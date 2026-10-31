@@ -1,4 +1,4 @@
-import * as C from './pulse-core.js?v=mvwrvwke';
+import * as C from './pulse-core.js?v=mvwrzw11';
 
 const CFG = {
   DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
@@ -794,7 +794,7 @@ async function renderZonesLayer() {
       const ru = f.properties.rules || [];
       const noRide = ru.some(r => r.rideAllowed === false), noThrough = ru.some(r => r.rideThrough === false), noEnd = ru.some(r => r.endAllowed === false), slow = ru.find(r => r.maxSpeed != null)?.maxSpeed;
       const col = noRide || noThrough ? '#ef6b6b' : noEnd ? '#e3b341' : slow != null ? '#c084fc' : opColor(z.operator);
-      L.geoJSON(f, { style: { color: col, weight: 1.5, fillOpacity: noRide ? .18 : .07, dashArray: noEnd && !noRide ? '4 3' : null } })
+      L.geoJSON(f, { style: { color: col, weight: noRide ? 1 : 1.5, fillOpacity: noRide ? .05 : .07, dashArray: noEnd && !noRide ? '4 3' : null } })
         .bindPopup(`<b>${esc(z.operator)}</b> · ${esc(f.properties.name || 'Zone')}<br>${noRide ? 'Fahren verboten' : noThrough ? 'Durchfahrt verboten' : 'Fahren erlaubt'}${noEnd ? ' · Abstellen verboten' : ''}${slow != null ? ` · max. ${fmt(slow)} km/h` : ''}${ru.some(r => r.parking) ? ' · Stationsparken' : ''}`).addTo(L_.zones);
       n++;
     }
