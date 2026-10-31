@@ -1,5 +1,5 @@
 { "generatedAt": "test", "known_gaps": [{ "operator": "Dott", "city": "Tübingen", "since": "2026-09-25", "probe_url": "http://127.0.0.1:8765/gone/gbfs.json" }], "sources": [
- { "id": "bolt_test", "name": "Bolt Test", "operator": "Bolt", "api": "gbfs", "url": "http://127.0.0.1:8765/v23/gbfs.json", "directories": ["mobidata_bw"], "priority": 1 },
+ { "id": "bolt_test", "name": "Bolt Test", "operator": "Bolt", "api": "gbfs", "url": "http://127.0.0.1:8765/v23/gbfs.json", "altUrls": ["http://127.0.0.1:8765/v23/gbfs.json"], "directories": ["mobidata_bw"], "priority": 1 },
  { "id": "bolt_test_mirror", "name": "Bolt Test Mirror", "operator": "Bolt", "api": "gbfs", "url": "http://127.0.0.1:8765/v23/gbfs.json", "directories": ["mobilitydata"], "priority": 2 },
  { "id": "dott_test", "name": "Dott Test", "operator": "Dott", "api": "gbfs", "url": "http://127.0.0.1:8765/v30/gbfs.json", "directories": ["mobilitydata"] },
  { "id": "nb_test", "name": "nextbike Test", "operator": "nextbike", "api": "citybikes", "url": "http://127.0.0.1:8765/citybikes/x", "directories": ["citybikes"], "priority": 3 },

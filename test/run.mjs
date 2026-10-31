@@ -25,5 +25,8 @@ const sq = JSON.parse(await readFile('test/out/stations-quota.json', 'utf8'));
 assert(sq.stations.length === 4 && sq.stations.every(x => x[5] === 2), 'Stationsquote über 2 Läufe');
 const rel = JSON.parse(await readFile('test/out/reliability.json', 'utf8'));
 assert(rel.sources.bolt_test.runs === 2 && rel.sources.gone_test.err === 2, 'Zuverlässigkeit je Quelle');
+const cons = JSON.parse(await readFile('test/out/consistency.json', 'utf8'));
+assert(cons.systems.length === 1 && cons.systems[0].verdict === 'consistent' && cons.systems[0].idOverlap === 1, 'Konsistenz: identischer Alternativ-Feed = consistent');
+assert(Array.isArray(cons.pairs), 'Quellenpaare vorhanden (Fixture zu klein für Paare)');
 const idle = JSON.parse(await readFile('test/out/idle.json', 'utf8'));
 assert(idle.groups['08416041|Bolt|scooter']?.[5] === 1, 'Standzeiten aggregiert');

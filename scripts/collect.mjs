@@ -237,6 +237,57 @@ await writeFile(zonesIdxFile, JSON.stringify({ at: now, zones: zonesIndex }));
 log(`Preise: ${pricing.length} Quellen · Zonen: ${zonesIndex.length} Quellen`);
 }
 
+// ---------- Konsistenz: Alternativ-Feeds desselben Systems und mehrere Quellen je Anbieter × Gemeinde ----------
+const consistency = { at: now, systems: [], pairs: [] };
+{
+  const hostOf = (u) => { try { return new URL(u).host; } catch { return ''; } };
+  const altTargets = results.filter(r => r.sys && r.src.altUrls?.length && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status));
+  await pool(altTargets, async ({ src, sys }) => {
+    const altUrl = src.altUrls[0];
+    try {
+      const alt = await C.readGbfsSystem({ ...src, url: altUrl }, fetchJson, { now });
+      const rec = sourceOut.find(x => x.id === src.id);
+      const kind = hostOf(altUrl) === hostOf(src.url) ? 'version' : (/mobidata-bw|mobilitaetsdaten\.nrw/.test(hostOf(src.url)) ? 'land_vs_betreiber' : 'betreiber_vs_land');
+      const entry = { sourceId: src.id, operator: src.operator, kind, primary: { url: src.url, version: sys.version, vehicles: sys.vehicles.length, available: sys.vehicles.filter(v => !v.disabled && !v.reserved).length, stations: sys.stations.length, feedAgeMs: rec?.feedAgeMs ?? null },
+        alt: { url: altUrl, version: alt.version, httpStatus: alt.httpStatus, vehicles: alt.vehicles.length, available: alt.vehicles.filter(v => !v.disabled && !v.reserved).length, stations: alt.stations.length, feedAgeMs: (() => { const a = [alt.feedAges.vehicle_status ?? alt.feedAges.free_bike_status, alt.feedAges.station_status].filter(x => x != null); return a.length ? Math.max(...a) : null; })(), errors: alt.errors.slice(0, 2) } };
+      if (!alt.vehicles.length && !alt.stations.length) { entry.verdict = 'alt_unreachable'; consistency.systems.push(entry); rec.consistency = entry.verdict; return; }
+      const A = new Map(sys.vehicles.map(v => [C.normalizeId(v.rawId), v])), B = new Map(alt.vehicles.map(v => [C.normalizeId(v.rawId), v]));
+      let common = 0; const dists = [];
+      for (const [id, v] of A) { const w = B.get(id); if (!w) continue; common++; if (C.validLatLon(v.lat, v.lon) && C.validLatLon(w.lat, w.lon)) dists.push(C.haversineM(v.lat, v.lon, w.lat, w.lon)); }
+      const union = A.size + B.size - common;
+      dists.sort((a, b) => a - b);
+      entry.idOverlap = union ? +(common / union).toFixed(3) : null;
+      entry.medianDistM = dists.length ? Math.round(dists[Math.floor(dists.length / 2)]) : null;
+      entry.p90DistM = dists.length ? Math.round(dists[Math.floor(dists.length * 0.9)]) : null;
+      const n1 = entry.primary.vehicles, n2 = entry.alt.vehicles;
+      const countDiff = Math.max(n1, n2) ? Math.abs(n1 - n2) / Math.max(n1, n2) : 0;
+      entry.countDiff = +countDiff.toFixed(3);
+      entry.verdict = (countDiff <= 0.05 && (entry.idOverlap ?? 1) >= 0.9 && (entry.medianDistM ?? 0) <= 25) ? 'consistent' : (countDiff <= 0.15 && (entry.idOverlap ?? 1) >= 0.7) ? 'minor' : 'divergent';
+      consistency.systems.push(entry); rec.consistency = entry.verdict;
+    } catch (e) { consistency.systems.push({ sourceId: src.id, operator: src.operator, alt: { url: altUrl }, verdict: 'error', error: e.message }); }
+  }, 6);
+  // Mehrere Quellen je Anbieter × Gemeinde (vor der Dublettenbereinigung)
+  const bySrc = new Map(); // `${op}|${ags}` → Map(sourceId → Set(ids))
+  for (const v of allVehicles) { const k = `${v.operator}|${v.ags}`; if (!bySrc.has(k)) bySrc.set(k, new Map()); const m = bySrc.get(k); if (!m.has(v.sourceId)) m.set(v.sourceId, new Map()); m.get(v.sourceId).set(C.normalizeId(v.rawId), v); }
+  for (const [k, m] of bySrc) {
+    if (m.size < 2) continue;
+    const [op, ags] = k.split('|');
+    const srcs = [...m.entries()].filter(([, ids]) => ids.size >= 20).sort((a, b) => b[1].size - a[1].size);
+    for (let i = 0; i < srcs.length; i++) for (let j = i + 1; j < srcs.length; j++) {
+      const [idA, A] = srcs[i], [idB, B] = srcs[j];
+      let common = 0; const dists = [];
+      for (const [id, v] of A) { const w = B.get(id); if (!w) continue; common++; if (C.validLatLon(v.lat, v.lon) && C.validLatLon(w.lat, w.lon)) dists.push(C.haversineM(v.lat, v.lon, w.lat, w.lon)); }
+      dists.sort((a, b) => a - b);
+      const union = A.size + B.size - common;
+      consistency.pairs.push({ operator: op, ags, a: { sourceId: idA, vehicles: A.size }, b: { sourceId: idB, vehicles: B.size }, common, idOverlap: +(common / union).toFixed(3), medianDistM: dists.length ? Math.round(dists[Math.floor(dists.length / 2)]) : null, countDiff: +(Math.abs(A.size - B.size) / Math.max(A.size, B.size)).toFixed(3) });
+    }
+  }
+  for (const pr of consistency.pairs) pr.verdict = pr.idOverlap >= 0.9 && pr.countDiff <= 0.05 && (pr.medianDistM ?? 0) <= 25 ? 'consistent' : pr.idOverlap >= 0.6 && pr.countDiff <= 0.2 ? 'minor' : pr.idOverlap < 0.2 ? 'disjoint' : 'divergent';
+  await writeFile(path.join(DATA, 'consistency.json'), JSON.stringify(consistency));
+  const vc = {}; for (const e of consistency.systems) vc[e.verdict] = (vc[e.verdict] || 0) + 1;
+  log(`Konsistenz: ${consistency.systems.length} Alternativ-Feeds ${JSON.stringify(vc)} · ${consistency.pairs.length} Quellenpaare je Anbieter×Gemeinde`);
+}
+
 // Dedupe über alle Quellen (je Anbieter)
 allVehicles.sort((a, b) => a.priority - b.priority);
 const dv = C.dedupeVehicles(allVehicles);
