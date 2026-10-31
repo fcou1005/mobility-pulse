@@ -16,6 +16,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   collect:
@@ -88,3 +89,13 @@ jobs:
           git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Daten $(date -u +%FT%TZ)"
           git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" data:data
           echo "veröffentlicht: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/latest.json"
+      - name: Nächsten Lauf anstoßen (Ersatz, solange der Zeitplan nicht anspringt)
+        if: always() && github.event_name != 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Läuft der GitHub-Zeitplan inzwischen (Lauf in den letzten 90 Min.), endet die Kette hier
+          last=$(gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -e schedule -L 1 --json createdAt -q '.[0].createdAt' || true)
+          if [ -n "$last" ] && [ $(( $(date +%s) - $(date -d "$last" +%s) )) -lt 5400 ]; then echo "Zeitplan aktiv, keine Kette"; exit 0; fi
+          sleep 900
+          gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main
