@@ -176,18 +176,32 @@ const add = (s) => {
   } catch (e) { log('CityBikes nicht erreichbar:', e.message); }
 }
 
-// 5) Dott — Direktfeeds (öffentliches Verzeichnis per Kandidaten-Prüfung; Treffer werden vom Sammler bestätigt)
-for (const slug of manual.dott_direct_candidates) {
-  const url = `https://gbfs.api.ridedott.com/public/v2/${slug}/gbfs.json`;
-  if ([...sources.values()].some(s => normUrl(s.url) === normUrl(url))) continue;
-  add({ id: `dott-${slug}`, name: `Dott ${slug}`, operator: 'Dott', api: 'gbfs', url, versions: ['2.3'], auth: null, directories: ['dott_direct'], candidate: true });
+// 5) Betreiber-Direktfeeds nach Stadt (Dott, Lime, Zeus, Bird) — Kandidaten, der Sammler bestätigt sie
+for (const [key, cfg] of Object.entries(manual.direct_candidates || {})) {
+  if (key.startsWith('_')) continue;
+  for (const city of cfg.cities) {
+    const url = cfg.url.replace('{city}', city);
+    if ([...sources.values()].some(s => normUrl(s.url) === normUrl(url) || (s.altUrls || []).some(u => normUrl(u) === normUrl(url)))) continue;
+    add({ id: `${key}-${city}`, name: `${cfg.operator} ${city}`, operator: cfg.operator, api: 'gbfs', url, versions: ['2.3'], auth: null, directories: [`${key}_direct`], candidate: true });
+  }
+}
+
+// 6) Quellen mit persönlichem Zugang (nur wenn Secrets gesetzt)
+for (const [key, cfg] of Object.entries(manual.auth_sources || {})) {
+  if (key.startsWith('_')) continue;
+  const ok = cfg.env.every(e => process.env[e]);
+  for (const sys of cfg.systems) {
+    add({ ...sys, api: 'gbfs', versions: ['2.3'], directories: [`${key}_api`], auth: { type: 'header', provider: key }, disabled: ok ? undefined : `Zugangsdaten fehlen (${cfg.env.join(', ')} als Repository-Secret setzen)` });
+  }
 }
 
 const list = [...new Set(sources.values())].sort((a, b) => a.operator.localeCompare(b.operator) || a.id.localeCompare(b.id));
 const out = {
   generatedAt: new Date().toISOString(),
   count: list.length,
-  directories: { mobilitydata: 'https://github.com/MobilityData/gbfs/blob/master/systems.csv', mobidata_bw: 'https://api.mobidata-bw.de/sharing/gbfs', mobidrom_nrw: 'https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet', citybikes: 'https://api.citybik.es/v2/networks', dott_direct: 'https://gbfs.api.ridedott.com/public/v2/' },
+  directories: { mobilitydata: 'https://github.com/MobilityData/gbfs/blob/master/systems.csv', mobidata_bw: 'https://api.mobidata-bw.de/sharing/gbfs', mobidrom_nrw: 'https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet', citybikes: 'https://api.citybik.es/v2/networks', dott_direct: 'https://gbfs.api.ridedott.com/public/v2/', lime_direct: 'https://data.lime.bike/api/partners/v2/gbfs/', zeus_direct: 'https://zeus.city/api/v1/mds/gbfs/', bird_direct: 'https://mds.bird.co/gbfs/v2/public/', db_api: 'https://developers.deutschebahn.com/db-api-marketplace/apis/product/shared-mobility-gbfs' },
+  auth_sources: Object.fromEntries(Object.entries(manual.auth_sources || {}).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, { host: v.host, headers: v.headers, env: v.env }])),
+  parking_reference: manual.parking_reference,
   known_gaps: manual.known_gaps,
   mobidata_wfs: manual.mobidata_wfs,
   sources: list,

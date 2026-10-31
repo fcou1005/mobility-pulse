@@ -58,6 +58,9 @@ jobs:
           BOUNDARIES_OUT=cache/boundaries.json node scripts/prepare-boundaries.mjs
 
       - name: Quellenkatalog aktualisieren
+        env:
+          DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
+          DB_API_KEY: ${{ secrets.DB_API_KEY }}
         run: node scripts/build-catalog.mjs
 
       - name: Sammeln
@@ -66,6 +69,8 @@ jobs:
           BOUNDARIES: cache/boundaries.json
           SOURCES_FILE: data/sources.json
           HISTORY_DAYS: '30'
+          DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
+          DB_API_KEY: ${{ secrets.DB_API_KEY }}
         run: |
           cp data/sources.json out/sources.json
           node scripts/collect.mjs

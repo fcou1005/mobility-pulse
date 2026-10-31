@@ -75,6 +75,13 @@ async function setupMobidrom(sources) {
   } catch (e) { log('MOBIDROM: ', e.message); }
 }
 
+// Header-Zugänge (z. B. DB API Marketplace) aus Umgebungsvariablen
+for (const [key, cfg] of Object.entries(catalog.auth_sources || {})) {
+  if (!cfg.env.every(e => process.env[e])) continue;
+  authHeaders.set(cfg.host, Object.fromEntries(Object.entries(cfg.headers).map(([h, e]) => [h, process.env[e]])));
+  log(`Zugang ${key}: aktiv`);
+}
+
 // Manifest / Sammelindex in Einzelsysteme auflösen
 async function expandSource(src) {
   if (src.api !== 'gbfs') return [src];

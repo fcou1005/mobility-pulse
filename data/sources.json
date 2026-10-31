@@ -1,12 +1,38 @@
 {
- "generatedAt": "2026-10-31T18:03:51.863Z",
- "count": 179,
+ "generatedAt": "2026-10-31T20:14:11.782Z",
+ "count": 253,
  "directories": {
   "mobilitydata": "https://github.com/MobilityData/gbfs/blob/master/systems.csv",
   "mobidata_bw": "https://api.mobidata-bw.de/sharing/gbfs",
   "mobidrom_nrw": "https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet",
   "citybikes": "https://api.citybik.es/v2/networks",
-  "dott_direct": "https://gbfs.api.ridedott.com/public/v2/"
+  "dott_direct": "https://gbfs.api.ridedott.com/public/v2/",
+  "lime_direct": "https://data.lime.bike/api/partners/v2/gbfs/",
+  "zeus_direct": "https://zeus.city/api/v1/mds/gbfs/",
+  "bird_direct": "https://mds.bird.co/gbfs/v2/public/",
+  "db_api": "https://developers.deutschebahn.com/db-api-marketplace/apis/product/shared-mobility-gbfs"
+ },
+ "auth_sources": {
+  "db": {
+   "host": "apis.deutschebahn.com",
+   "headers": {
+    "DB-Client-Id": "DB_CLIENT_ID",
+    "DB-Api-Key": "DB_API_KEY"
+   },
+   "env": [
+    "DB_CLIENT_ID",
+    "DB_API_KEY"
+   ]
+  }
+ },
+ "parking_reference": {
+  "_comment": "Offizielle Abstellflächen für Mikromobilität, zum Ausrichten von Deploy-Spots. Weitere Städte über OpenStreetMap (amenity=small_vehicle_parking, small_electric_vehicle=designated, Mobilitätsstationen).",
+  "berlin": {
+   "ags": "11000000",
+   "wfs": "https://gdi.berlin.de/services/wfs/abstell_mikromob",
+   "license": "dl-de/zero-2-0",
+   "source": "https://gdi.berlin.de/geonetwork/srv/api/records/6185b5fb-156a-3ebd-846a-9fbc9008e690"
+  }
  },
  "known_gaps": [
   {
@@ -62,6 +88,150 @@
    ]
   },
   {
+   "id": "bird-berlin",
+   "name": "Bird berlin",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/berlin/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-bremen",
+   "name": "Bird bremen",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/bremen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-cologne",
+   "name": "Bird cologne",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/cologne/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-dresden",
+   "name": "Bird dresden",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/dresden/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-dusseldorf",
+   "name": "Bird dusseldorf",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/dusseldorf/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-frankfurt",
+   "name": "Bird frankfurt",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/frankfurt/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-hamburg",
+   "name": "Bird hamburg",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/hamburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-hannover",
+   "name": "Bird hannover",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/hannover/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-leipzig",
+   "name": "Bird leipzig",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/leipzig/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
    "id": "bird-munich",
    "name": "Bird Munich",
    "location": "Munich",
@@ -77,6 +247,38 @@
    ],
    "homepage": "https://www.bird.co",
    "operator": "Bird",
+   "priority": 2
+  },
+  {
+   "id": "bird-nuremberg",
+   "name": "Bird nuremberg",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/nuremberg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "bird-stuttgart",
+   "name": "Bird stuttgart",
+   "operator": "Bird",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/stuttgart/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "bird_direct"
+   ],
+   "candidate": true,
    "priority": 2
   },
   {
@@ -180,6 +382,25 @@
    "altUrls": [
     "https://api.mobidata-bw.de/sharing/gbfs/v3/callabike/gbfs"
    ]
+  },
+  {
+   "id": "db_callabike",
+   "name": "Call a Bike (DB, bundesweit)",
+   "operator": "DB Connect",
+   "url": "https://apis.deutschebahn.com/db-api-marketplace/apis/shared-mobility-gbfs/v2/de/CallABike/gbfs",
+   "api": "gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "directories": [
+    "db_api"
+   ],
+   "auth": {
+    "type": "header",
+    "provider": "db"
+   },
+   "disabled": "Zugangsdaten fehlen (DB_CLIENT_ID, DB_API_KEY als Repository-Secret setzen)",
+   "priority": 2
   },
   {
    "id": "Augsburg",
@@ -664,6 +885,22 @@
    "priority": 2
   },
   {
+   "id": "dott-chemnitz",
+   "name": "Dott chemnitz",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/chemnitz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
    "id": "dott-cologne",
    "name": "Dott Cologne",
    "location": "Cologne",
@@ -678,6 +915,22 @@
    ],
    "homepage": "https://ridedott.com/",
    "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-cottbus",
+   "name": "Dott cottbus",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/cottbus/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
    "priority": 2
   },
   {
@@ -746,6 +999,22 @@
    "priority": 2
   },
   {
+   "id": "dott-erfurt",
+   "name": "Dott erfurt",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/erfurt/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
    "id": "dott-essen",
    "name": "Dott Essen",
    "location": "Essen",
@@ -800,6 +1069,38 @@
    "operator": "Dott",
    "api": "gbfs",
    "url": "https://gbfs.api.ridedott.com/public/v2/gelsenkirchen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-greifswald",
+   "name": "Dott greifswald",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/greifswald/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-halle",
+   "name": "Dott halle",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/halle/gbfs.json",
    "versions": [
     "2.3"
    ],
@@ -878,6 +1179,22 @@
    "priority": 2
   },
   {
+   "id": "dott-jena",
+   "name": "Dott jena",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/jena/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
    "id": "dott-kaiserslautern",
    "name": "Dott Kaiserslautern",
    "location": "Kaiserslautern",
@@ -945,6 +1262,22 @@
    "priority": 2
   },
   {
+   "id": "dott-magdeburg",
+   "name": "Dott magdeburg",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/magdeburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
    "id": "dott-mainz",
    "name": "Dott mainz",
    "operator": "Dott",
@@ -966,22 +1299,6 @@
    "operator": "Dott",
    "api": "gbfs",
    "url": "https://gbfs.api.ridedott.com/public/v2/mannheim/gbfs.json",
-   "versions": [
-    "2.3"
-   ],
-   "auth": null,
-   "directories": [
-    "dott_direct"
-   ],
-   "candidate": true,
-   "priority": 2
-  },
-  {
-   "id": "dott-mulheim",
-   "name": "Dott mulheim",
-   "operator": "Dott",
-   "api": "gbfs",
-   "url": "https://gbfs.api.ridedott.com/public/v2/mulheim/gbfs.json",
    "versions": [
     "2.3"
    ],
@@ -1076,6 +1393,38 @@
    "priority": 2
   },
   {
+   "id": "dott-rostock",
+   "name": "Dott rostock",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/rostock/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-schwerin",
+   "name": "Dott schwerin",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/schwerin/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
    "id": "dott-stuttgart",
    "name": "Dott Stuttgart",
    "location": "Stuttgart",
@@ -1098,6 +1447,22 @@
    "operator": "Dott",
    "api": "gbfs",
    "url": "https://gbfs.api.ridedott.com/public/v2/tubingen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-weimar",
+   "name": "Dott weimar",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/weimar/gbfs.json",
    "versions": [
     "2.3"
    ],
@@ -1388,6 +1753,374 @@
    ],
    "homepage": "https://www.li.me",
    "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "lime-berlin",
+   "name": "Lime berlin",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/berlin/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-bochum",
+   "name": "Lime bochum",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/bochum/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-bottrop",
+   "name": "Lime bottrop",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/bottrop/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-bremen",
+   "name": "Lime bremen",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/bremen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-chemnitz",
+   "name": "Lime chemnitz",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/chemnitz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-cologne",
+   "name": "Lime cologne",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/cologne/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-dortmund",
+   "name": "Lime dortmund",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/dortmund/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-dusseldorf",
+   "name": "Lime dusseldorf",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/dusseldorf/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-erfurt",
+   "name": "Lime erfurt",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/erfurt/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-essen",
+   "name": "Lime essen",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/essen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-gelsenkirchen",
+   "name": "Lime gelsenkirchen",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/gelsenkirchen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-halle",
+   "name": "Lime halle",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/halle/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-hannover",
+   "name": "Lime hannover",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/hannover/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-herne",
+   "name": "Lime herne",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/herne/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-jena",
+   "name": "Lime jena",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/jena/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-konstanz",
+   "name": "Lime konstanz",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/konstanz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-leipzig",
+   "name": "Lime leipzig",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/leipzig/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-magdeburg",
+   "name": "Lime magdeburg",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/magdeburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-munich",
+   "name": "Lime munich",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/munich/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-nuremberg",
+   "name": "Lime nuremberg",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/nuremberg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-offenbach",
+   "name": "Lime offenbach",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/offenbach/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-potsdam",
+   "name": "Lime potsdam",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/potsdam/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "lime-rostock",
+   "name": "Lime rostock",
+   "operator": "Lime",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/rostock/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "lime_direct"
+   ],
+   "candidate": true,
    "priority": 2
   },
   {
@@ -2339,6 +3072,25 @@
    ]
   },
   {
+   "id": "db_stadtrad",
+   "name": "StadtRAD Hamburg (DB)",
+   "operator": "StadtRAD",
+   "url": "https://apis.deutschebahn.com/db-api-marketplace/apis/shared-mobility-gbfs/v2/de/StadtRAD/gbfs",
+   "api": "gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "directories": [
+    "db_api"
+   ],
+   "auth": {
+    "type": "header",
+    "provider": "db"
+   },
+   "disabled": "Zugangsdaten fehlen (DB_CLIENT_ID, DB_API_KEY als Repository-Secret setzen)",
+   "priority": 2
+  },
+  {
    "id": "herrenberg_stadtrad",
    "name": "stadtRad - das stadtnavi Lastenrad",
    "location": "Herrenberg",
@@ -3195,6 +3947,470 @@
    "altUrls": [
     "https://zeus.city/api/v1/mds/gbfs/wurzburg/gbfs.json"
    ]
+  },
+  {
+   "id": "zeus-altenburg",
+   "name": "Zeus altenburg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/altenburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-bautzen",
+   "name": "Zeus bautzen",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/bautzen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-brandenburg",
+   "name": "Zeus brandenburg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/brandenburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-chemnitz",
+   "name": "Zeus chemnitz",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/chemnitz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-cottbus",
+   "name": "Zeus cottbus",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/cottbus/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-dessau",
+   "name": "Zeus dessau",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/dessau/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-eisenach",
+   "name": "Zeus eisenach",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/eisenach/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-erfurt",
+   "name": "Zeus erfurt",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/erfurt/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-frankfurt-oder",
+   "name": "Zeus frankfurt-oder",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/frankfurt-oder/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-freiberg",
+   "name": "Zeus freiberg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/freiberg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-gorlitz",
+   "name": "Zeus gorlitz",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/gorlitz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-gotha",
+   "name": "Zeus gotha",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/gotha/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-greifswald",
+   "name": "Zeus greifswald",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/greifswald/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-halle",
+   "name": "Zeus halle",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/halle/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-magdeburg",
+   "name": "Zeus magdeburg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/magdeburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-merseburg",
+   "name": "Zeus merseburg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/merseburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-naumburg",
+   "name": "Zeus naumburg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/naumburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-neubrandenburg",
+   "name": "Zeus neubrandenburg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/neubrandenburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-nordhausen",
+   "name": "Zeus nordhausen",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/nordhausen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-plauen",
+   "name": "Zeus plauen",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/plauen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-rostock",
+   "name": "Zeus rostock",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/rostock/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-schwerin",
+   "name": "Zeus schwerin",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/schwerin/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-stralsund",
+   "name": "Zeus stralsund",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/stralsund/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-suhl",
+   "name": "Zeus suhl",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/suhl/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-weimar",
+   "name": "Zeus weimar",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/weimar/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-weissenfels",
+   "name": "Zeus weissenfels",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/weissenfels/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-wismar",
+   "name": "Zeus wismar",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/wismar/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-wittenberg",
+   "name": "Zeus wittenberg",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/wittenberg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "zeus-zwickau",
+   "name": "Zeus zwickau",
+   "operator": "Zeus",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/zwickau/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "zeus_direct"
+   ],
+   "candidate": true,
+   "priority": 2
   }
  ]
 }
