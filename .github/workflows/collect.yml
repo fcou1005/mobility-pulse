@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: cache/boundaries.json
-          key: vg250-${{ steps.month.outputs.m }}-v1
+          key: vg250-${{ steps.month.outputs.m }}-v2
 
       - name: Gemeindegrenzen aufbereiten (BKG VG250)
         if: ${{ steps.bcache.outputs.cache-hit != 'true' }}

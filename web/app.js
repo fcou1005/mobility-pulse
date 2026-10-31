@@ -450,7 +450,7 @@ function renderLab() {
     return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${low == null ? 'k. A.' : pctf(s.lowBattery, s.batteryKnown)}</td><td class="n">${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${r.quality ?? '—'}</td><td class="n"><b>${score ?? '—'}</b><div class="bar"><i style="width:${score ?? 0}%"></i></div></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Keine Daten.</td></tr>';
   // Städtevergleich
   const munis = state.latest?.municipalities || {};
-  const src = state.mode === 'live' && state.live ? state.live.groups : new Map(Object.entries(state.latest?.groups || {}));
+  const src = new Map(Object.entries(state.latest?.groups || {})); // Gebietsvergleich immer aus dem Sammler-Stand (vollständig)
   const per = new Map();
   for (const [k, s] of src) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || ags === 'unbekannt') continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const m = per.get(ags) || { ags, available: 0, ops: new Set(), scooter: 0, bikes: 0 }; m.available += s.available; m.ops.add(op); if (ty === 'scooter') m.scooter += s.available; else m.bikes += s.available; per.set(ags, m); }
   const list = [...per.values()].sort((a, b) => b.available - a.available).slice(0, 25);

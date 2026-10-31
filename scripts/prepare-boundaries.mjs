@@ -13,7 +13,7 @@ const OUT = process.env.BOUNDARIES_OUT || path.join(ROOT, 'data', 'boundaries.js
 const CANDIDATES = [
   process.argv[2],
   process.env.VG250_URL,
-  'https://daten.gdz.bkg.bund.de/produkte/vg/vg250-ew_ebenen_0101/aktuell/vg250-ew_01-01.utm32s.shape.ebenen.zip', // mit Einwohnerzahl (EWZ)
+  'https://daten.gdz.bkg.bund.de/produkte/vg/vg250-ew_ebenen_1231/aktuell/vg250-ew_12-31.utm32s.shape.ebenen.zip', // mit Einwohnerzahl (EWZ), Gebietsstand 31.12.
   'https://daten.gdz.bkg.bund.de/produkte/vg/vg250_ebenen_0101/aktuell/vg250_01-01.utm32s.shape.ebenen.zip',
 ].filter(Boolean);
 const log = (...a) => console.error('[boundaries]', ...a);
@@ -63,7 +63,7 @@ for (const f of features) {
   prev.geometry = { type: 'MultiPolygon', coordinates: [...polys(prev.geometry), ...polys(f.geometry)] };
   prev.bbox = [Math.min(prev.bbox[0], f.bbox[0]), Math.min(prev.bbox[1], f.bbox[1]), Math.max(prev.bbox[2], f.bbox[2]), Math.max(prev.bbox[3], f.bbox[3])];
 }
-const out = { type: 'FeatureCollection', source: used, license: 'dl-de/by-2-0', attribution: '© GeoBasis-DE / BKG (Gemeindegrenzen VG250, vereinfacht ca. 30 m, quantisiert ca. 1 m)', generatedAt: new Date().toISOString(), features: [...byAgs.values()] };
+const out = { type: 'FeatureCollection', source: used, license: 'dl-de/by-2-0', attribution: `© GeoBasis-DE / BKG ${new Date().getFullYear()} (Gemeindegrenzen VG250${/vg250-ew/.test(used) ? '-EW, Gebietsstand 31.12.' : ', Gebietsstand 01.01.'}, vereinfacht ca. 30 m, quantisiert ca. 1 m)`, generatedAt: new Date().toISOString(), features: [...byAgs.values()] };
 await mkdir(path.dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(out));
 log(`→ ${OUT}: ${out.features.length} Gemeinden, ${(Buffer.byteLength(JSON.stringify(out)) / 1e6).toFixed(1)} MB`);
