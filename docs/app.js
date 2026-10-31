@@ -1,4 +1,4 @@
-import * as C from './pulse-core.js?v=mvwtrk91';
+import * as C from './pulse-core.js?v=mvwtt5ym';
 
 const CFG = {
   DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
@@ -848,6 +848,8 @@ async function renderConsistency() {
   for (const e of c.systems) { if (!inScope([e.sourceId]) || (state.operator !== 'all' && e.operator !== state.operator)) continue; rows.push({ kind: `${CONS_KIND[e.kind] || e.kind || 'Alternativ-Feed'}${e.idsRekeyed ? ' · Kennungen umgeschlüsselt' : ''}${e.stationsOnly ? ' · Stationen' : ''}<div class="sub-line mono">${esc(e.sourceId)}</div>`, op: e.operator, a: e.stationsOnly ? e.primary?.stations : e.primary?.vehicles, b: e.stationsOnly ? e.alt?.stations : e.alt?.vehicles, diff: e.countDiff, overlap: e.idOverlap, pm: e.posMatch, med: e.medianDistM, verdict: e.verdict, w: e.verdict === 'divergent' ? 3 : e.verdict === 'minor' ? 2 : e.verdict === 'alt_unreachable' ? 1 : 0 }); }
   for (const p of c.pairs) { if (!inScope([p.a.sourceId, p.b.sourceId], p.ags) || (state.operator !== 'all' && p.operator !== state.operator)) continue; rows.push({ kind: `Zwei Quellen · ${esc(muniName(p.ags))}${p.idsRekeyed ? ' · Kennungen umgeschlüsselt' : ''}<div class="sub-line mono">${esc(shortSrc(p.a.sourceId))} ↔ ${esc(shortSrc(p.b.sourceId))}</div>`, op: p.operator, a: p.a.vehicles, b: p.b.vehicles, diff: p.countDiff, overlap: p.idOverlap, pm: p.posMatch, med: p.medianDistM, verdict: p.verdict, w: p.verdict === 'divergent' ? 3 : p.verdict === 'minor' ? 2 : p.verdict === 'disjoint' ? 1.5 : 0 }); }
   rows.sort((x, y) => y.w - x.w || (y.a || 0) - (x.a || 0));
+  const seenRow = new Set(); const uniq = rows.filter(r => { const k = r.kind.replace(/<[^>]+>/g, '') + '|' + r.op; if (seenRow.has(k)) return false; seenRow.add(k); return true; });
+  rows.length = 0; rows.push(...uniq);
   const show = rows.slice(0, 80);
   tb.innerHTML = show.map(r => { const [label, cls] = CONS_LABEL[r.verdict] || [r.verdict, '']; return `<tr><td>${r.kind}</td><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(r.a)}</td><td class="n">${fmt(r.b)}</td><td class="n">${r.diff == null ? '—' : pctf(r.diff, 1)}</td><td class="n">${r.overlap == null ? '—' : pctf(r.overlap, 1)}</td><td class="n">${r.pm == null ? '—' : pctf(r.pm, 1)}</td><td class="n">${r.med == null ? '—' : `${fmt(r.med)} m`}</td><td><span class="pill plain" style="color:var(--${cls === 'muted' ? 'muted' : cls})">${label}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="empty">Keine Vergleiche im Filter.</td></tr>';
   const vc = {}; for (const r of rows) vc[r.verdict] = (vc[r.verdict] || 0) + 1;
