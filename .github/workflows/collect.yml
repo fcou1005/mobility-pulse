@@ -2,7 +2,7 @@ name: Sammler
 
 on:
   schedule:
-    - cron: '8,28,48 * * * *'   # nicht zur vollen Stunde (Lastspitze bei GitHub)
+    - cron: '8,28,49 * * * *'   # nicht zur vollen Stunde (Lastspitze bei GitHub)
   workflow_dispatch:
     inputs:
       rebuild_boundaries:
