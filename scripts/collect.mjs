@@ -259,7 +259,7 @@ const consistency = { at: now, systems: [], pairs: [] };
     const posOk = pm != null && pm >= 0.9;
     if (countDiff <= 0.05 && (idsOk || posOk)) return 'consistent';
     if (countDiff <= 0.15 && ((idOverlap ?? 0) >= 0.7 || (pm ?? 0) >= 0.7)) return 'minor';
-    if ((idOverlap ?? 0) < 0.2 && (pm ?? 0) < 0.2) return 'disjoint';
+    if ((idOverlap ?? 0) < 0.2 && (pm ?? 0) < 0.2 && countDiff > 0.3) return 'disjoint';
     return 'divergent';
   };
 
@@ -286,7 +286,10 @@ const consistency = { at: now, systems: [], pairs: [] };
       entry.countDiff = +countDiff.toFixed(3);
       entry.posMatch = posMatch(A, B);
       entry.idsRekeyed = (entry.idOverlap ?? 0) < 0.2 && (entry.posMatch ?? 0) >= 0.7;
-      entry.verdict = judge(countDiff, entry.idOverlap, entry.medianDistM, entry.posMatch);
+      if (!n1 && !n2) { // reine Stationssysteme: Stationszahl vergleichen
+        const s1 = entry.primary.stations, s2 = entry.alt.stations; const sd = Math.max(s1, s2) ? Math.abs(s1 - s2) / Math.max(s1, s2) : 0;
+        entry.countDiff = +sd.toFixed(3); entry.stationsOnly = true; entry.verdict = sd <= 0.05 ? 'consistent' : sd <= 0.15 ? 'minor' : 'divergent';
+      } else entry.verdict = judge(countDiff, entry.idOverlap, entry.medianDistM, entry.posMatch);
       consistency.systems.push(entry); rec.consistency = entry.verdict;
     } catch (e) { consistency.systems.push({ sourceId: src.id, operator: src.operator, alt: { url: altUrl }, verdict: 'error', error: e.message }); }
   }, 6);
