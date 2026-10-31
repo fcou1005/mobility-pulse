@@ -187,6 +187,13 @@ for (const { src, sys, probe, error } of results) {
 // ---------- Preise und Betriebszonen (GBFS system_pricing_plans / geofencing_zones) ----------
 const pricing = [], zonesIndex = [];
 await mkdir(path.join(DATA, 'zones'), { recursive: true });
+const zonesIdxFile = path.join(DATA, 'zones', 'index.json');
+const prevZonesIdx = existsSync(zonesIdxFile) ? JSON.parse(await readFile(zonesIdxFile, 'utf8')) : null;
+const refreshStatic = !prevZonesIdx || (now - (prevZonesIdx.at || 0)) > 23 * 3600e3 || process.env.REFRESH_STATIC === '1';
+if (!refreshStatic) {
+  log(`Preise/Zonen: Stand von ${new Date(prevZonesIdx.at).toISOString()} behalten (Aktualisierung täglich)`);
+  for (const z of prevZonesIdx.zones || []) { const rec = sourceOut.find(x => x.id === z.sourceId); if (rec) rec.zones = { count: z.count, ...z.kinds }; }
+} else {
 for (const f of await readdir(path.join(DATA, 'zones')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'zones', f));
 const firstLang = (o) => o == null ? null : Array.isArray(o) ? (o.find(x => x?.language === 'de') || o[0])?.text ?? null : typeof o === 'object' ? (o.de ?? o.en ?? Object.values(o)[0] ?? null) : o;
 await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status)), async ({ src, sys }) => { try {
@@ -226,8 +233,9 @@ await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].inclu
   } catch (e) { log(`Preise/Zonen ${src.id}: ${e.message}`); }
 }, 6);
 await writeFile(path.join(DATA, 'pricing.json'), JSON.stringify({ at: now, plans: pricing }));
-await writeFile(path.join(DATA, 'zones', 'index.json'), JSON.stringify({ at: now, zones: zonesIndex }));
+await writeFile(zonesIdxFile, JSON.stringify({ at: now, zones: zonesIndex }));
 log(`Preise: ${pricing.length} Quellen · Zonen: ${zonesIndex.length} Quellen`);
+}
 
 // Dedupe über alle Quellen (je Anbieter)
 allVehicles.sort((a, b) => a.priority - b.priority);
