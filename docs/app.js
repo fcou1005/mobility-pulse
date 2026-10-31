@@ -1,0 +1,690 @@
+import * as C from './pulse-core.js';
+
+const CFG = {
+  DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
+  MAIN: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/main/data/',
+  REPO: 'https://github.com/fcou1005/mobility-pulse',
+  WFS: 'https://api.mobidata-bw.de/geoserver/MobiData-BW/ows',
+  OVERPASS: 'https://overpass-api.de/api/interpreter',
+  MAX_POINTS: 6000,
+};
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n, d = 0) => n == null || !Number.isFinite(n) ? '—' : n.toLocaleString('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
+const pctf = (a, b) => b ? `${fmt((a / b) * 100, a / b < 0.1 ? 1 : 0)} %` : 'k. A.';
+const ageText = (ms) => ms == null ? '–' : ms < 90e3 ? 'gerade' : ms < 3600e3 ? `${Math.round(ms / 60e3)} Min.` : ms < 48 * 3600e3 ? `${(ms / 3600e3).toFixed(1).replace('.', ',')} Std.` : `${Math.round(ms / 86400e3)} Tg.`;
+const timeText = (ms) => ms ? new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
+const TYPE = C.VEHICLE_TYPE_LABEL;
+const STATUS = C.FRESHNESS_LABEL;
+const DIRS = { mobilitydata: 'MobilityData / Betreiber', mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', dott_direct: 'Dott · Direktfeed' };
+const OP_COLORS = { Bolt: '#34d399', Dott: '#60a5fa', Voi: '#f472b6', Lime: '#a3e635', nextbike: '#f59e0b', Zeus: '#c084fc', Donkey: '#fb923c', Bird: '#e879f9', 'DB Connect': '#ef4444', Yoio: '#22d3ee', sigo: '#fbbf24', StadtRAD: '#f87171' };
+const opColor = (op) => OP_COLORS[op] || `hsl(${parseInt(C.hashStr(op), 36) % 360} 60% 60%)`;
+
+const state = {
+  latest: null, catalog: null, status: null, histIndex: null, hist: {}, boundaries: null, bIndex: null,
+  scope: 'DE', operator: 'all', type: 'all', mode: 'collector',
+  live: null, // {at, systems: Map(id→sys), groups, vehicles, stations, recs: Map}
+  thresholds: { charge: 20, range: 5 },
+  map: null, layers: {}, supply: null, histDay: null,
+};
+
+// ---------- Laden ----------
+async function getJson(url, { timeout = 25000 } = {}) {
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), timeout);
+  const t0 = performance.now();
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, cache: 'no-cache' });
+    clearTimeout(t);
+    let json = null, error = null;
+    if (r.ok) { try { json = await r.json(); } catch { error = 'kein JSON'; } }
+    return { ok: r.ok && !!json, status: r.status, json, error, latencyMs: Math.round(performance.now() - t0) };
+  } catch (e) { clearTimeout(t); return { ok: false, status: 0, json: null, error: e.name === 'AbortError' ? 'Timeout' : 'Netz/CORS', latencyMs: Math.round(performance.now() - t0) }; }
+}
+function notice(html, kind = '', id = null) {
+  const box = $('#notice');
+  const el = id && $(`#notice [data-id="${id}"]`) || document.createElement('div');
+  el.className = `note ${kind}`; if (id) el.dataset.id = id; el.innerHTML = html; if (!el.parentNode) box.appendChild(el); return el;
+}
+const clearNotice = (id) => $(`#notice [data-id="${id}"]`)?.remove();
+
+async function loadBase() {
+  const [status, latest, sources, hist] = await Promise.all([getJson(CFG.DATA + 'status.json'), getJson(CFG.DATA + 'latest.json'), getJson(CFG.DATA + 'sources.json'), getJson(CFG.DATA + 'history/index.json')]);
+  state.status = status.json; state.latest = latest.json; state.histIndex = hist.json;
+  state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
+  if (!state.latest) {
+    notice(`Der Sammler hat noch keinen Datenstand veröffentlicht (<a href="${CFG.REPO}/actions">Actions</a>). Live-Abruf funktioniert trotzdem; Ortszuordnung erst nach dem ersten Lauf.`, 'warn', 'nolatest');
+    state.mode = 'live'; $('#sel-mode').value = 'live';
+  }
+}
+async function loadBoundaries() {
+  if (state.bIndex) return state.bIndex;
+  const r = await getJson(CFG.DATA + 'boundaries-active.json', { timeout: 60000 });
+  if (!r.ok) return null;
+  state.boundaries = r.json; state.bIndex = C.buildMunicipalityIndex(r.json);
+  return state.bIndex;
+}
+async function loadHistory(day) {
+  if (state.hist[day]) return state.hist[day];
+  const r = await getJson(CFG.DATA + `history/${day}.json`, { timeout: 60000 });
+  state.hist[day] = r.json || null; return state.hist[day];
+}
+
+// ---------- Scope ----------
+const muniName = (ags) => state.latest?.municipalities?.[ags]?.name || state.boundaries?.features.find(f => f.properties.ags === ags)?.properties.name || ags;
+const muniInfo = (ags) => state.latest?.municipalities?.[ags] || null;
+function scopeLabel() { return state.scope === 'DE' ? 'Deutschlandweit' : `${muniName(state.scope)} (${muniInfo(state.scope)?.state || ''})`; }
+function keyMatches(key) {
+  const [ags, op, ty] = key.split('|');
+  if (state.scope === 'DE' ? ags === 'DE' : ags !== state.scope) return false;
+  if (state.operator !== 'all' && op !== state.operator) return false;
+  if (state.type !== 'all' && ty !== state.type) return false;
+  return true;
+}
+// Gruppen der aktuellen Datenbasis (Sammler oder Live) auf den Scope gefiltert
+function scopeGroups() {
+  const src = state.mode === 'live' && state.live ? state.live.groups : new Map(Object.entries(state.latest?.groups || {}));
+  const out = new Map();
+  for (const [k, st] of src) {
+    const [ags, op, ty] = k.split('|');
+    if (ags === 'DE') continue;
+    if (state.scope !== 'DE' && ags !== state.scope) continue;
+    if (state.operator !== 'all' && op !== state.operator) continue;
+    if (state.type !== 'all' && ty !== state.type) continue;
+    out.set(k, st);
+  }
+  return out;
+}
+function sourcesForScope() {
+  const recs = state.latest?.sources || [];
+  if (state.scope === 'DE') return recs;
+  return recs.filter(r => (r.municipalities || []).includes(state.scope));
+}
+function liveRec(id) { return state.live?.recs.get(id) || null; }
+// Anbieter-Übersicht für den Scope
+function operatorRows() {
+  const groups = scopeGroups();
+  const byOp = new Map();
+  for (const [k, st] of groups) { const op = k.split('|')[1]; if (!byOp.has(op)) byOp.set(op, []); byOp.get(op).push(st); }
+  const recs = sourcesForScope();
+  const rows = [];
+  for (const [op, list] of byOp) {
+    const st = C.sumStats(list);
+    const ops = recs.filter(r => r.operator === op);
+    const effective = ops.map(r => liveRec(r.id) || r);
+    const usable = effective.filter(r => r.status === 'live' || r.status === 'delayed');
+    const age = usable.length ? Math.max(...usable.map(r => r.feedAgeMs ?? 0)) : (effective[0]?.feedAgeMs ?? null);
+    const status = usable.some(r => r.status === 'live') ? 'live' : usable.length ? 'delayed' : (effective[0]?.status || 'unknown');
+    const dirs = [...new Set(effective.flatMap(r => r.directories || []))];
+    const license = effective.map(r => r.license).find(Boolean) || null;
+    const quality = usable.length ? Math.round(usable.reduce((a, r) => a + (r.quality || 0), 0) / usable.length) : null;
+    const changed = effective.some(r => r.sourceChanged);
+    rows.push({ op, st, sources: effective, status, age, dirs, license, quality, changed, delta: deltaVsCollector(op) });
+  }
+  // Bekannte Lücken im Scope
+  for (const g of state.latest?.gaps || []) {
+    const ags = state.scope === 'DE' ? null : state.scope;
+    if (ags && muniName(ags) !== g.city) continue;
+    if (state.operator !== 'all' && g.operator !== state.operator) continue;
+    if (byOp.has(g.operator) && ags) continue;
+    rows.push({ op: g.operator, st: C.emptyStats(), sources: [], status: 'gap', age: null, dirs: [], license: null, quality: null, gap: g, delta: null });
+  }
+  rows.sort((a, b) => b.st.available - a.st.available || a.op.localeCompare(b.op));
+  return rows;
+}
+// Δ gegenüber letztem Sammler-Punkt (nur sinnvoll im Live-Modus, gleicher Fingerabdruck)
+function deltaVsCollector(op) {
+  if (state.mode !== 'live' || !state.live || !state.latest) return null;
+  const recs = sourcesForScope().filter(r => r.operator === op);
+  if (!recs.length || recs.some(r => { const l = liveRec(r.id); return l && r.fingerprint && l.fingerprint && l.fingerprint !== r.fingerprint; })) return null;
+  let a = 0, b = 0;
+  for (const [k, st] of state.live.groups) if (keyMatchesOp(k, op)) a += st.available;
+  for (const [k, st] of Object.entries(state.latest.groups)) if (keyMatchesOp(k, op)) b += st.available;
+  return { diff: a - b, sinceMs: Date.now() - state.latest.at };
+}
+function keyMatchesOp(k, op) { const [ags, o, ty] = k.split('|'); if (ags === 'DE') return false; if (state.scope !== 'DE' && ags !== state.scope) return false; if (o !== op) return false; if (state.type !== 'all' && ty !== state.type) return false; return true; }
+
+// ---------- Live-Abruf ----------
+async function liveFetch() {
+  const cat = state.catalog?.sources || [];
+  const recs = sourcesForScope();
+  const idSet = new Set(recs.map(r => r.id));
+  // Katalogquellen für den Scope; ohne Sammler-Stand: alles (mit Fortschritt)
+  let targets = cat.filter(s => !s.disabled && (state.scope === 'DE' && !state.latest ? true : idSet.has(s.id) || idSet.has(`${s.id}`) || recs.some(r => r.parent === s.id)));
+  if (state.scope !== 'DE' && !targets.length) targets = cat.filter(s => !s.disabled);
+  const btn = $('#btn-live'); btn.disabled = true;
+  const n = notice(`Live-Abruf: <span class="mono" id="live-prog">0 / ${targets.length}</span> Quellen <div class="progress"><i></i></div>`, '', 'live');
+  await loadBoundaries();
+  const systems = new Map(), recsOut = new Map();
+  let done = 0; const now = Date.now();
+  const worker = async (src) => {
+    try {
+      const subs = recs.filter(r => r.parent === src.id);
+      if (src.auth || subs.length) {
+        // Zugangsquellen (MOBIDROM): Momentaufnahme des Sammlers
+        for (const r of subs.length ? subs : [src]) {
+          const snap = await getJson(CFG.DATA + `snapshot/${r.id.replace(/[^\w.-]+/g, '_')}.json`);
+          if (snap.ok) systems.set(r.id, snapshotToSystem(snap.json, r));
+          recsOut.set(r.id, { ...r, snapshot: true, checkedAt: snap.json?.at || r.checkedAt });
+        }
+        return;
+      }
+      const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, getJson, { now }) : await C.readGbfsSystem(src, getJson, { now });
+      systems.set(src.id, sys);
+      recsOut.set(src.id, summarize(src, sys, now));
+    } finally { done++; const p = $('#live-prog'); if (p) p.textContent = `${done} / ${targets.length}`; const bar = $('#notice [data-id=live] .progress i'); if (bar) bar.style.width = `${(done / targets.length) * 100}%`; }
+  };
+  let i = 0; await Promise.all(Array.from({ length: 6 }, async () => { while (i < targets.length) await worker(targets[i++]); }));
+  // Zusammenführen
+  const vehicles = [], stations = [];
+  for (const [id, sys] of systems) {
+    const rec = recsOut.get(id); const usable = rec.status === 'live' || rec.status === 'delayed';
+    if (!usable) continue;
+    const src = cat.find(s => s.id === id) || recs.find(r => r.id === id) || {};
+    const agsSet = new Set();
+    for (const v of sys.vehicles) {
+      if (v.geoStatus !== 'ok') continue;
+      const m = state.bIndex ? C.assignMunicipality(state.bIndex, v.lat, v.lon) : null;
+      const ags = m?.ags || 'unbekannt'; agsSet.add(ags);
+      vehicles.push({ ...v, operator: rec.operator, sourceId: id, priority: src.priority ?? 2, ags, feedAgeMs: rec.vehicleFeedAgeMs });
+    }
+    for (const s of sys.stations) {
+      if (!C.validLatLon(s.lat, s.lon)) continue;
+      const m = state.bIndex ? C.assignMunicipality(state.bIndex, s.lat, s.lon) : null;
+      const ags = m?.ags || 'unbekannt'; agsSet.add(ags);
+      stations.push({ ...s, operator: rec.operator, sourceId: id, priority: src.priority ?? 2, ags, hasVehicleList: !!sys.vehicleListPresent, feedAgeMs: rec.stationFeedAgeMs });
+    }
+    rec.municipalities = [...agsSet];
+  }
+  vehicles.sort((a, b) => a.priority - b.priority);
+  const dv = C.dedupeVehicles(vehicles), ds = C.dedupeStations(stations);
+  const groups = C.aggregateGroups(dv.vehicles, ds.stations, { chargeThreshold: state.thresholds.charge, rangeThreshold: state.thresholds.range });
+  state.live = { at: now, systems, groups, vehicles: dv.vehicles, stations: ds.stations, recs: recsOut, dedupe: { ...dv.stats, stationDuplicates: ds.duplicates }, targets: targets.length };
+  clearNotice('live'); btn.disabled = false;
+  const failed = [...recsOut.values()].filter(r => !['live', 'delayed'].includes(r.status));
+  if (failed.length) notice(`${failed.length} von ${recsOut.size} Quellen lieferten keine verwertbaren Live-Daten (${[...new Set(failed.map(r => STATUS[r.status] || r.status))].join(', ')}). Fehlende Anbieter bleiben aus dem Sammler-Stand sichtbar.`, 'warn', 'livefail'); else clearNotice('livefail');
+  if (!state.bIndex) notice('Ohne Gemeindegrenzen (erster Sammler-Lauf fehlt) werden Live-Bestände nicht nach Ort getrennt.', 'warn', 'nob');
+  state.mode = 'live'; $('#sel-mode').value = 'live';
+  renderAll();
+}
+function summarize(src, sys, now) {
+  const rec = { id: src.id, operator: src.operator, name: src.name, api: src.api, url: src.url, directories: src.directories, priority: src.priority ?? 2, status: 'error', httpStatus: sys.httpStatus, latencyMs: sys.latencyMs, errors: sys.errors, license: sys.systemInfo?.licenseId || sys.systemInfo?.licenseUrl || src.license || null, version: sys.version || null, feedAgeMs: null, vehicleFeedAgeMs: null, stationFeedAgeMs: null, fingerprint: null, quality: null, counts: { vehicles: sys.vehicles.length, stations: sys.stations.length }, municipalities: [], checkedAt: now };
+  if (sys.httpStatus === 404 || sys.httpStatus === 410) rec.status = 'gone';
+  else if (sys.httpStatus === 401 || sys.httpStatus === 403) rec.status = 'auth';
+  else if (!sys.vehicles.length && !sys.stations.length) rec.status = sys.errors.length ? 'error' : 'empty';
+  else {
+    const vAge = sys.feedAges.vehicle_status ?? sys.feedAges.free_bike_status ?? null, sAge = sys.feedAges.station_status ?? null;
+    const ages = [vAge, sAge].filter(a => a != null);
+    rec.vehicleFeedAgeMs = vAge; rec.stationFeedAgeMs = sAge; rec.feedAgeMs = ages.length ? Math.max(...ages) : (sys.lastUpdated != null ? now - sys.lastUpdated : null);
+    rec.status = C.freshness(rec.feedAgeMs);
+  }
+  rec.fingerprint = C.fingerprint(sys); rec.quality = C.qualityScore(sys, now).score;
+  const prev = state.latest?.sources.find(r => r.id === src.id); rec.sourceChanged = !!(prev?.fingerprint && prev.fingerprint !== rec.fingerprint);
+  return rec;
+}
+function snapshotToSystem(snap, rec) {
+  return {
+    vehicles: (snap.vehicles || []).map(([lat, lon, type, flags, battery, range], i) => ({ rawId: `${rec.id}#${i}`, lat, lon, type, reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: battery, rangeKm: range, geoStatus: 'ok', geoOrigin: 'vehicle', reportedAt: snap.at, positionAgeMs: Date.now() - snap.at })),
+    stations: (snap.stations || []).map(([lat, lon, name, phys, bookable, docks, renting, returning], i) => ({ id: `${rec.id}#s${i}`, name, lat, lon, physicalAvailable: phys, bookable, docksAvailable: docks, renting: !!renting, returning: !!returning, installed: true, reportedAt: snap.at, typeHint: 'unknown' })),
+    vehicleListPresent: (snap.vehicles || []).length > 0, feedAges: {}, errors: [], systemInfo: {},
+  };
+}
+
+// ---------- Rendering ----------
+function setView(name) {
+  const views = ['live', 'lab', 'signals', 'coverage', 'sources'];
+  if (!views.includes(name)) name = 'live';
+  $$('section.view').forEach(s => s.classList.toggle('active', s.id === `view-${name}`));
+  $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.view === name));
+  if (name === 'live') setTimeout(() => state.map?.invalidateSize(), 50);
+  if (name === 'lab') renderHistory();
+}
+function renderAll() {
+  renderHeader(); renderLive(); renderLab(); renderSignals(); renderCoverage(); renderSources();
+}
+function renderHeader() {
+  $('#crumb-scope').textContent = scopeLabel();
+  const at = state.mode === 'live' && state.live ? state.live.at : state.latest?.at;
+  const label = state.mode === 'live' && state.live ? `Live ${timeText(at)}` : `Sammler ${timeText(at)}`;
+  $('#stand-pill').textContent = `Stand ${label}`;
+  $('#side-stamp').textContent = state.latest ? `Sammler: ${new Date(state.latest.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · ${state.latest.counts.sources} Quellen` : 'Sammler: noch kein Lauf';
+  const recs = sourcesForScope(); const eff = recs.map(r => liveRec(r.id) || r);
+  const by = {}; for (const r of eff) by[r.status] = (by[r.status] || 0) + 1;
+  $('#filter-count').textContent = `${eff.length} Quellen im Gebiet · ${Object.entries(by).map(([k, v]) => `${v} ${STATUS[k] || k}`).join(' · ')}${state.live ? ` · Live-Dubletten bereinigt: ${state.live.dedupe.duplicates}` : ''}`;
+}
+function tile(l, v, s, cls = '') { return `<div class="tile ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }
+function renderLive() {
+  const groups = scopeGroups(); const st = C.sumStats([...groups.values()]);
+  const rows = operatorRows();
+  const recs = sourcesForScope().map(r => liveRec(r.id) || r);
+  const usable = recs.filter(r => r.status === 'live' || r.status === 'delayed');
+  const gaps = rows.filter(r => r.gap).length;
+  const lowE = st.batteryKnown ? st.lowBattery / st.batteryKnown : null;
+  $('#live-tiles').innerHTML = [
+    tile('Verfügbar · buchbar', fmt(st.available), `${fmt(st.total)} gemeldet · ${fmt(st.reserved)} reserviert`),
+    tile('Gesperrt', fmt(st.disabled), st.total ? `${pctf(st.disabled, st.total)} des Bestands` : 'keine Fahrzeugdaten', st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
+    tile('Stationen mit Angebot', `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}`, `${fmt(st.stationsEmpty)} leer · ${fmt(st.stationsFull)} voll`),
+    tile('Energie niedrig', lowE == null ? 'k. A.' : pctf(st.lowBattery, st.batteryKnown), lowE == null ? 'keine Ladestandsangabe' : `${fmt(st.lowBattery)} von ${fmt(st.batteryKnown)} mit Angabe`, lowE > 0.3 ? 'warn' : ''),
+    tile('Quellen', `${fmt(usable.length)} / ${fmt(recs.length)}`, `${recs.filter(r => r.status === 'live').length} aktuell · ${recs.filter(r => r.status === 'delayed').length} verzögert${gaps ? ` · ${gaps} Datenlücke${gaps > 1 ? 'n' : ''}` : ''}`, recs.length && usable.length / recs.length < 0.7 ? 'warn' : ''),
+  ].join('');
+  // Tabelle
+  $('#tbl-operators tbody').innerHTML = rows.map(r => {
+    const s = r.st;
+    const d = r.delta ? `<span class="${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : ''}" style="color:var(--${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : 'muted'})">${r.delta.diff > 0 ? '+' : ''}${fmt(r.delta.diff)}</span><div class="sub-line">${ageText(r.delta.sinceMs)}</div>` : '—';
+    if (r.gap) return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${esc(r.gap.city)} · seit ${esc(r.gap.since)}</div></td><td colspan="7" class="sub-line">${esc(r.gap.note)}</td><td><span class="pill gap">Datenlücke</span></td><td></td></tr>`;
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${r.sources.length} Quelle${r.sources.length === 1 ? '' : 'n'}${r.changed ? ' · Quellenwechsel' : ''}</div></td>
+      <td>${r.dirs.map(d => DIRS[d] || d).join(' · ') || '–'}<div class="sub-line">Qualität ${r.quality ?? '–'}/100</div></td>
+      <td class="n">${fmt(s.available)}<div class="sub-line">${fmt(s.total)} gemeldet</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${d}</td>
+      <td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `${fmt(s.batteryKnown)} mit Angabe` : ''}</div></td>
+      <td class="n">${s.stations ? `${fmt(s.stationsEmpty)} / ${fmt(s.stations)}` : '—'}</td><td class="n">${ageText(r.age)}</td>
+      <td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span></td><td class="small">${r.license ? (/^https?:/.test(r.license) ? `<a href="${esc(r.license)}" target="_blank" rel="noopener">Lizenz ↗</a>` : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`;
+  }).join('') || '<tr><td colspan="10" class="empty">Keine Daten im gewählten Filter.</td></tr>';
+  renderBriefing(rows, st);
+  renderMap();
+}
+function renderBriefing(rows, st) {
+  const items = computeSignals().slice(0, 4);
+  $('#briefing').innerHTML = items.length ? items.map(sigCard).join('') : '<div class="empty">Keine auffälligen Signale im Gebiet.</div>';
+}
+
+// ---------- Karte ----------
+function initMap() {
+  const map = L.map('map', { preferCanvas: true, zoomControl: true }).setView([51.1, 10.4], 6);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende' }).addTo(map);
+  state.map = map;
+  state.layers = { vehicles: L.layerGroup().addTo(map), stations: L.layerGroup().addTo(map), muni: L.layerGroup().addTo(map), wfs: L.layerGroup().addTo(map), supply: L.layerGroup().addTo(map), bubbles: L.layerGroup().addTo(map), grid: L.layerGroup().addTo(map) };
+  map.on('moveend', () => { if ($('#chk-wfs').checked) loadWfs(); });
+}
+function livePoints() {
+  if (!state.live) return { vehicles: [], stations: [] };
+  const f = (x) => (state.scope === 'DE' || x.ags === state.scope) && (state.operator === 'all' || x.operator === state.operator);
+  return { vehicles: state.live.vehicles.filter(v => f(v) && (state.type === 'all' || v.type === state.type)), stations: state.live.stations.filter(f) };
+}
+function renderMap() {
+  if (!state.map) return;
+  const L_ = state.layers; Object.values(L_).forEach(l => l.clearLayers());
+  const layerMode = $('#sel-layer').value;
+  const { vehicles, stations } = livePoints();
+  const legend = [];
+  const inScope = state.scope !== 'DE';
+  if (state.live && (vehicles.length || stations.length)) {
+    $('#map-title').textContent = `Karte ${scopeLabel()}`;
+    const step = Math.max(1, Math.ceil(vehicles.length / CFG.MAX_POINTS));
+    let drawn = 0;
+    if (layerMode === 'points') {
+      if ($('#chk-vehicles').checked) for (let i = 0; i < vehicles.length; i += step) {
+        const v = vehicles[i]; drawn++;
+        const col = v.disabled ? '#ef6b6b' : opColor(v.operator);
+        L.circleMarker([v.lat, v.lon], { radius: 4, weight: 1, color: col, fillColor: col, fillOpacity: v.disabled ? .5 : .85, opacity: .9 })
+          .bindPopup(`<b>${esc(v.operator)}</b> · ${TYPE[v.type] || v.type}<br>${v.disabled ? 'gesperrt' : v.reserved ? 'reserviert' : 'verfügbar'}${v.batteryPct != null ? ` · Akku ${fmt(v.batteryPct)} %` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}<br><span class="muted">Position ${ageText(v.positionAgeMs)} · ${v.geoOrigin === 'station' ? 'Stationsersatz' : 'GPS'}${v.reusedId ? ' · Kennung wiederverwendet' : ''}</span>`).addTo(L_.vehicles);
+      }
+      if ($('#chk-stations').checked) for (const s of stations) {
+        const empty = s.renting !== false && (s.bookable ?? 0) === 0;
+        L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: empty ? '#e3b341' : opColor(s.operator), fillOpacity: .2 })
+          .bindPopup(`<b>${esc(s.name || 'Station')}</b> · ${esc(s.operator)}<br>physisch ${fmt(s.physicalAvailable)} · buchbar ${fmt(s.bookable)} · Plätze ${fmt(s.docksAvailable)}<br><span class="muted">${s.renting === false ? 'Ausleihe gesperrt' : 'vermietend'} · ${s.returning === false ? 'Rückgabe gesperrt' : 'Rückgabe möglich'}</span>`).addTo(L_.stations);
+      }
+      const ops = [...new Set(vehicles.map(v => v.operator))].slice(0, 12);
+      legend.push(...ops.map(o => `<span><i class="dot" style="background:${opColor(o)}"></i>${esc(o)}</span>`), `<span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span>`, `<span><i class="sq"></i>Station</span>`, `<span class="muted">${fmt(drawn)} / ${fmt(vehicles.length)} Fahrzeuge gezeichnet</span>`);
+    } else {
+      // Rasterzellen ca. 500 m
+      const cells = new Map();
+      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; if (v.batteryPct != null) { c.known++; if (v.batteryPct < state.thresholds.charge) c.low++; } cells.set(k, c); }
+      const max = Math.max(1, ...[...cells.values()].map(c => layerMode === 'energy' ? c.low : c.n));
+      for (const c of cells.values()) {
+        const val = layerMode === 'energy' ? c.low : c.n; if (!val) continue;
+        const a = 0.15 + 0.7 * (val / max);
+        L.rectangle([[c.lat - .00225, c.lon - .0035], [c.lat + .00225, c.lon + .0035]], { weight: 0, fillColor: layerMode === 'energy' ? '#e3b341' : '#49c7b0', fillOpacity: a })
+          .bindPopup(layerMode === 'energy' ? `${fmt(c.low)} Fahrzeuge unter ${state.thresholds.charge} % (von ${fmt(c.known)} mit Angabe)` : `${fmt(c.n)} verfügbare Fahrzeuge in dieser Zelle`).addTo(L_.grid);
+      }
+      legend.push(`<span>${layerMode === 'energy' ? 'Niedrige Energie' : 'Verfügbare Fahrzeuge'} je ~500-m-Zelle, dunkler = mehr (max ${fmt(max)})</span>`);
+    }
+  } else {
+    // Sammler-Stand: Gemeinde-Blasen
+    $('#map-title').textContent = state.scope === 'DE' ? 'Karte Deutschlandweit' : `Karte ${scopeLabel()}`;
+    const munis = state.latest?.municipalities || {};
+    const groups = scopeGroups();
+    const perMuni = new Map();
+    for (const [k, st] of groups) { const [ags, op] = k.split('|'); const m = perMuni.get(ags) || { ags, available: 0, total: 0, ops: {} }; m.available += st.available; m.total += st.total; m.ops[op] = (m.ops[op] || 0) + st.available; perMuni.set(ags, m); }
+    const centers = muniCenters();
+    const max = Math.max(1, ...[...perMuni.values()].map(m => m.available));
+    for (const m of perMuni.values()) {
+      const c = centers.get(m.ags); if (!c) continue;
+      const top = Object.entries(m.ops).sort((a, b) => b[1] - a[1])[0]?.[0];
+      L.circleMarker(c, { radius: 4 + Math.sqrt(m.available / max) * 26, weight: 1, color: opColor(top), fillColor: opColor(top), fillOpacity: .35 })
+        .bindPopup(`<b>${esc(munis[m.ags]?.name || m.ags)}</b> (${esc(munis[m.ags]?.state || '')})<br>${fmt(m.available)} verfügbar · ${fmt(m.total)} gemeldet<br>${Object.entries(m.ops).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${esc(o)} ${fmt(n)}`).join(' · ')}<br><a href="#live" data-ags="${m.ags}" class="pick-muni">Ort öffnen</a>`).addTo(L_.bubbles);
+    }
+    legend.push(`<span>Blase = verfügbare Fahrzeuge je Gemeinde (Sammler-Stand ${timeText(state.latest?.at)}), Farbe = größter Anbieter</span>`, `<span class="muted">Für Fahrzeugpositionen „Live abrufen“.</span>`);
+  }
+  if ($('#chk-muni').checked && inScope && state.boundaries) {
+    const f = state.boundaries.features.find(x => x.properties.ags === state.scope);
+    if (f) L.geoJSON(f, { style: { color: '#6aa9ff', weight: 1.5, fillOpacity: .04 } }).addTo(L_.muni);
+  }
+  $('#map-legend').innerHTML = legend.join('');
+  $('#map-sub').textContent = state.live && (vehicles.length || stations.length) ? `${fmt(vehicles.length)} Fahrzeuge · ${fmt(stations.length)} Stationen · Live ${timeText(state.live.at)}` : 'Fahrzeuge und Stationen';
+  fitMap();
+  if ($('#chk-wfs').checked) loadWfs();
+  if (state.supply && $('#chk-supply-on')) renderSupplyLayer();
+}
+function muniCenters() {
+  const out = new Map();
+  if (state.boundaries) for (const f of state.boundaries.features) { const b = f.bbox; out.set(f.properties.ags, [(b[1] + b[3]) / 2, (b[0] + b[2]) / 2]); }
+  return out;
+}
+let lastFitKey = null;
+function fitMap(force = false) {
+  const key = `${state.scope}|${state.mode}|${state.operator}`;
+  if (!force && key === lastFitKey) return; lastFitKey = key;
+  const map = state.map;
+  if (state.scope !== 'DE') {
+    const f = state.boundaries?.features.find(x => x.properties.ags === state.scope);
+    if (f) { const b = f.bbox; map.fitBounds([[b[1], b[0]], [b[3], b[2]]], { padding: [10, 10] }); return; }
+    const { vehicles } = livePoints(); if (vehicles.length) { map.fitBounds(L.latLngBounds(vehicles.slice(0, 2000).map(v => [v.lat, v.lon])), { padding: [10, 10] }); return; }
+  }
+  map.setView([51.1, 10.4], 6);
+}
+async function loadWfs() {
+  const L_ = state.layers; L_.wfs.clearLayers();
+  const map = state.map; if (map.getZoom() < 11) { notice('MobiData-Karte: ab Stadtzoom (Zoom ≥ 11) laden.', '', 'wfs'); return; }
+  const b = map.getBounds();
+  const url = `${CFG.WFS}?service=WFS&version=2.0.0&request=GetFeature&typeName=MobiData-BW:sharing_vehicles&outputFormat=application/json&srsName=EPSG:4326&count=4000&bbox=${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()},EPSG:4326`;
+  const r = await getJson(url, { timeout: 30000 });
+  if (!r.ok || !r.json?.features) { notice(`MobiData-Kartenquelle nicht erreichbar (${r.error || r.status}). <a href="https://www.mobidata-bw.de/karten/ipl/sharing/" target="_blank" rel="noopener">Originalkarte ↗</a>`, 'warn', 'wfs'); return; }
+  clearNotice('wfs');
+  const now = Date.now(); let n = 0, fresh = 0, old = 0, unk = 0;
+  for (const f of r.json.features) {
+    const [lon, lat] = f.geometry?.coordinates || []; if (!C.validLatLon(lat, lon)) continue;
+    const p = f.properties || {};
+    if (state.operator !== 'all' && !String(p.provider_name || p.operator || p.system_id || '').toLowerCase().includes(state.operator.toLowerCase())) continue;
+    const ts = C.toMs(p.last_reported || p.last_updated || p.timestamp || p.updated_at);
+    const age = ts != null ? now - ts : null;
+    const cls = age == null ? 'unk' : age <= 30 * 60e3 ? 'fresh' : 'old';
+    if (cls === 'fresh') fresh++; else if (cls === 'old') { old++; if (!$('#chk-wfs-old')?.checked) continue; } else unk++;
+    n++;
+    L.circleMarker([lat, lon], { radius: 3, weight: 1, color: cls === 'fresh' ? '#2dd4bf' : cls === 'old' ? '#8b949e' : '#e3b341', fillOpacity: .7 })
+      .bindPopup(`<b>MobiData-Karte</b><br>${esc(p.provider_name || p.operator || p.system_id || '')} · ${esc(p.form_factor || p.vehicle_type || '')}<br><span class="muted">${age == null ? 'Aktualität ungeklärt' : `Meldung ${ageText(age)}`}</span>`).addTo(L_.wfs);
+  }
+  notice(`MobiData-Karte: ${fmt(n)} Punkte im Ausschnitt (${fresh} zeitlich bestätigt, ${unk} Aktualität ungeklärt, ${old} älter${r.json.features.length >= 4000 ? ', Antwort begrenzt' : ''}). Nicht in Kennzahlen enthalten.`, '', 'wfs');
+}
+
+// ---------- Performance Lab ----------
+function renderLab() {
+  const groups = scopeGroups(); const st = C.sumStats([...groups.values()]);
+  $('#lab-tiles').innerHTML = [
+    tile('Buchbare Fahrzeuge', fmt(st.available), `${pctf(st.available, st.total)} von ${fmt(st.total)} gemeldeten`),
+    tile(`Ladestand unter ${state.mode === 'live' ? state.thresholds.charge : 20} %`, st.batteryKnown ? pctf(st.lowBattery, st.batteryKnown) : 'k. A.', st.batteryKnown ? `${fmt(st.lowBattery)} von ${fmt(st.batteryKnown)} mit Ladestand` : 'keine Ladestandsangabe'),
+    tile(`Reichweite unter ${state.mode === 'live' ? state.thresholds.range : 5} km`, st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : 'k. A.', st.rangeKnown ? `${fmt(st.lowRange)} von ${fmt(st.rangeKnown)} mit Reichweite` : 'keine Reichweitenangabe'),
+    tile('Stationen mit Angebot', st.stations ? `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}` : '—', st.stations ? `${fmt(st.stationBookable)} buchbar · ${fmt(st.stationDocks)} freie Plätze` : 'keine Stationen im Filter'),
+  ].join('');
+  // Fahrzeugarten
+  const byType = new Map();
+  for (const [k, s] of groups) { const ty = k.split('|')[2]; byType.set(ty, [...(byType.get(ty) || []), s]); }
+  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = C.sumStats(list); return `<tr><td>${TYPE[ty] || ty}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `n = ${fmt(s.batteryKnown)}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : 'k. A.'}</td></tr>`; }).sort().join('') || '<tr><td colspan="6" class="empty">Keine Daten.</td></tr>';
+  // Stationen je Anbieter
+  const byOp = new Map();
+  for (const [k, s] of groups) { const op = k.split('|')[1]; byOp.set(op, [...(byOp.get(op) || []), s]); }
+  $('#tbl-stations tbody').innerHTML = [...byOp].map(([op, list]) => C.sumStats(list)).map((s, i) => ({ s, op: [...byOp.keys()][i] })).filter(x => x.s.stations).map(({ op, s }) => `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span></td><td class="n">${fmt(s.stations)}</td><td class="n">${fmt(s.stationsRenting)}</td><td class="n">${fmt(s.stationsEmpty)}</td><td class="n">${fmt(s.stationsFull)}</td><td class="n">${fmt(s.stationPhysical)}</td><td class="n">${fmt(s.stationBookable)}</td><td class="n">${fmt(s.stationDocks)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Keine Stationsdaten im Filter.</td></tr>';
+  // Scorecard
+  const rows = operatorRows().filter(r => !r.gap);
+  $('#tbl-score tbody').innerHTML = rows.map(r => { const s = r.st; const avail = s.total ? s.available / s.total : null; const dis = s.total ? s.disabled / s.total : null; const low = s.batteryKnown ? s.lowBattery / s.batteryKnown : null; const emp = s.stations ? s.stationsEmpty / s.stations : null;
+    const parts = [avail != null ? avail * 100 : null, dis != null ? 100 - dis * 100 : null, low != null ? 100 - low * 100 : null, emp != null ? 100 - emp * 100 : null, r.quality].filter(x => x != null);
+    const score = parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${low == null ? 'k. A.' : pctf(s.lowBattery, s.batteryKnown)}</td><td class="n">${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${r.quality ?? '—'}</td><td class="n"><b>${score ?? '—'}</b><div class="bar"><i style="width:${score ?? 0}%"></i></div></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Keine Daten.</td></tr>';
+  // Städtevergleich
+  const munis = state.latest?.municipalities || {};
+  const src = state.mode === 'live' && state.live ? state.live.groups : new Map(Object.entries(state.latest?.groups || {}));
+  const per = new Map();
+  for (const [k, s] of src) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || ags === 'unbekannt') continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const m = per.get(ags) || { ags, available: 0, ops: new Set(), scooter: 0, bikes: 0 }; m.available += s.available; m.ops.add(op); if (ty === 'scooter') m.scooter += s.available; else m.bikes += s.available; per.set(ags, m); }
+  const list = [...per.values()].sort((a, b) => b.available - a.available).slice(0, 25);
+  $('#cities-title').textContent = state.scope === 'DE' ? 'Stadt- und Gebietsvergleich' : `Gebietsvergleich · ${muniName(state.scope)} im Kontext`;
+  if ($('#view-lab').classList.contains('active')) renderHistory();
+  $('#tbl-cities tbody').innerHTML = list.map(m => { const mi = munis[m.ags]; const pop = mi?.pop; return `<tr${m.ags === state.scope ? ' style="font-weight:600"' : ''}><td><a href="#live" class="pick-muni" data-ags="${m.ags}">${esc(mi?.name || m.ags)}</a> <span class="muted">${esc(mi?.state || '')}</span></td><td class="n">${fmt(m.available)}</td><td class="n">${pop ? fmt((m.available / pop) * 1e4, 1) : '—'}</td><td class="n">${m.ops.size}</td><td class="n">${fmt(m.scooter)}</td><td class="n">${fmt(m.bikes)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Keine Daten.</td></tr>';
+}
+async function renderHistory() {
+  const idx = state.histIndex; const box = $('#chart-hist');
+  if (!idx?.days?.length) { box.innerHTML = '<div class="empty">Noch keine Sammler-Punkte vorhanden.</div>'; return; }
+  const day = state.histDay || idx.days[idx.days.length - 1];
+  $('#hist-days').innerHTML = idx.days.slice(-7).map(d => `<button class="chip ${d === day ? 'on' : ''}" data-day="${d}">${d.slice(8)}.${d.slice(5, 7)}.</button>`).join('');
+  const h = await loadHistory(day);
+  if (!h) { box.innerHTML = '<div class="empty">Verlauf nicht ladbar.</div>'; return; }
+  const fi = h.fields.indexOf('available');
+  const byOp = new Map();
+  for (const [k, ser] of Object.entries(h.series)) {
+    const [ags, op, ty] = k.split('|');
+    if (state.scope === 'DE' ? ags !== 'DE' : ags !== state.scope) continue;
+    if (state.scope === 'DE' && state.operator !== 'all') continue; // DE-Totale je Art, kein Anbieter
+    if (state.operator !== 'all' && op !== state.operator) continue;
+    if (state.type !== 'all' && ty !== state.type) continue;
+    const name = state.scope === 'DE' ? (TYPE[ty] || ty) : op;
+    const arr = byOp.get(name) || new Array(h.t.length).fill(null);
+    ser.available.forEach((v, i) => { if (v != null) arr[i] = (arr[i] || 0) + v; });
+    byOp.set(name, arr);
+  }
+  const series = [...byOp].map(([name, values]) => ({ name, values, color: state.scope === 'DE' ? null : opColor(name) })).sort((a, b) => Math.max(...b.values.filter(x => x != null), 0) - Math.max(...a.values.filter(x => x != null), 0)).slice(0, 8);
+  const changes = (state.latest?.sources || []).filter(r => r.sourceChanged && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)));
+  $('#hist-sub').textContent = `${h.t.length} Sammler-Punkte am ${day.split('-').reverse().join('.')} · beobachtet ${timeText(h.t[0])}–${timeText(h.t[h.t.length - 1])}${changes.length ? ` · ${changes.length} Quellenwechsel (Vergleich unterbrochen)` : ''}`;
+  box.innerHTML = lineChart(h.t, series);
+  $('#chart-legend').innerHTML = series.map((s, i) => `<span><i class="dot" style="background:${s.color || palette(i)}"></i>${esc(s.name)} <span class="mono">${fmt(s.values.filter(x => x != null).pop())}</span></span>`).join('');
+}
+const palette = (i) => ['#49c7b0', '#6aa9ff', '#e3b341', '#f472b6', '#a3e635', '#c084fc', '#fb923c', '#ef6b6b'][i % 8];
+function lineChart(t, series) {
+  const W = 900, H = 260, P = { l: 48, r: 12, t: 12, b: 26 };
+  const vals = series.flatMap(s => s.values).filter(x => x != null);
+  if (!vals.length) return '<div class="empty">Keine Punkte für diesen Filter.</div>';
+  const max = Math.max(...vals) * 1.08 || 1, min = 0;
+  const x = (i) => P.l + (i / Math.max(1, t.length - 1)) * (W - P.l - P.r);
+  const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
+  const ticks = 4; let g = '';
+  for (let k = 0; k <= ticks; k++) { const v = min + ((max - min) * k) / ticks; g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 3}" text-anchor="end">${fmt(Math.round(v))}</text>`; }
+  const stepX = Math.max(1, Math.round(t.length / 6));
+  for (let i = 0; i < t.length; i += stepX) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${timeText(t[i])}</text>`;
+  const paths = series.map((s, i) => { let d = '', open = false; s.values.forEach((v, j) => { if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(j).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); const last = s.values.map((v, j) => [v, j]).filter(([v]) => v != null).pop(); return `<path d="${d}" fill="none" stroke="${s.color || palette(i)}" stroke-width="2" stroke-linejoin="round"/>${last ? `<circle cx="${x(last[1])}" cy="${y(last[0])}" r="3.5" fill="${s.color || palette(i)}"/>` : ''}`; }).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Verlauf verfügbarer Fahrzeuge">${g}${paths}</svg>`;
+}
+
+// ---------- Signale ----------
+let sigFilter = 'all';
+function computeSignals() {
+  const groups = scopeGroups(); const munis = state.latest?.municipalities || {};
+  const by = new Map();
+  for (const [k, s] of groups) { const [ags, op] = k.split('|'); const key = `${ags}|${op}`; by.set(key, [...(by.get(key) || []), s]); }
+  const out = [];
+  const place = (ags) => state.scope === 'DE' ? ` · ${munis[ags]?.name || ags}` : '';
+  for (const [key, list] of by) {
+    const [ags, op] = key.split('|'); const s = C.sumStats(list);
+    if (s.total >= 5 && s.disabled / s.total >= 0.25) out.push({ cat: 'disabled', sev: s.disabled / s.total >= 0.5 ? 'bad' : 'warn', w: s.disabled, title: `${op}${place(ags)}: ${fmt(s.disabled)} gesperrt (${pctf(s.disabled, s.total)})`, text: 'Der Feed markiert Fahrzeuge als nicht nutzbar. Ein konkreter Wartungsauftrag ist daraus nicht ableitbar.', foot: 'Gemeldetes is_disabled / Stationsfeld' });
+    if (s.batteryKnown >= 5 && s.lowBattery / s.batteryKnown >= 0.3) out.push({ cat: 'energy', sev: s.lowBattery / s.batteryKnown >= 0.6 ? 'bad' : 'warn', w: s.lowBattery, title: `${op}${place(ags)}: ${pctf(s.lowBattery, s.batteryKnown)} niedrige Energie`, text: `${fmt(s.lowBattery)} von ${fmt(s.batteryKnown)} Fahrzeugen mit Energieangabe. Möglicher Ladebedarf.`, foot: 'Ladestand / Reichweite · Arbeitsauftrag nicht bestätigt' });
+    if (s.stations >= 3 && s.stationsEmpty / s.stations >= 0.3) out.push({ cat: 'stations', sev: s.stationsEmpty / s.stations >= 0.6 ? 'bad' : 'warn', w: s.stationsEmpty, title: `${op}${place(ags)}: ${fmt(s.stationsEmpty)} leere Stationen (${pctf(s.stationsEmpty, s.stations)})`, text: `${fmt(s.stationsEmpty)} von ${fmt(s.stations)} gemeldeten Stationen bieten derzeit kein Fahrzeug.`, foot: 'Gemeldeter Stationsstatus' });
+    if (s.stations >= 3 && s.stationsFull / s.stations >= 0.3) out.push({ cat: 'stations', sev: 'info', w: s.stationsFull, title: `${op}${place(ags)}: ${fmt(s.stationsFull)} volle Stationen`, text: 'Rückgabe an diesen Stationen ist nicht möglich (keine freien Plätze).', foot: 'num_docks_available = 0' });
+    if (s.total >= 5 && s.geoStation / s.total >= 0.5) out.push({ cat: 'data', sev: 'info', w: s.geoStation, title: `${op}${place(ags)}: Positionen überwiegend Stationsersatz`, text: `${fmt(s.geoStation)} von ${fmt(s.total)} Fahrzeugen ohne eigene Koordinaten; Stationsposition wird als Ersatz gezeigt.`, foot: 'Geo-Prüfung' });
+  }
+  // Quellenzustand
+  const recs = sourcesForScope().map(r => liveRec(r.id) || r);
+  for (const r of recs) {
+    if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, title: `${r.operator}: Quelle ${STATUS[r.status].toLowerCase()}`, text: `${r.name || r.id}${r.feedAgeMs != null ? ` · Feed ${ageText(r.feedAgeMs)} alt` : ''}${r.errors?.length ? ` · ${r.errors[0]}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}` });
+    if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, title: `${r.operator}: Quellenwechsel erkannt`, text: `${r.name || r.id}: Endpunkt, Version, Feeds oder Fahrzeugarten haben sich geändert. Zeitvergleiche beginnen neu.`, foot: 'Fingerabdruck' });
+  }
+  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, title: `${g.operator} · ${g.city}: öffentliche Daten fehlen seit ${g.since.split('-').reverse().join('.')}`, text: g.note, foot: g.probeOk ? 'Feed wieder erreichbar' : `Feed geprüft: ${g.probeStatus ?? '–'}` });
+  // Bestandssprung gegen Verlauf
+  const h = state.histDay ? state.hist[state.histDay] : state.hist[state.histIndex?.days?.slice(-1)[0]];
+  if (h && h.t.length >= 3) {
+    const fi = h.fields.indexOf('available');
+    for (const [key, list] of by) {
+      const [ags, op] = key.split('|'); let prev = 0, cur = 0, n = 0;
+      for (const [k, ser] of Object.entries(h.series)) { if (!k.startsWith(`${ags}|${op}|`)) continue; const a = ser.available; const lastIdx = a.length - 1; if (a[lastIdx] == null || a[lastIdx - 3] == null) continue; cur += a[lastIdx]; prev += a[lastIdx - 3]; n++; }
+      if (n && prev >= 20 && Math.abs(cur - prev) / prev >= 0.3) out.push({ cat: 'jump', sev: 'warn', w: Math.abs(cur - prev), title: `${op}${place(ags)}: Bestand ${cur > prev ? '+' : ''}${fmt(cur - prev)} in einer Stunde`, text: `Verfügbar ${fmt(prev)} → ${fmt(cur)} über die letzten drei Sammler-Punkte. Ausleihen, Umverteilung oder ein Quellenproblem können dahinterstehen.`, foot: 'Sammler-Verlauf' });
+    }
+  }
+  const sevW = { bad: 3, warn: 2, info: 1 };
+  return out.sort((a, b) => sevW[b.sev] - sevW[a.sev] || b.w - a.w);
+}
+const CATS = { all: 'Alle', disabled: 'Gesperrt', energy: 'Energie', stations: 'Stationen', jump: 'Bestandssprung', data: 'Datenqualität' };
+function sigCard(s) { return `<div class="card ${s.sev}"><div class="k">${CATS[s.cat] || s.cat} · ${s.sev === 'bad' ? 'kritisch' : s.sev === 'warn' ? 'auffällig' : 'hinweis'}</div><b>${esc(s.title)}</b><p>${esc(s.text)}</p><div class="foot">${esc(s.foot)}</div></div>`; }
+function renderSignals() {
+  const all = computeSignals();
+  const counts = {}; for (const s of all) counts[s.cat] = (counts[s.cat] || 0) + 1;
+  $('#sig-filter').innerHTML = Object.entries(CATS).map(([k, l]) => `<button class="chip ${sigFilter === k ? 'on' : ''}" data-cat="${k}">${l} <span class="mono">${k === 'all' ? all.length : counts[k] || 0}</span></button>`).join('');
+  const list = (sigFilter === 'all' ? all : all.filter(s => s.cat === sigFilter)).slice(0, 60);
+  $('#signals').innerHTML = list.length ? list.map(sigCard).join('') : '<div class="empty" style="grid-column:1/-1">Keine Signale im gewählten Filter.</div>';
+  renderStability();
+}
+async function renderStability() {
+  const day = state.histDay || state.histIndex?.days?.slice(-1)[0];
+  const tb = $('#tbl-stability tbody');
+  if (!day) { tb.innerHTML = '<tr><td colspan="7" class="empty">Noch kein Verlauf.</td></tr>'; return; }
+  const h = await loadHistory(day); if (!h) { tb.innerHTML = '<tr><td colspan="7" class="empty">Verlauf nicht ladbar.</td></tr>'; return; }
+  const byOp = new Map();
+  for (const [k, ser] of Object.entries(h.series)) { const [ags, op, ty] = k.split('|'); if (state.scope === 'DE' ? ags !== 'DE' : ags !== state.scope) continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const name = state.scope === 'DE' ? (TYPE[ty] || ty) : op; const arr = byOp.get(name) || new Array(h.t.length).fill(null); ser.available.forEach((v, i) => { if (v != null) arr[i] = (arr[i] || 0) + v; }); byOp.set(name, arr); }
+  tb.innerHTML = [...byOp].map(([name, arr]) => { const v = arr.filter(x => x != null); if (!v.length) return ''; const min = Math.min(...v), max = Math.max(...v), last = v[v.length - 1], first = v[0]; const d = last - first; const drop = max && (max - last) / max; return `<tr><td>${esc(name)}</td><td class="n">${v.length}</td><td class="n">${fmt(min)}</td><td class="n">${fmt(max)}</td><td class="n">${fmt(last)}</td><td class="n">${d > 0 ? '+' : ''}${fmt(d)}</td><td class="small">${drop >= 0.3 ? `<span class="pill stale">${pctf(max - last, max)} unter Tagesmaximum</span>` : v.length < 3 ? '<span class="muted">zu wenige Punkte</span>' : '<span class="muted">stabil</span>'}</td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Keine Punkte im Filter.</td></tr>';
+}
+
+// ---------- Abdeckung ----------
+function renderCoverage() {
+  const munis = state.latest?.municipalities || {}; const q = ($('#cov-search').value || '').toLowerCase(); const dir = $('#cov-dir').value;
+  const recs = state.latest?.sources || [];
+  const rows = [];
+  for (const [ags, m] of Object.entries(munis)) {
+    for (const [op, o] of Object.entries(m.operators || {})) {
+      const srcs = recs.filter(r => r.operator === op && (r.municipalities || []).includes(ags));
+      const dirs = [...new Set(srcs.flatMap(r => r.directories || []))];
+      if (dir !== 'all' && !dirs.includes(dir)) continue;
+      if (q && !`${m.name} ${op} ${m.state}`.toLowerCase().includes(q)) continue;
+      const status = srcs.some(r => r.status === 'live') ? 'live' : srcs.some(r => r.status === 'delayed') ? 'delayed' : srcs[0]?.status || 'unknown';
+      rows.push({ ags, m, op, o, srcs, dirs, status });
+    }
+  }
+  rows.sort((a, b) => a.m.name.localeCompare(b.m.name, 'de') || a.op.localeCompare(b.op));
+  const opsAll = new Set(rows.map(r => r.op)), places = new Set(rows.map(r => r.ags));
+  $('#cov-tiles').innerHTML = [tile('Anbieter vor Ort', fmt(rows.length), 'Anbieter × Gemeinde mit bestätigter Zuordnung'), tile('Anbietergruppen', fmt(opsAll.size), 'über alle Quellen'), tile('Gemeinden', fmt(places.size), 'mit verfügbarem Angebot'), tile('Ohne Zuordnung', fmt(recs.filter(r => ['foreign', 'empty'].includes(r.status)).length), 'Quellen außerhalb DE oder ohne Bestand')].join('');
+  $('#cov-sub').textContent = `${fmt(rows.length)} Zeilen · Sammler-Stand ${timeText(state.latest?.at)}`;
+  const show = rows.slice(0, 400);
+  $('#tbl-cov tbody').innerHTML = show.map(r => `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${Object.entries(r.o.types).filter(([, n]) => n).map(([t, n]) => `${TYPE[t] || t} ${fmt(n)}`).join(' · ')}</div></td><td>${esc(r.m.name)} <span class="muted">${esc(r.m.state)}</span></td><td class="n">${fmt(r.o.total)}</td><td class="n">${fmt(r.o.available)}</td><td class="small">${r.dirs.map(d => DIRS[d] || d).join(' · ')}<div class="sub-line">${r.srcs.length} Quelle${r.srcs.length === 1 ? '' : 'n'}</div></td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span></td><td><a href="#live" class="pick-muni" data-ags="${r.ags}">Ort öffnen ↗</a></td></tr>`).join('') || '<tr><td colspan="7" class="empty">Keine Treffer.</td></tr>';
+  $('#cov-more').textContent = rows.length > show.length ? `${rows.length - show.length} weitere Zeilen – Suche eingrenzen.` : '';
+  $('#gaps').innerHTML = (state.latest?.gaps || []).map(g => `<div class="card info"><div class="k">Datenlücke</div><b>${esc(g.operator)} · ${esc(g.city)}</b><p>${esc(g.note)}</p><div class="foot">seit ${esc(g.since)} · zuletzt geprüft ${timeText(g.checkedAt)} · Feed ${g.probeOk ? 'erreichbar' : `nicht erreichbar (${g.probeStatus ?? '–'})`}</div></div>`).join('') || '<div class="empty">Keine bekannten Lücken.</div>';
+}
+
+// ---------- Quellen ----------
+function renderSources() {
+  const recs = state.latest?.sources || []; const cat = state.catalog;
+  const by = {}; for (const r of recs) by[r.status] = (by[r.status] || 0) + 1;
+  $('#src-tiles').innerHTML = [tile('Quellen geprüft', fmt(recs.length), `Katalog ${cat?.count ?? '–'} Einträge · ${state.latest ? new Date(state.latest.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–'}`), tile('Aktuell', fmt(by.live || 0), `${fmt(by.delayed || 0)} verzögert · ${fmt(by.stale || 0)} veraltet`, (by.live || 0) / Math.max(1, recs.length) < 0.6 ? 'warn' : 'ok'), tile('Nicht nutzbar', fmt((by.gone || 0) + (by.error || 0) + (by.auth || 0) + (by.empty || 0) + (by.unknown || 0)), `${fmt(by.gone || 0)} weg · ${fmt(by.error || 0)} Fehler · ${fmt(by.unknown || 0)} Zeit unklar · ${fmt(by.empty || 0)} leer`), tile('Dubletten bereinigt', fmt(state.latest?.dedupe?.duplicates), `${fmt(state.latest?.dedupe?.stationDuplicates)} Stationsdubletten · ${fmt(state.latest?.dedupe?.reusedIds)} Kennungen wiederverwendet`)].join('');
+  const dirCount = {}; for (const r of recs) for (const d of r.directories || []) dirCount[d] = (dirCount[d] || 0) + 1;
+  const dirInfo = {
+    mobilitydata: ['angebunden', 'Alle als Deutschland gelisteten Systeme des GBFS-Katalogs (Bike, Lastenrad, E-Scooter). Carsharing wird ausgeschlossen, Erreichbarkeit je Lauf geprüft.', 'https://github.com/MobilityData/gbfs/blob/master/systems.csv'],
+    mobidata_bw: ['angebunden · bevorzugt', 'Landesfeeds Baden-Württemberg; bei gleichem System vor dem Betreiberfeed verwendet. Die Kartenebene der offiziellen MobiData-Karte ist als Zusatzebene im Live-Modus verfügbar.', 'https://mobidata-bw.de/sk/dataset/bikesh'],
+    mobidrom_nrw: ['angebunden · Dienstzugang', 'Konflationierte Landesfeeds NRW (E-Scooter, Bikesharing, Lastenräder). Der allgemeine OAuth-Dienstzugang aus der Datensatzbeschreibung wird zur Laufzeit gelesen; Positionen kommen über Momentaufnahmen des Sammlers in die Karte.', 'https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet'],
+    citybikes: ['angebunden · Ergänzung', 'Stationszähler ohne Fahrzeugliste; nur mit belastbarem Zeitstempel. Dubletten zu GBFS-Stationen werden über Name und Position zusammengeführt.', 'https://api.citybik.es/v2/networks'],
+    dott_direct: ['Kandidaten geprüft', 'Direktfeeds gbfs.api.ridedott.com je Stadt; Kandidaten ohne Feed bleiben als „nicht erreichbar“ sichtbar, Tübingen als Datenlücke.', 'https://gbfs.api.ridedott.com/public/v2/stuttgart/gbfs.json'],
+  };
+  $('#dirs').innerHTML = Object.entries(dirInfo).map(([k, [st, txt, url]]) => `<div class="card ok"><div class="k">${esc(st)}</div><b>${DIRS[k]}</b><p>${esc(txt)}</p><div class="foot">${fmt(dirCount[k] || 0)} Quellen · <a href="${url}" target="_blank" rel="noopener">Originalquelle ↗</a></div></div>`).join('') +
+    `<div class="card info"><div class="k">Grundlage</div><b>Gemeindegrenzen · BKG</b><p>${esc(state.latest?.boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')}, Lizenz dl-de/by-2-0. GPS entscheidet die Gemeinde; unklare Grenzfälle bleiben ohne Zuordnung.</p><div class="foot">${fmt(state.latest?.boundaries?.count)} Gemeinden · <a href="https://gdz.bkg.bund.de" target="_blank" rel="noopener">Originalquelle ↗</a></div></div>
+     <div class="card warn"><div class="k">Nicht verwendet</div><b>DB API Marketplace · Voi Partner-API</b><p>Beide erfordern persönliche Zugangsdaten. Call-a-Bike-Daten kommen über MobiData BW und MOBIDROM NRW, Voi-Daten über beide Landesverzeichnisse.</p><div class="foot">kein Partnerzugang</div></div>`;
+  renderSourceTable();
+  $('#method').innerHTML = METHOD;
+}
+function renderSourceTable() {
+  const q = ($('#src-search').value || '').toLowerCase(); const stf = $('#src-status').value;
+  const recs = (state.latest?.sources || []).filter(r => (stf === 'all' || r.status === stf) && (!q || `${r.id} ${r.name} ${r.operator} ${r.url}`.toLowerCase().includes(q)));
+  const munis = state.latest?.municipalities || {};
+  const show = recs.slice(0, 300);
+  $('#tbl-src tbody').innerHTML = show.map(r => `<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a><div class="sub-line mono">${esc(r.id)}${r.sourceChanged ? ' · Quellenwechsel' : ''}</div></td><td>${esc(r.operator)}</td><td class="small">${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}</td><td class="n">${esc(r.version || '–')}</td><td class="n">${fmt(r.counts?.vehicles)}<div class="sub-line">${r.counts?.outside ? `${fmt(r.counts.outside)} außerhalb` : ''}${r.counts?.missing ? ` ${fmt(r.counts.missing)} o. Koord.` : ''}</div></td><td class="n">${fmt(r.counts?.stations)}</td><td class="n" title="${(r.municipalities || []).slice(0, 12).map(a => munis[a]?.name || a).join(', ')}">${fmt((r.municipalities || []).length)}</td><td class="n">${ageText(r.feedAgeMs)}</td><td class="n">${r.quality ?? '–'}</td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span>${r.errors?.length ? `<div class="sub-line">${esc(r.errors[0]).slice(0, 60)}</div>` : ''}</td><td class="small">${r.license ? (/^https?:/.test(r.license) ? `<a href="${esc(r.license)}" target="_blank" rel="noopener">Lizenz ↗</a>` : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Keine Treffer.</td></tr>';
+  $('#src-more').textContent = recs.length > show.length ? `${recs.length - show.length} weitere Quellen – Suche eingrenzen.` : '';
+}
+const METHOD = `
+<h2>Die Auswertung im Detail</h2>
+<h3>Zählweise</h3><p>Verfügbar heißt buchbar: nicht reserviert, nicht gesperrt. Bei Stationen werden physischer Bestand, buchbarer Bestand (<span class="mono">is_installed</span> und <span class="mono">is_renting</span>) und Rückgabeplätze getrennt geführt; eine geschlossene Station zählt ihre Fahrzeuge nicht als verfügbar. Stationäre Quellen werden nur dann als Fahrzeugbestand addiert, wenn die Quelle keine Fahrzeugliste liefert.</p>
+<h3>Frische</h3><p>Quellen bis fünf Minuten Alter gelten als aktuell, bis 30 Minuten als verzögert, darüber als veraltet. Veraltete und zeitlich unklare Quellen fließen nicht in Kennzahlen ein, bleiben aber als Lücke sichtbar. Positionsalter (je Fahrzeug) und Quellenalter (je Feed) sind getrennte Merkmale.</p>
+<h3>Geo-Prüfung und Ortszuordnung</h3><p>Zahlenformate werden normalisiert, eindeutig vertauschte Breiten- und Längengrade korrigiert. Fehlt ein Koordinatenpaar, dient eine referenzierte Stationsposition als gekennzeichneter Ersatz. Positionen außerhalb Deutschlands oder ohne Gemeinde bleiben außen vor. Die Gemeinde ergibt sich aus GPS und BKG-Gemeindegrenze (VG250, vereinfacht ca. 30 m); ein Sammelfeed kann mehrere Orte beliefern. Die Anbieterauswahl folgt der tatsächlichen GPS-Abdeckung des gewählten Orts.</p>
+<h3>Dubletten und Quellenwechsel</h3><p>Fahrzeuge desselben Anbieters werden über alle Quellen zusammengeführt: UUIDs und Quellenpräfixe werden vereinheitlicht, der jüngste Stand gewinnt, bei Gleichstand die direkte Position vor dem Stationsersatz. Gleiche Kennungen an weit entfernten Positionen (über 300 m) bleiben als Prüffälle erhalten. Stationen gelten als gleich bei gleicher Kennung oder gleichem Namen innerhalb von 60 m. Ein Fingerabdruck aus Endpunkt, Version, Feeds und Fahrzeugarten erkennt Quellenwechsel; danach beginnen Zeitvergleiche neu.</p>
+<h3>Energie</h3><p>Ladestand und Reichweite haben getrennte Nenner; gezählt werden nur Fahrzeuge mit der jeweiligen Angabe. Fehlt der Ladestand, wird er bei bekannter Maximalreichweite aus der Reichweite abgeleitet. Grenzen lassen sich im Performance Lab einstellen und gelten im Live-Abruf; der Sammler rechnet mit 20 % und 5 km.</p>
+<h3>Verlauf</h3><p>Der Sammler läuft alle 20 Minuten unabhängig vom Browser (GitHub Actions) und speichert bereinigte Summen je Gemeinde, Anbieter und Fahrzeugart für 30 Tage. Individuelle Fahrzeugwege werden nicht archiviert. Der Live-Abruf im Browser liest die offenen Feeds direkt; Zugangsquellen (MOBIDROM NRW) kommen als Momentaufnahme des letzten Sammler-Laufs. Δ Sammler vergleicht den Live-Stand mit dem letzten Sammler-Punkt desselben Quellen-Fingerabdrucks.</p>
+<h3>Qualität</h3><p>Der Qualitätswert einer Quelle beurteilt Frische (70 %) und vorhandene Merkmale wie Energie, Zeitstempel und Fahrzeugart (30 %). Er bewertet die Quelle, nicht den Betrieb des Unternehmens. Gesperrte Fahrzeuge, leere Stationen und Niedrigakku sind Hinweise aus dem Feed; was ein Betreiber gerade bearbeitet, ist ohne internen Zugang nicht bekannt.</p>
+<h3>Grenzen</h3><p>Die angeschlossenen Daten bilden keine vollständigen Marktanteile ab. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
+
+// ---------- Versorgung an Haltestellen ----------
+async function checkSupply() {
+  const box = $('#supply');
+  if (state.scope === 'DE') { box.innerHTML = '<div class="empty">Bitte eine Gemeinde wählen.</div>'; return; }
+  if (!state.live) { box.innerHTML = '<div class="empty">Zuerst „Live abrufen“, damit Fahrzeugpositionen vorliegen.</div>'; return; }
+  await loadBoundaries();
+  const f = state.boundaries?.features.find(x => x.properties.ags === state.scope); if (!f) { box.innerHTML = '<div class="empty">Gemeindegrenze fehlt.</div>'; return; }
+  const b = f.bbox; const radius = +$('#sel-radius').value;
+  box.innerHTML = '<div class="muted small">Haltestellen werden geladen …</div>';
+  const q = `[out:json][timeout:25];(node["highway"="bus_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="tram_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="station"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="halt"](${b[1]},${b[0]},${b[3]},${b[2]}););out body 800;`;
+  const r = await getJson(`${CFG.OVERPASS}?data=${encodeURIComponent(q)}`, { timeout: 40000 });
+  if (!r.ok) { box.innerHTML = `<div class="empty">Overpass nicht erreichbar (${r.error || r.status}).</div>`; return; }
+  const stops = (r.json.elements || []).filter(e => C.assignMunicipality(state.bIndex, e.lat, e.lon)?.ags === state.scope).map(e => ({ id: e.id, name: e.tags?.name || 'Haltestelle', lat: e.lat, lon: e.lon, kind: e.tags?.railway ? 'Bahn/Tram' : 'Bus' }));
+  const { vehicles } = livePoints(); const avail = vehicles.filter(v => !v.disabled && !v.reserved);
+  for (const s of stops) { let best = Infinity, bestOp = null; for (const v of avail) { const d = C.haversineM(s.lat, s.lon, v.lat, v.lon); if (d < best) { best = d; bestOp = v.operator; } } s.dist = Number.isFinite(best) ? Math.round(best) : null; s.op = bestOp; }
+  stops.sort((a, b) => (b.dist ?? 1e9) - (a.dist ?? 1e9));
+  const gaps = stops.filter(s => s.dist == null || s.dist > radius);
+  state.supply = { stops, radius };
+  const med = stops.length ? stops.map(s => s.dist ?? 9999).sort((a, b) => a - b)[Math.floor(stops.length / 2)] : null;
+  box.innerHTML = `<div class="tiles" style="margin-bottom:10px">${tile('Haltestellen', fmt(stops.length), `OSM, innerhalb ${esc(muniName(state.scope))}`)}${tile(`Ohne Fahrzeug in ${radius} m`, fmt(gaps.length), pctf(gaps.length, stops.length) + ' der Haltestellen', gaps.length / Math.max(1, stops.length) > 0.4 ? 'warn' : '')}${tile('Median-Entfernung', med == null ? '—' : `${fmt(med)} m`, 'zum nächsten verfügbaren Fahrzeug')}</div>
+  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Nächstes Fahrzeug</th><th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td><td>${esc(s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}`;
+}
+function renderSupplyLayer() {
+  const L_ = state.layers; L_.supply.clearLayers(); if (!state.supply) return;
+  for (const s of state.supply.stops) { const gap = s.dist == null || s.dist > state.supply.radius; L.circleMarker([s.lat, s.lon], { radius: gap ? 6 : 4, weight: 2, color: gap ? '#ef6b6b' : '#6aa9ff', fillOpacity: .5 }).bindPopup(`<b>${esc(s.name)}</b> (${s.kind})<br>nächstes verfügbares Fahrzeug: ${s.dist == null ? '—' : `${fmt(s.dist)} m`} ${esc(s.op || '')}`).addTo(L_.supply); }
+}
+
+// ---------- Steuerung ----------
+function populateScope() {
+  const sel = $('#sel-scope'); const munis = state.latest?.municipalities || {};
+  const byState = {};
+  for (const m of Object.values(munis)) { (byState[m.state] ??= []).push(m); }
+  const STATES = { BW: 'Baden-Württemberg', BY: 'Bayern', BE: 'Berlin', BB: 'Brandenburg', HB: 'Bremen', HH: 'Hamburg', HE: 'Hessen', MV: 'Mecklenburg-Vorpommern', NI: 'Niedersachsen', NW: 'Nordrhein-Westfalen', RP: 'Rheinland-Pfalz', SL: 'Saarland', SN: 'Sachsen', ST: 'Sachsen-Anhalt', SH: 'Schleswig-Holstein', TH: 'Thüringen' };
+  sel.innerHTML = '<option value="DE">Deutschlandweit</option>' + Object.keys(byState).sort((a, b) => (STATES[a] || a).localeCompare(STATES[b] || b)).map(st => `<optgroup label="${STATES[st] || st}">${byState[st].sort((a, b) => a.name.localeCompare(b.name, 'de')).map(m => `<option value="${m.ags}">${esc(m.name)}</option>`).join('')}</optgroup>`).join('');
+  sel.value = state.scope;
+}
+function populateOperators() {
+  const sel = $('#sel-operator'); const prev = state.operator;
+  let ops;
+  if (state.scope === 'DE') ops = [...new Set((state.latest?.sources || []).filter(r => ['live', 'delayed'].includes(r.status)).map(r => r.operator))];
+  else ops = Object.keys(muniInfo(state.scope)?.operators || {});
+  if (state.live) for (const [k] of state.live.groups) { const [ags, op] = k.split('|'); if (state.scope === 'DE' || ags === state.scope) ops.push(op); }
+  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) ops.push(g.operator);
+  ops = [...new Set(ops)].sort((a, b) => a.localeCompare(b, 'de'));
+  sel.innerHTML = '<option value="all">Alle Anbieter vor Ort</option>' + ops.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  state.operator = ops.includes(prev) ? prev : 'all'; sel.value = state.operator;
+}
+function bind() {
+  $('#sel-scope').addEventListener('change', async (e) => { state.scope = e.target.value; state.live = null; state.supply = null; if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; populateOperators(); if (state.scope !== 'DE') loadBoundaries().then(() => renderMap()); renderAll(); if (state.scope !== 'DE' && state.latest) liveFetch(); });
+  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; renderAll(); });
+  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; renderAll(); });
+  $('#sel-mode').addEventListener('change', (e) => { state.mode = e.target.value; if (state.mode === 'live' && !state.live) liveFetch(); else renderAll(); });
+  $('#btn-live').addEventListener('click', () => liveFetch());
+  $('#btn-fit').addEventListener('click', () => fitMap(true));
+  ['chk-vehicles', 'chk-stations', 'chk-muni', 'sel-layer'].forEach(id => $(`#${id}`).addEventListener('change', () => renderMap()));
+  $('#chk-wfs').addEventListener('change', (e) => e.target.checked ? loadWfs() : (state.layers.wfs.clearLayers(), clearNotice('wfs')));
+  $('#in-charge').addEventListener('change', (e) => { state.thresholds.charge = +e.target.value || 20; if (state.live) recomputeLive(); renderAll(); });
+  $('#in-range').addEventListener('change', (e) => { state.thresholds.range = +e.target.value || 5; if (state.live) recomputeLive(); renderAll(); });
+  $('#hist-days').addEventListener('click', (e) => { const b = e.target.closest('[data-day]'); if (!b) return; state.histDay = b.dataset.day; renderHistory(); renderStability(); });
+  $('#sig-filter').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; sigFilter = b.dataset.cat; renderSignals(); });
+  $('#cov-search').addEventListener('input', renderCoverage); $('#cov-dir').addEventListener('change', renderCoverage);
+  $('#src-search').addEventListener('input', renderSourceTable); $('#src-status').addEventListener('change', renderSourceTable);
+  $('#btn-supply').addEventListener('click', checkSupply);
+  $('#btn-supply-map').addEventListener('click', () => { renderSupplyLayer(); location.hash = '#live'; });
+  $('#btn-csv').addEventListener('click', exportCsv);
+  $('#btn-theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme; const next = cur === 'light' ? 'dark' : cur === 'dark' ? '' : 'light'; if (next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme; try { localStorage.setItem('mp-theme', next); } catch {} });
+  document.addEventListener('click', (e) => { const a = e.target.closest('.pick-muni'); if (!a) return; e.preventDefault(); $('#sel-scope').value = a.dataset.ags; $('#sel-scope').dispatchEvent(new Event('change')); location.hash = '#live'; window.scrollTo({ top: 0 }); });
+  window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
+}
+function recomputeLive() { if (!state.live) return; state.live.groups = C.aggregateGroups(state.live.vehicles, state.live.stations, { chargeThreshold: state.thresholds.charge, rangeThreshold: state.thresholds.range }); }
+function exportCsv() {
+  const rows = operatorRows(); const head = ['Anbieter', 'Gebiet', 'Verfuegbar', 'Gemeldet', 'Gesperrt', 'Reserviert', 'EnergieNiedrig', 'MitEnergieangabe', 'Stationen', 'LeereStationen', 'Status', 'Datenalter_min', 'Quellen', 'Lizenz'];
+  const lines = rows.map(r => [r.op, scopeLabel(), r.st.available, r.st.total, r.st.disabled, r.st.reserved, r.st.lowBattery, r.st.batteryKnown, r.st.stations, r.st.stationsEmpty, STATUS[r.status] || r.status, r.age == null ? '' : Math.round(r.age / 60e3), r.dirs.map(d => DIRS[d] || d).join('|'), r.license || ''].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+  const blob = new Blob(['﻿' + [head.join(';'), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `mobility-pulse_${state.scope}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+async function init() {
+  try { const t = localStorage.getItem('mp-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  initMap(); bind();
+  setView(location.hash.slice(1) || 'live');
+  await loadBase();
+  populateScope(); populateOperators();
+  renderAll();
+  if (state.latest) loadBoundaries().then(() => renderMap());
+  setInterval(async () => { const s = await getJson(CFG.DATA + 'status.json'); if (s.ok && s.json.at !== state.status?.at) { const l = await getJson(CFG.DATA + 'latest.json'); if (l.ok) { state.status = s.json; state.latest = l.json; state.hist = {}; populateScope(); populateOperators(); renderAll(); } } }, 5 * 60e3);
+}
+init();
