@@ -197,7 +197,7 @@ details summary{cursor:pointer;color:var(--fg-2)}
       <div class="panel c6"><div class="panel-head"><div><h2 id="cities-title">Stadt- und Gebietsvergleich</h2><div class="sub">Verfügbare Fahrzeuge je Gemeinde aus dem Sammler-Stand, je 10.000 Einwohner wenn bekannt</div></div></div><div class="tbl"><table id="tbl-cities"><thead><tr><th>Gemeinde</th><th class="n">Verfügbar</th><th class="n">je 10.000 EW</th><th class="n">Anbieter</th><th class="n">E-Scooter</th><th class="n">Räder</th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel c6"><div class="panel-head"><div><h2>Preise</h2><div class="sub">Aus den Preisfeeds der Anbieter (system_pricing_plans), Stand des Sammler-Laufs</div></div></div><div class="tbl"><table id="tbl-pricing"><thead><tr><th>Anbieter</th><th>Tarif</th><th class="n">Entsperren</th><th class="n">je Minute</th><th class="n">je km</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div><div class="muted small" id="pricing-note"></div></div>
       <div class="panel c6"><div class="panel-head"><div><h2>Marktanteile · 7 Tage</h2><div class="sub">Anteil am verfügbaren Bestand je Anbieter, Tagesmittel aus dem Sammler</div></div></div><div id="chart-share"></div><div class="legend" id="share-legend"></div></div>
-      <div class="panel c12"><div class="panel-head"><div><h2>Versorgung an Haltestellen</h2><div class="sub">ÖPNV-Haltestellen aus OpenStreetMap, Luftlinie zum nächsten verfügbaren Fahrzeug</div></div><div class="inline-form"><label>Radius <select id="sel-radius"><option>200</option><option selected>300</option><option>500</option><option>1000</option></select> m</label><button id="btn-supply">Haltestellen prüfen</button><button id="btn-supply-map">Auf Karte zeigen</button></div></div><div id="supply"></div></div>
+      <div class="panel c12"><div class="panel-head"><div><h2>Versorgung an Haltestellen</h2><div class="sub">ÖPNV-Haltestellen aus OpenStreetMap, Fußweg (OSRM) oder Luftlinie zum nächsten verfügbaren Fahrzeug</div></div><div class="inline-form"><label>Radius <select id="sel-radius"><option>200</option><option selected>300</option><option>500</option><option>1000</option></select> m</label><label><input type="checkbox" id="chk-walk" checked> Fußweg statt Luftlinie</label><button id="btn-supply">Haltestellen prüfen</button><button id="btn-supply-map">Auf Karte zeigen</button></div></div><div id="supply"></div></div>
     </div>
   </section>
 
@@ -240,6 +240,11 @@ details summary{cursor:pointer;color:var(--fg-2)}
     <div class="tiles" id="src-tiles"></div>
     <div class="cards" id="dirs"></div>
     <div class="panel">
+      <div class="panel-head"><div><h2>Konsistenz zwischen Quellen</h2><div class="sub" id="cons-sub">Landesfeed gegen Betreiberfeed desselben Systems und mehrere Quellen desselben Anbieters in einer Gemeinde: Bestand, Kennungs-Überlappung, Positionsabweichung</div></div></div>
+      <div class="tbl"><table id="tbl-cons"><thead><tr><th>Vergleich</th><th>Anbieter</th><th class="n">Bestand A</th><th class="n">Bestand B</th><th class="n">Abweichung</th><th class="n">Kennungen gemeinsam</th><th class="n">Median-Abstand</th><th>Urteil</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted small" id="cons-note"></div>
+    </div>
+    <div class="panel">
       <div class="panel-head"><div><h2>Einzelquellen</h2><div class="sub">Zustand des letzten Sammler-Laufs; Fingerabdruck erkennt Quellenwechsel</div></div><div class="inline-form"><input type="search" id="src-search" placeholder="Quelle suchen"><select id="src-status"><option value="all">Alle Zustände</option><option value="live">Aktuell</option><option value="delayed">Verzögert</option><option value="stale">Veraltet</option><option value="unknown">Zeit unklar</option><option value="empty">Leer</option><option value="error">Fehler</option><option value="gone">Nicht erreichbar</option><option value="auth">Zugang nötig</option><option value="foreign">Außerhalb DE</option></select></div></div>
       <div class="tbl"><table id="tbl-src"><thead><tr><th>Quelle</th><th>Anbieter</th><th>Verzeichnis</th><th class="n">Version</th><th class="n">Fahrzeuge</th><th class="n">Stationen</th><th class="n">Orte</th><th class="n">Alter</th><th class="n">Qualität</th><th class="n">Verfügb. 7 T.</th><th>Status</th><th>Lizenz</th></tr></thead><tbody></tbody></table></div>
       <div class="muted small" id="src-more"></div>
@@ -249,6 +254,6 @@ details summary{cursor:pointer;color:var(--fg-2)}
 </main>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script type="module" src="app.js?v=mvwrzw11"></script>
+<script type="module" src="app.js?v=mvwsvvtq"></script>
 </body>
 </html>

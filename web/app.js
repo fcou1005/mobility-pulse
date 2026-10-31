@@ -6,6 +6,7 @@ const CFG = {
   REPO: 'https://github.com/fcou1005/mobility-pulse',
   WFS: 'https://api.mobidata-bw.de/geoserver/MobiData-BW/ows',
   OVERPASS: 'https://overpass-api.de/api/interpreter',
+  OSRM_FOOT: 'https://routing.openstreetmap.de/routed-foot',
   MAX_POINTS: 6000,
 };
 const $ = (s, el = document) => el.querySelector(s);
@@ -535,6 +536,7 @@ function computeSignals() {
     if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, title: `${r.operator}: Quelle ${STATUS[r.status].toLowerCase()}`, text: `${r.name || r.id}${r.feedAgeMs != null ? ` · Feed ${ageText(r.feedAgeMs)} alt` : ''}${r.errors?.length ? ` · ${r.errors[0]}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}` });
     if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, title: `${r.operator}: Quellenwechsel erkannt`, text: `${r.name || r.id}: Endpunkt, Version, Feeds oder Fahrzeugarten haben sich geändert. Zeitvergleiche beginnen neu.`, foot: 'Fingerabdruck' });
   }
+  for (const e of state.usage?.consistency?.systems || []) { if (e.verdict !== 'divergent') continue; const r = (state.latest?.sources || []).find(x => x.id === e.sourceId); if (!r || (state.scope !== 'DE' && !(r.municipalities || []).includes(state.scope)) || (state.operator !== 'all' && e.operator !== state.operator)) continue; out.push({ cat: 'data', sev: 'warn', w: Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0)), title: `${e.operator}: Landes- und Betreiberfeed weichen ab`, text: `${e.sourceId}: ${fmt(e.primary?.vehicles)} vs. ${fmt(e.alt?.vehicles)} Fahrzeuge, ${e.idOverlap == null ? '' : pctf(e.idOverlap, 1) + ' gemeinsame Kennungen, '}Median-Abstand ${e.medianDistM == null ? '—' : fmt(e.medianDistM) + ' m'}.`, foot: 'Konsistenzprüfung' }); }
   for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, title: `${g.operator} · ${g.city}: öffentliche Daten fehlen seit ${g.since.split('-').reverse().join('.')}`, text: g.note, foot: g.probeOk ? 'Feed wieder erreichbar' : `Feed geprüft: ${g.probeStatus ?? '–'}` });
   // Bestandssprung gegen Verlauf
   const h = state.histDay ? state.hist[state.histDay] : state.hist[state.histIndex?.days?.slice(-1)[0]];
@@ -611,6 +613,7 @@ function renderSources() {
     `<div class="card info"><div class="k">Grundlage</div><b>Gemeindegrenzen · BKG</b><p>${esc(state.latest?.boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')}, Lizenz dl-de/by-2-0. GPS entscheidet die Gemeinde; unklare Grenzfälle bleiben ohne Zuordnung.</p><div class="foot">${fmt(state.latest?.boundaries?.count)} Gemeinden · <a href="https://gdz.bkg.bund.de" target="_blank" rel="noopener">Originalquelle ↗</a></div></div>
      <div class="card warn"><div class="k">Nicht verwendet</div><b>DB API Marketplace · Voi Partner-API</b><p>Beide erfordern persönliche Zugangsdaten. Call-a-Bike-Daten kommen über MobiData BW und MOBIDROM NRW, Voi-Daten über beide Landesverzeichnisse.</p><div class="foot">kein Partnerzugang</div></div>`;
   loadOnce('reliability', 'reliability.json').then(() => renderSourceTable());
+  renderConsistency();
   $('#method').innerHTML = METHOD;
 }
 function relCell(id) { const r = state.usage?.reliability?.sources?.[id]; if (!r || !r.runs) return '<span class="muted">–</span>'; const ok = (r.live + r.delayed) / r.runs; return `<span style="color:var(--${ok >= 0.95 ? 'ok' : ok >= 0.8 ? 'warn' : 'bad'})">${pctf(r.live + r.delayed, r.runs)}</span><div class="sub-line">${r.runs} Läufe · Ø ${fmt(r.latencyAvg)} ms</div>`; }
@@ -623,7 +626,7 @@ function renderSourceTable() {
   $('#src-more').textContent = recs.length > show.length ? `${recs.length - show.length} weitere Quellen – Suche eingrenzen.` : '';
 }
 // ---------- Nutzung & Bewegung ----------
-state.usage = { index: null, day: null, docs: {}, cells: {}, idle: null, idleLong: null, quota: null, pricing: null, zonesIndex: null, zones: {}, reliability: null, weather: {} };
+state.usage = { index: null, day: null, docs: {}, cells: {}, idle: null, idleLong: null, quota: null, pricing: null, zonesIndex: null, zones: {}, reliability: null, consistency: null, weather: {} };
 async function loadUsageIndex() { if (!state.usage.index) { const r = await getJson(CFG.DATA + 'events/index.json'); state.usage.index = r.json || { days: [], cellDays: [] }; } return state.usage.index; }
 async function loadEvents(day) { if (!(day in state.usage.docs)) { const r = await getJson(CFG.DATA + `events/${day}.json`, { timeout: 60000 }); state.usage.docs[day] = r.json || null; } return state.usage.docs[day]; }
 async function loadCells(day, st) { const k = `${day}/${st}`; if (!(k in state.usage.cells)) { const r = await getJson(CFG.DATA + `cells/${day}/${st}.json`, { timeout: 60000 }); state.usage.cells[k] = r.json || null; } return state.usage.cells[k]; }
@@ -832,6 +835,24 @@ async function renderShareChart() {
   $('#share-legend').innerHTML = series.map(s => `<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)} <span class="mono">${s.values.at(-1) == null ? '—' : fmt(s.values.at(-1), 1) + ' %'}</span></span>`).join('');
 }
 
+// ---------- Konsistenz ----------
+const CONS_LABEL = { consistent: ['Stimmig', 'ok'], minor: ['Kleine Abweichung', 'warn'], divergent: ['Abweichend', 'bad'], disjoint: ['Getrennte Flotten', 'info'], alt_unreachable: ['Alternative nicht erreichbar', 'muted'], error: ['Fehler', 'bad'] };
+const CONS_KIND = { version: 'v2 ↔ v3 (gleicher Host)', land_vs_betreiber: 'Landesfeed ↔ Betreiber', betreiber_vs_land: 'Betreiber ↔ Landesfeed' };
+const shortSrc = (id) => String(id).replace(/^mobidrom_[^:]+:source-/, 'NRW · ').replace(/^citybikes_/, 'CityBikes · ');
+async function renderConsistency() {
+  const c = await loadOnce('consistency', 'consistency.json'); const tb = $('#tbl-cons tbody');
+  if (!c) { tb.innerHTML = '<tr><td colspan="8" class="empty">Noch keine Konsistenzprüfung.</td></tr>'; return; }
+  const inScope = (ids, ags) => state.scope === 'DE' ? true : (ags ? ags === state.scope : ids.some(id => (state.latest?.sources || []).find(r => r.id === id)?.municipalities?.includes(state.scope)));
+  const rows = [];
+  for (const e of c.systems) { if (!inScope([e.sourceId]) || (state.operator !== 'all' && e.operator !== state.operator)) continue; rows.push({ kind: `${CONS_KIND[e.kind] || e.kind || 'Alternativ-Feed'}<div class="sub-line mono">${esc(e.sourceId)}</div>`, op: e.operator, a: e.primary?.vehicles, b: e.alt?.vehicles, diff: e.countDiff, overlap: e.idOverlap, med: e.medianDistM, verdict: e.verdict, w: e.verdict === 'divergent' ? 3 : e.verdict === 'minor' ? 2 : e.verdict === 'alt_unreachable' ? 1 : 0 }); }
+  for (const p of c.pairs) { if (!inScope([p.a.sourceId, p.b.sourceId], p.ags) || (state.operator !== 'all' && p.operator !== state.operator)) continue; rows.push({ kind: `Zwei Quellen · ${esc(muniName(p.ags))}<div class="sub-line mono">${esc(shortSrc(p.a.sourceId))} ↔ ${esc(shortSrc(p.b.sourceId))}</div>`, op: p.operator, a: p.a.vehicles, b: p.b.vehicles, diff: p.countDiff, overlap: p.idOverlap, med: p.medianDistM, verdict: p.verdict, w: p.verdict === 'divergent' ? 3 : p.verdict === 'minor' ? 2 : p.verdict === 'disjoint' ? 1.5 : 0 }); }
+  rows.sort((x, y) => y.w - x.w || (y.a || 0) - (x.a || 0));
+  const show = rows.slice(0, 80);
+  tb.innerHTML = show.map(r => { const [label, cls] = CONS_LABEL[r.verdict] || [r.verdict, '']; return `<tr><td>${r.kind}</td><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(r.a)}</td><td class="n">${fmt(r.b)}</td><td class="n">${r.diff == null ? '—' : pctf(r.diff, 1)}</td><td class="n">${r.overlap == null ? '—' : pctf(r.overlap, 1)}</td><td class="n">${r.med == null ? '—' : `${fmt(r.med)} m`}</td><td><span class="pill plain" style="color:var(--${cls === 'muted' ? 'muted' : cls})">${label}</span></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Keine Vergleiche im Filter.</td></tr>';
+  const vc = {}; for (const r of rows) vc[r.verdict] = (vc[r.verdict] || 0) + 1;
+  $('#cons-note').textContent = `${rows.length} Vergleiche · ${Object.entries(vc).map(([k, v]) => `${v} ${(CONS_LABEL[k] || [k])[0].toLowerCase()}`).join(' · ')} · Stand ${timeText(c.at)}${rows.length > show.length ? ` · ${rows.length - show.length} weitere` : ''}`;
+}
+
 const METHOD = `
 <h2>Die Auswertung im Detail</h2>
 <h3>Zählweise</h3><p>Verfügbar heißt buchbar: nicht reserviert, nicht gesperrt. Bei Stationen werden physischer Bestand, buchbarer Bestand (<span class="mono">is_installed</span> und <span class="mono">is_renting</span>) und Rückgabeplätze getrennt geführt; eine geschlossene Station zählt ihre Fahrzeuge nicht als verfügbar. Stationäre Quellen werden nur dann als Fahrzeugbestand addiert, wenn die Quelle keine Fahrzeugliste liefert.</p>
@@ -843,7 +864,8 @@ const METHOD = `
 <h3>Qualität</h3><p>Der Qualitätswert einer Quelle beurteilt Frische (70 %) und vorhandene Merkmale wie Energie, Zeitstempel und Fahrzeugart (30 %). Er bewertet die Quelle, nicht den Betrieb des Unternehmens. Gesperrte Fahrzeuge, leere Stationen und Niedrigakku sind Hinweise aus dem Feed; was ein Betreiber gerade bearbeitet, ist ohne internen Zugang nicht bekannt.</p>
 <h3>Nutzung und Bewegung</h3><p>Der Sammler merkt sich je Fahrzeug eine gehashte Kennung mit gerundeter Position, Ladestand und Sperrstatus. Verschwindet eine Kennung zwischen zwei Läufen, zählt das als Fahrtbeginn (bei gesperrtem oder fast leerem Fahrzeug als Abholung); eine neue Kennung zählt als Fahrtende. GBFS schreibt vor, Kennungen nach jeder Fahrt zu wechseln, deshalb sind das Zählungen ohne Zuordnung von Start zu Ziel. Bei Systemen mit stabilen Kennungen (etwa stationsbasierte Räder) kehrt die Kennung zurück; dann sind Dauer und Luftlinien-Distanz messbar und werden als Ø ausgewiesen. Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: Umsetzung durch den Betreiber. Ladestand springt von unter 40 % auf mindestens 85 % am selben Ort: Akkutausch; die Wartezeit misst die Zeit unter 20 % bis zum Tausch. Standzeit ist die Zeit seit der letzten Positionsänderung über 50 m (höchstens seit dem ersten Sammler-Kontakt). Quellenausfälle erzeugen keine Fahrten. Alle Werte sind Schätzungen aus 20-Minuten-Momentaufnahmen und keine Betreiberzahlen.</p>
 <h3>Zellen, Zonen, Preise</h3><p>Start- und Zielzellen sind etwa 250 m groß und werden je Gemeinde und Tag gezählt; „bedient“ ist eine Zelle, in der innerhalb von 7 Tagen ein verfügbares Fahrzeug stand. Betriebszonen stammen aus <span class="mono">geofencing_zones.json</span> der Anbieterfeeds, Preise aus <span class="mono">system_pricing_plans.json</span>; beides wird je Lauf neu gelesen. Wetter kommt stündlich von Open-Meteo für den Gemeindemittelpunkt. Stations-Verfügbarkeitsquoten zählen Läufe der letzten 7 Tage, in denen eine vermietende Station kein buchbares Fahrzeug bzw. keinen freien Platz hatte.</p>
-<h3>Grenzen</h3><p>Die angeschlossenen Daten bilden keine vollständigen Marktanteile ab. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
+<h3>Konsistenz und Fußwege</h3><p>Hat ein System im Katalog eine zweite Adresse (Landesfeed und Betreiberfeed oder zwei GBFS-Versionen), liest der Sammler beide und vergleicht Bestand, Kennungs-Überlappung (gemeinsame ÷ alle Kennungen) und den Median-Abstand gleicher Kennungen. Liefern zwei Quellen desselben Anbieters Fahrzeuge in derselben Gemeinde, werden sie paarweise genauso verglichen; „getrennte Flotten“ heißt, dass sich die Kennungen kaum überschneiden. Fußwege in der Haltestellen-Analyse kommen vom OSRM-Fußgängerprofil der FOSSGIS-Instanz (routing.openstreetmap.de); je Haltestelle werden die drei nächsten Fahrzeuge geroutet, der Umweg-Faktor ist Fußweg ÷ Luftlinie.</p>
+<h3>Grenzen</h3><p>Die angeschlossenen Daten bilden keine vollständigen Marktanteile ab. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien, sofern das Fußweg-Routing nicht aktiviert ist. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
 
 // ---------- Versorgung an Haltestellen ----------
 async function checkSupply() {
@@ -852,24 +874,58 @@ async function checkSupply() {
   if (!state.live) { box.innerHTML = '<div class="empty">Zuerst „Live abrufen“, damit Fahrzeugpositionen vorliegen.</div>'; return; }
   await loadBoundaries();
   const f = state.boundaries?.features.find(x => x.properties.ags === state.scope); if (!f) { box.innerHTML = '<div class="empty">Gemeindegrenze fehlt.</div>'; return; }
-  const b = f.bbox; const radius = +$('#sel-radius').value;
+  const b = f.bbox; const radius = +$('#sel-radius').value; const useWalk = $('#chk-walk').checked;
   box.innerHTML = '<div class="muted small">Haltestellen werden geladen …</div>';
   const q = `[out:json][timeout:25];(node["highway"="bus_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="tram_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="station"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="halt"](${b[1]},${b[0]},${b[3]},${b[2]}););out body 800;`;
   const r = await getJson(`${CFG.OVERPASS}?data=${encodeURIComponent(q)}`, { timeout: 40000 });
   if (!r.ok) { box.innerHTML = `<div class="empty">Overpass nicht erreichbar (${r.error || r.status}).</div>`; return; }
   const stops = (r.json.elements || []).filter(e => C.assignMunicipality(state.bIndex, e.lat, e.lon)?.ags === state.scope).map(e => ({ id: e.id, name: e.tags?.name || 'Haltestelle', lat: e.lat, lon: e.lon, kind: e.tags?.railway ? 'Bahn/Tram' : 'Bus' }));
   const { vehicles } = livePoints(); const avail = vehicles.filter(v => !v.disabled && !v.reserved);
-  for (const s of stops) { let best = Infinity, bestOp = null; for (const v of avail) { const d = C.haversineM(s.lat, s.lon, v.lat, v.lon); if (d < best) { best = d; bestOp = v.operator; } } s.dist = Number.isFinite(best) ? Math.round(best) : null; s.op = bestOp; }
-  stops.sort((a, b) => (b.dist ?? 1e9) - (a.dist ?? 1e9));
-  const gaps = stops.filter(s => s.dist == null || s.dist > radius);
-  state.supply = { stops, radius };
-  const med = stops.length ? stops.map(s => s.dist ?? 9999).sort((a, b) => a - b)[Math.floor(stops.length / 2)] : null;
-  box.innerHTML = `<div class="tiles" style="margin-bottom:10px">${tile('Haltestellen', fmt(stops.length), `OSM, innerhalb ${esc(muniName(state.scope))}`)}${tile(`Ohne Fahrzeug in ${radius} m`, fmt(gaps.length), pctf(gaps.length, stops.length) + ' der Haltestellen', gaps.length / Math.max(1, stops.length) > 0.4 ? 'warn' : '')}${tile('Median-Entfernung', med == null ? '—' : `${fmt(med)} m`, 'zum nächsten verfügbaren Fahrzeug')}</div>
-  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Nächstes Fahrzeug</th><th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td><td>${esc(s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}`;
+  // Luftlinie: drei nächste Kandidaten je Haltestelle
+  for (const s of stops) {
+    const cands = [];
+    for (const v of avail) { const d = C.haversineM(s.lat, s.lon, v.lat, v.lon); if (cands.length < 3 || d < cands[2].d) { cands.push({ d, v }); cands.sort((a, b) => a.d - b.d); if (cands.length > 3) cands.pop(); } }
+    s.cands = cands; s.dist = cands.length ? Math.round(cands[0].d) : null; s.op = cands[0]?.v.operator || null; s.walk = null; s.walkMin = null; s.walkOp = null;
+  }
+  // Fußweg (OSRM, Fußgänger-Profil der FOSSGIS-Instanz): nur Haltestellen, die per Luftlinie überhaupt in Reichweite sein könnten
+  let routed = 0, routeFail = 0;
+  if (useWalk && stops.length) {
+    const limit = Math.max(radius * 2, 1500);
+    const todo = stops.filter(s => s.dist != null && s.dist <= limit).slice(0, 300);
+    const batches = []; for (let i = 0; i < todo.length; i += 24) batches.push(todo.slice(i, i + 24));
+    let done = 0;
+    for (const batch of batches) {
+      box.innerHTML = `<div class="muted small">Fußwege werden berechnet … ${done} / ${todo.length} Haltestellen</div><div class="progress"><i style="width:${(done / todo.length) * 100}%"></i></div>`;
+      const coords = [], targetIdx = new Map();
+      batch.forEach(s => coords.push(`${s.lon.toFixed(6)},${s.lat.toFixed(6)}`));
+      batch.forEach(s => s.cands.forEach(c => { const k = `${c.v.lon.toFixed(5)},${c.v.lat.toFixed(5)}`; if (!targetIdx.has(k)) { targetIdx.set(k, coords.length); coords.push(k); } }));
+      const sources = batch.map((_, i) => i).join(';'), dests = [...targetIdx.values()].join(';');
+      const url = `${CFG.OSRM_FOOT}/table/v1/driving/${coords.join(';')}?sources=${sources}&destinations=${dests}&annotations=distance,duration`;
+      const rr = await getJson(url, { timeout: 30000 });
+      if (!rr.ok || rr.json?.code !== 'Ok') { routeFail += batch.length; done += batch.length; continue; }
+      const destList = [...targetIdx.keys()];
+      batch.forEach((s, i) => {
+        let best = Infinity, bestMin = null, bestOp = null;
+        for (const c of s.cands) { const k = `${c.v.lon.toFixed(5)},${c.v.lat.toFixed(5)}`; const j = destList.indexOf(k); const d = rr.json.distances?.[i]?.[j]; if (d != null && d < best) { best = d; bestMin = rr.json.durations?.[i]?.[j]; bestOp = c.v.operator; } }
+        if (Number.isFinite(best)) { s.walk = Math.round(best); s.walkMin = bestMin != null ? Math.round(bestMin / 60) : null; s.walkOp = bestOp; routed++; }
+      });
+      done += batch.length;
+      await new Promise(res => setTimeout(res, 120));
+    }
+  }
+  const eff = (s) => useWalk ? (s.walk ?? (s.dist != null && s.dist > Math.max(radius * 2, 1500) ? s.dist : null)) : s.dist;
+  stops.sort((a, b) => (eff(b) ?? 1e9) - (eff(a) ?? 1e9));
+  const gaps = stops.filter(s => eff(s) == null || eff(s) > radius);
+  state.supply = { stops, radius, useWalk, eff };
+  const vals = stops.map(eff).filter(v => v != null).sort((a, b) => a - b);
+  const med = vals.length ? vals[Math.floor(vals.length / 2)] : null;
+  const ratio = (() => { const pairs = stops.filter(s => s.walk != null && s.dist); return pairs.length ? pairs.reduce((a, s) => a + s.walk / s.dist, 0) / pairs.length : null; })();
+  box.innerHTML = `<div class="tiles" style="margin-bottom:10px">${tile('Haltestellen', fmt(stops.length), `OSM, innerhalb ${esc(muniName(state.scope))}`)}${tile(`Ohne Fahrzeug in ${radius} m ${useWalk ? 'Fußweg' : 'Luftlinie'}`, fmt(gaps.length), pctf(gaps.length, stops.length) + ' der Haltestellen', gaps.length / Math.max(1, stops.length) > 0.4 ? 'warn' : '')}${tile(`Median ${useWalk ? 'Fußweg' : 'Luftlinie'}`, med == null ? '—' : `${fmt(med)} m`, 'zum nächsten verfügbaren Fahrzeug')}${useWalk ? tile('Umweg-Faktor', ratio == null ? '—' : fmt(ratio, 2), `${fmt(routed)} Haltestellen geroutet${routeFail ? ` · ${fmt(routeFail)} ohne Route` : ''} · Fußweg ÷ Luftlinie`) : ''}</div>
+  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Luftlinie</th>${useWalk ? '<th class="n">Fußweg</th><th class="n">Gehzeit</th>' : ''}<th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td>${useWalk ? `<td class="n">${s.walk == null ? '<span class="muted">nicht geroutet</span>' : `${fmt(s.walk)} m`}</td><td class="n">${s.walkMin == null ? '—' : `${fmt(s.walkMin)} Min.`}</td>` : ''}<td>${esc((useWalk && s.walkOp) || s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}<div class="muted small" style="margin-top:6px">${useWalk ? 'Fußwege über das OSRM-Fußgängerprofil von routing.openstreetmap.de (FOSSGIS); je Haltestelle die drei nächsten Fahrzeuge geprüft. Haltestellen mit Luftlinie über ' + fmt(Math.max(radius * 2, 1500)) + ' m werden nicht geroutet.' : 'Luftlinie; Fußweg-Routing per Häkchen aktivierbar.'}</div>`;
 }
 function renderSupplyLayer() {
   const L_ = state.layers; L_.supply.clearLayers(); if (!state.supply) return;
-  for (const s of state.supply.stops) { const gap = s.dist == null || s.dist > state.supply.radius; L.circleMarker([s.lat, s.lon], { radius: gap ? 6 : 4, weight: 2, color: gap ? '#ef6b6b' : '#6aa9ff', fillOpacity: .5 }).bindPopup(`<b>${esc(s.name)}</b> (${s.kind})<br>nächstes verfügbares Fahrzeug: ${s.dist == null ? '—' : `${fmt(s.dist)} m`} ${esc(s.op || '')}`).addTo(L_.supply); }
+  for (const s of state.supply.stops) { const d = state.supply.eff ? state.supply.eff(s) : s.dist; const gap = d == null || d > state.supply.radius; L.circleMarker([s.lat, s.lon], { radius: gap ? 6 : 4, weight: 2, color: gap ? '#ef6b6b' : '#6aa9ff', fillOpacity: .5 }).bindPopup(`<b>${esc(s.name)}</b> (${s.kind})<br>nächstes verfügbares Fahrzeug: ${s.dist == null ? '—' : `${fmt(s.dist)} m Luftlinie`}${s.walk != null ? ` · ${fmt(s.walk)} m Fußweg (${fmt(s.walkMin)} Min.)` : ''} ${esc(s.walkOp || s.op || '')}`).addTo(L_.supply); }
 }
 
 // ---------- Steuerung ----------
