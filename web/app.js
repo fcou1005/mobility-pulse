@@ -5,7 +5,7 @@ const CFG = {
   MAIN: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/main/data/',
   REPO: 'https://github.com/fcou1005/mobility-pulse',
   WFS: 'https://api.mobidata-bw.de/geoserver/MobiData-BW/ows',
-  OVERPASS: 'https://overpass-api.de/api/interpreter',
+  OVERPASS: ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'],
   OSRM_FOOT: 'https://routing.openstreetmap.de/routed-foot',
   VALHALLA: 'https://valhalla1.openstreetmap.de',
   MAX_POINTS: 6000,
@@ -878,8 +878,9 @@ async function checkSupply() {
   const b = f.bbox; const radius = +$('#sel-radius').value; const useWalk = $('#chk-walk').checked;
   box.innerHTML = '<div class="muted small">Haltestellen werden geladen …</div>';
   const q = `[out:json][timeout:25];(node["highway"="bus_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="tram_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="station"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="halt"](${b[1]},${b[0]},${b[3]},${b[2]}););out body 800;`;
-  const r = await getJson(`${CFG.OVERPASS}?data=${encodeURIComponent(q)}`, { timeout: 40000 });
-  if (!r.ok) { box.innerHTML = `<div class="empty">Overpass nicht erreichbar (${r.error || r.status}).</div>`; return; }
+  let r = null;
+  for (const ep of CFG.OVERPASS) { r = await getJson(`${ep}?data=${encodeURIComponent(q)}`, { timeout: 40000 }); if (r.ok && r.json?.elements) break; }
+  if (!r?.ok || !r.json?.elements) { box.innerHTML = `<div class="empty">Overpass nicht erreichbar (${r?.error || r?.status}) – alle Spiegel versucht, bitte später erneut.</div>`; return; }
   const rawStops = (r.json.elements || []).filter(e => C.assignMunicipality(state.bIndex, e.lat, e.lon)?.ags === state.scope).map(e => ({ id: e.id, name: e.tags?.name || 'Haltestelle', lat: e.lat, lon: e.lon, kind: e.tags?.railway ? 'Bahn/Tram' : 'Bus' }));
   // Gegenüberliegende Haltepunkte gleichen Namens (innerhalb 80 m) zu einer Haltestelle zusammenfassen
   const stops = [];
