@@ -353,6 +353,7 @@ for (const gap of catalog.known_gaps || []) {
 }
 
 const statusCounts = {};
+let runEv = null; // Ereignisse dieses Laufs (für runs.json)
 for (const s of sourceOut) statusCounts[s.status] = (statusCounts[s.status] || 0) + 1;
 const latest = {
   at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt,
@@ -404,6 +405,26 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
   const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes });
   await writeFile(evFile, JSON.stringify(evDoc));
+  { const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0); runEv = { start: 0, end: 0, rot: 0 }; for (const h of tr.hourly.values()) { runEv.start += s(h.start); runEv.end += s(h.end); runEv.rot += s(h.rot); } }
+  // Langzeit-Archiv: Tageswerte je Gemeinde|Anbieter|Art, eine Datei je Monat, wird nie gekürzt
+  {
+    const arDir = path.join(DATA, 'archive'); await mkdir(arDir, { recursive: true });
+    const month = tr.day.slice(0, 7), arFile = path.join(arDir, `${month}.json`);
+    const ar = existsSync(arFile) ? JSON.parse(await readFile(arFile, 'utf8')) : { month, days: {} };
+    ar.fields = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
+    const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0);
+    const obsMin = (evDoc.runs || []).reduce((a, r) => a + (r[1] == null ? 0 : Math.min(r[1], 45 * 60e3) / 60e3), 0);
+    const vminOk = (evDoc.runs || []).every(r => r[1] == null || r[2] === 1);
+    const rows = {};
+    for (const [k, g] of Object.entries(evDoc.groups || {})) {
+      const hs = hist.series[k]?.total?.filter(x => x != null) || [];
+      const fleet = vminOk && obsMin > 0 && s(g.vminTot) > 0 ? s(g.vminTot) / obsMin : hs.length ? hs.reduce((a, b) => a + b, 0) / hs.length : null;
+      rows[k] = [fleet == null ? null : +fleet.toFixed(1), s(g.start), s(g.end), s(g.rot), s(g.reloc), s(g.swap), s(g.pickup), s(g.disOn), Math.round(obsMin)];
+    }
+    ar.days[tr.day] = rows; ar.updatedAt = now;
+    await writeFile(arFile, JSON.stringify(ar));
+    await writeFile(path.join(arDir, 'index.json'), JSON.stringify({ months: (await readdir(arDir)).filter(f => /^\d{4}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 7)).sort(), fields: ar.fields, updatedAt: now }));
+  }
   const cellsDir = path.join(DATA, 'cells');
   const cellFile = path.join(cellsDir, `${tr.day}.json`);
   const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day, { dt: tr.dt, hour: tr.hour });
@@ -488,5 +509,15 @@ if (boundaries) {
   const feats = boundaries.features.filter(f => activeAgs.has(f.properties.ags));
   await writeFile(path.join(DATA, 'boundaries-active.json'), JSON.stringify({ type: 'FeatureCollection', attribution: boundaries.attribution, license: boundaries.license, generatedAt: latest.generatedAt, features: feats }));
   log(`Aktive Gemeinden: ${feats.length}`);
+}
+// Sammler-Monitor: ein Eintrag je Lauf, 7 Tage (Lücken, Ausfälle, Zählungen)
+{
+  const f = path.join(DATA, 'runs.json');
+  const doc = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : { runs: [] };
+  doc.fields = ['at', 'dauer_ms', 'quellen', 'aktuell', 'verzoegert', 'veraltet', 'fehler', 'fahrzeuge', 'stationen', 'fahrten', 'fahrtenden', 'kennungswechsel', 'ausloeser'];
+  const st = statusCounts;
+  doc.runs.push([now, Date.now() - now, sourceOut.length, st.live || 0, st.delayed || 0, st.stale || 0, Object.entries(st).filter(([k]) => !['live', 'delayed', 'stale', 'empty', 'foreign'].includes(k)).reduce((a, [, v]) => a + v, 0), dv.vehicles.length, ds.stations.length, runEv?.start ?? null, runEv?.end ?? null, runEv?.rot ?? null, process.env.GITHUB_EVENT_NAME || 'lokal']);
+  doc.runs = doc.runs.filter(r => now - r[0] <= 7 * 86400e3).slice(-600);
+  await writeFile(f, JSON.stringify(doc));
 }
 log(`fertig in ${((Date.now() - now) / 1000).toFixed(1)} s · Status:`, JSON.stringify(statusCounts));
