@@ -116,3 +116,10 @@ const sb = O.planStationBalance({ stations: [ST('Leer', 48.52, 0, 10), ST('Voll'
 assert(sb.empty === 2 && sb.full === 1, 'Stationen: 2 fast leer, 1 voll');
 assert(sb.moves === 5 && sb.missing === 4, 'volle Station gibt 5 ab (bis 50 %), 4 fehlen');
 assert(sb.runs[0].stops[0].type === 'pickup' && sb.runs[0].stops[0].station === 'Voll', 'Tour beginnt an der vollen Station');
+// Pflicht-Abstellzone (station_parking): Spot rastet auf Station ein, ohne Station ausgeschlossen
+const zc = O.zoneConstraints({ features: [{ properties: { rules: [{ rideAllowed: false, rideThrough: true, parking: true }] }, geometry: sq(clat, clon, 0.03) }] });
+assert(zc.mandatory.length === 1 && zc.noPark.length === 0, 'station_parking-Zone ist Pflicht-Abstellzone, kein Verbot');
+const stn = { lat: clat + 0.0006, lon: clon, name: 'Dott Hub Markt' };
+const sp5 = O.scoreSpots(m, { topN: 5, minSpacingM: 200, mandatory: zc.mandatory, stations: [stn] });
+assert(sp5.spots.length >= 1 && sp5.spots[0].lat === stn.lat && sp5.spots[0].park.cat === 'station', 'Spot auf Anbieter-Station gesetzt');
+assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zellen ohne Station in der Pflichtzone ausgeschlossen');

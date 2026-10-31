@@ -69,12 +69,13 @@ async function loadCellDocs(stCode, days) {
 async function loadNoPark(ags, op, bbox) {
   const idx = await X.loadOnce('zonesIndex', 'zones/index.json');
   const files = (idx?.zones || []).filter(z => z.operator === op && (z.municipalities || []).includes(ags)).map(z => z.file);
-  const geoms = [];
+  const geoms = [], mandatory = [];
   for (const f of files) {
-    if (!(f in S.zones)) { const r = await X.getJson(X.CFG.DATA + `zones/${f}`, { timeout: 60000 }); S.zones[f] = r.ok ? O.noParkGeometries(r.json) : []; }
-    for (const g of S.zones[f]) if (!bbox || overlaps(g, bbox)) geoms.push(g);
+    if (!(f in S.zones)) { const r = await X.getJson(X.CFG.DATA + `zones/${f}`, { timeout: 60000 }); S.zones[f] = r.ok ? O.zoneConstraints(r.json) : { noPark: [], mandatory: [] }; }
+    for (const g of S.zones[f].noPark) if (!bbox || overlaps(g, bbox)) geoms.push(g);
+    for (const g of S.zones[f].mandatory) if (!bbox || overlaps(g, bbox)) mandatory.push(g);
   }
-  return { geoms, files: files.length };
+  return { geoms, mandatory, files: files.length };
 }
 function overlaps(g, b) { const c = JSON.stringify(g.coordinates).match(/-?\d+\.\d+/g) || []; let x0 = 999, x1 = -999, y0 = 999, y1 = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } return !(x1 < b[0] || x0 > b[2] || y1 < b[1] || y0 > b[3]); }
 // Umgebung (ÖPNV, Abstellflächen): erst die vom Sammler vorberechnete Datei, sonst Overpass im Hintergrund
@@ -168,7 +169,7 @@ async function computePlan() {
     if (useOsm && !osm && pre.spots.length) overpassBackground(ags, pre.spots, () => { if (X.state.scope === ags) computePlan(); });
     const osmNote = !useOsm ? '' : osm ? ` · Umgebung: OSM (${osm.from === 'Sammler' ? `Sammler, ${new Date(osm.at).toLocaleDateString('de-DE')}` : osm.from})` : S.osm[ags]?.state === 'loading' ? ' · ÖPNV und Abstellflächen werden aus OSM geladen (bis 2 Min.), der Plan rechnet sich danach neu' : S.osm[ags]?.state === 'fail' ? ' · OSM nicht erreichbar, ohne ÖPNV/Abstellflächen' : '';
     const parking = osm || wfs ? [...(wfs?.points || []), ...(osm?.parking || [])] : null;
-    const spots = O.scoreSpots(model, { topN, minSpacingM: spacing, share, horizonH, noPark: np.geoms, transit: osm?.transit || null, parking });
+    const spots = O.scoreSpots(model, { topN, minSpacingM: spacing, share, horizonH, noPark: np.geoms, mandatory: np.mandatory, stations, transit: osm?.transit || null, parking });
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
     const common = { depot, maxRuns: num('#ops-maxruns', 6), horizonH };
     const van = num('#ops-van', 20);
@@ -206,7 +207,7 @@ function renderTiles() {
   $('#ops-tiles').innerHTML = [
     tile('Flotte', `${f(k.available)} / ${f(k.total)}`, `verfügbar / gemeldet · ${f(k.disabled)} gesperrt · Anteil ${f(p.share * 100)} %`),
     tile('Nachfrage', `${f(sph * p.share, 1)} /h`, `Fahrtbeginne ${p.band === 'day' ? 'im Tagesmittel' : O.BANDS[p.band].label} · Markt ${f(sph, 1)} /h`),
-    tile('Spots', `${f(p.spots.spots.length)}`, `Ziel ${f(target)} Fzg. · fehlen ${f(need)}${p.spots.excluded ? ` · ${f(p.spots.excluded)} Zellen im Abstellverbot` : ''}`, need > target * 0.5 ? 'warn' : ''),
+    tile('Spots', `${f(p.spots.spots.length)}`, `Ziel ${f(target)} Fzg. · fehlen ${f(need)}${p.spots.excluded ? ` · ${f(p.spots.excluded)} Zellen durch Zonen ausgeschlossen` : ''}`, need > target * 0.5 ? 'warn' : ''),
     tile('Akku', k.batteryKnown ? `${f(k.low)}` : 'k. A.', k.batteryKnown ? `unter ${num('#ops-swapthr', 25)} % von ${f(k.batteryKnown)} mit Angabe` : 'Feed meldet keinen Ladestand', k.batteryKnown && k.low / k.batteryKnown > 0.25 ? 'warn' : ''),
     tile('Standzeit', `${f(k.idle24)}`, `über 24 h unbewegt · Median ${k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h'}`, k.idleKnown && k.idle24 / k.idleKnown > 0.3 ? 'warn' : ''),
     tile('Touren', `${f(runs.length)}`, `${f(km, 1)} km · ${f(min / 60, 1)} h Einsatz${Object.keys(S.routed).length ? ' · Straßenrouting' : ' · Luftlinie × 1,35'}`),
@@ -263,7 +264,7 @@ function drawMap(fit) {
   }
   $('#ops-map-sub').textContent = `${X.muniName(p.ags)} · ${p.op} · ${p.band === 'day' ? 'ganzer Tag' : O.BANDS[p.band].label}`;
 }
-const parkLabel = (pk) => ({ escooter: 'E-Scooter-Stellfläche', official: 'amtliche Abstellfläche', sharing: 'Sharing-/Mobilitätspunkt', rad: 'Radabstellanlage' }[pk.cat] || pk.cat) + (pk.name ? ` „${pk.name}“` : '');
+const parkLabel = (pk) => ({ station: 'Station des Anbieters (Pflicht-Abstellzone)', escooter: 'E-Scooter-Stellfläche', official: 'amtliche Abstellfläche', sharing: 'Sharing-/Mobilitätspunkt', rad: 'Radabstellanlage' }[pk.cat] || pk.cat) + (pk.name ? ` „${pk.name}“` : '');
 const runTitle = (r) => `<b>${r.id} · ${RUN_LABEL[r.kind]}</b> · ${X.fmt(r.vehicles)} Fzg. · ${X.fmt(r.km, 1)} km · ${X.fmt(r.totalMin)} min`;
 function renderRuns() {
   const p = S.plan, f = X.fmt, esc = X.esc;
@@ -290,7 +291,7 @@ function renderRuns() {
 function renderSpots() {
   const p = S.plan, f = X.fmt, esc = X.esc;
   const needBy = new Map(p.rebalance.needs.map(n => [n.cell, n]));
-  $('#ops-spots-sub').textContent = `${p.spots.candidates} Kandidatenzellen · Faktoren ${p.spots.activeFactors.map(k => O.AHP.labels[k]).join(', ')} · ${p.np.geoms.length} Abstellverbots-Polygone aus ${p.np.files} Zonenfeed${p.np.files === 1 ? '' : 's'}${p.wfs ? ` · ${f(p.wfs.points.length)} amtliche Abstellflächen` : ''}${p.osm ? ` · OSM: ${f(p.osm.parking.length)} Abstellflächen, ${f(p.osm.transit.length)} Haltepunkte` : ''}`;
+  $('#ops-spots-sub').textContent = `${p.spots.candidates} Kandidatenzellen · Faktoren ${p.spots.activeFactors.map(k => O.AHP.labels[k]).join(', ')} · ${p.np.geoms.length} Abstellverbots-${p.np.mandatory.length ? ` und ${p.np.mandatory.length} Pflicht-Abstell-` : ''}Polygone aus ${p.np.files} Zonenfeed${p.np.files === 1 ? '' : 's'}${p.wfs ? ` · ${f(p.wfs.points.length)} amtliche Abstellflächen` : ''}${p.osm ? ` · OSM: ${f(p.osm.parking.length)} Abstellflächen, ${f(p.osm.transit.length)} Haltepunkte` : ''}`;
   const bar = (x) => `<span class="bar" style="display:inline-block;width:38px;vertical-align:middle"><i style="width:${Math.round((x ?? 0) * 100)}%"></i></span>`;
   $('#ops-spots tbody').innerHTML = p.spots.spots.map(s => { const n = needBy.get(s.cell); return `<tr><td class="n">${s.rank}</td><td><a href="https://www.openstreetmap.org/?mlat=${s.lat.toFixed(5)}&mlon=${s.lon.toFixed(5)}#map=18/${s.lat.toFixed(5)}/${s.lon.toFixed(5)}" target="_blank" rel="noopener" class="mono">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</a><div class="sub-line">${s.park ? esc(parkLabel(s.park)) : 'Zellmitte'}</div></td>
     <td class="n"><b>${f(s.target)}</b></td><td class="n">${f(n?.have)}</td><td class="n" style="color:var(--${n?.need ? 'warn' : 'muted'})">${f(n?.need)}</td>
@@ -317,7 +318,7 @@ function renderMethod() {
   const A = O.AHP, f = (x) => x < 1 ? `1/${Math.round(1 / x)}` : String(x);
   $('#ops-method').innerHTML = `<h2>Methode</h2>
   <h3>Nachfrage</h3><p>Fahrtbeginne je Zelle (≈ 250 m) und Tageszeit-Band aus dem Verschwinden verfügbarer Fahrzeuge zwischen zwei Sammler-Läufen, über alle Anbieter (Markt). Rate = Starts ÷ Messstunden im Band; Bestand = Ø verfügbare Fahrzeuge je Lauf. Der Anbieter bekommt seinen aktuellen Anteil am verfügbaren Bestand der Gemeinde. Zellen mischen Fahrzeugarten.</p>
-  <h3>Deploy-Spots (MCDA)</h3><p>Faktoren auf 0–1 standardisiert (95. Perzentil als Obergrenze): <b>Nachfrage</b> (Starts/h), <b>Unterversorgung</b> (Starts/h ÷ (Bestand + 0,5)), <b>ÖPNV-Nähe</b> (Haltepunkte ≤ 200 m, 3 = voll), <b>Abstellfläche</b> (E-Scooter-Stellfläche, amtliche Fläche oder Sharing-Punkt ≤ 160 m = 1, Radabstellanlage ≤ 80 m = 0,5). Der Spot rastet auf die Fläche ein. Abstellverbote aus den GBFS-Zonen des Anbieters sind ein Ausschluss, kein Gewicht. Mindestabstand zwischen Spots, Ziel = Starts/h × Anteil × Horizont (2–15 Fzg.).</p>
+  <h3>Deploy-Spots (MCDA)</h3><p>Faktoren auf 0–1 standardisiert (95. Perzentil als Obergrenze): <b>Nachfrage</b> (Starts/h), <b>Unterversorgung</b> (Starts/h ÷ (Bestand + 0,5)), <b>ÖPNV-Nähe</b> (Haltepunkte ≤ 200 m, 3 = voll), <b>Abstellfläche</b> (E-Scooter-Stellfläche, amtliche Fläche oder Sharing-Punkt ≤ 160 m = 1, Radabstellanlage ≤ 80 m = 0,5). Der Spot rastet auf die Fläche ein. Abstellverbote aus den GBFS-Zonen des Anbieters sind ein Ausschluss, kein Gewicht. In Pflicht-Abstellzonen (GBFS <span class="mono">station_parking</span>, z. B. Dott Leipzig) rastet der Spot auf die nächste Station des Anbieters (≤ 150 m) ein, ohne Station fällt die Zelle weg. Mindestabstand zwischen Spots, Ziel = Starts/h × Anteil × Horizont (2–15 Fzg.).</p>
   <div class="tbl"><table><thead><tr><th>AHP</th>${A.criteria.map(c => `<th class="n">${A.labels[c]}</th>`).join('')}<th class="n">Gewicht</th></tr></thead><tbody>${A.criteria.map((c, i) => `<tr><td>${A.labels[c]}</td>${A.matrix[i].map(x => `<td class="n mono">${f(x)}</td>`).join('')}<td class="n mono"><b>${A.weights[c].toFixed(3)}</b></td></tr>`).join('')}</tbody></table></div>
   <p class="small">Saaty-Skala, Eigenvektor-Gewichte, Konsistenzquote CR = ${A.cr.toFixed(3)} (&lt; 0,10). Fehlt ein Faktor (z. B. OSM nicht erreichbar), wird er ausgelassen und die übrigen Gewichte neu normiert. <b>Sensitivität:</b> jedes Gewicht ±20 %, neu normiert; „stabil“ = Spot bleibt in allen Varianten in der Auswahl, „mittel“ ≥ 75 %, sonst „unsicher“.</p>
   <h3>Touren</h3><p><b>Umsetzen:</b> Überschuss sind Fahrzeuge über dem erwarteten Bedarf ihrer Zelle im Horizont, Fahrzeuge über 24 h unbewegt und überzählige an Spots; Akku unter 30 % wird nicht umgesetzt, sondern getauscht. Zuordnung nach Spot-Rang zum nächsten Überschussfahrzeug (≤ 4 km), Bündelung nach Transporterkapazität, erst einsammeln, dann ausbringen. <b>Akkutausch:</b> Priorität = 0,6 × Ladestand-Lücke + 0,4 × Nachfrage am Standort. <b>Werkstatt:</b> gesperrte Fahrzeuge, längste Sperre zuerst. <b>Stationen:</b> Füllgrad ≤ 20 % aus Stationen ≥ 80 % auf 50 % auffüllen. Reihenfolge je Tour: Nächster Nachbar mit mehreren Starts, 2-opt, Or-opt. Fahrzeit ohne Straßenrouting: Luftlinie × 1,35 bei 18 km/h; mit „Straßenrouting“ OSRM (Demo-Server, ohne Verkehr). Vor-Ort-Zeiten: 1,5 min abholen, 1 min ausbringen, 2,5 min Akku, 3 min Werkstatt.</p>
