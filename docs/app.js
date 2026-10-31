@@ -1,4 +1,4 @@
-import * as C from './pulse-core.js';
+import * as C from './pulse-core.js?v=mvwrvwke';
 
 const CFG = {
   DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
