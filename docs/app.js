@@ -1,4 +1,4 @@
-import * as C from './pulse-core.js?v=mvwto56b';
+import * as C from './pulse-core.js?v=mvwtrk91';
 
 const CFG = {
   DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
@@ -897,7 +897,7 @@ async function checkSupply() {
   if (useWalk && stops.length) {
     const limit = Math.max(radius * 2, 1500);
     const todo = stops.filter(s => s.dist != null && s.dist <= limit).slice(0, 600);
-    const batchSize = 16; // Valhalla teilt intern (Quellen × Ziele ≤ 100), OSRM nimmt ≤ 100 Koordinaten
+    const batchSize = 6; // 6 Haltestellen × ≤ 12 Ziele = ein Valhalla-Aufruf (Quellen × Ziele ≤ 100)
     const batches = []; for (let i = 0; i < todo.length; i += batchSize) batches.push(todo.slice(i, i + batchSize));
     let done = 0;
     for (const batch of batches) {
@@ -912,7 +912,7 @@ async function checkSupply() {
         if (Number.isFinite(best)) { s.walk = Math.round(best); s.walkMin = bestSec != null ? Math.round(bestSec / 60) : null; s.walkOp = bestOp; routed++; }
       });
       done += batch.length;
-      await new Promise(res => setTimeout(res, 120));
+      await new Promise(res => setTimeout(res, 40));
     }
   }
   // Fußweg, sonst Luftlinie (nicht geroutet oder außerhalb des Routing-Limits)
