@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr } from './pulse-core.js?v=mvwwi61n';
+import { haversineM, normalizeId, hashStr } from './pulse-core.js?v=mvwxzft8';
 
 export const TRACK_VERSION = 2;
 export const MOVE_M = 150;        // ab hier gilt ein Positionswechsel bei gleicher Kennung als Umsetzung (bzw. Fahrt bei stabilen Kennungen)
@@ -187,7 +187,8 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     e.name = String(s.name || e.name || '').slice(0, 60); e.lat = +s.lat.toFixed(5); e.lon = +s.lon.toFixed(5);
     const dd = (e.d[day] ??= [0, 0, 0]);
     const open = s.installed !== false && s.renting !== false;
-    dd[0]++; if (open && (s.bookable ?? 0) === 0) dd[1]++; if (s.installed !== false && s.returning !== false && s.docksAvailable === 0) dd[2]++;
+    // leer nur, wenn auch im Umkreis kein Fahrzeug des Anbieters steht (nearbyVehicles aus aggregateGroups)
+    dd[0]++; if (open && (s.bookable ?? 0) === 0 && !(s.nearbyVehicles > 0)) dd[1]++; if (s.installed !== false && s.returning !== false && s.docksAvailable === 0) dd[2]++;
     for (const k of Object.keys(e.d)) if (daysBetween(k, day) > 7) delete e.d[k];
     state.s[key] = e;
   }

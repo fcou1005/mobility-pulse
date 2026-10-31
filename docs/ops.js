@@ -1,5 +1,5 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvwwi61n';
+import * as O from './pulse-ops.js?v=mvwxzft8';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -9,6 +9,16 @@ const RUN_LABEL = { rebalance: 'Umsetzen', swap: 'Akkutausch', workshop: 'Werkst
 const STOP_LABEL = { pickup: 'Abholen', drop: 'Ausbringen', swap: 'Akku tauschen', pickup_disabled: 'Defekt abholen' };
 const BAND_NOW = () => O.bandOf(+new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Berlin' }).format(new Date()) % 24);
 const num = (id, d) => { const v = +$(id)?.value; return Number.isFinite(v) && v > 0 ? v : d; };
+
+// Deep-Links: aktuelle Flotte lesen, Parameter aus der URL setzen (Flotte wird beim Rechnen geprüft)
+export const opsFleet = () => S.op;
+export function applyOpsParams({ op, type } = {}) {
+  if (op) S.op = op;
+  const sel = $('#ops-type'); if (type && [...sel.options].some(o => o.value === type)) sel.value = type;
+}
+const abbr = (text, title) => `<abbr title="${X.esc(title)}">${text}</abbr>`;
+const sig2 = (x) => { const p = 10 ** Math.max(0, Math.floor(Math.log10(Math.abs(x) || 1)) - 1); return Math.round(x / p) * p; };
+const hhmm = () => new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
 export function initOps(ctx) {
   X = ctx;
@@ -24,6 +34,8 @@ export function initOps(ctx) {
   $('#ops-csv-runs').addEventListener('click', () => S.plan && download(`touren_${slug()}.csv`, '﻿' + O.runsCsv(allRuns(), S.plan.depot), 'text/csv'));
   $('#ops-geojson').addEventListener('click', () => S.plan && download(`plan_${slug()}.geojson`, JSON.stringify(O.planGeoJson(S.plan.spots.spots, allRuns(), S.plan.depot)), 'application/geo+json'));
   document.addEventListener('click', (e) => { const a = e.target.closest('.ops-pick'); if (!a) return; e.preventDefault(); $('#sel-scope').value = a.dataset.ags; $('#sel-scope').dispatchEvent(new Event('change')); setTimeout(() => { location.hash = '#ops'; renderOps(); }, 0); });
+  // OSM erneut versuchen (nach Ausfall gilt sonst 10 Min. Pause)
+  document.addEventListener('click', (e) => { if (!e.target.closest('#ops-osm-retry')) return; const ags = S.plan?.ags || X.state.scope; delete S.osm[ags]; $('#ops-warn').innerHTML = ''; computePlan(); });
   renderMethod();
 }
 
@@ -51,9 +63,9 @@ export async function renderOps() {
 function showPicker() {
   const munis = Object.values(X.state.latest?.municipalities || {}).map(m => ({ ...m, avail: Object.values(m.operators || {}).reduce((s, o) => s + (o.available ?? o.total ?? 0), 0) })).sort((a, b) => b.avail - a.avail).slice(0, 18);
   const el = $('#ops-pick'); el.hidden = false;
-  el.innerHTML = `<h2>Gemeinde wählen</h2><div class="sub">Die Disposition rechnet je Gemeinde und Anbieter. Oben im Filter jede Gemeinde wählbar; hier die größten Flotten.</div><div class="chips">${munis.map(m => `<a href="#ops" class="chip ops-pick" data-ags="${m.ags}">${X.esc(m.name)} <span class="muted">${X.fmt(m.avail)}</span></a>`).join('')}</div>`;
+  el.innerHTML = `<h2>Gemeinde wählen</h2><div class="sub">Die Disposition rechnet je Gemeinde und Anbieter. Oben im Filter ist jede Gemeinde wählbar; hier die größten Flotten.</div><div class="chips">${munis.map(m => `<a href="#ops" class="chip ops-pick" data-ags="${m.ags}">${X.esc(m.name)} <span class="muted">${X.fmt(m.avail)}</span></a>`).join('')}</div>`;
   for (const k in S.layers) S.layers[k].clearLayers();
-  $('#ops-tiles').innerHTML = ''; $('#ops-runs').innerHTML = ''; $('#ops-spots tbody').innerHTML = ''; status('');
+  $('#ops-tiles').innerHTML = ''; $('#ops-runs').innerHTML = ''; $('#ops-warn').innerHTML = ''; $('#ops-spots-sub').textContent = ''; $('#ops-spots tbody').innerHTML = '<tr><td colspan="10" class="empty"><b>Noch kein Plan.</b>Oben eine Gemeinde wählen.</td></tr>'; status('');
 }
 
 // ---------- Daten ----------
@@ -142,7 +154,7 @@ async function computePlan() {
     if (!ops.length) { status(`Keine ${type === 'all' ? 'Fahrzeuge oder Stationen' : X.TYPE[type] || type} in dieser Gemeinde im letzten Sammler-Lauf — andere Fahrzeugart wählen.`); for (const k in S.layers) S.layers[k].clearLayers(); $('#ops-op').innerHTML = ''; return; }
     const pick = (o) => o && counts.has(o) && (counts.get(o) > 0 || ops[0][1] === 0);
     let op = pick(S.op) ? S.op : pick(st.operator) ? st.operator : ops[0][0];
-    S.op = op;
+    S.op = op; X.syncUrl?.();
     $('#ops-op').innerHTML = ops.map(([o, n]) => `<option value="${X.esc(o)}"${o === op ? ' selected' : ''}>${X.esc(o)} · ${n ? `${X.fmt(n)} Fzg.` : 'Stationen'}</option>`).join('');
     const vehicles = inMuni.filter(v => v.operator === op && (type === 'all' || v.type === type));
     const stations = stInMuni.filter(s => s.operator === op);
@@ -167,7 +179,9 @@ async function computePlan() {
     ]);
     const osm = ctxDoc?.state === 'ok' ? ctxDoc : null;
     if (useOsm && !osm && pre.spots.length) overpassBackground(ags, pre.spots, () => { if (X.state.scope === ags) computePlan(); });
-    const osmNote = !useOsm ? '' : osm ? ` · Umgebung: OSM (${osm.from === 'Sammler' ? `Sammler, ${new Date(osm.at).toLocaleDateString('de-DE')}` : osm.from})` : S.osm[ags]?.state === 'loading' ? ' · ÖPNV und Abstellflächen werden aus OSM geladen (bis 2 Min.), der Plan rechnet sich danach neu' : S.osm[ags]?.state === 'fail' ? ' · OSM nicht erreichbar, ohne ÖPNV/Abstellflächen' : '';
+    const osmNote = !useOsm ? '' : osm ? ` · Umgebung: OSM (${osm.from === 'Sammler' ? `Sammler, ${new Date(osm.at).toLocaleDateString('de-DE')}` : osm.from})` : S.osm[ags]?.state === 'loading' ? ' · ÖPNV und Abstellflächen werden aus OSM geladen (bis 2 Min.), der Plan rechnet sich danach neu' : '';
+    // OSM-Ausfall sichtbar als Warnung, nicht nur im Statustext
+    $('#ops-warn').innerHTML = useOsm && !osm && S.osm[ags]?.state === 'fail' ? '<div class="note warn" role="alert"><b>OpenStreetMap nicht erreichbar.</b> Spots sind ohne ÖPNV-Nähe und Abstellflächen gerechnet (Faktoren Ö und A fehlen). <button class="chip" id="ops-osm-retry">Erneut versuchen</button></div>' : '';
     const parking = osm || wfs ? [...(wfs?.points || []), ...(osm?.parking || [])] : null;
     const spots = O.scoreSpots(model, { topN, minSpacingM: spacing, share, horizonH, noPark: np.geoms, mandatory: np.mandatory, stations, transit: osm?.transit || null, parking });
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
@@ -183,11 +197,11 @@ async function computePlan() {
     const kpi = O.fleetKpis(vehicles, { swapThreshold: num('#ops-swapthr', 25) });
     S.plan = { ags, op, type, band, bandNote, model, share, spots, rebalance, swaps, workshop, station, kpi, depot, np, osm, wfs, fleet: { vehicles, stations }, at: fleet.at, days: cellDocs.length };
     S.routed = {};
-    status(`${X.esc(op)} in ${X.esc(X.muniName(ags))} · Flotte vom ${new Date(fleet.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Nachfrage aus ${model.days} Tag${model.days === 1 ? '' : 'en'} (${X.fmt(model.hours, 1)} Messstunden)${bandNote ? ` · ${bandNote}` : ''}${osmNote}`);
+    status(`<b>Berechnet ${hhmm()}</b> · ${X.esc(op)} in ${X.esc(X.muniName(ags))} · Flotte vom ${new Date(fleet.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Nachfrage aus ${model.days} Tag${model.days === 1 ? '' : 'en'} (${X.fmt(model.hours, 1)} Messstunden)${bandNote ? ` · ${bandNote}` : ''}${osmNote}`);
     renderTiles(); drawMap(true); renderRuns(); renderSpots();
     const plan = S.plan; X.econFor(ags, op, type).then(e => { if (S.plan === plan) { plan.econ = e || false; renderTiles(); } }).catch(() => { plan.econ = false; });
     if ($('#ops-route').checked) routeRuns();
-  } catch (e) { console.error(e); status(`Fehler: ${X.esc(e.message)}`); }
+  } catch (e) { console.error(e); status(`<span class="warn-text">Plan konnte nicht berechnet werden: ${X.esc(e.message)}.</span> Parameter prüfen und „Plan berechnen“ erneut drücken.`); }
   finally { S.busy = false; if (S.again) { S.again = false; setTimeout(computePlan, 0); } }
 }
 const centroid = (list) => list.length ? { lat: list.reduce((s, v) => s + v.lat, 0) / list.length, lon: list.reduce((s, v) => s + v.lon, 0) / list.length } : { lat: 51.1, lon: 10.4 };
@@ -205,19 +219,20 @@ function renderTiles() {
   const need = p.rebalance.needs.reduce((s, n) => s + n.need, 0), target = p.spots.spots.reduce((s, x) => s + x.target, 0);
   const runs = allRuns(); const km = runs.reduce((s, r) => s + r.km, 0), min = runs.reduce((s, r) => s + r.totalMin, 0);
   const sph = [...p.model.cells.values()].reduce((s, c) => s + (c.startsPerHour || 0), 0);
+  const pr = X.state.usage?.profile; const prelim = !pr || pr.source === 'Standardkurve' || (pr.days ?? 0) < 3; const rv = (x) => x >= 100 ? f(sig2(x)) : f(x);
   $('#ops-tiles').innerHTML = [
-    tile('Flotte', `${f(k.available)} / ${f(k.total)}`, `verfügbar / gemeldet · ${f(k.disabled)} gesperrt · Anteil ${f(p.share * 100)} %`),
+    tile('Flotte', `${f(k.available)} / ${f(k.total)}`, `verfügbar / gemeldet · ${f(k.disabled)} gesperrt · Anteil an erfassten Fahrzeugen ${f(p.share * 100)} %`),
     tile('Nachfrage', `${f(sph * p.share, 1)} /h`, `Fahrtbeginne ${p.band === 'day' ? 'im Tagesmittel' : O.BANDS[p.band].label} · Markt ${f(sph, 1)} /h`),
     tile('Spots', `${f(p.spots.spots.length)}`, `Ziel ${f(target)} Fzg. · fehlen ${f(need)}${p.spots.excluded ? ` · ${f(p.spots.excluded)} Zellen durch Zonen ausgeschlossen` : ''}`, need > target * 0.5 ? 'warn' : ''),
     tile('Akku & Standzeit', k.batteryKnown ? `${f(k.low)}` : 'k. A.', `${k.batteryKnown ? `unter ${num('#ops-swapthr', 25)} % von ${f(k.batteryKnown)}` : 'kein Ladestand im Feed'} · ${f(k.idle24)} über 24 h unbewegt (Median ${k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h'})`, (k.batteryKnown && k.low / k.batteryKnown > 0.25) || (k.idleKnown && k.idle24 / k.idleKnown > 0.3) ? 'warn' : ''),
-    tile('Umsatz / Tag', p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? `${f(p.econ.revDay)} €` : '—', p.econ === undefined ? 'Schätzung wird geladen' : !p.econ ? 'keine Fahrtdaten für diesen Anbieter' : `${p.econ.plausible ? '' : 'Fahrtenzahl unplausibel · '}${f(p.econ.rvd, 2)} Rides/Fzg./Tag · Auslastung ${p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %'} · netto`, p.econ && !p.econ.plausible ? 'warn' : ''),
+    tile('Umsatz / Tag', p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? (prelim ? `${rv(p.econ.revDay * 0.7)}–${rv(p.econ.revDay * 1.3)} €` : `${f(p.econ.revDay)} €`) : '—', p.econ === undefined ? 'Schätzung wird geladen' : !p.econ ? 'keine Fahrtdaten für diesen Anbieter' : `${prelim ? 'vorläufig (unter 3 Messtagen) · ' : ''}${p.econ.plausible ? '' : 'Fahrtenzahl unplausibel · '}${f(p.econ.rvd, 2)} Rides/Fzg./Tag · Auslastung ${p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %'} · netto`, `est${p.econ && !p.econ.plausible ? ' warn' : ''}`),
     tile('Touren', `${f(runs.length)}`, `${f(km, 1)} km · ${f(min / 60, 1)} h Einsatz${Object.keys(S.routed).length ? ' · Straßenrouting' : ' · Luftlinie × 1,35'}`),
   ].join('');
 }
 function legend() {
   const chip = (k, label, color) => `<button class="chip${S.show[k] ? ' on' : ''}" data-l="${k}"${color ? ` style="${S.show[k] ? `background:${color};color:#06121a` : `border-color:${color}`}"` : ''}>${label}</button>`;
   $('#ops-layers').innerHTML = chip('demand', 'Nachfrage') + chip('fleet', 'Flotte') + chip('spots', 'Spots') + chip('rebalance', 'Umsetzen', RUN_COLOR.rebalance) + (S.plan?.station ? chip('station', 'Stationen', RUN_COLOR.station) : '') + chip('swap', 'Akkutausch', RUN_COLOR.swap) + chip('workshop', 'Werkstatt', RUN_COLOR.workshop);
-  $('#ops-legend').innerHTML = `<span><i class="sq" style="background:#49c7b0;border-color:#49c7b0"></i>Fahrtbeginne/h (Zelle ≈ 250 m)</span><span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span><span><i class="dot" style="background:#e3b341"></i>Akku niedrig</span><span><i class="dot" style="background:#c084fc"></i>&gt; 24 h unbewegt</span><span><b class="ops-spot-mini">1</b>Spot (gestrichelt = Rang unsicher)</span><span><b class="ops-spot-mini" style="background:var(--fg)">D</b>Depot</span>`;
+  $('#ops-legend').innerHTML = `<span><i class="sq" style="background:#49c7b0;border-color:#49c7b0"></i>Fahrtbeginne/h (${abbr('Zelle', 'Raster von etwa 250 × 250 m; Starts, Ziele und Bestand werden je Zelle gezählt')} ≈ 250 m)</span><span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span><span><i class="dot" style="background:#e3b341"></i>Akku niedrig</span><span><i class="dot" style="background:#c084fc"></i>&gt; 24 h unbewegt</span><span><b class="ops-spot-mini">1</b>Spot (gestrichelt = Rang unsicher)</span><span><b class="ops-spot-mini" style="background:var(--fg)">D</b>Depot</span>`;
 }
 function drawMap(fit) {
   const p = S.plan; if (!p) return;
@@ -248,7 +263,7 @@ function drawMap(fit) {
       const n = needBy.get(s.cell);
       L.circle([s.lat, s.lon], { radius: 150, weight: 1, color: '#49c7b0', fill: false, dashArray: s.stabilityLabel === 'stabil' ? null : '4 4' }).addTo(Lx.spots);
       L.marker([s.lat, s.lon], { icon: L.divIcon({ className: `ops-spot${s.stabilityLabel === 'stabil' ? '' : ' weak'}`, html: `${s.rank}`, iconSize: [24, 24] }) })
-        .bindPopup(`<b>Spot ${s.rank}</b>${s.park ? ` · ${esc(parkLabel(s.park))}` : ''}<br>Ziel ${f(s.target)} Fzg. · vorhanden ${f(n?.have)} · fehlen ${f(n?.need)}<br>${f(s.startsPerHourOp, 2)} Fahrtbeginne/h (Anbieter) · Score ${f(s.score, 2)} · ${s.stabilityLabel}`).addTo(Lx.spots);
+        .bindPopup(`<b>Spot ${s.rank}</b>${s.park ? ` · ${esc(parkLabel(s.park))}` : ''}<br>Ziel ${f(s.target)} Fzg. · vorhanden ${f(n?.have)} · fehlen ${f(n?.need)}<br>${f(s.startsPerHourOp, 2)} Fahrtbeginne/h (Anbieter) · Score ${f(s.score, 2)} · Stabilität ${p.model.hours < 24 ? 'vorläufig' : s.stabilityLabel}`).addTo(Lx.spots);
     }
   }
   for (const r of allRuns()) {
@@ -277,7 +292,7 @@ function renderRuns() {
       return `<div class="card ops-run" style="border-left:3px solid ${RUN_COLOR[kind]}"><b>${r.id} · ${f(r.vehicles)} Fzg. · ${f(r.stops.length)} Stopps</b>
         <p>${f(r.km, 1)} km · ${f(r.driveMin)} min Fahrt + ${f(r.handleMin)} min vor Ort = <b>${f(r.totalMin)} min</b>${S.routed[r.id] ? ' · Straße' : ''}</p>
         <details><summary>Stoppliste</summary><ol class="small">${r.stops.map(s => `<li>${STOP_LABEL[s.type]} ${f(s.count)}${s.station ? ` · ${esc(s.station)} (${esc(s.fill)})` : ''}${s.spotRank ? ` · Spot ${s.spotRank}` : ''}${s.battery?.length ? ` · Akku ${s.battery.slice(0, 6).join('/')} %` : ''}${s.idleMaxH ? ` · steht ${f(s.idleMaxH)} h` : ''}</li>`).join('')}</ol></details>
-        <div class="foot"><button class="chip" data-fit="${r.id}">Auf Karte</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener">Navigation${links.length > 1 ? ` ${i + 1}/${links.length}` : ''} ↗</a>`).join(' · ')}</div></div>`;
+        <div class="foot"><button class="chip" data-fit="${r.id}">Auf Karte</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener" title="Google Maps erlaubt höchstens 10 Punkte je Route">${links.length > 1 ? `Route Teil ${i + 1} von ${links.length}` : 'Route'} ↗</a>`).join(' · ')}</div></div>`;
     }).join('') : '<div class="muted small">Keine Tour nötig.</div>';
     return `<h3 style="margin-top:12px">${RUN_LABEL[kind]}</h3><div class="sub">${head}</div><div class="cards" style="grid-template-columns:1fr">${body}</div>`;
   };
@@ -292,13 +307,47 @@ function renderRuns() {
 function renderSpots() {
   const p = S.plan, f = X.fmt, esc = X.esc;
   const needBy = new Map(p.rebalance.needs.map(n => [n.cell, n]));
-  $('#ops-spots-sub').textContent = `${p.spots.candidates} Kandidatenzellen · Faktoren ${p.spots.activeFactors.map(k => O.AHP.labels[k]).join(', ')} · ${p.np.geoms.length} Abstellverbots-${p.np.mandatory.length ? ` und ${p.np.mandatory.length} Pflicht-Abstell-` : ''}Polygone aus ${p.np.files} Zonenfeed${p.np.files === 1 ? '' : 's'}${p.wfs ? ` · ${f(p.wfs.points.length)} amtliche Abstellflächen` : ''}${p.osm ? ` · OSM: ${f(p.osm.parking.length)} Abstellflächen, ${f(p.osm.transit.length)} Haltepunkte` : ''}`;
+  const prelim = p.model.hours < 24; // Sensitivität über wenige Messstunden ist nicht aussagekräftig
+  $('#ops-spots-sub').innerHTML = esc(`${p.spots.candidates} Kandidatenzellen · Faktoren ${p.spots.activeFactors.map(k => O.AHP.labels[k]).join(', ')} · ${p.np.geoms.length} Abstellverbots-${p.np.mandatory.length ? ` und ${p.np.mandatory.length} Pflicht-Abstell-` : ''}Polygone aus ${p.np.files} Zonenfeed${p.np.files === 1 ? '' : 's'}${p.wfs ? ` · ${f(p.wfs.points.length)} amtliche Abstellflächen` : ''}${p.osm ? ` · OSM: ${f(p.osm.parking.length)} Abstellflächen, ${f(p.osm.transit.length)} Haltepunkte` : ''}`) +
+    (prelim ? `<br><span class="warn-text">Stabilität erst ab 24 Messstunden aussagekräftig (bisher ${f(p.model.hours, 1)} h).</span>` : '');
   const bar = (x) => `<span class="bar" style="display:inline-block;width:38px;vertical-align:middle"><i style="width:${Math.round((x ?? 0) * 100)}%"></i></span>`;
-  $('#ops-spots tbody').innerHTML = p.spots.spots.map(s => { const n = needBy.get(s.cell); return `<tr><td class="n">${s.rank}</td><td><a href="https://www.openstreetmap.org/?mlat=${s.lat.toFixed(5)}&mlon=${s.lon.toFixed(5)}#map=18/${s.lat.toFixed(5)}/${s.lon.toFixed(5)}" target="_blank" rel="noopener" class="mono">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</a><div class="sub-line">${s.park ? esc(parkLabel(s.park)) : 'Zellmitte'}</div></td>
+  const F = { N: 'Nachfrage (Starts/h)', U: 'Unterversorgung (Starts/h ÷ Bestand)', Ö: 'ÖPNV-Nähe (Haltepunkte ≤ 200 m)', A: 'Abstellfläche in der Nähe' };
+  const fac = (x, l) => `${bar(x)} <abbr title="${F[l]}: ${f((x ?? 0) * 100)} %">${l}</abbr>`;
+  $('#ops-spots tbody').innerHTML = p.spots.spots.map(s => { const n = needBy.get(s.cell); const k = geoKey(s.lat, s.lon); const g = s.rank <= GEO_TOP ? GEO.get(k) : undefined;
+    const osm = `<a href="https://www.openstreetmap.org/?mlat=${s.lat.toFixed(5)}&mlon=${s.lon.toFixed(5)}#map=18/${s.lat.toFixed(5)}/${s.lon.toFixed(5)}" target="_blank" rel="noopener" class="mono" title="Auf OpenStreetMap öffnen">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</a>`;
+    const place = s.park ? esc(parkLabel(s.park)) : 'Zellmitte';
+    const main = s.rank > GEO_TOP ? place : `<span class="geo-main" data-geo="${k}" data-fallback="${place}">${g ? esc(g) : g === null ? place : '<span class="muted">Adresse wird gesucht …</span>'}</span>`;
+    return `<tr><td class="n">${s.rank}</td><td>${main}<div class="sub-line">${osm}${s.rank <= GEO_TOP ? ` · ${place}` : ''}</div></td>
     <td class="n"><b>${f(s.target)}</b></td><td class="n">${f(n?.have)}</td><td class="n" style="color:var(--${n?.need ? 'warn' : 'muted'})">${f(n?.need)}</td>
     <td class="n">${f(s.startsPerHourOp, 2)}<div class="sub-line">Markt ${f(s.startsPerHour, 2)}</div></td><td class="n">${f(s.supplyAvg, 1)}</td><td class="n">${f(s.score, 2)}</td>
-    <td class="small">${bar(s.factors.demand)} N ${bar(s.factors.underserved)} U${p.spots.activeFactors.includes('transit') ? ` ${bar(s.factors.transit)} Ö` : ''}${p.spots.activeFactors.includes('parking') ? ` ${bar(s.factors.parking)} A` : ''}</td>
-    <td><span class="pill ${s.stabilityLabel === 'stabil' ? 'live' : s.stabilityLabel === 'mittel' ? 'delayed' : 'stale'}">${s.stabilityLabel}</span><div class="sub-line">${f(s.stability * 100)} % der Varianten</div></td></tr>`; }).join('') || '<tr><td colspan="10" class="empty">Keine Spots — zu wenig Nachfrage gemessen.</td></tr>';
+    <td class="small" style="white-space:nowrap">${fac(s.factors.demand, 'N')} ${fac(s.factors.underserved, 'U')}${p.spots.activeFactors.includes('transit') ? ` ${fac(s.factors.transit, 'Ö')}` : ''}${p.spots.activeFactors.includes('parking') ? ` ${fac(s.factors.parking, 'A')}` : ''}</td>
+    <td>${prelim ? '<span class="pill prelim" title="Stabilität erst ab 24 Messstunden aussagekräftig">vorläufig</span>' : `<span class="pill ${s.stabilityLabel === 'stabil' ? 'live' : s.stabilityLabel === 'mittel' ? 'delayed' : 'stale'}">${s.stabilityLabel}</span>`}<div class="sub-line">${f(s.stability * 100)} % der Varianten</div></td></tr>`; }).join('') || '<tr><td colspan="10" class="empty"><b>Keine Spots: zu wenig Nachfrage gemessen.</b>Unter „Parameter“ einen längeren Zeitraum bei „Nachfrage aus“ wählen.</td></tr>';
+  queueGeo(p.spots.spots.slice(0, GEO_TOP));
+}
+// Straße/Stadtteil für die Top-Spots per Nominatim (OSM): im Hintergrund, höchstens 1 Anfrage/s, Cache im Speicher
+const GEO = new Map(), GEO_TOP = 20; const geoQueue = []; let geoBusy = false;
+const geoKey = (lat, lon) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
+function geoText(j) {
+  const a = j?.address || {};
+  const street = a.road || a.pedestrian || a.footway || a.square || a.path || a.cycleway || a.place || j?.name || null;
+  const area = a.suburb || a.city_district || a.quarter || a.neighbourhood || a.village || a.town || null;
+  return [street, area].filter(Boolean).join(' · ') || null;
+}
+function queueGeo(spots) {
+  for (const s of spots) { const k = geoKey(s.lat, s.lon); if (!GEO.has(k) && !geoQueue.some(q => q.k === k)) geoQueue.push({ k, lat: s.lat, lon: s.lon }); }
+  pumpGeo();
+}
+async function pumpGeo() {
+  if (geoBusy) return; geoBusy = true;
+  try {
+    while (geoQueue.length) {
+      const q = geoQueue.shift(); if (GEO.has(q.k)) continue;
+      const r = await X.getJson(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=17&lat=${q.lat.toFixed(6)}&lon=${q.lon.toFixed(6)}&accept-language=de`, { timeout: 15000 });
+      GEO.set(q.k, r.ok ? geoText(r.json) : null);
+      document.querySelectorAll(`[data-geo="${q.k}"]`).forEach(el => { const t = GEO.get(q.k); el.textContent = t || el.dataset.fallback || 'Zellmitte'; });
+      if (geoQueue.length) await new Promise(res => setTimeout(res, 1100)); // Nominatim-Nutzungsregel: höchstens 1 Anfrage je Sekunde
+    }
+  } finally { geoBusy = false; }
 }
 async function routeRuns() {
   const p = S.plan; const runs = allRuns().filter(r => S.show[r.kind]);

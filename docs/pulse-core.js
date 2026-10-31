@@ -365,7 +365,8 @@ export function dedupeStations(stations) {
 // ---------- Aggregation ----------
 export function emptyStats() {
   return { total: 0, available: 0, reserved: 0, disabled: 0, batteryKnown: 0, lowBattery: 0, rangeKnown: 0, lowRange: 0, stationVehicles: 0, geoStation: 0, posStale: 0,
-    stations: 0, stationsInstalled: 0, stationsRenting: 0, stationsEmpty: 0, stationsFull: 0, stationPhysical: 0, stationBookable: 0, stationDocks: 0 };
+    stations: 0, stationsInstalled: 0, stationsRenting: 0, stationsEmpty: 0, stationsFull: 0, stationPhysical: 0, stationBookable: 0, stationDocks: 0,
+    stationsEmptyReported: 0, stationsEmptyNearby: 0 };
 }
 export function addVehicle(st, v, { chargeThreshold = 20, rangeThreshold = 5 } = {}) {
   st.total++;
@@ -383,7 +384,11 @@ export function addStation(st, s, countVehicles) {
   if (s.installed !== false && s.renting !== false) st.stationsRenting++;
   const phys = s.physicalAvailable ?? 0;
   st.stationPhysical += phys; st.stationBookable += s.bookable ?? 0; st.stationDocks += s.docksAvailable ?? 0;
-  if (s.installed !== false && s.renting !== false && (s.bookable ?? 0) === 0) st.stationsEmpty++;
+  if (s.installed !== false && s.renting !== false && (s.bookable ?? 0) === 0) {
+    // als leer gemeldet – aber stehen frei abgestellte Fahrzeuge desselben Anbieters direkt daneben, ist die Station faktisch versorgt
+    st.stationsEmptyReported++;
+    if (s.nearbyVehicles > 0) st.stationsEmptyNearby++; else st.stationsEmpty++;
+  }
   if (s.installed !== false && s.returning !== false && s.docksAvailable === 0) st.stationsFull++;
   if (countVehicles) { st.stationVehicles += phys; st.total += phys; st.available += s.bookable ?? 0; if (s.disabled) st.disabled += s.disabled; }
 }
@@ -399,7 +404,21 @@ export function operatorFromName(text, aliases) {
 
 // Gemeinde × Anbieter × Fahrzeugart aggregieren (Fahrzeuge bereits dedupliziert, mit .ags/.operator/.type;
 // Stationen mit .ags/.operator/.perType/.typeHint/.hasVehicleList)
+export const STATION_NEAR_M = 50; // Umkreis, in dem frei abgestellte Fahrzeuge einer Station zugerechnet werden
+/** Zählt je Station verfügbare Fahrzeuge desselben Anbieters im Umkreis (setzt station.nearbyVehicles). */
+export function countNearbyVehicles(vehicles, stations, radiusM = STATION_NEAR_M) {
+  const CL = 0.0005, CO = 0.0008; const grid = new Map();
+  for (const v of vehicles) { if (v.disabled || v.reserved || !Number.isFinite(v.lat)) continue; const k = `${v.operator}|${Math.floor(v.lat / CL)}|${Math.floor(v.lon / CO)}`; (grid.get(k) || grid.set(k, []).get(k)).push(v); }
+  for (const s of stations) {
+    if (!Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
+    const i = Math.floor(s.lat / CL), j = Math.floor(s.lon / CO); let n = 0;
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const v of grid.get(`${s.operator}|${i + di}|${j + dj}`) || []) if (haversineM(s.lat, s.lon, v.lat, v.lon) <= radiusM) n++;
+    s.nearbyVehicles = n;
+  }
+  return stations;
+}
 export function aggregateGroups(vehicles, stations, { chargeThreshold = 20, rangeThreshold = 5 } = {}) {
+  countNearbyVehicles(vehicles, stations);
   const groups = new Map();
   const g = (key) => { if (!groups.has(key)) groups.set(key, emptyStats()); return groups.get(key); };
   for (const v of vehicles) addVehicle(g(`${v.ags}|${v.operator}|${v.type}`), v, { chargeThreshold, rangeThreshold });

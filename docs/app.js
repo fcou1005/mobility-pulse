@@ -1,9 +1,11 @@
-import * as C from './pulse-core.js?v=mvwwi61n';
-import { initOps, renderOps } from './ops.js?v=mvwwi61n';
-import * as E from './pulse-econ.js?v=mvwwi61n';
+import * as C from './pulse-core.js?v=mvwxzft8';
+import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvwxzft8';
+import * as E from './pulse-econ.js?v=mvwxzft8';
 
+const QS = new URLSearchParams(location.search);
+const DEMO = QS.get('demo') === '1'; // eingefrorener Demo-Stand (Branch demo), ohne Live-Abruf und ohne Nachladen
 const CFG = {
-  DATA: (() => { const d = new URLSearchParams(location.search).get('data'); return d && /^(\/|https?:\/\/(localhost|127\.0\.0\.1)[:/])/.test(d) ? d : 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/'; })(), // ?data=/pfad/ nur lokal, für Tests
+  DATA: (() => { const d = QS.get('data'); if (d && /^(\/|https?:\/\/(localhost|127\.0\.0\.1)[:/])/.test(d)) return d; return DEMO ? 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/demo/' : 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/'; })(), // ?data=/pfad/ nur lokal, für Tests
   MAIN: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/main/data/',
   REPO: 'https://github.com/fcou1005/mobility-pulse',
   WFS: 'https://api.mobidata-bw.de/geoserver/MobiData-BW/ows',
@@ -24,6 +26,22 @@ const STATUS = { ...C.FRESHNESS_LABEL, collector: 'Sammler-Stand' };
 const DIRS = { mobilitydata: 'MobilityData / Betreiber', mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', dott_direct: 'Dott · Direktfeed', lime_direct: 'Lime · Direktfeed', zeus_direct: 'Zeus · Direktfeed', bird_direct: 'Bird · Direktfeed', db_api: 'DB API Marketplace' };
 const OP_COLORS = { Bolt: '#34d399', Dott: '#60a5fa', Voi: '#f472b6', Lime: '#a3e635', nextbike: '#f59e0b', Zeus: '#c084fc', Donkey: '#fb923c', Bird: '#e879f9', 'DB Connect': '#ef4444', Yoio: '#22d3ee', sigo: '#fbbf24', StadtRAD: '#f87171' };
 const opColor = (op) => OP_COLORS[op] || `hsl(${parseInt(C.hashStr(op), 36) % 360} 60% 60%)`;
+// Begriffe, die eine kurze Erklärung brauchen (als <abbr title>)
+const GLOSS = {
+  rvd: 'Rides per Vehicle per Day: Fahrten je Fahrzeug und Tag (Fahrten/Tag ÷ Ø Flotte auf der Straße)',
+  util: 'Anteil der Zeit, in der ein Fahrzeug fährt (Rides/Fzg./Tag × Ø Fahrtdauer ÷ 24 h)',
+  real: 'Anteil des Listenpreises, der tatsächlich bezahlt wird (Pässe, Rabatte, Freiminuten)',
+  rot: 'Fahrzeug taucht am selben Ort (≤ 40 m) mit neuer Kennung auf, ohne gefahren zu sein; zählt nicht als Fahrt',
+  reloc: 'Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: vom Betreiber transportiert',
+  pickup: 'Gesperrte oder fast leere Fahrzeuge, die aus dem Feed verschwinden (Werkstatt, Laden)',
+  cell: 'Raster von etwa 250 × 250 m; Starts, Ziele und Bestand werden je Zelle gezählt',
+  calib: 'Faktor auf die gemessenen Fahrten dieses Anbieters, z. B. aus bekannten Betreiberzahlen. Wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz. Nur in diesem Browser gespeichert.',
+};
+const abbr = (text, key) => `<abbr title="${esc(GLOSS[key] || key)}">${text}</abbr>`;
+// Leere Stationen: „effektiv leer“ = gemeldet leer und kein Fahrzeug ≤ 50 m; ältere Sammler-Stände kennen nur den gemeldeten Wert
+const emptyTip = (s) => { const rep = s.stationsEmptyReported || s.stationsEmpty || 0, near = s.stationsEmptyNearby || 0; return near ? `als leer gemeldet: ${fmt(rep)} · davon ${fmt(near)} mit verfügbaren Fahrzeugen ≤ ${C.STATION_NEAR_M ?? 50} m (Fahrzeuge der Station nicht zugeordnet)` : `als leer gemeldet: ${fmt(rep)}`; };
+const isClient = () => document.body.classList.contains('mode-client');
+const sig2 = (x) => { const p = 10 ** Math.max(0, Math.floor(Math.log10(Math.abs(x) || 1)) - 1); return Math.round(x / p) * p; };
 
 const state = {
   latest: null, catalog: null, status: null, histIndex: null, hist: {}, boundaries: null, bIndex: null,
@@ -58,7 +76,14 @@ async function loadBase() {
   const [status, latest, sources, hist] = await Promise.all([getJson(fresh('status.json')), getJson(fresh('latest.json')), getJson(CFG.DATA + 'sources.json'), getJson(CFG.DATA + 'history/index.json')]);
   state.status = status.json; state.latest = latest.json; state.histIndex = hist.json;
   state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
-  if (state.status?.at && Date.now() - state.status.at > 45 * 60e3) notice(`Der letzte Sammler-Lauf ist ${ageText(Date.now() - state.status.at)} alt (Plan: alle 20 Min.). Zahlen gelten für ${new Date(state.status.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}; <a href="${CFG.REPO}/actions">Läufe ansehen</a>.`, 'warn', 'stale');
+  if (!DEMO && state.status?.at && Date.now() - state.status.at > 45 * 60e3) notice(`Der letzte Sammler-Lauf ist ${ageText(Date.now() - state.status.at)} alt (Plan: alle 20 Min.). Zahlen gelten für ${new Date(state.status.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}; <a href="${CFG.REPO}/actions">Läufe ansehen</a>.`, 'warn', 'stale');
+  if (DEMO) {
+    const at = state.status?.at || state.latest?.at;
+    const b = $('#demo-badge'); b.hidden = false; b.textContent = at ? `Demo-Stand vom ${new Date(at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}` : 'Demo-Stand';
+    b.title = 'Eingefrorener Datenstand: kein Live-Abruf, kein Nachladen';
+    if (!state.latest) notice('Der Demo-Stand ist gerade nicht ladbar. Seite später neu laden oder ohne <span class="mono">?demo=1</span> öffnen.', 'warn', 'nolatest');
+    return;
+  }
   if (!state.latest) {
     notice(`Der Sammler hat noch keinen Datenstand veröffentlicht (<a href="${CFG.REPO}/actions">Actions</a>). Live-Abruf funktioniert trotzdem; Ortszuordnung erst nach dem ersten Lauf.`, 'warn', 'nolatest');
     state.mode = 'live'; $('#sel-mode').value = 'live';
@@ -155,6 +180,7 @@ function keyMatchesOp(k, op) { const [ags, o, ty] = k.split('|'); if (ags === 'D
 
 // ---------- Live-Abruf ----------
 async function liveFetch() {
+  if (DEMO) return; // Demo-Stand bleibt eingefroren
   const cat = state.catalog?.sources || [];
   const recs = sourcesForScope();
   const idSet = new Set(recs.map(r => r.id));
@@ -266,15 +292,91 @@ function snapshotToSystem(snap, rec) {
 }
 
 // ---------- Rendering ----------
+// Drei Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
+const VIEWS = ['live', 'lab', 'usage', 'ops', 'signals', 'coverage', 'sources'];
+const GROUPS = [
+  { id: 'markt', label: 'Marktbild', segs: [['live', 'Übersicht'], ['lab', 'Leistung'], ['usage', 'Nutzung'], ['coverage', 'Anbieter']] },
+  { id: 'ops', label: 'Disposition', segs: [['ops', 'Disposition']] },
+  { id: 'vertrauen', label: 'Datenvertrauen', segs: [['sources', 'Quellen'], ['signals', 'Signale']] },
+];
+const VIEW_ALIAS = { markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', vertrauen: 'sources', datenvertrauen: 'sources' };
+const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
+let currentView = 'live', urlReady = false;
+const resolveView = (h) => { let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 function setView(name) {
-  const views = ['live', 'lab', 'usage', 'ops', 'signals', 'coverage', 'sources'];
-  if (!views.includes(name)) name = 'live';
+  name = resolveView(name);
+  const group = GROUPS.find(g => g.segs.some(([v]) => v === name));
+  currentView = name;
   $$('section.view').forEach(s => s.classList.toggle('active', s.id === `view-${name}`));
-  $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.view === name));
+  $$('#nav a').forEach(a => { const on = a.dataset.group === group.id; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  $('#crumb-group').textContent = group.label;
+  renderSegments(group, name);
+  const segLabel = group.segs.length > 1 ? group.segs.find(([v]) => v === name)?.[1] : null;
+  document.title = `${segLabel ? `${segLabel} · ` : ''}${group.label} · Mobility Pulse`;
   if (name === 'live') setTimeout(() => state.map?.invalidateSize(), 50);
   if (name === 'lab') { renderHistory(); renderPricing(); renderShareChart(); }
   if (name === 'usage') renderUsage();
   if (name === 'ops') renderOps();
+  syncUrl();
+}
+function renderSegments(group, name) {
+  const seg = $('#seg');
+  const segs = group.segs.filter(([v]) => !(isClient() && CLIENT_HIDDEN.has(v)));
+  if (segs.length < 2) { seg.hidden = true; seg.dataset.key = ''; return; }
+  const key = `${group.id}|${isClient()}`;
+  if (seg.dataset.key !== key) { seg.innerHTML = segs.map(([v, l]) => `<a href="#${v}" data-v="${v}">${l}</a>`).join(''); seg.dataset.key = key; seg.classList.add('instant'); }
+  seg.hidden = false;
+  $$('a', seg).forEach(a => { if (a.dataset.v === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  placeSeg();
+  requestAnimationFrame(() => requestAnimationFrame(() => seg.classList.remove('instant')));
+}
+// Gleitender Indikator: Position und Breite des aktiven Segments; ohne Messung bleibt der schlichte Hintergrund
+function placeSeg() {
+  const seg = $('#seg'); const a = seg && !seg.hidden && seg.querySelector('a[aria-current]');
+  if (!a || !a.offsetWidth) { seg?.classList.remove('ready'); return; }
+  seg.style.setProperty('--seg-x', `${a.offsetLeft}px`); seg.style.setProperty('--seg-w', `${a.offsetWidth}px`); seg.style.setProperty('--seg-o', '1');
+  seg.classList.add('ready');
+}
+// Gebiet, Anbieter, Fahrzeugart (und Kundenansicht) in der URL halten: ?scope=…&op=…&type=…#ansicht
+function syncUrl() {
+  if (!urlReady) return;
+  const q = new URLSearchParams(location.search);
+  const inOps = currentView === 'ops';
+  const op = inOps ? (opsFleet() || state.operator) : state.operator;
+  const ty = inOps ? $('#ops-type').value : state.type;
+  const put = (k, v) => v && v !== 'all' && v !== 'DE' ? q.set(k, v) : q.delete(k);
+  put('scope', state.scope); put('op', op); put('type', ty); put('kunde', isClient() ? '1' : null);
+  const s = q.toString().replace(/%2F/g, '/');
+  try { history.replaceState(history.state, '', `${location.pathname}${s ? `?${s}` : ''}#${currentView}`); } catch { /* file:// o. Ä. */ }
+}
+function applyUrlParams() {
+  const has = (sel, v) => v != null && [...$(sel).options].some(o => o.value === v);
+  const sc = QS.get('scope');
+  if (has('#sel-scope', sc)) { state.scope = sc; $('#sel-scope').value = sc; }
+  populateOperators();
+  const op = QS.get('op'), ty = QS.get('type');
+  if (resolveView(location.hash.slice(1)) === 'ops') applyOpsParams({ op, type: ty });
+  else {
+    if (has('#sel-operator', op)) { state.operator = op; $('#sel-operator').value = op; }
+    if (has('#sel-type', ty)) { state.type = ty; $('#sel-type').value = ty; }
+  }
+  urlReady = true;
+  return state.scope !== 'DE';
+}
+function setClient(on) {
+  document.body.classList.toggle('mode-client', on);
+  $('#btn-client').setAttribute('aria-pressed', String(on));
+  $('#btn-share').textContent = on ? 'Kundenlink kopieren' : 'Link kopieren';
+  setView(currentView); renderLede();
+}
+async function copyLink() {
+  syncUrl();
+  const btn = $('#btn-share'), url = location.href; let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch {
+    try { const t = document.createElement('textarea'); t.value = url; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch { ok = false; }
+  }
+  btn.textContent = ok ? 'Kopiert ✓' : 'Kopieren nicht möglich'; btn.classList.toggle('done', ok);
+  clearTimeout(copyLink.t); copyLink.t = setTimeout(() => { btn.textContent = isClient() ? 'Kundenlink kopieren' : 'Link kopieren'; btn.classList.remove('done'); }, 1600);
 }
 function renderAll() {
   // Ein fehlerhaftes Panel darf die übrigen nicht mitreißen
@@ -296,11 +398,39 @@ function renderHeader() {
   const label = state.mode === 'live' && state.live ? `Live ${timeText(at)}` : `Sammler ${timeText(at)}`;
   $('#stand-pill').textContent = `Stand ${label}`;
   renderStamp();
-  const recs = sourcesForScope(); const eff = recs.map(r => liveRec(r.id) || r);
-  const by = {}; for (const r of eff) by[r.status] = (by[r.status] || 0) + 1;
-  $('#filter-count').textContent = `${eff.length} Quellen im Gebiet · ${Object.entries(by).map(([k, v]) => `${v} ${STATUS[k] || k}`).join(' · ')}${state.live ? ` · Live-Dubletten bereinigt: ${state.live.dedupe.duplicates}` : ''}`;
+  const h = dataHealth();
+  const el = $('#filter-count');
+  el.innerHTML = `<span class="health ${h.level}"><i></i>${h.label}${h.counted ? ` · ${fmt(h.fresh)} von ${fmt(h.counted)} erreichbaren Quellen aktuell` : ''}${h.staleRun ? ` · Sammler-Lauf ${ageText(Date.now() - state.latest.at)} alt` : ''}</span>`;
+  el.title = h.detail;
 }
-function tile(l, v, s, cls = '') { return `<div class="tile ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }
+// Ampel zur Datenlage im Gebiet: nicht erreichbare Quellen und geprüfte Kandidaten ohne Feed zählen nicht als Fehler
+function dataHealth() {
+  const eff = sourcesForScope().map(r => liveRec(r.id) || r);
+  const by = {}; for (const r of eff) by[r.status] = (by[r.status] || 0) + 1;
+  const counted = eff.filter(r => !['gone', 'foreign'].includes(r.status) && !(r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty', 'collector'].includes(r.status)));
+  const fresh = counted.filter(r => r.status === 'live' || r.status === 'collector').length;
+  const usable = counted.filter(r => ['live', 'delayed', 'collector'].includes(r.status)).length;
+  const staleRun = !DEMO && !!state.latest && !(state.mode === 'live' && state.live) && Date.now() - state.latest.at > 45 * 60e3;
+  const ratio = counted.length ? usable / counted.length : 0;
+  let level = !counted.length ? 'none' : ratio >= 0.8 ? 'ok' : ratio >= 0.5 ? 'warn' : 'bad';
+  if (staleRun && level === 'ok') level = 'warn';
+  const label = { ok: 'Datenlage gut', warn: 'Datenlage eingeschränkt', bad: 'Datenlage schwach', none: state.latest ? 'Keine Quellen im Gebiet' : 'Noch kein Sammler-Stand' }[level];
+  const detail = `${eff.length} Quellen im Gebiet · ${Object.entries(by).map(([k, v]) => `${v} ${STATUS[k] || k}`).join(' · ')}${state.live ? ` · Live-Dubletten bereinigt: ${state.live.dedupe.duplicates}` : ''}\nNicht erreichbare Quellen und Direktfeed-Kandidaten ohne Daten zählen nicht als Fehler.`;
+  return { level, label, fresh, usable, counted: counted.length, staleRun, detail };
+}
+function tile(l, v, s, cls = '', title = '') { return `<div class="tile ${cls}"${title ? ` title="${esc(title)}"` : ''}><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }
+// Kernaussage über den Kacheln der Übersicht
+function renderLede() {
+  const el = $('#live-lede'); if (!el) return;
+  if (!state.latest && !state.live) { el.textContent = 'Noch kein Datenstand geladen.'; return; }
+  const st = C.sumStats([...scopeGroups().values()]); const h = dataHealth();
+  const sig = computeSignals().filter(s => s.sev !== 'info').length;
+  const place = state.scope === 'DE' ? 'Deutschland' : muniName(state.scope);
+  const filt = [state.operator !== 'all' ? state.operator : null, state.type !== 'all' ? TYPE[state.type] : null].filter(Boolean).join(', ');
+  const dataTxt = h.level === 'ok' ? 'Daten aktuell' : h.staleRun ? `Sammler-Stand ${ageText(Date.now() - state.latest.at)} alt` : h.level === 'warn' ? 'Daten teils verzögert' : h.level === 'bad' ? 'Daten lückenhaft' : 'keine Quellen';
+  const sigTxt = `${fmt(sig)} Auffälligkeit${sig === 1 ? '' : 'en'}`;
+  el.innerHTML = `<b>${esc(place)}${filt ? ` · ${esc(filt)}` : ''}:</b> <strong>${fmt(st.available)}</strong> Fahrzeuge verfügbar · ${st.total ? `<strong>${pctf(st.disabled, st.total)}</strong> gesperrt` : 'keine Fahrzeugdaten'} · ${isClient() ? sigTxt : `<a href="#signals">${sigTxt}</a>`} · <span class="health ${h.level}" title="${esc(h.detail)}"><i></i>${dataTxt}</span>`;
+}
 function renderLive() {
   const groups = scopeGroups(); const st = C.sumStats([...groups.values()]);
   const rows = operatorRows();
@@ -311,7 +441,7 @@ function renderLive() {
   $('#live-tiles').innerHTML = [
     tile('Verfügbar · buchbar', fmt(st.available), `${fmt(st.total)} gemeldet · ${fmt(st.reserved)} reserviert`),
     tile('Gesperrt', fmt(st.disabled), st.total ? `${pctf(st.disabled, st.total)} des Bestands` : 'keine Fahrzeugdaten', st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
-    tile('Stationen mit Angebot', `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}`, `${fmt(st.stationsEmpty)} leer · ${fmt(st.stationsFull)} voll`),
+    tile('Stationen mit Angebot', `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}`, st.stations ? `${fmt(st.stationsEmpty)} leer · ${fmt(st.stationsFull)} voll` : 'keine Stationen im Gebiet', '', st.stations ? emptyTip(st) : ''),
     tile('Energie niedrig', lowE == null ? 'k. A.' : pctf(st.lowBattery, st.batteryKnown), lowE == null ? 'keine Ladestandsangabe' : `${fmt(st.lowBattery)} von ${fmt(st.batteryKnown)} mit Angabe`, lowE > 0.3 ? 'warn' : ''),
     tile('Quellen', `${fmt(usable.length)} / ${fmt(recs.length)}`, `${recs.filter(r => r.status === 'live').length} aktuell · ${recs.filter(r => r.status === 'delayed').length} verzögert${gaps ? ` · ${gaps} Datenlücke${gaps > 1 ? 'n' : ''}` : ''}`, recs.length && usable.length / recs.length < 0.7 ? 'warn' : ''),
   ].join('');
@@ -324,15 +454,16 @@ function renderLive() {
       <td>${r.dirs.map(d => DIRS[d] || d).join(' · ') || '–'}<div class="sub-line">Qualität ${r.quality ?? '–'}/100</div></td>
       <td class="n">${fmt(s.available)}<div class="sub-line">${fmt(s.total)} gemeldet</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${d}</td>
       <td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `${fmt(s.batteryKnown)} mit Angabe` : ''}</div></td>
-      <td class="n">${s.stations ? `${fmt(s.stationsEmpty)} / ${fmt(s.stations)}` : '—'}</td><td class="n">${ageText(r.age)}</td>
+      <td class="n"${s.stations ? ` title="${esc(emptyTip(s))}"` : ''}>${s.stations ? `${fmt(s.stationsEmpty)} / ${fmt(s.stations)}` : '—'}</td><td class="n">${ageText(r.age)}</td>
       <td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span></td><td class="small">${r.license ? (/^https?:/.test(r.license) ? `<a href="${esc(r.license)}" target="_blank" rel="noopener">Lizenz ↗</a>` : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`;
-  }).join('') || '<tr><td colspan="10" class="empty">Keine Daten im gewählten Filter.</td></tr>';
+  }).join('') || `<tr><td colspan="10" class="empty"><b>Keine Anbieter im gewählten Filter.</b>${state.operator !== 'all' || state.type !== 'all' ? 'Anbieter und Fahrzeugart auf „Alle“ stellen.' : state.scope === 'DE' ? 'Der Sammler-Stand wird geladen.' : 'Anderes Gebiet wählen oder „Live abrufen“.'}</td></tr>`;
   renderBriefing(rows, st);
+  renderLede();
   renderMap();
 }
 function renderBriefing(rows, st) {
   const items = computeSignals().slice(0, 4);
-  $('#briefing').innerHTML = items.length ? items.map(sigCard).join('') : '<div class="empty">Keine auffälligen Signale im Gebiet.</div>';
+  $('#briefing').innerHTML = items.length ? items.map(sigCard).join('') : '<div class="empty"><b>Keine auffälligen Signale im Gebiet.</b>Bestand, Sperren, Energie und Quellen sind unauffällig.</div>';
 }
 
 // ---------- Karte ----------
@@ -376,12 +507,13 @@ function renderMap() {
           .bindPopup(`<b>${esc(v.operator)}</b> · ${TYPE[v.type] || v.type}<br>${v.disabled ? 'gesperrt' : v.reserved ? 'reserviert' : 'verfügbar'}${v.batteryPct != null ? ` · Akku ${fmt(v.batteryPct)} %` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}<br><span class="muted">Position ${ageText(v.positionAgeMs)} · ${v.geoOrigin === 'station' ? 'Stationsersatz' : 'GPS'}${v.reusedId ? ' · Kennung wiederverwendet' : ''}</span>`).addTo(L_.vehicles);
       }
       if ($('#chk-stations').checked) for (const s of stations) {
-        const empty = s.renting !== false && (s.bookable ?? 0) === 0;
+        // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt, also in Anbieterfarbe
+        const near = s.nearbyVehicles || 0, empty = s.renting !== false && (s.bookable ?? 0) === 0 && !near;
         L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: empty ? '#e3b341' : opColor(s.operator), fillOpacity: .2 })
-          .bindPopup(`<b>${esc(s.name || 'Station')}</b> · ${esc(s.operator)}<br>physisch ${fmt(s.physicalAvailable)} · buchbar ${fmt(s.bookable)} · Plätze ${fmt(s.docksAvailable)}<br><span class="muted">${s.renting === false ? 'Ausleihe gesperrt' : 'vermietend'} · ${s.returning === false ? 'Rückgabe gesperrt' : 'Rückgabe möglich'}</span>`).addTo(L_.stations);
+          .bindPopup(`<b>${esc(s.name || 'Station')}</b> · ${esc(s.operator)}<br>physisch ${fmt(s.physicalAvailable)} · buchbar ${fmt(s.bookable)} · Plätze ${fmt(s.docksAvailable)}${near ? `<br>${fmt(near)} Fahrzeug${near === 1 ? '' : 'e'} im Umkreis ${C.STATION_NEAR_M ?? 50} m` : ''}<br><span class="muted">${s.renting === false ? 'Ausleihe gesperrt' : 'vermietend'} · ${s.returning === false ? 'Rückgabe gesperrt' : 'Rückgabe möglich'}</span>`).addTo(L_.stations);
       }
       const ops = [...new Set(vehicles.map(v => v.operator))].slice(0, 12);
-      legend.push(...ops.map(o => `<span><i class="dot" style="background:${opColor(o)}"></i>${esc(o)}</span>`), `<span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span>`, `<span><i class="sq"></i>Station</span>`, `<span class="muted">${fmt(drawn)} / ${fmt(vehicles.length)} Fahrzeuge gezeichnet</span>`);
+      legend.push(...ops.map(o => `<span><i class="dot" style="background:${opColor(o)}"></i>${esc(o)}</span>`), `<span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span>`, `<span><i class="sq"></i>Station</span>`, `<span><i class="sq" style="border-color:#e3b341"></i>Station leer (kein Fahrzeug ≤ ${C.STATION_NEAR_M ?? 50} m)</span>`, `<span class="muted">${fmt(drawn)} / ${fmt(vehicles.length)} Fahrzeuge gezeichnet</span>`);
     } else {
       // Rasterzellen ca. 500 m
       const cells = new Map();
@@ -472,22 +604,22 @@ function renderLab() {
     tile('Buchbare Fahrzeuge', fmt(st.available), `${pctf(st.available, st.total)} von ${fmt(st.total)} gemeldeten`),
     tile(`Ladestand unter ${state.mode === 'live' ? state.thresholds.charge : 20} %`, st.batteryKnown ? pctf(st.lowBattery, st.batteryKnown) : 'k. A.', st.batteryKnown ? `${fmt(st.lowBattery)} von ${fmt(st.batteryKnown)} mit Ladestand` : 'keine Ladestandsangabe'),
     tile(`Reichweite unter ${state.mode === 'live' ? state.thresholds.range : 5} km`, st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : 'k. A.', st.rangeKnown ? `${fmt(st.lowRange)} von ${fmt(st.rangeKnown)} mit Reichweite` : 'keine Reichweitenangabe'),
-    tile('Stationen mit Angebot', st.stations ? `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}` : '—', st.stations ? `${fmt(st.stationBookable)} buchbar · ${fmt(st.stationDocks)} freie Plätze` : 'keine Stationen im Filter'),
+    tile('Stationen mit Angebot', st.stations ? `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}` : '—', st.stations ? `${fmt(st.stationBookable)} buchbar · ${fmt(st.stationDocks)} freie Plätze` : 'keine Stationen im Filter', '', st.stations ? emptyTip(st) : ''),
   ].join('');
   // Fahrzeugarten
   const byType = new Map();
   for (const [k, s] of groups) { const ty = k.split('|')[2]; byType.set(ty, [...(byType.get(ty) || []), s]); }
-  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = C.sumStats(list); return `<tr><td>${TYPE[ty] || ty}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `n = ${fmt(s.batteryKnown)}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : 'k. A.'}</td></tr>`; }).sort().join('') || '<tr><td colspan="6" class="empty">Keine Daten.</td></tr>';
+  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = C.sumStats(list); return `<tr><td>${TYPE[ty] || ty}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `n = ${fmt(s.batteryKnown)}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : 'k. A.'}</td></tr>`; }).sort().join('') || '<tr><td colspan="6" class="empty"><b>Keine Fahrzeuge im Filter.</b>Fahrzeugart oder Anbieter auf „Alle“ stellen.</td></tr>';
   // Stationen je Anbieter
   const byOp = new Map();
   for (const [k, s] of groups) { const op = k.split('|')[1]; byOp.set(op, [...(byOp.get(op) || []), s]); }
-  $('#tbl-stations tbody').innerHTML = [...byOp].map(([op, list]) => C.sumStats(list)).map((s, i) => ({ s, op: [...byOp.keys()][i] })).filter(x => x.s.stations).map(({ op, s }) => `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span></td><td class="n">${fmt(s.stations)}</td><td class="n">${fmt(s.stationsRenting)}</td><td class="n">${fmt(s.stationsEmpty)}</td><td class="n">${fmt(s.stationsFull)}</td><td class="n">${fmt(s.stationPhysical)}</td><td class="n">${fmt(s.stationBookable)}</td><td class="n">${fmt(s.stationDocks)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Keine Stationsdaten im Filter.</td></tr>';
+  $('#tbl-stations tbody').innerHTML = [...byOp].map(([op, list]) => C.sumStats(list)).map((s, i) => ({ s, op: [...byOp.keys()][i] })).filter(x => x.s.stations).map(({ op, s }) => `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span></td><td class="n">${fmt(s.stations)}</td><td class="n">${fmt(s.stationsRenting)}</td><td class="n" title="${esc(emptyTip(s))}">${fmt(s.stationsEmpty)}</td><td class="n">${fmt(s.stationsFull)}</td><td class="n">${fmt(s.stationPhysical)}</td><td class="n">${fmt(s.stationBookable)}</td><td class="n">${fmt(s.stationDocks)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty"><b>Keine Stationen im Filter.</b>Stationen melden vor allem Bikesharing-Anbieter; Fahrzeugart „Alle“ zeigt sie.</td></tr>';
   // Scorecard
   const rows = operatorRows().filter(r => !r.gap);
   $('#tbl-score tbody').innerHTML = rows.map(r => { const s = r.st; const avail = s.total ? s.available / s.total : null; const dis = s.total ? s.disabled / s.total : null; const low = s.batteryKnown ? s.lowBattery / s.batteryKnown : null; const emp = s.stations ? s.stationsEmpty / s.stations : null;
     const parts = [avail != null ? avail * 100 : null, dis != null ? 100 - dis * 100 : null, low != null ? 100 - low * 100 : null, emp != null ? 100 - emp * 100 : null, r.quality].filter(x => x != null);
     const score = parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
-    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${low == null ? 'k. A.' : pctf(s.lowBattery, s.batteryKnown)}</td><td class="n">${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${r.quality ?? '—'}</td><td class="n"><b>${score ?? '—'}</b><div class="bar"><i style="width:${score ?? 0}%"></i></div></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Keine Daten.</td></tr>';
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${low == null ? 'k. A.' : pctf(s.lowBattery, s.batteryKnown)}</td><td class="n"${emp == null ? '' : ` title="${esc(emptyTip(s))}"`}>${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${r.quality ?? '—'}</td><td class="n"><b>${score ?? '—'}</b><div class="bar"><i style="width:${score ?? 0}%"></i></div></td></tr>`; }).join('') || '<tr><td colspan="8" class="empty"><b>Keine Anbieter im Filter.</b>Gebiet mit Angebot wählen.</td></tr>';
   // Städtevergleich
   const munis = state.latest?.municipalities || {};
   const src = new Map(Object.entries(state.latest?.groups || {})); // Gebietsvergleich immer aus dem Sammler-Stand (vollständig)
@@ -496,15 +628,15 @@ function renderLab() {
   const list = [...per.values()].sort((a, b) => b.available - a.available).slice(0, 25);
   $('#cities-title').textContent = state.scope === 'DE' ? 'Stadt- und Gebietsvergleich' : `Gebietsvergleich · ${muniName(state.scope)} im Kontext`;
   if ($('#view-lab').classList.contains('active')) renderHistory();
-  $('#tbl-cities tbody').innerHTML = list.map(m => { const mi = munis[m.ags]; const pop = mi?.pop; return `<tr${m.ags === state.scope ? ' style="font-weight:600"' : ''}><td><a href="#live" class="pick-muni" data-ags="${m.ags}">${esc(mi?.name || m.ags)}</a> <span class="muted">${esc(mi?.state || '')}</span></td><td class="n">${fmt(m.available)}</td><td class="n">${pop ? fmt((m.available / pop) * 1e4, 1) : '—'}</td><td class="n">${m.ops.size}</td><td class="n">${fmt(m.scooter)}</td><td class="n">${fmt(m.bikes)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Keine Daten.</td></tr>';
+  $('#tbl-cities tbody').innerHTML = list.map(m => { const mi = munis[m.ags]; const pop = mi?.pop; return `<tr${m.ags === state.scope ? ' style="font-weight:600"' : ''}><td><a href="#live" class="pick-muni" data-ags="${m.ags}">${esc(mi?.name || m.ags)}</a> <span class="muted">${esc(mi?.state || '')}</span></td><td class="n">${fmt(m.available)}</td><td class="n">${pop ? fmt((m.available / pop) * 1e4, 1) : '—'}</td><td class="n">${m.ops.size}</td><td class="n">${fmt(m.scooter)}</td><td class="n">${fmt(m.bikes)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty"><b>Keine Gemeinden im Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen.</td></tr>';
 }
 async function renderHistory() {
   const idx = state.histIndex; const box = $('#chart-hist');
-  if (!idx?.days?.length) { box.innerHTML = '<div class="empty">Noch keine Sammler-Punkte vorhanden.</div>'; return; }
+  if (!idx?.days?.length) { box.innerHTML = '<div class="empty"><b>Noch keine Sammler-Punkte.</b>Der Verlauf beginnt mit dem ersten Sammler-Lauf.</div>'; return; }
   const day = state.histDay || idx.days[idx.days.length - 1];
   $('#hist-days').innerHTML = idx.days.slice(-7).map(d => `<button class="chip ${d === day ? 'on' : ''}" data-day="${d}">${d.slice(8)}.${d.slice(5, 7)}.</button>`).join('');
   const h = await loadHistory(day);
-  if (!h) { box.innerHTML = '<div class="empty">Verlauf nicht ladbar.</div>'; return; }
+  if (!h) { box.innerHTML = '<div class="empty"><b>Verlauf nicht ladbar.</b>Anderen Tag wählen oder die Seite später neu laden.</div>'; return; }
   const fi = h.fields.indexOf('available');
   const byOp = new Map();
   for (const [k, ser] of Object.entries(h.series)) {
@@ -528,7 +660,7 @@ const palette = (i) => ['#49c7b0', '#6aa9ff', '#e3b341', '#f472b6', '#a3e635', '
 function lineChart(t, series) {
   const W = 900, H = 260, P = { l: 48, r: 12, t: 12, b: 26 };
   const vals = series.flatMap(s => s.values).filter(x => x != null);
-  if (!vals.length) return '<div class="empty">Keine Punkte für diesen Filter.</div>';
+  if (!vals.length) return '<div class="empty"><b>Keine Punkte für diesen Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen.</div>';
   const max = Math.max(...vals) * 1.08 || 1, min = 0;
   const x = (i) => P.l + (i / Math.max(1, t.length - 1)) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
@@ -552,7 +684,11 @@ function computeSignals() {
     const [ags, op] = key.split('|'); const s = C.sumStats(list);
     if (s.total >= 5 && s.disabled / s.total >= 0.25) out.push({ cat: 'disabled', sev: s.disabled / s.total >= 0.5 ? 'bad' : 'warn', w: s.disabled, title: `${op}${place(ags)}: ${fmt(s.disabled)} gesperrt (${pctf(s.disabled, s.total)})`, text: 'Der Feed markiert Fahrzeuge als nicht nutzbar. Ein konkreter Wartungsauftrag ist daraus nicht ableitbar.', foot: 'Gemeldetes is_disabled / Stationsfeld' });
     if (s.batteryKnown >= 5 && s.lowBattery / s.batteryKnown >= 0.3) out.push({ cat: 'energy', sev: s.lowBattery / s.batteryKnown >= 0.6 ? 'bad' : 'warn', w: s.lowBattery, title: `${op}${place(ags)}: ${pctf(s.lowBattery, s.batteryKnown)} niedrige Energie`, text: `${fmt(s.lowBattery)} von ${fmt(s.batteryKnown)} Fahrzeugen mit Energieangabe. Möglicher Ladebedarf.`, foot: 'Ladestand / Reichweite · Arbeitsauftrag nicht bestätigt' });
-    if (s.stations >= 3 && s.stationsEmpty / s.stations >= 0.3) out.push({ cat: 'stations', sev: s.stationsEmpty / s.stations >= 0.6 ? 'bad' : 'warn', w: s.stationsEmpty, title: `${op}${place(ags)}: ${fmt(s.stationsEmpty)} leere Stationen (${pctf(s.stationsEmpty, s.stations)})`, text: `${fmt(s.stationsEmpty)} von ${fmt(s.stations)} gemeldeten Stationen bieten derzeit kein Fahrzeug.`, foot: 'Gemeldeter Stationsstatus' });
+    // Leer zählt nur effektiv: gemeldet leer und kein verfügbares Fahrzeug desselben Anbieters ≤ 50 m
+    const nearM = C.STATION_NEAR_M ?? 50, nearN = s.stationsEmptyNearby || 0;
+    const nearTxt = nearN ? ` Weitere ${fmt(nearN)} als leer gemeldet, aber Fahrzeuge ≤ ${nearM} m daneben (Fahrzeuge der Station nicht zugeordnet).` : '';
+    if (s.stations >= 3 && s.stationsEmpty / s.stations >= 0.3) out.push({ cat: 'stations', sev: s.stationsEmpty / s.stations >= 0.6 ? 'bad' : 'warn', w: s.stationsEmpty, title: `${op}${place(ags)}: ${fmt(s.stationsEmpty)} leere Stationen (${pctf(s.stationsEmpty, s.stations)})`, text: `${fmt(s.stationsEmpty)} von ${fmt(s.stations)} gemeldeten Stationen bieten derzeit kein Fahrzeug, auch keins im Umkreis von ${nearM} m.${nearTxt}`, foot: 'Stationsstatus und Fahrzeugpositionen' });
+    else if (s.stations >= 3 && nearN / s.stations >= 0.3) out.push({ cat: 'data', sev: 'info', w: nearN, title: `${op}${place(ags)}: ${fmt(nearN)} Stationen als leer gemeldet, Fahrzeuge daneben`, text: `Der Stationsfeed meldet kein buchbares Fahrzeug, aber ≤ ${nearM} m stehen verfügbare Fahrzeuge desselben Anbieters. Die Fahrzeuge sind der Station im Feed nicht zugeordnet; effektiv leer sind ${fmt(s.stationsEmpty)}.`, foot: 'Stationsstatus und Fahrzeugpositionen' });
     if (s.stations >= 3 && s.stationsFull / s.stations >= 0.3) out.push({ cat: 'stations', sev: 'info', w: s.stationsFull, title: `${op}${place(ags)}: ${fmt(s.stationsFull)} volle Stationen`, text: 'Rückgabe an diesen Stationen ist nicht möglich (keine freien Plätze).', foot: 'num_docks_available = 0' });
     if (s.total >= 5 && s.geoStation / s.total >= 0.5) out.push({ cat: 'data', sev: 'info', w: s.geoStation, title: `${op}${place(ags)}: Positionen überwiegend Stationsersatz`, text: `${fmt(s.geoStation)} von ${fmt(s.total)} Fahrzeugen ohne eigene Koordinaten; Stationsposition wird als Ersatz gezeigt.`, foot: 'Geo-Prüfung' });
   }
@@ -584,17 +720,17 @@ function renderSignals() {
   const counts = {}; for (const s of all) counts[s.cat] = (counts[s.cat] || 0) + 1;
   $('#sig-filter').innerHTML = Object.entries(CATS).map(([k, l]) => `<button class="chip ${sigFilter === k ? 'on' : ''}" data-cat="${k}">${l} <span class="mono">${k === 'all' ? all.length : counts[k] || 0}</span></button>`).join('');
   const list = (sigFilter === 'all' ? all : all.filter(s => s.cat === sigFilter)).slice(0, 60);
-  $('#signals').innerHTML = list.length ? list.map(sigCard).join('') : '<div class="empty" style="grid-column:1/-1">Keine Signale im gewählten Filter.</div>';
+  $('#signals').innerHTML = list.length ? list.map(sigCard).join('') : `<div class="empty" style="grid-column:1/-1"><b>Keine Signale im gewählten Filter.</b>${sigFilter !== 'all' ? 'Kategorie „Alle“ wählen.' : 'Im Gebiet ist derzeit nichts auffällig.'}</div>`;
   renderStability();
 }
 async function renderStability() {
   const day = state.histDay || state.histIndex?.days?.slice(-1)[0];
   const tb = $('#tbl-stability tbody');
-  if (!day) { tb.innerHTML = '<tr><td colspan="7" class="empty">Noch kein Verlauf.</td></tr>'; return; }
-  const h = await loadHistory(day); if (!h) { tb.innerHTML = '<tr><td colspan="7" class="empty">Verlauf nicht ladbar.</td></tr>'; return; }
+  if (!day) { tb.innerHTML = '<tr><td colspan="7" class="empty"><b>Noch kein Verlauf.</b>Er beginnt mit dem ersten Sammler-Lauf.</td></tr>'; return; }
+  const h = await loadHistory(day); if (!h) { tb.innerHTML = '<tr><td colspan="7" class="empty"><b>Verlauf nicht ladbar.</b>Seite später neu laden.</td></tr>'; return; }
   const byOp = new Map();
   for (const [k, ser] of Object.entries(h.series)) { const [ags, op, ty] = k.split('|'); if (state.scope === 'DE' ? ags !== 'DE' : ags !== state.scope) continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const name = state.scope === 'DE' ? (TYPE[ty] || ty) : op; const arr = byOp.get(name) || new Array(h.t.length).fill(null); ser.available.forEach((v, i) => { if (v != null) arr[i] = (arr[i] || 0) + v; }); byOp.set(name, arr); }
-  tb.innerHTML = [...byOp].map(([name, arr]) => { const v = arr.filter(x => x != null); if (!v.length) return ''; const min = Math.min(...v), max = Math.max(...v), last = v[v.length - 1], first = v[0]; const d = last - first; const drop = max && (max - last) / max; return `<tr><td>${esc(name)}</td><td class="n">${v.length}</td><td class="n">${fmt(min)}</td><td class="n">${fmt(max)}</td><td class="n">${fmt(last)}</td><td class="n">${d > 0 ? '+' : ''}${fmt(d)}</td><td class="small">${drop >= 0.3 ? `<span class="pill stale">${pctf(max - last, max)} unter Tagesmaximum</span>` : v.length < 3 ? '<span class="muted">zu wenige Punkte</span>' : '<span class="muted">stabil</span>'}</td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Keine Punkte im Filter.</td></tr>';
+  tb.innerHTML = [...byOp].map(([name, arr]) => { const v = arr.filter(x => x != null); if (!v.length) return ''; const min = Math.min(...v), max = Math.max(...v), last = v[v.length - 1], first = v[0]; const d = last - first; const drop = max && (max - last) / max; return `<tr><td>${esc(name)}</td><td class="n">${v.length}</td><td class="n">${fmt(min)}</td><td class="n">${fmt(max)}</td><td class="n">${fmt(last)}</td><td class="n">${d > 0 ? '+' : ''}${fmt(d)}</td><td class="small">${drop >= 0.3 ? `<span class="pill stale">${pctf(max - last, max)} unter Tagesmaximum</span>` : v.length < 3 ? '<span class="muted">zu wenige Punkte</span>' : '<span class="muted">stabil</span>'}</td></tr>`; }).join('') || '<tr><td colspan="7" class="empty"><b>Keine Punkte im Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen.</td></tr>';
 }
 
 // ---------- Abdeckung ----------
@@ -617,9 +753,9 @@ function renderCoverage() {
   $('#cov-tiles').innerHTML = [tile('Anbieter vor Ort', fmt(rows.length), 'Anbieter × Gemeinde mit bestätigter Zuordnung'), tile('Anbietergruppen', fmt(opsAll.size), 'über alle Quellen'), tile('Gemeinden', fmt(places.size), 'mit verfügbarem Angebot'), tile('Ohne Zuordnung', fmt(recs.filter(r => ['foreign', 'empty'].includes(r.status)).length), 'Quellen außerhalb DE oder ohne Bestand')].join('');
   $('#cov-sub').textContent = `${fmt(rows.length)} Zeilen · Sammler-Stand ${timeText(state.latest?.at)}`;
   const show = rows.slice(0, 400);
-  $('#tbl-cov tbody').innerHTML = show.map(r => `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${Object.entries(r.o.types).filter(([, n]) => n).map(([t, n]) => `${TYPE[t] || t} ${fmt(n)}`).join(' · ')}</div></td><td>${esc(r.m.name)} <span class="muted">${esc(r.m.state)}</span></td><td class="n">${fmt(r.o.total)}</td><td class="n">${fmt(r.o.available)}</td><td class="small">${r.dirs.map(d => DIRS[d] || d).join(' · ')}<div class="sub-line">${r.srcs.length} Quelle${r.srcs.length === 1 ? '' : 'n'}</div></td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span></td><td><a href="#live" class="pick-muni" data-ags="${r.ags}">Ort öffnen ↗</a></td></tr>`).join('') || '<tr><td colspan="7" class="empty">Keine Treffer.</td></tr>';
+  $('#tbl-cov tbody').innerHTML = show.map(r => `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${Object.entries(r.o.types).filter(([, n]) => n).map(([t, n]) => `${TYPE[t] || t} ${fmt(n)}`).join(' · ')}</div></td><td>${esc(r.m.name)} <span class="muted">${esc(r.m.state)}</span></td><td class="n">${fmt(r.o.total)}</td><td class="n">${fmt(r.o.available)}</td><td class="small">${r.dirs.map(d => DIRS[d] || d).join(' · ')}<div class="sub-line">${r.srcs.length} Quelle${r.srcs.length === 1 ? '' : 'n'}</div></td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span></td><td><a href="#live" class="pick-muni" data-ags="${r.ags}">Ort öffnen ↗</a></td></tr>`).join('') || `<tr><td colspan="7" class="empty"><b>Keine Treffer.</b>${q || dir !== 'all' ? 'Suche leeren oder „Alle Verzeichnisse“ wählen.' : 'Der Sammler-Stand wird geladen.'}</td></tr>`;
   $('#cov-more').textContent = rows.length > show.length ? `${rows.length - show.length} weitere Zeilen – Suche eingrenzen.` : '';
-  $('#gaps').innerHTML = (state.latest?.gaps || []).map(g => `<div class="card info"><div class="k">Datenlücke</div><b>${esc(g.operator)} · ${esc(g.city)}</b><p>${esc(g.note)}</p><div class="foot">seit ${esc(g.since)} · zuletzt geprüft ${timeText(g.checkedAt)} · Feed ${g.probeOk ? 'erreichbar' : `nicht erreichbar (${g.probeStatus ?? '–'})`}</div></div>`).join('') || '<div class="empty">Keine bekannten Lücken.</div>';
+  $('#gaps').innerHTML = (state.latest?.gaps || []).map(g => `<div class="card info"><div class="k">Datenlücke</div><b>${esc(g.operator)} · ${esc(g.city)}</b><p>${esc(g.note)}</p><div class="foot">seit ${esc(g.since)} · zuletzt geprüft ${timeText(g.checkedAt)} · Feed ${g.probeOk ? 'erreichbar' : `nicht erreichbar (${g.probeStatus ?? '–'})`}</div></div>`).join('') || '<div class="empty"><b>Keine bekannten Lücken.</b>Alle bekannten Betreiber liefern offene Daten.</div>';
 }
 
 // ---------- Quellen ----------
@@ -639,8 +775,77 @@ function renderSources() {
     `<div class="card info"><div class="k">Grundlage</div><b>Gemeindegrenzen · BKG</b><p>${esc(state.latest?.boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')}, Lizenz dl-de/by-2-0. GPS entscheidet die Gemeinde; unklare Grenzfälle bleiben ohne Zuordnung.</p><div class="foot">${fmt(state.latest?.boundaries?.count)} Gemeinden · <a href="https://gdz.bkg.bund.de" target="_blank" rel="noopener">Originalquelle ↗</a></div></div>
      <div class="card warn"><div class="k">Nicht verwendet</div><b>DB API Marketplace · Voi Partner-API</b><p>Beide erfordern persönliche Zugangsdaten. Call-a-Bike-Daten kommen über MobiData BW und MOBIDROM NRW, Voi-Daten über beide Landesverzeichnisse.</p><div class="foot">kein Partnerzugang</div></div>`;
   loadOnce('reliability', 'reliability.json').then(() => renderSourceTable());
-  renderConsistency();
+  renderConsistency(); renderMonitor().catch(e => console.error('Monitor', e)); renderQuality(); renderLicenses();
   $('#method').innerHTML = METHOD;
+}
+// ---------- Datenvertrauen: Sammler-Monitor, Datenqualität, Lizenzen ----------
+const TRIGGER = { schedule: 'geplant', workflow_dispatch: 'manuell', lokal: 'lokal', push: 'Push' };
+async function renderMonitor() {
+  const box = $('#monitor'); const doc = await loadOnce('runs', 'runs.json');
+  const F = doc?.fields || ['at', 'dauer_ms', 'quellen', 'aktuell', 'verzoegert', 'veraltet', 'fehler', 'fahrzeuge', 'stationen', 'fahrten', 'fahrtenden', 'kennungswechsel', 'ausloeser'];
+  const ix = Object.fromEntries(F.map((f, i) => [f, i]));
+  const runs = (doc?.runs || []).filter(r => Number.isFinite(r[ix.at])).sort((a, b) => a[ix.at] - b[ix.at]);
+  if (!runs.length) { box.innerHTML = '<div class="empty"><b>Monitor startet mit dem nächsten Sammler-Lauf.</b>Danach stehen hier Laufzeiten, Lücken und Auslöser der letzten 7 Tage.</div>'; return; }
+  const share = (r) => r[ix.quellen] ? (r[ix.aktuell] || 0) / r[ix.quellen] : null;
+  const shares = runs.map(share).filter(x => x != null).sort((a, b) => a - b);
+  const med = shares.length ? shares[Math.floor(shares.length / 2)] : null;
+  const lvl = (v) => v == null || med == null ? 'warn' : v >= med - 0.05 ? 'ok' : v >= med - 0.15 ? 'warn' : 'bad';
+  const GAP = 45 * 60e3, now = Date.now(), last = runs[runs.length - 1];
+  const gaps = []; for (let i = 1; i < runs.length; i++) { const a = runs[i - 1][ix.at], b = runs[i][ix.at]; if (b - a > GAP) gaps.push([a, b, false]); }
+  if (!DEMO && now - last[ix.at] > GAP && now - last[ix.at] < 7 * 86400e3) gaps.push([last[ix.at], now, true]);
+  const t0 = runs[0][ix.at], t1 = Math.max(gaps.some(g => g[2]) ? now : last[ix.at], t0 + 3600e3);
+  const W = 900, H = 150, P = { l: 40, r: 12, t: 14, b: 24 };
+  const lo = Math.max(0, Math.floor(((shares[0] ?? 0) - 0.05) * 10) / 10), hi = Math.min(1, Math.ceil(((shares[shares.length - 1] ?? 1) + 0.02) * 10) / 10) || 1;
+  const x = (t) => P.l + ((t - t0) / (t1 - t0)) * (W - P.l - P.r), y = (v) => P.t + (1 - ((v ?? lo) - lo) / Math.max(0.05, hi - lo)) * (H - P.t - P.b);
+  const dt = (t) => new Date(t).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  let g = '';
+  for (const v of [lo, (lo + hi) / 2, hi]) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v * 100)} %</text>`;
+  const span = t1 - t0;
+  if (span > 30 * 3600e3) { const d = new Date(t0); d.setHours(24, 0, 0, 0); for (let t = +d; t < t1; t += 86400e3) g += `<line class="grid" x1="${x(t).toFixed(1)}" x2="${x(t).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/><text x="${(x(t) + 4).toFixed(1)}" y="${H - 8}">${new Date(t).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</text>`; }
+  else { const step = span > 12 * 3600e3 ? 6 : span > 4 * 3600e3 ? 2 : 1; const d = new Date(t0); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); for (let t = +d; t < t1; t += 3600e3) { if (new Date(t).getHours() % step) continue; g += `<text x="${x(t).toFixed(1)}" y="${H - 8}" text-anchor="middle">${timeText(t)}</text>`; } }
+  for (const [a, b, open] of gaps) { const w = Math.max(2, x(b) - x(a)); g += `<rect class="mon-gap" x="${x(a).toFixed(1)}" y="${P.t}" width="${w.toFixed(1)}" height="${H - P.t - P.b}"><title>Lücke: ${dt(a)} bis ${open ? 'jetzt' : dt(b)} (${durText(b - a)} ohne Lauf)</title></rect>${w > 34 ? `<text class="mon-gap-t" x="${(x(a) + w / 2).toFixed(1)}" y="${P.t + 10}" text-anchor="middle">Lücke</text>` : ''}`; }
+  // Linie zwischen Läufen, an Lücken unterbrochen
+  let d = ''; runs.forEach((r, i) => { const v = share(r); if (v == null) return; const brk = i === 0 || r[ix.at] - runs[i - 1][ix.at] > GAP; d += `${brk ? 'M' : 'L'}${x(r[ix.at]).toFixed(1)} ${y(v).toFixed(1)} `; });
+  g += `<path class="mon-line" d="${d}"/>`;
+  g += runs.map(r => { const v = share(r); return `<circle class="mon-pt ${lvl(v)}" cx="${x(r[ix.at]).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${runs.length > 300 ? 2 : 3}"><title>${dt(r[ix.at])} · ${TRIGGER[r[ix.ausloeser]] || r[ix.ausloeser] || '–'}\n${fmt(r[ix.aktuell])} von ${fmt(r[ix.quellen])} Quellen aktuell (${v == null ? '–' : fmt(v * 100) + ' %'}) · ${fmt(r[ix.fehler])} Fehler\n${fmt(r[ix.fahrzeuge])} Fahrzeuge · ${fmt(r[ix.fahrten])} Fahrten · Dauer ${r[ix.dauer_ms] == null ? '–' : fmt(r[ix.dauer_ms] / 1000, 1) + ' s'}</title></circle>`; }).join('');
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const today = runs.filter(r => r[ix.at] >= +midnight).length;
+  const trig = {}; for (const r of runs) { const k = r[ix.ausloeser] || 'unbekannt'; trig[k] = (trig[k] || 0) + 1; }
+  const closed = gaps.filter(gp => !gp[2]); const longest = closed.length ? Math.max(...closed.map(([a, b]) => b - a)) : 0;
+  const lastAge = now - last[ix.at];
+  box.innerHTML = `<div class="mon-stats">
+    <div>Letzter Lauf<b style="color:var(--${!DEMO && lastAge > GAP ? 'warn' : 'fg'})">${timeText(last[ix.at])}</b>${DEMO ? new Date(last[ix.at]).toLocaleDateString('de-DE') : `vor ${ageText(lastAge)}`} · ${last[ix.dauer_ms] == null ? '' : `${fmt(last[ix.dauer_ms] / 1000, 1)} s · `}${fmt(last[ix.aktuell])} von ${fmt(last[ix.quellen])} Quellen aktuell</div>
+    <div>Läufe heute<b>${fmt(today)}</b>${fmt(runs.length)} in ${fmt(Math.max(1, Math.round((last[ix.at] - t0) / 86400e3)))} Tag${Math.round((last[ix.at] - t0) / 86400e3) > 1 ? 'en' : ''} · Plan alle 20 Min.</div>
+    <div>Auslöser<b>${fmt(trig.schedule || 0)} · ${fmt(trig.workflow_dispatch || 0)}</b>geplant (schedule) · manuell (workflow_dispatch)${Object.keys(trig).filter(k => !['schedule', 'workflow_dispatch'].includes(k)).map(k => ` · ${fmt(trig[k])} ${esc(TRIGGER[k] || k)}`).join('')}</div>
+    <div>Lücken über 45 Min.<b style="color:var(--${gaps.length ? 'warn' : 'fg'})">${fmt(gaps.length)}</b>${gaps.length ? `längste ${durText(Math.max(longest, ...gaps.filter(gp => gp[2]).map(([a, b]) => b - a)))}${gaps.some(gp => gp[2]) ? ' · seit dem letzten Lauf offen' : ''}` : 'Sammler lief lückenlos'}</div>
+  </div>
+  <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sammler-Läufe der letzten 7 Tage">${g}</svg>
+  <div class="legend"><span><i class="dot" style="background:var(--ok)"></i>üblicher Anteil aktueller Quellen (Median ${med == null ? '–' : fmt(med * 100) + ' %'})</span><span><i class="dot" style="background:var(--warn)"></i>5–15 Punkte darunter</span><span><i class="dot" style="background:var(--bad)"></i>mehr als 15 Punkte darunter</span><span><i class="sq" style="background:color-mix(in srgb,var(--bad) 14%,transparent);border-color:transparent"></i>Lücke über 45 Min. ohne Lauf</span></div>`;
+}
+function renderQuality() {
+  const L0 = state.latest; const box = $('#quality');
+  if (!L0) { box.innerHTML = '<div class="empty"><b>Noch kein Sammler-Stand.</b>Die Bereinigung erscheint nach dem ersten Lauf.</div>'; return; }
+  const d = L0.dedupe || {}; const recs = L0.sources || [];
+  const tot = { unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0 };
+  for (const r of recs) for (const k in tot) tot[k] += r.counts?.[k] || 0;
+  const worst = recs.map(r => ({ r, n: (r.counts?.unassigned || 0) + (r.counts?.outside || 0) + (r.counts?.missing || 0) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 6);
+  box.innerHTML = `<dl class="kv">
+    <dt>Fahrzeug-Dubletten entfernt<small>gleiches Fahrzeug in mehreren Quellen${d.prefixVariants ? `, davon ${fmt(d.prefixVariants)} nur mit anderem Kennungs-Präfix` : ''}</small></dt><dd>${fmt(d.duplicates)}</dd>
+    <dt>Stations-Dubletten<small>gleiche Kennung oder gleicher Name ≤ 60 m</small></dt><dd>${fmt(d.stationDuplicates)}</dd>
+    <dt>Kennungen wiederverwendet<small>gleiche Kennung an weit entfernten Orten, als Prüffall behalten</small></dt><dd>${fmt(d.reusedIds)}</dd>
+    <dt>Ohne Gemeinde<small>Position in Deutschland, aber keiner Gemeinde zuordenbar</small></dt><dd>${fmt(tot.unassigned)}</dd>
+    <dt>Außerhalb Deutschlands</dt><dd>${fmt(tot.outside)}</dd>
+    <dt>Ohne Koordinaten<small>${tot.stationFallback ? `${fmt(tot.stationFallback)} über Stationsposition ersetzt` : 'ohne Ersatzposition'}</small></dt><dd>${fmt(tot.missing)}</dd>
+    ${tot.repaired ? `<dt>Koordinaten repariert<small>vertauschte Breite/Länge, Zahlenformat</small></dt><dd>${fmt(tot.repaired)}</dd>` : ''}
+  </dl>${worst.length ? `<div class="tbl" style="margin-top:var(--s3)"><table><thead><tr><th>Quelle</th><th class="n">ohne Gemeinde</th><th class="n">außerhalb</th><th class="n">ohne Koord.</th></tr></thead><tbody>${worst.map(({ r }) => `<tr><td>${esc(r.name || r.id)}<div class="sub-line mono">${esc(r.id)}</div></td><td class="n">${fmt(r.counts?.unassigned || 0)}</td><td class="n">${fmt(r.counts?.outside || 0)}</td><td class="n">${fmt(r.counts?.missing || 0)}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
+function renderLicenses() {
+  const box = $('#licenses'); const recs = (state.latest?.sources || []).filter(r => !(r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(r.status)));
+  if (!recs.length) { box.innerHTML = '<div class="empty"><b>Noch keine Quellen.</b>Die Übersicht erscheint nach dem ersten Sammler-Lauf.</div>'; return; }
+  const by = new Map(); for (const r of recs) { const k = r.license || ''; const e = by.get(k) || { n: 0, ops: new Set() }; e.n++; e.ops.add(r.operator); by.set(k, e); }
+  const rows = [...by].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+  const label = (l) => !l ? '<span class="muted">k. A.</span>' : /^https?:/.test(l) ? `<a href="${esc(l)}" target="_blank" rel="noopener">${esc(l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))} ↗</a>` : esc(l);
+  box.innerHTML = `<div class="tbl"><table><thead><tr><th>Lizenz</th><th class="n">Quellen</th><th>Anbieter</th></tr></thead><tbody>${rows.slice(0, 20).map(([l, e]) => `<tr><td>${label(l)}</td><td class="n">${fmt(e.n)}</td><td class="small">${esc([...e.ops].sort((a, b) => a.localeCompare(b, 'de')).slice(0, 5).join(', '))}${e.ops.size > 5 ? ` +${e.ops.size - 5}` : ''}</td></tr>`).join('')}</tbody></table></div><div class="muted small" style="margin-top:var(--s2)">Kommerzielle Nutzung je Lizenz prüfen. „k. A.“ heißt: Der Feed nennt keine Lizenz.${rows.length > 20 ? ` ${rows.length - 20} weitere Lizenzangaben.` : ''}</div>`;
 }
 function relCell(id) { const r = state.usage?.reliability?.sources?.[id]; if (!r || !r.runs) return '<span class="muted">–</span>'; const ok = (r.live + r.delayed) / r.runs; return `<span style="color:var(--${ok >= 0.95 ? 'ok' : ok >= 0.8 ? 'warn' : 'bad'})">${pctf(r.live + r.delayed, r.runs)}</span><div class="sub-line">${r.runs} Läufe · Ø ${fmt(r.latencyAvg)} ms</div>`; }
 function renderSourceTable() {
@@ -650,7 +855,7 @@ function renderSourceTable() {
   const recs = all.filter(r => !hidden.includes(r));
   const munis = state.latest?.municipalities || {};
   const show = recs.slice(0, 300);
-  $('#tbl-src tbody').innerHTML = show.map(r => `<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a><div class="sub-line mono">${esc(r.id)}${r.sourceChanged ? ' · Quellenwechsel' : ''}</div></td><td>${esc(r.operator)}</td><td class="small">${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}</td><td class="n">${esc(r.version || '–')}</td><td class="n">${fmt(r.counts?.vehicles)}<div class="sub-line">${r.counts?.outside ? `${fmt(r.counts.outside)} außerhalb` : ''}${r.counts?.missing ? ` ${fmt(r.counts.missing)} o. Koord.` : ''}</div></td><td class="n">${fmt(r.counts?.stations)}</td><td class="n" title="${(r.municipalities || []).slice(0, 12).map(a => munis[a]?.name || a).join(', ')}">${fmt((r.municipalities || []).length)}</td><td class="n">${ageText(r.feedAgeMs)}</td><td class="n">${r.quality ?? '–'}</td><td class="n">${relCell(r.id)}</td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span>${r.errors?.length ? `<div class="sub-line">${esc(r.errors[0]).slice(0, 60)}</div>` : ''}</td><td class="small">${r.license ? (/^https?:/.test(r.license) ? `<a href="${esc(r.license)}" target="_blank" rel="noopener">Lizenz ↗</a>` : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`).join('') || '<tr><td colspan="12" class="empty">Keine Treffer.</td></tr>';
+  $('#tbl-src tbody').innerHTML = show.map(r => `<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a><div class="sub-line mono">${esc(r.id)}${r.sourceChanged ? ' · Quellenwechsel' : ''}</div></td><td>${esc(r.operator)}</td><td class="small">${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}</td><td class="n">${esc(r.version || '–')}</td><td class="n">${fmt(r.counts?.vehicles)}<div class="sub-line">${[r.counts?.unassigned ? `${fmt(r.counts.unassigned)} o. Gemeinde` : '', r.counts?.outside ? `${fmt(r.counts.outside)} außerhalb` : '', r.counts?.missing ? `${fmt(r.counts.missing)} o. Koord.` : ''].filter(Boolean).join(' · ')}</div></td><td class="n">${fmt(r.counts?.stations)}</td><td class="n" title="${(r.municipalities || []).slice(0, 12).map(a => munis[a]?.name || a).join(', ')}">${fmt((r.municipalities || []).length)}</td><td class="n">${ageText(r.feedAgeMs)}</td><td class="n">${r.quality ?? '–'}</td><td class="n">${relCell(r.id)}</td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span>${r.errors?.length ? `<div class="sub-line">${esc(r.errors[0]).slice(0, 60)}</div>` : ''}</td><td class="small">${r.license ? (/^https?:/.test(r.license) ? `<a href="${esc(r.license)}" target="_blank" rel="noopener">Lizenz ↗</a>` : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`).join('') || `<tr><td colspan="12" class="empty"><b>Keine Treffer.</b>${q || stf !== 'all' ? 'Suche leeren oder „Alle Zustände“ wählen.' : 'Der Sammler-Stand wird geladen.'}</td></tr>`;
   $('#src-more').textContent = [recs.length > show.length ? `${recs.length - show.length} weitere Quellen – Suche eingrenzen.` : '', hidden.length ? `${hidden.length} geprüfte Direktfeed-Kandidaten ohne Daten ausgeblendet (Suche nach Anbieter zeigt sie).` : ''].filter(Boolean).join(' ');
 }
 // ---------- Nutzung & Bewegung ----------
@@ -668,12 +873,13 @@ async function renderUsage() {
   const idx = await loadUsageIndex();
   const days = idx.days || [];
   const box = $('#usage-tiles');
-  if (!days.length) { box.innerHTML = ''; $('#usage-note').textContent = 'Noch keine Ereignisdaten – der Sammler braucht zwei Läufe, bevor Bewegungen erkennbar sind.'; $('#chart-usage').innerHTML = ''; $('#tbl-usage tbody').innerHTML = '<tr><td colspan="13" class="empty">Noch keine Daten.</td></tr>'; return; }
+  renderArchive().catch(() => {});
+  if (!days.length) { box.innerHTML = ''; $('#usage-note').textContent = 'Noch keine Ereignisdaten – der Sammler braucht zwei Läufe, bevor Bewegungen erkennbar sind.'; $('#chart-usage').innerHTML = '<div class="empty"><b>Noch keine Bewegungen gemessen.</b>Sie erscheinen nach zwei Sammler-Läufen.</div>'; $('#tbl-usage tbody').innerHTML = '<tr><td colspan="6" class="empty"><b>Noch keine Daten.</b>Bewegungen erscheinen nach zwei Sammler-Läufen.</td></tr>'; $('#tbl-usage-more tbody').innerHTML = '<tr><td colspan="7" class="empty">Noch keine Daten.</td></tr>'; return; }
   const day = state.usage.day && days.includes(state.usage.day) ? state.usage.day : days[days.length - 1];
   state.usage.day = day;
   $('#usage-days').innerHTML = days.slice(-7).map(d => `<button class="chip ${d === day ? 'on' : ''}" data-uday="${d}">${d.slice(8)}.${d.slice(5, 7)}.</button>`).join('');
   const doc = await loadEvents(day);
-  if (!doc) { box.innerHTML = ''; $('#usage-note').textContent = 'Ereignisdatei nicht ladbar.'; return; }
+  if (!doc) { box.innerHTML = ''; $('#usage-note').textContent = 'Ereignisdatei nicht ladbar – anderen Tag wählen oder später neu laden.'; return; }
   const runs = doc.runs || [];
   const observedMs = runs.filter(r => r[1] != null).reduce((a, r) => a + Math.min(r[1], 45 * 60e3), 0);
   $('#usage-note').textContent = `${runs.length} Sammler-Läufe · beobachtet ${durText(observedMs)} · ${timeText(runs[0]?.[0])}–${timeText(runs[runs.length - 1]?.[0])}`;
@@ -684,16 +890,13 @@ async function renderUsage() {
     const [, op, ty] = k.split('|'); const name = state.scope === 'DE' && state.operator === 'all' ? (TYPE[ty] || ty) : op;
     const a = byOp.get(name) || T_empty(); T_add(a, g); byOp.set(name, a); T_add(tot, g);
   }
-  // Flotte für Umschlag: verfügbarer Bestand im Scope (Sammler-Stand)
-  const fleet = new Map(); let fleetTot = 0;
-  for (const [k, st] of Object.entries(state.latest?.groups || {})) { if (!groupInScope(k)) continue; const [, op, ty] = k.split('|'); const name = state.scope === 'DE' && state.operator === 'all' ? (TYPE[ty] || ty) : op; fleet.set(name, (fleet.get(name) || 0) + st.total); fleetTot += st.total; }
+  // Eine Fahrten-Definition: gemessene Fahrtbeginne im Beobachtungszeitraum (Hochrechnung und RVD stehen unter Umsatz & Kennzahlen)
   const starts = sum(tot.start), ends = sum(tot.end), reloc = sum(tot.reloc), swaps = sum(tot.swap), pickups = sum(tot.pickup);
   box.innerHTML = [
-    tile('Fahrten (geschätzt)', fmt(starts), `${fmt(ends)} Fahrtenden · ${durText(observedMs)} beobachtet`),
-    tile('Umschlag', fleetTot ? fmt(starts / fleetTot, 2) : '—', 'Fahrten je gemeldetem Fahrzeug im Zeitraum'),
-    tile('Umsetzungen', fmt(reloc), 'gleiche Kennung, > 150 m versetzt, nicht verschwunden'),
+    tile('Fahrten gemessen', fmt(starts), `in ${durText(observedMs)} Beobachtung · ${fmt(ends)} Fahrtenden`),
+    tile(abbr('Umsetzungen', 'reloc'), fmt(reloc), 'gleiche Kennung, > 150 m versetzt, nicht verschwunden'),
     tile('Akkutausch', fmt(swaps), tot.swapWaitN ? `Ø ${durText(tot.swapWaitSum / tot.swapWaitN)} unter 20 % bis zum Tausch` : 'Sprung von < 40 % auf ≥ 85 % am selben Ort'),
-    tile('Abholungen', fmt(pickups), 'gesperrte oder fast leere Fahrzeuge verschwunden'),
+    tile(abbr('Abholungen', 'pickup'), fmt(pickups), 'gesperrte oder fast leere Fahrzeuge verschwunden'),
     tile('Sperrdauer', tot.disDurN ? durText(tot.disDurSum / tot.disDurN) : '—', `${fmt(sum(tot.disOff))} Fahrzeuge wieder freigegeben`),
   ].join('');
   // Tagesgang
@@ -709,11 +912,14 @@ async function renderUsage() {
   for (const [k, a] of Object.entries(idle?.groups || {})) { if (!groupInScope(k)) continue; for (let i = 0; i < 5; i++) ib[i] += a[i]; in_ += a[5]; }
   const labels = idle?.buckets || ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'];
   const imax = Math.max(1, ...ib);
-  $('#idle-bars').innerHTML = in_ ? labels.map((l, i) => `<div class="hbar"><span>${l}</span><div class="bar"><i style="width:${(ib[i] / imax) * 100}%;background:${i >= 3 ? 'var(--warn)' : 'var(--accent)'}"></i></div><span class="n mono">${pctf(ib[i], in_)}</span></div>`).join('') + `<div class="muted small" style="margin-top:6px">${fmt(in_)} verfügbare Fahrzeuge · Stand ${timeText(idle.at)} · Zeit seit letzter Bewegung, höchstens seit erstem Sammler-Kontakt (${days[0].split('-').reverse().join('.')})</div>` : '<div class="empty">Keine Standzeiten im Filter.</div>';
-  // Tabelle je Anbieter
-  $('#tbl-usage tbody').innerHTML = [...byOp].sort((a, b) => sum(b[1].start) - sum(a[1].start)).map(([name, a]) => { const fl = fleet.get(name) || 0; const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mode = modes.includes('stable') ? 'stabil' : modes.includes('rotating') ? 'rotierend' : 'offen';
-    return `<tr><td><span class="op"><i style="background:${opColor(name)}"></i>${esc(name)}</span></td><td class="n">${fmt(sum(a.start))}</td><td class="n">${fmt(sum(a.end))}</td><td class="n">${fl ? fmt(sum(a.start) / fl, 2) : '—'}</td><td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${fmt(sum(a.reloc))}</td><td class="n">${fmt(sum(a.swap))}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.pickup))}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mode === 'stabil' ? 'Dauer/Distanz messbar' : mode === 'rotierend' ? 'nur Start/Ziel-Zählung' : 'noch zu wenige Läufe'}</div></td></tr>`; }).join('') || '<tr><td colspan="13" class="empty">Keine Ereignisse im Filter.</td></tr>';
-  renderCellsTable(day); renderQuota(); renderEcon(day, doc).catch(e => console.error('Umsatz', e));
+  $('#idle-bars').innerHTML = in_ ? labels.map((l, i) => `<div class="hbar"><span>${l}</span><div class="bar"><i style="width:${(ib[i] / imax) * 100}%;background:${i >= 3 ? 'var(--warn)' : 'var(--accent)'}"></i></div><span class="n mono">${pctf(ib[i], in_)}</span></div>`).join('') + `<div class="muted small" style="margin-top:6px">${fmt(in_)} verfügbare Fahrzeuge · Stand ${timeText(idle.at)} · Zeit seit letzter Bewegung, höchstens seit erstem Sammler-Kontakt (${days[0].split('-').reverse().join('.')})</div>` : '<div class="empty"><b>Keine Standzeiten im Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen.</div>';
+  // Tabelle je Anbieter: sechs Standardspalten, der Rest unter „Weitere Spalten“
+  const list = [...byOp].sort((a, b) => sum(b[1].start) - sum(a[1].start));
+  const opCell = (name) => `<td><span class="op"><i style="background:${opColor(name)}"></i>${esc(name)}</span></td>`;
+  $('#tbl-usage tbody').innerHTML = list.map(([name, a]) => `<tr>${opCell(name)}<td class="n">${fmt(sum(a.start))}</td><td class="n">${fmt(sum(a.end))}</td><td class="n">${fmt(sum(a.reloc))}</td><td class="n">${fmt(sum(a.swap))}</td><td class="n">${fmt(sum(a.pickup))}</td></tr>`).join('') || '<tr><td colspan="6" class="empty"><b>Keine Ereignisse im Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen oder anderen Tag wählen.</td></tr>';
+  $('#tbl-usage-more tbody').innerHTML = list.map(([name, a]) => { const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mode = modes.includes('stable') ? 'stabil' : modes.includes('rotating') ? 'rotierend' : 'offen';
+    return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mode === 'stabil' ? 'Dauer/Distanz messbar' : mode === 'rotierend' ? 'nur Start/Ziel-Zählung' : 'noch zu wenige Läufe'}</div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Keine Ereignisse im Filter.</td></tr>';
+  renderCellsTable(day); renderQuota(); if (!isClient()) renderEcon(day, doc).catch(e => console.error('Umsatz', e));
 }
 // ---------- Umsatz & Kennzahlen ----------
 function econOpts() {
@@ -741,7 +947,8 @@ async function econGroups(day, keep) {
     const pl = planCache.get(pk);
     const series = hist?.series?.[k]?.total?.filter(x => x != null) || [];
     const fleetFallback = series.length ? series.reduce((a, b) => a + b, 0) / series.length : (state.latest?.groups?.[k]?.total ?? null);
-    out.set(k, { ...E.kpis({ g, obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, realization: o.realization, net: o.net }), plan: pl, op, ty, ags });
+    const fac = calibFor(op); const gc = fac === 1 ? g : { ...g, start: (g.start || []).map(v => (v || 0) * fac) }; // Korrektur × je Anbieter
+    out.set(k, { ...E.kpis({ g: gc, obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, realization: o.realization, net: o.net }), plan: pl, op, ty, ags });
   }
   return { out, doc, obsMin, profile: prof };
 }
@@ -753,7 +960,7 @@ async function econFor(ags, op, type) {
 }
 async function renderEcon(day) {
   const r = await econGroups(day, groupInScope);
-  if (!r) { $('#econ-tiles').innerHTML = ''; $('#tbl-econ tbody').innerHTML = '<tr><td colspan="12" class="empty">Keine Daten.</td></tr>'; return; }
+  if (!r) { $('#econ-tiles').innerHTML = ''; $('#econ-excl').innerHTML = ''; $('#econ-badge').textContent = 'Schätzung'; $('#tbl-econ tbody').innerHTML = '<tr><td colspan="12" class="empty"><b>Keine Ereignisdaten für diesen Tag.</b>Anderen Tag wählen.</td></tr>'; return; }
   const byName = new Map();
   for (const x of r.out.values()) { const name = `${x.op}|${x.ty}`; if (!byName.has(name)) byName.set(name, []); byName.get(name).push(x); }
   const rows = [...byName].map(([name, list]) => { const [op, ty] = name.split('|'); const c = E.combine(list); const plans = [...new Set(list.map(x => x.plan?.plan ? E.planLabel(x.plan.plan) : null).filter(Boolean))]; return { op, ty, c, list, plans, planScope: list.find(x => x.plan)?.plan?.scope }; }).filter(x => x.c && x.c.fleet > 0).sort((a, b) => (b.c.revDay || 0) - (a.c.revDay || 0) || b.c.rides - a.c.rides);
@@ -761,23 +968,51 @@ async function renderEcon(day) {
   const tot = E.combine(good.map(x => x.c));
   const cov = Math.max(0, ...rows.map(x => x.c.coverage || 0));
   const o = econOpts(); const euro = (v, d = 0) => v == null ? '—' : `${fmt(v, d)} €`;
+  // Reifegrad: Läufe und Messbeginn am Panel; unter 3 vollen Messtagen Hochrechnungen nur als Spanne
+  const idx = await loadUsageIndex(); const first = (idx.days || [])[0]; const runsN = (r.doc.runs || []).length;
+  const dd = (d) => d ? `${d.slice(8)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '–';
+  $('#econ-badge').textContent = first && first !== day ? `Schätzung · ${fmt(runsN)} Läufe am ${dd(day)} · Daten seit ${dd(first)}` : `Schätzung · ${fmt(runsN)} Läufe seit ${dd(first || day)}`;
+  const prelim = r.profile.source === 'Standardkurve' || (r.profile.days ?? 0) < 3;
+  const pb = $('#econ-prelim'); pb.hidden = !prelim; pb.title = `Erst ${fmt(r.profile.days ?? 0)} volle Messtage; ab 3 wird der Tagesgang gemessen statt angenommen. Bis dahin Hochrechnungen als Spanne (× 0,7 bis × 1,3).`;
+  const rng = (v, d = 0, unit = '') => { if (v == null || !Number.isFinite(v)) return '—'; if (!prelim || v === 0) return `${fmt(v, d)}${unit}`; const f = (x) => x >= 100 ? fmt(sig2(x)) : fmt(x, d); return `${f(v * 0.7)}–${f(v * 1.3)}${unit}`; };
+  $('#econ-tiles').classList.toggle('prelim', prelim);
   $('#econ-tiles').innerHTML = tot ? [
-    tile('Fahrten / Tag', fmt(tot.ridesDay), `hochgerechnet aus ${fmt(tot.rides)} gemessenen · ${fmt(cov * 100)} % des Tagesgangs beobachtet`),
-    tile('Rides / Fzg. / Tag', fmt(tot.rvd, 2), `bezogen auf Ø ${fmt(tot.fleet)} Fahrzeuge auf der Straße`),
-    tile('Auslastung', tot.utilization == null ? '—' : `${fmt(tot.utilization * 100, 1)} %`, `Zeit in Fahrt · Ø ${fmt(tot.avgMin, 1)} Min. je Fahrt`),
-    tile(`Umsatz / Tag ${o.net ? 'netto' : 'brutto'}`, euro(tot.revDay), `Realisierung ${fmt(o.realization * 100)} % · Listenpreise der Feeds`),
-    tile('Umsatz / Fzg. / Tag', euro(tot.revPerVehicleDay, 2), `${euro(tot.perRide, 2)} je Fahrt`),
-    tile('Hochrechnung Monat', euro(tot.revDay != null ? tot.revDay * 30 : null), '30 Tage zum heutigen Niveau, ohne Saison'),
-  ].join('') : '';
-  $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.c; const warn = !c.plausible;
-    return `<tr${warn ? ' style="opacity:.6"' : ''}><td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${TYPE[x.ty] || x.ty}${state.scope === 'DE' ? ` · ${x.list.length} Gemeinde${x.list.length === 1 ? '' : 'n'}` : ''}</div></td>
-      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${c.rot ? `${fmt(c.rot)} Kennungswechsel` : ''}</div></td><td class="n">${fmt(c.ridesDay)}</td>
+    tile('Fahrten / Tag', rng(tot.ridesDay), `hochgerechnet aus ${fmt(tot.rides)} gemessenen · ${fmt(cov * 100)} % des Tagesgangs beobachtet`),
+    tile(abbr('Rides / Fzg. / Tag', 'rvd'), fmt(tot.rvd, 2), `bezogen auf Ø ${fmt(tot.fleet)} Fahrzeuge auf der Straße`),
+    tile(abbr('Auslastung', 'util'), tot.utilization == null ? '—' : `${fmt(tot.utilization * 100, 1)} %`, `Zeit in Fahrt · Ø ${fmt(tot.avgMin, 1)} Min. je Fahrt`),
+    tile(`Umsatz / Tag ${o.net ? 'netto' : 'brutto'}`, rng(tot.revDay, 0, ' €'), `${abbr('Realisierung', 'real')} ${fmt(o.realization * 100)} % · Listenpreise der Feeds`),
+    tile('Umsatz / Fzg. / Tag', rng(tot.revPerVehicleDay, 2, ' €'), `${euro(tot.perRide, 2)} je Fahrt`),
+  ].join('') : '<div class="empty" style="grid-column:1/-1"><b>Keine belastbare Zeile im Filter.</b>Alle Zeilen sind unplausibel oder ohne Flotte; anderen Tag oder Anbieter wählen.</div>';
+  // Unplausible Zeilen sind aus den Summen raus – sichtbar machen
+  const bad = rows.filter(x => !x.c.plausible); const names = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}`);
+  const ex = $('#econ-excl'); ex.innerHTML = bad.length ? `Summen ohne ${esc(names.slice(0, 4).join(', '))}${names.length > 4 ? ` und ${names.length - 4} weitere` : ''} <span class="muted">(nicht belastbar)</span>` : '';
+  ex.title = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}: ${x.c.flags[0] || 'unplausibel'}`).join('\n');
+  const cal = calibAll();
+  $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.c; const warn = !c.plausible; const fac = calibFor(x.op);
+    return `<tr${warn ? ' style="opacity:.6"' : ''}><td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${TYPE[x.ty] || x.ty}${state.scope === 'DE' ? ` · ${x.list.length} Gemeinde${x.list.length === 1 ? '' : 'n'}` : ''}</div>${c.flags.length ? `<div class="sub-line warn-text" style="white-space:normal;min-width:22ch;max-width:30ch">${esc(c.flags[0])}</div>` : ''}</td>
+      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${fac !== 1 ? `gemessen ${fmt(c.rides / fac)} × ${fmt(fac, 2)}` : c.rot ? `${fmt(c.rot)} ${abbr('Kennungswechsel', 'rot')}` : ''}</div></td>
+      <td class="n"><input type="number" class="calib" data-op="${esc(x.op)}" value="${fac}" min="0.1" max="5" step="0.05" style="width:4.8em${fac !== 1 ? ';border-color:var(--accent)' : ''}" aria-label="Korrekturfaktor Fahrten ${esc(x.op)}" title="${esc(GLOSS.calib)}">${fac !== 1 ? '<div class="sub-line">angewendet</div>' : ''}</td>
+      <td class="n">${rng(c.ridesDay)}</td>
       <td class="n"><b>${fmt(c.rvd, 2)}</b></td><td class="n">${c.utilization == null ? '—' : `${fmt(c.utilization * 100, 1)} %`}</td><td class="n">${fmt(c.avgMin, 1)} min</td>
       <td class="small">${x.plans.slice(0, 2).map(esc).join('<br>') || '<span class="muted">kein Tarif im Feed</span>'}${x.planScope === 'Anbieter' ? '<div class="sub-line">Tarif anderer Stadt</div>' : ''}</td>
-      <td class="n">${euro(c.perRide, 2)}</td><td class="n"><b>${euro(c.revDay)}</b></td><td class="n">${euro(c.revPerVehicleDay, 2)}</td>
-      <td class="small">${c.flags.length ? esc(c.flags[0]) : '<span class="muted">—</span>'}</td></tr>`; }).join('') || '<tr><td colspan="12" class="empty">Keine Daten im Filter.</td></tr>';
-  const excludedN = rows.length - good.length;
-  $('#econ-note').innerHTML = `Fahrten = verschwundene verfügbare Fahrzeuge (Kennungswechsel ≤ 40 m am selben Ort zählen nicht). Hochrechnung auf 24 h über den Tagesgang (${esc(r.profile.source)}). Flotte = Ø Fahrzeuge auf der Straße inkl. gesperrter. Ø Fahrtdauer: ${o.rideMin ? `Vorgabe ${fmt(o.rideMin)} Min.` : 'gemessen, wo Kennungen stabil sind (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40)'}. Umsatz zu Listenpreisen des Standardtarifs, ${o.net ? 'ohne 19 % MwSt., ' : ''}mal Realisierungsquote (Pässe, Rabatte, Freiminuten). Betreiber-Umsetzungen, die das Fahrzeug aus dem Feed nehmen, zählen als Fahrt.${excludedN ? ` ${excludedN} Zeile${excludedN === 1 ? '' : 'n'} mit unplausibler Fahrtenzahl sind ausgegraut und nicht in den Summen.` : ''}`;
+      <td class="n">${euro(c.perRide, 2)}</td><td class="n"><b>${rng(c.revDay, 0, ' €')}</b></td><td class="n">${rng(c.revPerVehicleDay, 2, ' €')}</td></tr>`; }).join('') || '<tr><td colspan="12" class="empty"><b>Keine Fahrten im Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen.</td></tr>';
+  const excludedN = rows.length - good.length; const calOps = Object.keys(cal);
+  $('#econ-note').innerHTML = `Fahrten = verschwundene verfügbare Fahrzeuge (${abbr('Kennungswechsel', 'rot')} ≤ 40 m am selben Ort zählen nicht). Hochrechnung auf 24 h über den Tagesgang (${esc(r.profile.source)}${prelim ? '; unter 3 vollen Messtagen als Spanne × 0,7 bis × 1,3' : ''}). Flotte = Ø Fahrzeuge auf der Straße inkl. gesperrter. Ø Fahrtdauer: ${o.rideMin ? `Vorgabe ${fmt(o.rideMin)} Min.` : 'gemessen, wo Kennungen stabil sind (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40)'}. Umsatz zu Listenpreisen des Standardtarifs, ${o.net ? 'ohne 19 % MwSt., ' : ''}mal ${abbr('Realisierungsquote', 'real')}. Betreiber-Umsetzungen, die das Fahrzeug aus dem Feed nehmen, zählen als Fahrt.${excludedN ? ` ${excludedN} Zeile${excludedN === 1 ? '' : 'n'} mit unplausibler Fahrtenzahl sind ausgegraut und nicht in den Summen.` : ''} <b>Korrektur ×</b> multipliziert die gemessenen Fahrten eines Anbieters (wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz); die Faktoren gelten nur in diesem Browser${calOps.length ? ` – aktiv für ${esc(calOps.join(', '))}` : ''}.`;
+}
+// Korrekturfaktoren je Anbieter, lokal im Browser (localStorage, fehlertolerant)
+const CALIB_KEY = 'mp-calib';
+function calibAll() { try { const v = JSON.parse(localStorage.getItem(CALIB_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } }
+function calibFor(op) { const v = +calibAll()[op]; return Number.isFinite(v) && v > 0 ? v : 1; }
+function setCalib(op, v) { try { const all = calibAll(); if (!Number.isFinite(v) || v <= 0 || Math.abs(v - 1) < 1e-9) delete all[op]; else all[op] = Math.min(5, Math.max(0.1, v)); localStorage.setItem(CALIB_KEY, JSON.stringify(all)); } catch { /* privates Fenster: Faktor gilt nicht */ } }
+// Langzeit-Archiv (Tageswerte je Monat): nur Hinweis auf Umfang
+async function renderArchive() {
+  const el = $('#usage-archive'); if (!el) return;
+  const idx = await loadOnce('archiveIndex', 'archive/index.json');
+  const months = (idx?.months || []).filter(m => /^\d{4}-\d{2}$/.test(m)).sort();
+  if (!months.length) { el.textContent = ''; return; }
+  if (state.usage.archiveDays == null) { const docs = await Promise.all(months.map(m => getJson(CFG.DATA + `archive/${m}.json`, { timeout: 60000 }))); state.usage.archiveDays = docs.reduce((a, d) => a + Object.keys(d.json?.days || {}).length, 0); }
+  const n = state.usage.archiveDays; const m0 = months[0];
+  el.textContent = `· Archiv seit ${new Date(+m0.slice(0, 4), +m0.slice(5, 7) - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}, ${fmt(n)} Tag${n === 1 ? '' : 'e'}`;
 }
 function T_empty() { return { start: new Array(24).fill(0), end: new Array(24).fill(0), reloc: new Array(24).fill(0), swap: new Array(24).fill(0), pickup: new Array(24).fill(0), disOn: new Array(24).fill(0), disOff: new Array(24).fill(0), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 }; }
 function T_add(a, g) { for (const f of ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff']) for (let i = 0; i < 24; i++) a[f][i] += g[f]?.[i] || 0; for (const f of ['swapWaitSum', 'swapWaitN', 'disDurSum', 'disDurN', 'tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN']) a[f] += g[f] || 0; }
@@ -797,7 +1032,7 @@ function hourChart(series, weather, runs) {
   const x = (h) => P.l + ((h + 0.5) / 24) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - v / max) * (H - P.t - P.b);
   let g = '';
-  for (let k = 0; k <= 4; k++) { const v = (max * k) / 4; g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 3}" text-anchor="end">${fmt(Math.round(v))}</text>`; }
+  for (let k = 0; k <= 4; k++) { const v = (max * k) / 4; g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 3}" text-anchor="end">${max < 8 ? fmt(v, 1) : fmt(Math.round(v))}</text>`; }
   for (let h = 0; h < 24; h += 3) g += `<text x="${x(h)}" y="${H - 8}" text-anchor="middle">${h} Uhr</text>`;
   // beobachtete Stunden markieren
   if (runs?.length) { const hs = new Set(runs.map(r => new Date(r[0]).getHours())); for (let h = 0; h < 24; h++) if (!hs.has(h)) g += `<rect x="${x(h) - (W - P.l - P.r) / 48}" y="${P.t}" width="${(W - P.l - P.r) / 24}" height="${H - P.t - P.b}" fill="var(--line)" opacity=".35"/>`; }
@@ -821,20 +1056,20 @@ async function cellsForScope(day) {
 async function renderCellsTable(day) {
   const tb = $('#tbl-cells tbody');
   const cells = await cellsForScope(day);
-  if (!cells) { tb.innerHTML = `<tr><td colspan="6" class="empty">${state.scope === 'DE' ? 'Bitte eine Gemeinde wählen.' : 'Noch keine Zellen für diesen Tag.'}</td></tr>`; return; }
+  if (!cells) { tb.innerHTML = `<tr><td colspan="6" class="empty">${state.scope === 'DE' ? '<b>Zellen gibt es je Gemeinde.</b>Oben ein Gebiet wählen.' : '<b>Noch keine Zellen für diesen Tag.</b>Anderen Tag wählen.'}</td></tr>`; return; }
   const runs = (state.usage.docs[day]?.runs || []).length || 1;
   const rows = Object.entries(cells).map(([cell, v]) => ({ cell, start: v[0], end: v[1], present: v[2], reloc: v[3], net: v[1] - v[0] })).filter(r => r.start + r.end + r.reloc > 0).sort((a, b) => b.start - a.start).slice(0, 15);
-  tb.innerHTML = rows.map(r => { const [lat, lon] = cellCenterOf(r.cell); return `<tr><td><a href="#live" class="pick-cell" data-lat="${lat}" data-lon="${lon}">${lat.toFixed(4)}, ${lon.toFixed(4)}</a></td><td class="n">${fmt(r.start)}</td><td class="n">${fmt(r.end)}</td><td class="n" style="color:var(--${r.net > 0 ? 'ok' : r.net < 0 ? 'bad' : 'muted'})">${r.net > 0 ? '+' : ''}${fmt(r.net)}</td><td class="n">${pctf(Math.min(r.present, runs), runs)}</td><td class="n">${fmt(r.reloc)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Keine Bewegungen in diesem Gebiet.</td></tr>';
+  tb.innerHTML = rows.map(r => { const [lat, lon] = cellCenterOf(r.cell); return `<tr><td><a href="#live" class="pick-cell" data-lat="${lat}" data-lon="${lon}">${lat.toFixed(4)}, ${lon.toFixed(4)}</a></td><td class="n">${fmt(r.start)}</td><td class="n">${fmt(r.end)}</td><td class="n" style="color:var(--${r.net > 0 ? 'ok' : r.net < 0 ? 'bad' : 'muted'})">${r.net > 0 ? '+' : ''}${fmt(r.net)}</td><td class="n">${pctf(Math.min(r.present, runs), runs)}</td><td class="n">${fmt(r.reloc)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty"><b>Keine Bewegungen in diesem Gebiet.</b>Anderen Tag wählen.</td></tr>';
 }
 const CELL_LAT = 0.0025, CELL_LON = 0.0035;
 function cellCenterOf(cell) { const [a, b] = cell.split(':').map(Number); return [a * CELL_LAT, b * CELL_LON]; }
 async function renderQuota() {
   const q = await loadOnce('quota', 'stations-quota.json'); const tb = $('#tbl-quota tbody');
-  if (!q) { tb.innerHTML = '<tr><td colspan="5" class="empty">Keine Stationsdaten.</td></tr>'; return; }
+  if (!q) { tb.innerHTML = '<tr><td colspan="5" class="empty"><b>Keine Stationsdaten.</b>Die Quote entsteht aus den Sammler-Läufen der letzten 7 Tage.</td></tr>'; return; }
   let rows = q.stations.filter(s => (state.scope === 'DE' || s[0] === state.scope) && (state.operator === 'all' || s[1] === state.operator) && s[5] >= 3);
   rows.sort((a, b) => (b[6] / b[5]) - (a[6] / a[5]) || b[5] - a[5]);
   rows = rows.slice(0, 25);
-  tb.innerHTML = rows.map(s => `<tr><td>${esc(s[2] || 'Station')}${state.scope === 'DE' ? `<div class="sub-line">${esc(muniName(s[0]))}</div>` : ''}</td><td>${esc(s[1])}</td><td class="n">${fmt(s[5])}</td><td class="n"><span style="color:var(--${s[6] / s[5] >= 0.5 ? 'bad' : s[6] / s[5] >= 0.25 ? 'warn' : 'fg'})">${pctf(s[6], s[5])}</span></td><td class="n">${pctf(s[7], s[5])}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Keine Stationen mit genug Läufen im Filter.</td></tr>';
+  tb.innerHTML = rows.map(s => `<tr><td>${esc(s[2] || 'Station')}${state.scope === 'DE' ? `<div class="sub-line">${esc(muniName(s[0]))}</div>` : ''}</td><td>${esc(s[1])}</td><td class="n">${fmt(s[5])}</td><td class="n"><span style="color:var(--${s[6] / s[5] >= 0.5 ? 'bad' : s[6] / s[5] >= 0.25 ? 'warn' : 'fg'})">${pctf(s[6], s[5])}</span></td><td class="n">${pctf(s[7], s[5])}</td></tr>`).join('') || '<tr><td colspan="5" class="empty"><b>Keine Stationen mit genug Läufen im Filter.</b>Stationen brauchen mindestens 3 Sammler-Läufe.</td></tr>';
 }
 
 // ---------- Karten-Ebenen: Start/Ziel, bediente Zellen, lange Standzeiten, Betriebszonen ----------
@@ -908,22 +1143,22 @@ async function renderZonesLayer() {
   $('#map-legend-zones').innerHTML = `<span class="muted">Zonen (${fmt(n)})</span><span><i class="sq" style="background:#ef6b6b55;border-color:#ef6b6b"></i>Fahrverbot</span><span><i class="sq" style="background:#e3b34133;border-color:#e3b341;border-style:dashed"></i>Abstellverbot</span><span><i class="sq" style="background:#60a5fa33;border-color:#60a5fa;border-style:dashed"></i>nur an Stationen abstellen</span><span><i class="sq" style="background:#c084fc33;border-color:#c084fc"></i>Tempolimit</span><span class="muted">Rand = Anbieter:</span>${zops.map(o => `<span><i class="sq" style="background:transparent;border-color:${opColor(o)}"></i>${esc(o)}</span>`).join('')}`;
 }
 
-// ---------- Preise, Marktanteile, Zuverlässigkeit ----------
+// ---------- Preise, Anteile an erfassten Fahrzeugen, Zuverlässigkeit ----------
 async function renderPricing() {
   const p = await loadOnce('pricing', 'pricing.json'); const tb = $('#tbl-pricing tbody');
-  if (!p?.plans?.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">Noch keine Preisfeeds gelesen.</td></tr>'; return; }
+  if (!p?.plans?.length) { tb.innerHTML = '<tr><td colspan="6" class="empty"><b>Noch keine Preisfeeds gelesen.</b>Preise erscheinen nach dem nächsten Sammler-Lauf.</td></tr>'; return; }
   let list = p.plans.filter(x => (state.scope === 'DE' || (x.municipalities || []).includes(state.scope)) && (state.operator === 'all' || x.operator === state.operator));
   const seen = new Set(); const rows = [];
   for (const src of list) for (const pl of src.plans) { const key = `${src.operator}|${pl.name}|${pl.unlock}|${pl.perMin[0]?.rate}`; if (seen.has(key)) continue; seen.add(key); rows.push({ op: src.operator, pl, src }); }
   rows.sort((a, b) => a.op.localeCompare(b.op) || (a.pl.unlock ?? 0) - (b.pl.unlock ?? 0));
   const money = (v, cur) => v == null ? '—' : `${fmt(v, 2)} ${cur || '€'}`.replace(' EUR', ' €');
-  tb.innerHTML = rows.slice(0, 60).map(({ op, pl, src }) => `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>${state.scope === 'DE' ? `<div class="sub-line">${esc(src.sourceId)}</div>` : ''}</td><td>${esc(pl.name || pl.id)}</td><td class="n">${money(pl.unlock, pl.currency)}</td><td class="n">${pl.perMin.length ? pl.perMin.map(x => `${money(x.rate, pl.currency)}${x.interval && x.interval !== 1 ? ` je ${x.interval} Min.` : ''}${x.start ? ` ab Min. ${x.start}` : ''}`).join('<br>') : '—'}</td><td class="n">${pl.perKm.length ? pl.perKm.map(x => money(x.rate, pl.currency)).join('<br>') : '—'}</td><td class="small">${esc(pl.desc || '')}${pl.surge ? ' · dynamisch' : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Keine Preisangaben für diesen Filter.</td></tr>';
+  tb.innerHTML = rows.slice(0, 60).map(({ op, pl, src }) => `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>${state.scope === 'DE' ? `<div class="sub-line">${esc(src.sourceId)}</div>` : ''}</td><td>${esc(pl.name || pl.id)}</td><td class="n">${money(pl.unlock, pl.currency)}</td><td class="n">${pl.perMin.length ? pl.perMin.map(x => `${money(x.rate, pl.currency)}${x.interval && x.interval !== 1 ? ` je ${x.interval} Min.` : ''}${x.start ? ` ab Min. ${x.start}` : ''}`).join('<br>') : '—'}</td><td class="n">${pl.perKm.length ? pl.perKm.map(x => money(x.rate, pl.currency)).join('<br>') : '—'}</td><td class="small">${esc(pl.desc || '')}${pl.surge ? ' · dynamisch' : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty"><b>Keine Preisangaben für diesen Filter.</b>Nicht jeder Anbieter veröffentlicht Tarife; Anbieter auf „Alle“ stellen.</td></tr>';
   $('#pricing-note').textContent = rows.length > 60 ? `${rows.length - 60} weitere Tarife – Gebiet oder Anbieter wählen.` : `${rows.length} Tarife · Stand ${timeText(p.at)}`;
 }
 async function renderShareChart() {
   const idx = state.histIndex; const box = $('#chart-share');
   const days = (idx?.days || []).slice(-7);
-  if (!days.length) { box.innerHTML = '<div class="empty">Noch kein Verlauf.</div>'; return; }
+  if (!days.length) { box.innerHTML = '<div class="empty"><b>Noch kein Verlauf.</b>Er beginnt mit dem ersten Sammler-Lauf.</div>'; return; }
   const perDay = [];
   for (const d of days) { const h = await loadHistory(d); if (!h) { perDay.push(null); continue; } const byOp = new Map(); for (const [k, ser] of Object.entries(h.series)) { const [ags, op, ty] = k.split('|'); if (ags === 'DE') continue; if (state.scope !== 'DE' && ags !== state.scope) continue; if (state.type !== 'all' && ty !== state.type) continue; const v = ser.available.filter(x => x != null); if (!v.length) continue; byOp.set(op, (byOp.get(op) || 0) + v.reduce((a, b) => a + b, 0) / v.length); } perDay.push(byOp); }
   const ops = [...new Set(perDay.flatMap(m => m ? [...m.keys()] : []))];
@@ -934,7 +1169,7 @@ async function renderShareChart() {
   let g = ''; for (let k = 0; k <= 4; k++) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(k * 25)}" y2="${y(k * 25)}"/><text x="${P.l - 6}" y="${y(k * 25) + 3}" text-anchor="end">${k * 25} %</text>`;
   days.forEach((d, i) => { g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${d.slice(8)}.${d.slice(5, 7)}.</text>`; });
   const paths = series.map(s => { let d = '', open = false; s.values.forEach((v, i) => { if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>` + s.values.map((v, i) => v == null ? '' : `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="${s.color}"/>`).join(''); }).join('');
-  box.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Marktanteile">${g}${paths}</svg>`;
+  box.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Anteil an erfassten Fahrzeugen">${g}${paths}</svg>`;
   $('#share-legend').innerHTML = series.map(s => `<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)} <span class="mono">${s.values.at(-1) == null ? '—' : fmt(s.values.at(-1), 1) + ' %'}</span></span>`).join('');
 }
 
@@ -944,7 +1179,7 @@ const CONS_KIND = { version: 'v2 ↔ v3 (gleicher Host)', land_vs_betreiber: 'La
 const shortSrc = (id) => String(id).replace(/^mobidrom_[^:]+:source-/, 'NRW · ').replace(/^citybikes_/, 'CityBikes · ');
 async function renderConsistency() {
   const c = await loadOnce('consistency', 'consistency.json'); const tb = $('#tbl-cons tbody');
-  if (!c) { tb.innerHTML = '<tr><td colspan="9" class="empty">Noch keine Konsistenzprüfung.</td></tr>'; return; }
+  if (!c) { tb.innerHTML = '<tr><td colspan="9" class="empty"><b>Noch keine Konsistenzprüfung.</b>Sie läuft mit jedem Sammler-Lauf.</td></tr>'; return; }
   const inScope = (ids, ags) => state.scope === 'DE' ? true : (ags ? ags === state.scope : ids.some(id => (state.latest?.sources || []).find(r => r.id === id)?.municipalities?.includes(state.scope)));
   const rows = [];
   for (const e of c.systems) { if (!inScope([e.sourceId]) || (state.operator !== 'all' && e.operator !== state.operator)) continue; rows.push({ kind: `${CONS_KIND[e.kind] || e.kind || 'Alternativ-Feed'}${e.idsRekeyed ? ' · Kennungen umgeschlüsselt' : ''}${e.stationsOnly ? ' · Stationen' : ''}<div class="sub-line mono">${esc(e.sourceId)}</div>`, op: e.operator, a: e.stationsOnly ? e.primary?.stations : e.primary?.vehicles, b: e.stationsOnly ? e.alt?.stations : e.alt?.vehicles, diff: e.countDiff, overlap: e.idOverlap, pm: e.posMatch, med: e.medianDistM, verdict: e.verdict, w: e.verdict === 'divergent' ? 3 : e.verdict === 'minor' ? 2 : e.verdict === 'alt_unreachable' ? 1 : 0 }); }
@@ -953,7 +1188,7 @@ async function renderConsistency() {
   const seenRow = new Set(); const uniq = rows.filter(r => { const k = r.kind.replace(/<[^>]+>/g, '') + '|' + r.op; if (seenRow.has(k)) return false; seenRow.add(k); return true; });
   rows.length = 0; rows.push(...uniq);
   const show = rows.slice(0, 80);
-  tb.innerHTML = show.map(r => { const [label, cls] = CONS_LABEL[r.verdict] || [r.verdict, '']; return `<tr><td>${r.kind}</td><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(r.a)}</td><td class="n">${fmt(r.b)}</td><td class="n">${r.diff == null ? '—' : pctf(r.diff, 1)}</td><td class="n">${r.overlap == null ? '—' : pctf(r.overlap, 1)}</td><td class="n">${r.pm == null ? '—' : pctf(r.pm, 1)}</td><td class="n">${r.med == null ? '—' : `${fmt(r.med)} m`}</td><td><span class="pill plain" style="color:var(--${cls === 'muted' ? 'muted' : cls})">${label}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="empty">Keine Vergleiche im Filter.</td></tr>';
+  tb.innerHTML = show.map(r => { const [label, cls] = CONS_LABEL[r.verdict] || [r.verdict, '']; return `<tr><td>${r.kind}</td><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(r.a)}</td><td class="n">${fmt(r.b)}</td><td class="n">${r.diff == null ? '—' : pctf(r.diff, 1)}</td><td class="n">${r.overlap == null ? '—' : pctf(r.overlap, 1)}</td><td class="n">${r.pm == null ? '—' : pctf(r.pm, 1)}</td><td class="n">${r.med == null ? '—' : `${fmt(r.med)} m`}</td><td><span class="pill plain" style="color:var(--${cls === 'muted' ? 'muted' : cls})">${label}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="empty"><b>Keine Vergleiche im Filter.</b>Vergleiche gibt es nur, wo ein System zwei Quellen hat.</td></tr>';
   const vc = {}; for (const r of rows) vc[r.verdict] = (vc[r.verdict] || 0) + 1;
   $('#cons-note').textContent = `${rows.length} Vergleiche · ${Object.entries(vc).map(([k, v]) => `${v} ${(CONS_LABEL[k] || [k])[0].toLowerCase()}`).join(' · ')} · Stand ${timeText(c.at)}${rows.length > show.length ? ` · ${rows.length - show.length} weitere` : ''}`;
 }
@@ -964,13 +1199,13 @@ const METHOD = `
 <h3>Frische</h3><p>Quellen bis fünf Minuten Alter gelten als aktuell, bis 30 Minuten als verzögert, darüber als veraltet. Veraltete und zeitlich unklare Quellen fließen nicht in Kennzahlen ein, bleiben aber als Lücke sichtbar. Positionsalter (je Fahrzeug) und Quellenalter (je Feed) sind getrennte Merkmale.</p>
 <h3>Geo-Prüfung und Ortszuordnung</h3><p>Zahlenformate werden normalisiert, eindeutig vertauschte Breiten- und Längengrade korrigiert. Fehlt ein Koordinatenpaar, dient eine referenzierte Stationsposition als gekennzeichneter Ersatz. Positionen außerhalb Deutschlands oder ohne Gemeinde bleiben außen vor. Die Gemeinde ergibt sich aus GPS und BKG-Gemeindegrenze (VG250, vereinfacht ca. 30 m); ein Sammelfeed kann mehrere Orte beliefern. Die Anbieterauswahl folgt der tatsächlichen GPS-Abdeckung des gewählten Orts.</p>
 <h3>Dubletten und Quellenwechsel</h3><p>Fahrzeuge desselben Anbieters werden über alle Quellen zusammengeführt: UUIDs und Quellenpräfixe werden vereinheitlicht, der jüngste Stand gewinnt, bei Gleichstand die direkte Position vor dem Stationsersatz. Gleiche Kennungen an weit entfernten Positionen (über 300 m) bleiben als Prüffälle erhalten. Stationen gelten als gleich bei gleicher Kennung oder gleichem Namen innerhalb von 60 m. Ein Fingerabdruck aus Endpunkt, Version, Feeds und Fahrzeugarten erkennt Quellenwechsel; danach beginnen Zeitvergleiche neu.</p>
-<h3>Energie</h3><p>Ladestand und Reichweite haben getrennte Nenner; gezählt werden nur Fahrzeuge mit der jeweiligen Angabe. Fehlt der Ladestand, wird er bei bekannter Maximalreichweite aus der Reichweite abgeleitet. Grenzen lassen sich im Performance Lab einstellen und gelten im Live-Abruf; der Sammler rechnet mit 20 % und 5 km.</p>
+<h3>Energie</h3><p>Ladestand und Reichweite haben getrennte Nenner; gezählt werden nur Fahrzeuge mit der jeweiligen Angabe. Fehlt der Ladestand, wird er bei bekannter Maximalreichweite aus der Reichweite abgeleitet. Grenzen lassen sich unter Marktbild › Leistung einstellen und gelten im Live-Abruf; der Sammler rechnet mit 20 % und 5 km.</p>
 <h3>Verlauf</h3><p>Der Sammler läuft alle 20 Minuten unabhängig vom Browser (GitHub Actions) und speichert bereinigte Summen je Gemeinde, Anbieter und Fahrzeugart für 30 Tage. Individuelle Fahrzeugwege werden nicht archiviert. Der Live-Abruf im Browser liest die offenen Feeds direkt; Zugangsquellen (MOBIDROM NRW) kommen als Momentaufnahme des letzten Sammler-Laufs. Δ Sammler vergleicht den Live-Stand mit dem letzten Sammler-Punkt desselben Quellen-Fingerabdrucks.</p>
 <h3>Qualität</h3><p>Der Qualitätswert einer Quelle beurteilt Frische (70 %) und vorhandene Merkmale wie Energie, Zeitstempel und Fahrzeugart (30 %). Er bewertet die Quelle, nicht den Betrieb des Unternehmens. Gesperrte Fahrzeuge, leere Stationen und Niedrigakku sind Hinweise aus dem Feed; was ein Betreiber gerade bearbeitet, ist ohne internen Zugang nicht bekannt.</p>
 <h3>Nutzung und Bewegung</h3><p>Der Sammler merkt sich je Fahrzeug eine gehashte Kennung mit gerundeter Position, Ladestand und Sperrstatus. Verschwindet eine Kennung zwischen zwei Läufen, zählt das als Fahrtbeginn (bei gesperrtem oder fast leerem Fahrzeug als Abholung); eine neue Kennung zählt als Fahrtende. GBFS schreibt vor, Kennungen nach jeder Fahrt zu wechseln, deshalb sind das Zählungen ohne Zuordnung von Start zu Ziel. Bei Systemen mit stabilen Kennungen (etwa stationsbasierte Räder) kehrt die Kennung zurück; dann sind Dauer und Luftlinien-Distanz messbar und werden als Ø ausgewiesen. Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: Umsetzung durch den Betreiber. Ladestand springt von unter 40 % auf mindestens 85 % am selben Ort: Akkutausch; die Wartezeit misst die Zeit unter 20 % bis zum Tausch. Standzeit ist die Zeit seit der letzten Positionsänderung über 50 m (höchstens seit dem ersten Sammler-Kontakt). Quellenausfälle erzeugen keine Fahrten. Alle Werte sind Schätzungen aus 20-Minuten-Momentaufnahmen und keine Betreiberzahlen.</p>
 <h3>Zellen, Zonen, Preise</h3><p>Start- und Zielzellen sind etwa 250 m groß und werden je Gemeinde und Tag gezählt; „bedient“ ist eine Zelle, in der innerhalb von 7 Tagen ein verfügbares Fahrzeug stand. Betriebszonen stammen aus <span class="mono">geofencing_zones.json</span> der Anbieterfeeds, Preise aus <span class="mono">system_pricing_plans.json</span>; beides wird je Lauf neu gelesen. Wetter kommt stündlich von Open-Meteo für den Gemeindemittelpunkt. Stations-Verfügbarkeitsquoten zählen Läufe der letzten 7 Tage, in denen eine vermietende Station kein buchbares Fahrzeug bzw. keinen freien Platz hatte.</p>
 <h3>Konsistenz und Fußwege</h3><p>Hat ein System im Katalog eine zweite Adresse (Landesfeed und Betreiberfeed oder zwei GBFS-Versionen), liest der Sammler beide und vergleicht Bestand, Kennungs-Überlappung (gemeinsame ÷ alle Kennungen) und den Median-Abstand gleicher Kennungen; schlüsselt ein Verzeichnis die Kennungen um (Landesfeeds tun das), zählt stattdessen der Anteil der Fahrzeuge, zu denen in der anderen Quelle ein Fahrzeug innerhalb von 10 m steht. Liefern zwei Quellen desselben Anbieters Fahrzeuge in derselben Gemeinde, werden sie paarweise genauso verglichen; „getrennte Flotten“ heißt, dass sich die Kennungen kaum überschneiden. Fußwege in der Haltestellen-Analyse kommen vom Fußgängerprofil der FOSSGIS-Routingdienste (Valhalla, bei Ausfall OSRM auf routing.openstreetmap.de); je Haltestelle werden die zwei nächsten Fahrzeuge geroutet, der Umweg-Faktor ist Fußweg ÷ Luftlinie.</p>
-<h3>Grenzen</h3><p>Die angeschlossenen Daten bilden keine vollständigen Marktanteile ab. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien, sofern das Fußweg-Routing nicht aktiviert ist. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
+<h3>Grenzen</h3><p>Die offenen Feeds decken nicht alle Anbieter ab; Anteile beziehen sich immer auf die erfassten Fahrzeuge. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien, sofern das Fußweg-Routing nicht aktiviert ist. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
 
 // ---------- Versorgung an Haltestellen ----------
 async function checkSupply() {
@@ -1085,9 +1320,17 @@ function populateOperators() {
   state.operator = ops.includes(prev) ? prev : 'all'; sel.value = state.operator;
 }
 function bind() {
-  $('#sel-scope').addEventListener('change', async (e) => { state.scope = e.target.value; state.live = null; state.supply = null; if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; populateOperators(); if (state.scope !== 'DE') loadBoundaries().then(() => renderMap()); renderAll(); if (state.scope !== 'DE' && state.latest) liveFetch(); });
-  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; renderAll(); });
-  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; renderAll(); });
+  $('#sel-scope').addEventListener('change', async (e) => { state.scope = e.target.value; state.live = null; state.supply = null; if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; populateOperators(); syncUrl(); if (state.scope !== 'DE') loadBoundaries().then(() => renderMap()); renderAll(); if (state.scope !== 'DE' && state.latest) liveFetch(); });
+  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; syncUrl(); renderAll(); });
+  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; syncUrl(); renderAll(); });
+  $('#btn-share').addEventListener('click', copyLink);
+  $('#btn-client').addEventListener('click', () => setClient(!isClient()));
+  $('#tbl-econ').addEventListener('change', (e) => { const i = e.target.closest('input.calib'); if (!i) return; setCalib(i.dataset.op, parseFloat(String(i.value).replace(',', '.'))); renderEcon(state.usage.day); });
+  window.addEventListener('resize', () => placeSeg());
+  document.fonts?.ready?.then(() => placeSeg());
+  // Drucken: zugeklappte Bereiche öffnen, danach wieder schließen
+  window.addEventListener('beforeprint', () => $$('details:not([open])').forEach(d => { d.open = true; d.dataset.printOpened = '1'; }));
+  window.addEventListener('afterprint', () => $$('details[data-print-opened]').forEach(d => { d.open = false; delete d.dataset.printOpened; }));
   $('#sel-mode').addEventListener('change', (e) => { state.mode = e.target.value; if (state.mode === 'live' && !state.live) liveFetch(); else renderAll(); });
   $('#btn-live').addEventListener('click', () => liveFetch());
   $('#btn-fit').addEventListener('click', () => fitMap(true));
@@ -1122,15 +1365,20 @@ function exportCsv() {
 
 async function init() {
   try { const t = localStorage.getItem('mp-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  if (QS.get('kunde') === '1') { document.body.classList.add('mode-client'); $('#btn-client').setAttribute('aria-pressed', 'true'); $('#btn-share').textContent = 'Kundenlink kopieren'; }
+  if (DEMO) document.body.classList.add('mode-demo');
   initMap(); bind();
-  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE, econFor });
+  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE, econFor, syncUrl });
   setView(location.hash.slice(1) || 'live');
   await loadBase();
-  populateScope(); populateOperators();
-  renderAll();
+  populateScope();
+  const deep = applyUrlParams(); // Deep-Link: Gebiet, Anbieter, Fahrzeugart aus der URL
+  renderAll(); syncUrl();
   if (state.latest) loadBoundaries().then(() => renderMap());
+  if (deep && state.latest) liveFetch();
+  if (DEMO) return; // Demo-Stand: kein Nachladen
   // Sammler-Stand alle 2 Min. prüfen; bei neuem Lauf alles neu laden (Ereignis-, Zonen- und Flottendateien inklusive)
-  setInterval(async () => { const s = await getJson(fresh('status.json')); if (s.ok && s.json.at !== state.status?.at) { const l = await getJson(fresh('latest.json')); if (l.ok) { state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing']) state.usage[k] = null; populateScope(); populateOperators(); clearNotice('stale'); renderAll(); } } }, 2 * 60e3);
+  setInterval(async () => { const s = await getJson(fresh('status.json')); if (s.ok && s.json.at !== state.status?.at) { const l = await getJson(fresh('latest.json')); if (l.ok) { state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex']) state.usage[k] = null; populateScope(); populateOperators(); clearNotice('stale'); renderAll(); } } }, 2 * 60e3);
   setInterval(renderStamp, 30e3);
 }
 init();
