@@ -3,8 +3,7 @@ import { rm, mkdir, readFile } from 'node:fs/promises';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const run = spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json' } });
-await new Promise(r => run.on('exit', r));
+for (let i = 0; i < 2; i++) { const run = spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json' } }); await new Promise(r => run.on('exit', r)); }
 srv.kill();
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -14,3 +13,17 @@ assert(d.sources.find(s => s.id === 'gone_test')?.status === 'gone', '404 → go
 assert(d.sources.find(s => s.id === 'dott_test')?.status === 'stale', '40 Min alter Feed → stale');
 assert(!d.municipalities['08111000'], 'veraltete Quelle liefert keine Ortszuordnung');
 assert(d.groups['08416041|nextbike|bike']?.stationsEmpty === 1, 'leere Station erkannt');
+const { existsSync } = await import('node:fs');
+assert(existsSync('test/out/track/state.json.gz'), 'Track-Zustand geschrieben');
+const pr = JSON.parse(await readFile('test/out/pricing.json', 'utf8'));
+assert(pr.plans.length >= 1 && pr.plans[0].plans[0].perMin[0].rate === 0.22, 'Preisplan gelesen');
+const zi = JSON.parse(await readFile('test/out/zones/index.json', 'utf8'));
+assert(zi.zones.length >= 1 && zi.zones[0].kinds.slow === 1, 'Zonen gelesen (1 Langsamzone)');
+const evIdx = JSON.parse(await readFile('test/out/events/index.json', 'utf8'));
+assert(evIdx.days.length === 1 && evIdx.first === false, 'Ereignisdatei nach zweitem Lauf');
+const sq = JSON.parse(await readFile('test/out/stations-quota.json', 'utf8'));
+assert(sq.stations.length === 4 && sq.stations.every(x => x[5] === 2), 'Stationsquote über 2 Läufe');
+const rel = JSON.parse(await readFile('test/out/reliability.json', 'utf8'));
+assert(rel.sources.bolt_test.runs === 2 && rel.sources.gone_test.err === 2, 'Zuverlässigkeit je Quelle');
+const idle = JSON.parse(await readFile('test/out/idle.json', 'utf8'));
+assert(idle.groups['08416041|Bolt|scooter']?.[5] === 1, 'Standzeiten aggregiert');

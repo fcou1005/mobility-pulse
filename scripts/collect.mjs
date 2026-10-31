@@ -5,6 +5,8 @@ import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as C from '../lib/pulse-core.js';
+import * as T from '../lib/pulse-track.js';
+import { gzipSync, gunzipSync } from 'node:zlib';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const DATA = process.env.DATA_DIR || path.join(ROOT, 'data');
@@ -182,6 +184,47 @@ for (const { src, sys, probe, error } of results) {
   }
 }
 
+// ---------- Preise und Betriebszonen (GBFS system_pricing_plans / geofencing_zones) ----------
+const pricing = [], zonesIndex = [];
+await mkdir(path.join(DATA, 'zones'), { recursive: true });
+for (const f of await readdir(path.join(DATA, 'zones')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'zones', f));
+const firstLang = (o) => o == null ? null : Array.isArray(o) ? (o.find(x => x?.language === 'de') || o[0])?.text ?? null : typeof o === 'object' ? (o.de ?? o.en ?? Object.values(o)[0] ?? null) : o;
+await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status)), async ({ src, sys }) => {
+  const rec = sourceOut.find(x => x.id === src.id);
+  if (sys.feeds.system_pricing_plans) {
+    const r = await fetchJson(sys.feeds.system_pricing_plans);
+    const plans = r.json?.data?.plans || [];
+    const out = plans.slice(0, 12).map(pl => {
+      const perMin = (pl.per_min_pricing || []).map(x => ({ start: C.num(x.start), rate: C.num(x.rate), interval: C.num(x.interval), end: C.num(x.end) }));
+      const perKm = (pl.per_km_pricing || []).map(x => ({ start: C.num(x.start), rate: C.num(x.rate), interval: C.num(x.interval), end: C.num(x.end) }));
+      return { id: pl.plan_id, name: firstLang(pl.name), currency: pl.currency || null, unlock: C.num(pl.price), perMin, perKm, taxable: C.bool(pl.is_taxable), desc: String(firstLang(pl.description) || '').slice(0, 240), surge: C.bool(pl.surge_pricing) };
+    });
+    if (out.length) { pricing.push({ sourceId: src.id, operator: src.operator, municipalities: rec.municipalities, plans: out, at: now }); rec.pricingPlans = out.length; }
+  }
+  if (sys.feeds.geofencing_zones) {
+    const r = await fetchJson(sys.feeds.geofencing_zones);
+    const fc = r.json?.data?.geofencing_zones;
+    if (fc?.features?.length) {
+      const feats = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')).map(f => {
+        const rules = (f.properties?.rules || []).map(ru => ({ rideAllowed: C.bool(ru.ride_allowed ?? ru.ride_start_allowed), rideThrough: C.bool(ru.ride_through_allowed), endAllowed: C.bool(ru.ride_end_allowed), maxSpeed: C.num(ru.maximum_speed_kph), parking: C.bool(ru.station_parking) }));
+        const round = (c) => Array.isArray(c[0]) ? c.map(round) : [+c[0].toFixed(5), +c[1].toFixed(5)];
+        return { type: 'Feature', properties: { name: firstLang(f.properties?.name) || null, rules, start: f.properties?.start || null, end: f.properties?.end || null }, geometry: { type: f.geometry.type, coordinates: round(f.geometry.coordinates) } };
+      });
+      const doc = JSON.stringify({ type: 'FeatureCollection', sourceId: src.id, operator: src.operator, at: now, globalRules: (r.json?.data?.global_rules || []).map(ru => ({ rideAllowed: C.bool(ru.ride_allowed ?? ru.ride_start_allowed), rideThrough: C.bool(ru.ride_through_allowed), maxSpeed: C.num(ru.maximum_speed_kph) })), features: feats });
+      if (doc.length <= 3e6) {
+        const file = `${src.id.replace(/[^\w.-]+/g, '_')}.json`;
+        await writeFile(path.join(DATA, 'zones', file), doc);
+        const kinds = { noRide: feats.filter(f => f.properties.rules.some(ru => ru.rideAllowed === false)).length, noThrough: feats.filter(f => f.properties.rules.some(ru => ru.rideThrough === false)).length, slow: feats.filter(f => f.properties.rules.some(ru => ru.maxSpeed != null)).length, noEnd: feats.filter(f => f.properties.rules.some(ru => ru.endAllowed === false)).length };
+        zonesIndex.push({ sourceId: src.id, operator: src.operator, municipalities: rec.municipalities, file, count: feats.length, bytes: doc.length, kinds, at: now });
+        rec.zones = { count: feats.length, ...kinds };
+      } else rec.zones = { count: feats.length, tooLarge: true };
+    }
+  }
+}, 6);
+await writeFile(path.join(DATA, 'pricing.json'), JSON.stringify({ at: now, plans: pricing }));
+await writeFile(path.join(DATA, 'zones', 'index.json'), JSON.stringify({ at: now, zones: zonesIndex }));
+log(`Preise: ${pricing.length} Quellen · Zonen: ${zonesIndex.length} Quellen`);
+
 // Dedupe über alle Quellen (je Anbieter)
 allVehicles.sort((a, b) => a.priority - b.priority);
 const dv = C.dedupeVehicles(allVehicles);
@@ -248,6 +291,43 @@ await writeFile(histFile, JSON.stringify(hist));
 const days = (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
 for (const f of days.slice(0, Math.max(0, days.length - HISTORY_DAYS))) await rm(path.join(DATA, 'history', f));
 await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days: (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), fields: FIELDS, updatedAt: now }));
+
+// ---------- Fahrzeug-Verfolgung (Fahrten, Standzeiten, Tausch, Umsetzungen, Sperren, Zellen, Stationsquote, Zuverlässigkeit) ----------
+{
+  await mkdir(path.join(DATA, 'track'), { recursive: true });
+  await mkdir(path.join(DATA, 'events'), { recursive: true });
+  await mkdir(path.join(DATA, 'cells'), { recursive: true });
+  const stateFile = path.join(DATA, 'track', 'state.json.gz');
+  let prevState = null;
+  if (existsSync(stateFile)) { try { prevState = JSON.parse(gunzipSync(await readFile(stateFile)).toString('utf8')); } catch (e) { log('Track-Zustand unlesbar, Neustart:', e.message); } }
+  const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, latencyMs: r.latencyMs })), now });
+  await writeFile(stateFile, gzipSync(JSON.stringify(tr.state)));
+  const evFile = path.join(DATA, 'events', `${tr.day}.json`);
+  const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes });
+  await writeFile(evFile, JSON.stringify(evDoc));
+  const cellsDir = path.join(DATA, 'cells');
+  const cellFile = path.join(cellsDir, `${tr.day}.json`);
+  const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day);
+  await writeFile(cellFile, JSON.stringify(cellDoc));
+  // je Bundesland aufgeteilt (kleinere Downloads)
+  await mkdir(path.join(cellsDir, tr.day), { recursive: true });
+  for (const [st, doc] of Object.entries(cellDoc.states)) await writeFile(path.join(cellsDir, tr.day, `${st}.json`), JSON.stringify({ day: tr.day, state: st, munis: doc }));
+  await writeFile(path.join(DATA, 'idle.json'), JSON.stringify({ at: now, buckets: ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'], groups: tr.idle }));
+  // Lange Standzeiten: je Gemeinde max. 400 Punkte (gleichmäßig ausgedünnt)
+  const byAgs = new Map(); for (const p of tr.idleLong) { if (!byAgs.has(p.ags)) byAgs.set(p.ags, []); byAgs.get(p.ags).push(p); }
+  const longOut = []; for (const [, list] of byAgs) { list.sort((a, b) => b.hours - a.hours); const step = Math.max(1, Math.ceil(list.length / 400)); for (let i = 0; i < list.length; i += step) longOut.push(list[i]); }
+  await writeFile(path.join(DATA, 'idle-long.json'), JSON.stringify({ at: now, total: tr.idleLong.length, points: longOut }));
+  await writeFile(path.join(DATA, 'stations-quota.json'), JSON.stringify({ at: now, days: 7, fields: ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns'], stations: T.stationQuota(tr.state) }));
+  await writeFile(path.join(DATA, 'reliability.json'), JSON.stringify({ at: now, days: 7, sources: T.reliability(tr.state) }));
+  // Ereignis- und Zellendateien: 30 bzw. 14 Tage behalten
+  for (const f of (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -HISTORY_DAYS)) await rm(path.join(DATA, 'events', f));
+  const cellDays = (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}(\.json)?$/.test(f)).sort();
+  for (const f of cellDays.filter(f => !f.endsWith('.json')).slice(0, -14)) await rm(path.join(cellsDir, f), { recursive: true, force: true });
+  for (const f of cellDays.filter(f => f.endsWith('.json')).slice(0, -3)) await rm(path.join(cellsDir, f));
+  await writeFile(path.join(DATA, 'events', 'index.json'), JSON.stringify({ days: (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), cellDays: (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort(), updatedAt: now, first: tr.first }));
+  const ev = [...tr.hourly.values()].reduce((a, h) => { a.start += h.start.reduce((x, y) => x + y, 0); a.end += h.end.reduce((x, y) => x + y, 0); a.reloc += h.reloc.reduce((x, y) => x + y, 0); a.swap += h.swap.reduce((x, y) => x + y, 0); return a; }, { start: 0, end: 0, reloc: 0, swap: 0 });
+  log(`Verfolgung: ${Object.keys(tr.state.v).length} Kennungen im Zustand${tr.first ? ' (erster Lauf)' : ` · Fahrten begonnen ${ev.start}, beendet ${ev.end}, Umsetzungen ${ev.reloc}, Akkutausch ${ev.swap}`} · lange Standzeiten ${tr.idleLong.length}`);
+}
 
 // Aktive Gemeindegrenzen fürs Dashboard
 if (boundaries) {
