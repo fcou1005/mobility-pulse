@@ -1,4 +1,4 @@
-import * as C from './pulse-core.js?v=mvwtcs7y';
+import * as C from './pulse-core.js?v=mvwth3r3';
 
 const CFG = {
   DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
@@ -896,7 +896,8 @@ async function checkSupply() {
   if (useWalk && stops.length) {
     const limit = Math.max(radius * 2, 1500);
     const todo = stops.filter(s => s.dist != null && s.dist <= limit).slice(0, 600);
-    const batches = []; for (let i = 0; i < todo.length; i += 16) batches.push(todo.slice(i, i + 16));
+    const batchSize = state.walkProvider === 'Valhalla' ? 6 : 16; // Valhalla: Quellen × Ziele ≤ 100
+    const batches = []; for (let i = 0; i < todo.length; i += batchSize) batches.push(todo.slice(i, i + batchSize));
     let done = 0;
     for (const batch of batches) {
       box.innerHTML = `<div class="muted small">Fußwege werden berechnet … ${done} / ${todo.length} Haltestellen (${state.walkProvider || 'OSRM'})</div><div class="progress"><i style="width:${(done / todo.length) * 100}%"></i></div>`;
@@ -935,16 +936,22 @@ async function walkMatrix(sources, targets) {
     if (r.ok && r.json?.code === 'Ok') { state.walkProvider = 'OSRM'; return { dist: r.json.distances, sec: r.json.durations }; }
     state.walkProvider = 'Valhalla';
   }
-  try {
-    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 25000);
-    const r = await fetch(CFG.VALHALLA + '/sources_to_targets', { method: 'POST', signal: ctrl.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sources: sources.map(s => ({ lat: +s.lat.toFixed(6), lon: +s.lon.toFixed(6) })), targets: targets.map(t => ({ lat: +t.lat.toFixed(6), lon: +t.lon.toFixed(6) })), costing: 'pedestrian', units: 'kilometers' }) });
-    clearTimeout(t);
-    if (!r.ok) return null;
-    const j = await r.json();
-    const dist = (j.sources_to_targets || []).map(row => row.map(c => c.distance == null ? null : c.distance * 1000));
-    const sec = (j.sources_to_targets || []).map(row => row.map(c => c.time ?? null));
-    return { dist, sec };
-  } catch { return null; }
+  // Valhalla: Quellen × Ziele ≤ 100 je Aufruf → in Teilaufrufe mit wenigen Quellen zerlegen
+  const dist = [], sec = [];
+  const per = Math.max(1, Math.floor(100 / targets.length));
+  for (let i = 0; i < sources.length; i += per) {
+    const part = sources.slice(i, i + per);
+    try {
+      const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 25000);
+      const r = await fetch(CFG.VALHALLA + '/sources_to_targets', { method: 'POST', signal: ctrl.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sources: part.map(s => ({ lat: +s.lat.toFixed(6), lon: +s.lon.toFixed(6) })), targets: targets.map(t => ({ lat: +t.lat.toFixed(6), lon: +t.lon.toFixed(6) })), costing: 'pedestrian', units: 'kilometers' }) });
+      clearTimeout(t);
+      if (!r.ok) return null;
+      const j = await r.json();
+      for (const row of j.sources_to_targets || []) { dist.push(row.map(c => c.distance == null ? null : c.distance * 1000)); sec.push(row.map(c => c.time ?? null)); }
+    } catch { return null; }
+    if (i + per < sources.length) await new Promise(res => setTimeout(res, 80));
+  }
+  return { dist, sec };
 }
 function renderSupplyLayer() {
   const L_ = state.layers; L_.supply.clearLayers(); if (!state.supply) return;
