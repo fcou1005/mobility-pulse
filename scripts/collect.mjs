@@ -241,6 +241,28 @@ log(`Preise: ${pricing.length} Quellen · Zonen: ${zonesIndex.length} Quellen`);
 const consistency = { at: now, systems: [], pairs: [] };
 {
   const hostOf = (u) => { try { return new URL(u).host; } catch { return ''; } };
+  // Positionsabgleich: Anteil der Fahrzeuge aus A, zu denen in B ein Fahrzeug innerhalb von 10 m steht (Kennungen können umgeschlüsselt sein)
+  const posMatch = (A, B) => {
+    const grid = new Map(); const k = (lat, lon) => `${Math.round(lat * 1000)}:${Math.round(lon * 1000)}`;
+    for (const w of B.values()) { if (!C.validLatLon(w.lat, w.lon)) continue; const key = k(w.lat, w.lon); if (!grid.has(key)) grid.set(key, []); grid.get(key).push(w); }
+    let n = 0, hit = 0;
+    for (const v of A.values()) {
+      if (!C.validLatLon(v.lat, v.lon)) continue; n++;
+      const la = Math.round(v.lat * 1000), lo = Math.round(v.lon * 1000); let ok = false;
+      for (let dx = -1; dx <= 1 && !ok; dx++) for (let dy = -1; dy <= 1 && !ok; dy++) for (const w of grid.get(`${la + dx}:${lo + dy}`) || []) if (C.haversineM(v.lat, v.lon, w.lat, w.lon) <= 10) { ok = true; break; }
+      if (ok) hit++;
+    }
+    return n ? +(hit / n).toFixed(3) : null;
+  };
+  const judge = (countDiff, idOverlap, med, pm) => {
+    const idsOk = idOverlap != null && idOverlap >= 0.9 && (med ?? 0) <= 25;
+    const posOk = pm != null && pm >= 0.9;
+    if (countDiff <= 0.05 && (idsOk || posOk)) return 'consistent';
+    if (countDiff <= 0.15 && ((idOverlap ?? 0) >= 0.7 || (pm ?? 0) >= 0.7)) return 'minor';
+    if ((idOverlap ?? 0) < 0.2 && (pm ?? 0) < 0.2) return 'disjoint';
+    return 'divergent';
+  };
+
   const altTargets = results.filter(r => r.sys && r.src.altUrls?.length && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status));
   await pool(altTargets, async ({ src, sys }) => {
     const altUrl = src.altUrls[0];
@@ -262,7 +284,9 @@ const consistency = { at: now, systems: [], pairs: [] };
       const n1 = entry.primary.vehicles, n2 = entry.alt.vehicles;
       const countDiff = Math.max(n1, n2) ? Math.abs(n1 - n2) / Math.max(n1, n2) : 0;
       entry.countDiff = +countDiff.toFixed(3);
-      entry.verdict = (countDiff <= 0.05 && (entry.idOverlap ?? 1) >= 0.9 && (entry.medianDistM ?? 0) <= 25) ? 'consistent' : (countDiff <= 0.15 && (entry.idOverlap ?? 1) >= 0.7) ? 'minor' : 'divergent';
+      entry.posMatch = posMatch(A, B);
+      entry.idsRekeyed = (entry.idOverlap ?? 0) < 0.2 && (entry.posMatch ?? 0) >= 0.7;
+      entry.verdict = judge(countDiff, entry.idOverlap, entry.medianDistM, entry.posMatch);
       consistency.systems.push(entry); rec.consistency = entry.verdict;
     } catch (e) { consistency.systems.push({ sourceId: src.id, operator: src.operator, alt: { url: altUrl }, verdict: 'error', error: e.message }); }
   }, 6);
@@ -279,10 +303,11 @@ const consistency = { at: now, systems: [], pairs: [] };
       for (const [id, v] of A) { const w = B.get(id); if (!w) continue; common++; if (C.validLatLon(v.lat, v.lon) && C.validLatLon(w.lat, w.lon)) dists.push(C.haversineM(v.lat, v.lon, w.lat, w.lon)); }
       dists.sort((a, b) => a - b);
       const union = A.size + B.size - common;
-      consistency.pairs.push({ operator: op, ags, a: { sourceId: idA, vehicles: A.size }, b: { sourceId: idB, vehicles: B.size }, common, idOverlap: +(common / union).toFixed(3), medianDistM: dists.length ? Math.round(dists[Math.floor(dists.length / 2)]) : null, countDiff: +(Math.abs(A.size - B.size) / Math.max(A.size, B.size)).toFixed(3) });
+      const pm = posMatch(A, B);
+      consistency.pairs.push({ operator: op, ags, a: { sourceId: idA, vehicles: A.size }, b: { sourceId: idB, vehicles: B.size }, common, idOverlap: +(common / union).toFixed(3), posMatch: pm, idsRekeyed: common / union < 0.2 && (pm ?? 0) >= 0.7, medianDistM: dists.length ? Math.round(dists[Math.floor(dists.length / 2)]) : null, countDiff: +(Math.abs(A.size - B.size) / Math.max(A.size, B.size)).toFixed(3) });
     }
   }
-  for (const pr of consistency.pairs) pr.verdict = pr.idOverlap >= 0.9 && pr.countDiff <= 0.05 && (pr.medianDistM ?? 0) <= 25 ? 'consistent' : pr.idOverlap >= 0.6 && pr.countDiff <= 0.2 ? 'minor' : pr.idOverlap < 0.2 ? 'disjoint' : 'divergent';
+  for (const pr of consistency.pairs) pr.verdict = judge(pr.countDiff, pr.idOverlap, pr.medianDistM, pr.posMatch);
   await writeFile(path.join(DATA, 'consistency.json'), JSON.stringify(consistency));
   const vc = {}; for (const e of consistency.systems) vc[e.verdict] = (vc[e.verdict] || 0) + 1;
   log(`Konsistenz: ${consistency.systems.length} Alternativ-Feeds ${JSON.stringify(vc)} · ${consistency.pairs.length} Quellenpaare je Anbieter×Gemeinde`);
