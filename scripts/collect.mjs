@@ -16,6 +16,7 @@ const HISTORY_DAYS = +process.env.HISTORY_DAYS || 30;
 const UA = 'mobility-pulse/1.0 (+https://github.com/fcou1005/mobility-pulse)';
 
 const catalog = JSON.parse(await readFile(process.env.SOURCES_FILE || path.join(DATA, 'sources.json'), 'utf8'));
+const manual = JSON.parse(await readFile(path.join(ROOT, 'data', 'sources-manual.json'), 'utf8'));
 const boundariesPath = process.env.BOUNDARIES || path.join(DATA, 'boundaries.json');
 let index = null, boundaries = null;
 if (existsSync(boundariesPath)) {
@@ -121,6 +122,7 @@ for (const { src, sys, probe, error } of results) {
     feedAgeMs: null, vehicleFeedAgeMs: null, stationFeedAgeMs: null, fingerprint: null, quality: null, counts: {}, municipalities: [], vehicleTypes: [], checkedAt: now };
   if (!sys) { rec.errors = [error || probe?.error || `HTTP ${probe?.status}`]; rec.status = probe?.status === 404 || probe?.status === 410 ? 'gone' : probe?.status === 401 || probe?.status === 403 ? 'auth' : 'error'; sourceOut.push(rec); continue; }
   rec.errors = sys.errors;
+  if (src.parent) { const guess = C.operatorFromName(`${sys.systemInfo?.operator || ''} ${sys.systemInfo?.name || ''} ${src.id.split(':').pop()}`, manual.operator_aliases); if (guess) { rec.operator = guess; src.operator = guess; } }
   rec.license = sys.systemInfo?.licenseId || sys.systemInfo?.licenseUrl || src.license || null;
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
@@ -183,18 +185,7 @@ const ds = C.dedupeStations(allStations);
 log(`Fahrzeuge ${allVehicles.length} → ${dv.vehicles.length} (Dubletten ${dv.stats.duplicates}, Kennungs-Wiederverwendung ${dv.stats.reusedIds}); Stationen ${allStations.length} → ${ds.stations.length}`);
 
 // Aggregation: Gemeinde × Anbieter × Fahrzeugart
-const groups = new Map();
-const g = (key) => { if (!groups.has(key)) groups.set(key, C.emptyStats()); return groups.get(key); };
-for (const v of dv.vehicles) C.addVehicle(g(`${v.ags}|${v.operator}|${v.type}`), v, { chargeThreshold, rangeThreshold });
-for (const s of ds.stations) {
-  const types = s.perType ? Object.keys(s.perType) : [s.typeHint || 'unknown'];
-  const countVehicles = !s.hasVehicleList;
-  if (s.perType && countVehicles) {
-    for (const [ty, n] of Object.entries(s.perType)) { const st = g(`${s.ags}|${s.operator}|${ty}`); st.total += n; st.available += s.renting !== false && s.installed !== false ? n : 0; st.stationVehicles += n; }
-    const main = types.sort((a, b) => s.perType[b] - s.perType[a])[0];
-    C.addStation(g(`${s.ags}|${s.operator}|${main}`), s, false);
-  } else C.addStation(g(`${s.ags}|${s.operator}|${types[0]}`), s, countVehicles);
-}
+const groups = C.aggregateGroups(dv.vehicles, ds.stations, { chargeThreshold, rangeThreshold });
 const groupsOut = {};
 for (const [k, v] of groups) groupsOut[k] = v;
 
