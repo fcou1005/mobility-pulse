@@ -405,11 +405,33 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   await writeFile(evFile, JSON.stringify(evDoc));
   const cellsDir = path.join(DATA, 'cells');
   const cellFile = path.join(cellsDir, `${tr.day}.json`);
-  const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day);
+  const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day, { dt: tr.dt, hour: tr.hour });
   await writeFile(cellFile, JSON.stringify(cellDoc));
   // je Bundesland aufgeteilt (kleinere Downloads)
   await mkdir(path.join(cellsDir, tr.day), { recursive: true });
-  for (const [st, doc] of Object.entries(cellDoc.states)) await writeFile(path.join(cellsDir, tr.day, `${st}.json`), JSON.stringify({ day: tr.day, state: st, munis: doc }));
+  for (const [st, doc] of Object.entries(cellDoc.states)) await writeFile(path.join(cellsDir, tr.day, `${st}.json`), JSON.stringify({ day: tr.day, state: st, bandMin: cellDoc.bandMin, bandRuns: cellDoc.bandRuns, fields: 'start,end,present,reloc,start×6,present×6,end×6', munis: doc }));
+  // Flotte für die Disposition (Ops): alle deduplizierten Fahrzeuge und Stationen je Bundesland, mit Standzeit
+  {
+    await mkdir(path.join(DATA, 'ops'), { recursive: true });
+    for (const f of await readdir(path.join(DATA, 'ops')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'ops', f));
+    const TYPES = C.VEHICLE_TYPES;
+    const byState = new Map();
+    const S = (st) => { if (!byState.has(st)) byState.set(st, { ops: [], munis: [], vehicles: [], stations: [] }); return byState.get(st); };
+    const idx = (arr, v) => { let i = arr.indexOf(v); if (i < 0) { i = arr.length; arr.push(v); } return i; };
+    for (const v of dv.vehicles) {
+      const st = muniOut[v.ags]?.state; if (!st) continue; const o = S(st);
+      const e = tr.state.v[T.vehicleKey(v.operator, v.rawId)];
+      const idleMin = e ? Math.round((now - e[8]) / 60e3) : null;
+      o.vehicles.push([+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags)]);
+    }
+    for (const s of ds.stations) {
+      const st = muniOut[s.ags]?.state; if (!st) continue; const o = S(st);
+      o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0]);
+    }
+    let bytes = 0;
+    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
+  }
   await writeFile(path.join(DATA, 'idle.json'), JSON.stringify({ at: now, buckets: ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'], groups: tr.idle }));
   // Lange Standzeiten: je Gemeinde max. 400 Punkte (gleichmäßig ausgedünnt)
   const byAgs = new Map(); for (const p of tr.idleLong) { if (!byAgs.has(p.ags)) byAgs.set(p.ags, []); byAgs.get(p.ags).push(p); }
