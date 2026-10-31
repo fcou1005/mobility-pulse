@@ -864,7 +864,7 @@ const METHOD = `
 <h3>Qualität</h3><p>Der Qualitätswert einer Quelle beurteilt Frische (70 %) und vorhandene Merkmale wie Energie, Zeitstempel und Fahrzeugart (30 %). Er bewertet die Quelle, nicht den Betrieb des Unternehmens. Gesperrte Fahrzeuge, leere Stationen und Niedrigakku sind Hinweise aus dem Feed; was ein Betreiber gerade bearbeitet, ist ohne internen Zugang nicht bekannt.</p>
 <h3>Nutzung und Bewegung</h3><p>Der Sammler merkt sich je Fahrzeug eine gehashte Kennung mit gerundeter Position, Ladestand und Sperrstatus. Verschwindet eine Kennung zwischen zwei Läufen, zählt das als Fahrtbeginn (bei gesperrtem oder fast leerem Fahrzeug als Abholung); eine neue Kennung zählt als Fahrtende. GBFS schreibt vor, Kennungen nach jeder Fahrt zu wechseln, deshalb sind das Zählungen ohne Zuordnung von Start zu Ziel. Bei Systemen mit stabilen Kennungen (etwa stationsbasierte Räder) kehrt die Kennung zurück; dann sind Dauer und Luftlinien-Distanz messbar und werden als Ø ausgewiesen. Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: Umsetzung durch den Betreiber. Ladestand springt von unter 40 % auf mindestens 85 % am selben Ort: Akkutausch; die Wartezeit misst die Zeit unter 20 % bis zum Tausch. Standzeit ist die Zeit seit der letzten Positionsänderung über 50 m (höchstens seit dem ersten Sammler-Kontakt). Quellenausfälle erzeugen keine Fahrten. Alle Werte sind Schätzungen aus 20-Minuten-Momentaufnahmen und keine Betreiberzahlen.</p>
 <h3>Zellen, Zonen, Preise</h3><p>Start- und Zielzellen sind etwa 250 m groß und werden je Gemeinde und Tag gezählt; „bedient“ ist eine Zelle, in der innerhalb von 7 Tagen ein verfügbares Fahrzeug stand. Betriebszonen stammen aus <span class="mono">geofencing_zones.json</span> der Anbieterfeeds, Preise aus <span class="mono">system_pricing_plans.json</span>; beides wird je Lauf neu gelesen. Wetter kommt stündlich von Open-Meteo für den Gemeindemittelpunkt. Stations-Verfügbarkeitsquoten zählen Läufe der letzten 7 Tage, in denen eine vermietende Station kein buchbares Fahrzeug bzw. keinen freien Platz hatte.</p>
-<h3>Konsistenz und Fußwege</h3><p>Hat ein System im Katalog eine zweite Adresse (Landesfeed und Betreiberfeed oder zwei GBFS-Versionen), liest der Sammler beide und vergleicht Bestand, Kennungs-Überlappung (gemeinsame ÷ alle Kennungen) und den Median-Abstand gleicher Kennungen; schlüsselt ein Verzeichnis die Kennungen um (Landesfeeds tun das), zählt stattdessen der Anteil der Fahrzeuge, zu denen in der anderen Quelle ein Fahrzeug innerhalb von 10 m steht. Liefern zwei Quellen desselben Anbieters Fahrzeuge in derselben Gemeinde, werden sie paarweise genauso verglichen; „getrennte Flotten“ heißt, dass sich die Kennungen kaum überschneiden. Fußwege in der Haltestellen-Analyse kommen vom OSRM-Fußgängerprofil der FOSSGIS-Instanz (routing.openstreetmap.de); je Haltestelle werden die drei nächsten Fahrzeuge geroutet, der Umweg-Faktor ist Fußweg ÷ Luftlinie.</p>
+<h3>Konsistenz und Fußwege</h3><p>Hat ein System im Katalog eine zweite Adresse (Landesfeed und Betreiberfeed oder zwei GBFS-Versionen), liest der Sammler beide und vergleicht Bestand, Kennungs-Überlappung (gemeinsame ÷ alle Kennungen) und den Median-Abstand gleicher Kennungen; schlüsselt ein Verzeichnis die Kennungen um (Landesfeeds tun das), zählt stattdessen der Anteil der Fahrzeuge, zu denen in der anderen Quelle ein Fahrzeug innerhalb von 10 m steht. Liefern zwei Quellen desselben Anbieters Fahrzeuge in derselben Gemeinde, werden sie paarweise genauso verglichen; „getrennte Flotten“ heißt, dass sich die Kennungen kaum überschneiden. Fußwege in der Haltestellen-Analyse kommen vom OSRM-Fußgängerprofil der FOSSGIS-Instanz (routing.openstreetmap.de); je Haltestelle werden die zwei nächsten Fahrzeuge geroutet, der Umweg-Faktor ist Fußweg ÷ Luftlinie.</p>
 <h3>Grenzen</h3><p>Die angeschlossenen Daten bilden keine vollständigen Marktanteile ab. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien, sofern das Fußweg-Routing nicht aktiviert ist. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
 
 // ---------- Versorgung an Haltestellen ----------
@@ -887,7 +887,7 @@ async function checkSupply() {
   // Luftlinie: drei nächste Kandidaten je Haltestelle
   for (const s of stops) {
     const cands = [];
-    for (const v of avail) { const d = C.haversineM(s.lat, s.lon, v.lat, v.lon); if (cands.length < 3 || d < cands[2].d) { cands.push({ d, v }); cands.sort((a, b) => a.d - b.d); if (cands.length > 3) cands.pop(); } }
+    for (const v of avail) { const d = C.haversineM(s.lat, s.lon, v.lat, v.lon); if (cands.length < 2 || d < cands[1].d) { cands.push({ d, v }); cands.sort((a, b) => a.d - b.d); if (cands.length > 2) cands.pop(); } }
     s.cands = cands; s.dist = cands.length ? Math.round(cands[0].d) : null; s.op = cands[0]?.v.operator || null; s.walk = null; s.walkMin = null; s.walkOp = null;
   }
   // Fußweg (OSRM, Fußgänger-Profil der FOSSGIS-Instanz): nur Haltestellen, die per Luftlinie überhaupt in Reichweite sein könnten
@@ -895,7 +895,7 @@ async function checkSupply() {
   if (useWalk && stops.length) {
     const limit = Math.max(radius * 2, 1500);
     const todo = stops.filter(s => s.dist != null && s.dist <= limit).slice(0, 600);
-    const batches = []; for (let i = 0; i < todo.length; i += 24) batches.push(todo.slice(i, i + 24));
+    const batches = []; for (let i = 0; i < todo.length; i += 33) batches.push(todo.slice(i, i + 33));
     let done = 0, bi = 0;
     const runBatch = async (batch) => {
       box.innerHTML = `<div class="muted small">Fußwege werden berechnet … ${done} / ${todo.length} Haltestellen</div><div class="progress"><i style="width:${(done / todo.length) * 100}%"></i></div>`;
@@ -904,8 +904,9 @@ async function checkSupply() {
       batch.forEach(s => s.cands.forEach(c => { const k = `${c.v.lon.toFixed(5)},${c.v.lat.toFixed(5)}`; if (!targetIdx.has(k)) { targetIdx.set(k, coords.length); coords.push(k); } }));
       const sources = batch.map((_, i) => i).join(';'), dests = [...targetIdx.values()].join(';');
       const url = `${CFG.OSRM_FOOT}/table/v1/driving/${coords.join(';')}?sources=${sources}&destinations=${dests}&annotations=distance,duration`;
-      const rr = await getJson(url, { timeout: 30000 });
-      if (!rr.ok || rr.json?.code !== 'Ok') { routeFail += batch.length; done += batch.length; return; }
+      let rr = null;
+      for (let attempt = 0; attempt < 3; attempt++) { rr = await getJson(url, { timeout: 30000 }); if (rr.ok && rr.json?.code === 'Ok') break; await new Promise(res => setTimeout(res, 900 * (attempt + 1))); }
+      if (!rr?.ok || rr.json?.code !== 'Ok') { routeFail += batch.length; done += batch.length; return; }
       const destList = [...targetIdx.keys()];
       batch.forEach((s, i) => {
         let best = Infinity, bestMin = null, bestOp = null;
@@ -914,7 +915,7 @@ async function checkSupply() {
       });
       done += batch.length;
     };
-    await Promise.all(Array.from({ length: 3 }, async () => { while (bi < batches.length) await runBatch(batches[bi++]); }));
+    await Promise.all(Array.from({ length: 1 }, async () => { while (bi < batches.length) { await runBatch(batches[bi++]); await new Promise(res => setTimeout(res, 150)); } }));
   }
   // Fußweg, sonst Luftlinie (nicht geroutet oder außerhalb des Routing-Limits)
   const eff = (s) => useWalk ? (s.walk ?? s.dist) : s.dist;
@@ -925,7 +926,7 @@ async function checkSupply() {
   const med = vals.length ? vals[Math.floor(vals.length / 2)] : null;
   const ratio = (() => { const pairs = stops.filter(s => s.walk != null && s.dist); return pairs.length ? pairs.reduce((a, s) => a + s.walk / s.dist, 0) / pairs.length : null; })();
   box.innerHTML = `<div class="tiles" style="margin-bottom:10px">${tile('Haltestellen', fmt(stops.length), `OSM, innerhalb ${esc(muniName(state.scope))} · ${fmt(rawStops.length)} Haltepunkte zusammengefasst`)}${tile(`Ohne Fahrzeug in ${radius} m ${useWalk ? 'Fußweg' : 'Luftlinie'}`, fmt(gaps.length), pctf(gaps.length, stops.length) + ' der Haltestellen', gaps.length / Math.max(1, stops.length) > 0.4 ? 'warn' : '')}${tile(`Median ${useWalk ? 'Fußweg' : 'Luftlinie'}`, med == null ? '—' : `${fmt(med)} m`, 'zum nächsten verfügbaren Fahrzeug')}${useWalk ? tile('Umweg-Faktor', ratio == null ? '—' : fmt(ratio, 2), `${fmt(routed)} Haltestellen geroutet${routeFail ? ` · ${fmt(routeFail)} ohne Route` : ''} · Fußweg ÷ Luftlinie`) : ''}</div>
-  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Luftlinie</th>${useWalk ? '<th class="n">Fußweg</th><th class="n">Gehzeit</th>' : ''}<th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td>${useWalk ? `<td class="n">${s.walk == null ? `<span class="muted">${s.dist != null && s.dist > Math.max(radius * 2, 1500) ? 'außer Reichweite' : 'nicht geroutet'}</span>` : `${fmt(s.walk)} m`}</td><td class="n">${s.walkMin == null ? '—' : `${fmt(s.walkMin)} Min.`}</td>` : ''}<td>${esc((useWalk && s.walkOp) || s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}<div class="muted small" style="margin-top:6px">${useWalk ? 'Fußwege über das OSRM-Fußgängerprofil von routing.openstreetmap.de (FOSSGIS); je Haltestelle die drei nächsten Fahrzeuge geprüft. Haltestellen mit Luftlinie über ' + fmt(Math.max(radius * 2, 1500)) + ' m werden nicht geroutet.' : 'Luftlinie; Fußweg-Routing per Häkchen aktivierbar.'}</div>`;
+  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Luftlinie</th>${useWalk ? '<th class="n">Fußweg</th><th class="n">Gehzeit</th>' : ''}<th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td>${useWalk ? `<td class="n">${s.walk == null ? `<span class="muted">${s.dist != null && s.dist > Math.max(radius * 2, 1500) ? 'außer Reichweite' : 'nicht geroutet'}</span>` : `${fmt(s.walk)} m`}</td><td class="n">${s.walkMin == null ? '—' : `${fmt(s.walkMin)} Min.`}</td>` : ''}<td>${esc((useWalk && s.walkOp) || s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}<div class="muted small" style="margin-top:6px">${useWalk ? 'Fußwege über das OSRM-Fußgängerprofil von routing.openstreetmap.de (FOSSGIS); je Haltestelle die zwei nächsten Fahrzeuge geprüft. Haltestellen mit Luftlinie über ' + fmt(Math.max(radius * 2, 1500)) + ' m werden nicht geroutet.' : 'Luftlinie; Fußweg-Routing per Häkchen aktivierbar.'}</div>`;
 }
 function renderSupplyLayer() {
   const L_ = state.layers; L_.supply.clearLayers(); if (!state.supply) return;
