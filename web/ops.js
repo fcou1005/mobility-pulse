@@ -77,20 +77,36 @@ async function loadNoPark(ags, op, bbox) {
   return { geoms, files: files.length };
 }
 function overlaps(g, b) { const c = JSON.stringify(g.coordinates).match(/-?\d+\.\d+/g) || []; let x0 = 999, x1 = -999, y0 = 999, y1 = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } return !(x1 < b[0] || x0 > b[2] || y1 < b[1] || y0 > b[3]); }
-async function overpassAround(points) {
-  const key = points.map(p => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`).join('|');
-  if (key in S.osm) return S.osm[key];
-  const parts = points.map(p => { const a = `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`; return `nwr(around:170,${a})["amenity"~"^(kick-scooter_parking|small_vehicle_parking|small_electric_vehicle_parking|bicycle_rental|kick-scooter_rental|mobility_hub|bicycle_parking)$"];nwr(around:170,${a})["small_electric_vehicle"~"^(designated|yes)$"];node(around:220,${a})[~"^(highway|public_transport|railway)$"~"^(bus_stop|platform|tram_stop|station|halt)$"];`; }).join('');
-  const q = `[out:json][timeout:50];(${parts});out center tags;`;
-  for (const ep of X.CFG.OVERPASS) {
-    try {
-      const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 60000);
-      const r = await fetch(ep, { method: 'POST', body: new URLSearchParams({ data: q }), signal: ctrl.signal }); clearTimeout(t);
-      if (!r.ok) continue; const j = await r.json(); if (!j?.elements) continue;
-      return (S.osm[key] = { parking: O.parkingFromOsm(j.elements), transit: O.transitFromOsm(j.elements), ep });
-    } catch { /* nächster Spiegel */ }
+// Umgebung (ÖPNV, Abstellflächen): erst die vom Sammler vorberechnete Datei, sonst Overpass im Hintergrund
+const CTX_CATS = ['escooter', 'sharing', 'rad', 'official'];
+async function contextFor(ags) {
+  if (S.osm[ags]?.state === 'ok' || S.osm[ags]?.state === 'loading') return S.osm[ags];
+  if (!S.osm[ags]) {
+    const r = await X.getJson(X.CFG.DATA + `context/${ags}.json`, { timeout: 30000 });
+    if (r.ok) { const d = r.json; return (S.osm[ags] = { state: 'ok', from: 'Sammler', at: d.at, parking: d.parking.map(([lat, lon, c, name]) => ({ lat, lon, cat: d.cats?.[c] || CTX_CATS[c], name })), transit: d.transit.map(([lat, lon]) => ({ lat, lon })) }); }
   }
-  return (S.osm[key] = null);
+  return S.osm[ags] || null;
+}
+function overpassBackground(ags, points, onDone) {
+  if (S.osm[ags]?.state === 'loading' || S.osm[ags]?.state === 'ok') return;
+  if (S.osm[ags]?.state === 'fail' && Date.now() - S.osm[ags].at < 10 * 60e3) return;
+  S.osm[ags] = { state: 'loading', at: Date.now() };
+  const la = points.map(p => p.lat), lo = points.map(p => p.lon);
+  const bb = [Math.min(...la) - 0.003, Math.min(...lo) - 0.004, Math.max(...la) + 0.003, Math.max(...lo) + 0.004].map(x => x.toFixed(4)).join(',');
+  // Eine bbox-Abfrage mit festen Schlüsseln ist auf Overpass viel schneller als viele around-Filter oder Schlüssel-Regex
+  const q = `[out:json][timeout:90][bbox:${bb}];(nwr["amenity"~"^(kick-scooter_parking|small_vehicle_parking|small_electric_vehicle_parking|bicycle_rental|kick-scooter_rental|mobility_hub|bicycle_parking)$"];nwr["small_electric_vehicle"];node["highway"="bus_stop"];node["public_transport"="platform"];node["railway"~"^(tram_stop|station|halt)$"];);out center tags;`;
+  (async () => {
+    for (const ep of X.CFG.OVERPASS) {
+      try {
+        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 100000);
+        const r = await fetch(ep, { method: 'POST', body: new URLSearchParams({ data: q }), signal: ctrl.signal }); clearTimeout(t);
+        if (!r.ok) continue; const j = await r.json(); if (!Array.isArray(j?.elements) || j.remark) continue;
+        S.osm[ags] = { state: 'ok', from: new URL(ep).host, at: Date.now(), parking: O.parkingFromOsm(j.elements), transit: O.transitFromOsm(j.elements) };
+        onDone(); return;
+      } catch { /* nächster Spiegel */ }
+    }
+    S.osm[ags] = { state: 'fail', at: Date.now() }; onDone();
+  })();
 }
 async function officialParking(ags) {
   const ref = Object.values(X.state.catalog?.parking_reference || {}).find(p => p.ags === ags);
@@ -105,7 +121,7 @@ async function officialParking(ags) {
 
 // ---------- Plan ----------
 async function computePlan() {
-  if (S.busy) return; S.busy = true;
+  if (S.busy) { S.again = true; return; } S.busy = true;
   const st = X.state, ags = st.scope;
   try {
     ensureMap();
@@ -138,11 +154,15 @@ async function computePlan() {
     const spacing = num('#ops-spacing', 220), topN = Math.min(60, num('#ops-n', 20)), horizonH = num('#ops-horizon', 3);
     status('Lade Zonen und Umgebung …');
     const pre = O.scoreSpots(model, { topN: Math.min(80, topN * 3), minSpacingM: spacing * 0.6 });
-    const [np, osm, wfs] = await Promise.all([
+    const useOsm = $('#ops-osm').checked;
+    const [np, ctxDoc, wfs] = await Promise.all([
       loadNoPark(ags, op, b ? [b[0] - 0.02, b[1] - 0.02, b[2] + 0.02, b[3] + 0.02] : null),
-      $('#ops-osm').checked && pre.spots.length ? overpassAround(pre.spots) : Promise.resolve(null),
+      useOsm ? contextFor(ags) : Promise.resolve(null),
       officialParking(ags),
     ]);
+    const osm = ctxDoc?.state === 'ok' ? ctxDoc : null;
+    if (useOsm && !osm && pre.spots.length) overpassBackground(ags, pre.spots, () => { if (X.state.scope === ags) computePlan(); });
+    const osmNote = !useOsm ? '' : osm ? ` · Umgebung: OSM (${osm.from === 'Sammler' ? `Sammler, ${new Date(osm.at).toLocaleDateString('de-DE')}` : osm.from})` : S.osm[ags]?.state === 'loading' ? ' · ÖPNV und Abstellflächen werden aus OSM geladen (bis 2 Min.), der Plan rechnet sich danach neu' : S.osm[ags]?.state === 'fail' ? ' · OSM nicht erreichbar, ohne ÖPNV/Abstellflächen' : '';
     const parking = osm || wfs ? [...(wfs?.points || []), ...(osm?.parking || [])] : null;
     const spots = O.scoreSpots(model, { topN, minSpacingM: spacing, share, horizonH, noPark: np.geoms, transit: osm?.transit || null, parking });
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
@@ -158,11 +178,11 @@ async function computePlan() {
     const kpi = O.fleetKpis(vehicles, { swapThreshold: num('#ops-swapthr', 25) });
     S.plan = { ags, op, type, band, bandNote, model, share, spots, rebalance, swaps, workshop, station, kpi, depot, np, osm, wfs, fleet: { vehicles, stations }, at: fleet.at, days: cellDocs.length };
     S.routed = {};
-    status(`${X.esc(op)} in ${X.esc(X.muniName(ags))} · Flotte vom ${new Date(fleet.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Nachfrage aus ${model.days} Tag${model.days === 1 ? '' : 'en'} (${X.fmt(model.hours, 1)} Messstunden)${bandNote ? ` · ${bandNote}` : ''}${osm === null && $('#ops-osm').checked ? ' · OSM nicht erreichbar, ohne ÖPNV/Abstellflächen' : ''}`);
+    status(`${X.esc(op)} in ${X.esc(X.muniName(ags))} · Flotte vom ${new Date(fleet.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Nachfrage aus ${model.days} Tag${model.days === 1 ? '' : 'en'} (${X.fmt(model.hours, 1)} Messstunden)${bandNote ? ` · ${bandNote}` : ''}${osmNote}`);
     renderTiles(); drawMap(true); renderRuns(); renderSpots();
     if ($('#ops-route').checked) routeRuns();
   } catch (e) { console.error(e); status(`Fehler: ${X.esc(e.message)}`); }
-  finally { S.busy = false; }
+  finally { S.busy = false; if (S.again) { S.again = false; setTimeout(computePlan, 0); } }
 }
 const centroid = (list) => list.length ? { lat: list.reduce((s, v) => s + v.lat, 0) / list.length, lon: list.reduce((s, v) => s + v.lon, 0) / list.length } : { lat: 51.1, lon: 10.4 };
 

@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as C from '../lib/pulse-core.js';
 import * as T from '../lib/pulse-track.js';
+import * as OPS from '../lib/pulse-ops.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
@@ -431,6 +432,38 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
     let bytes = 0;
     for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
+  }
+  // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
+  // Wenige Gemeinden je Lauf (größte Flotten zuerst), gültig 7 Tage – der Browser muss Overpass dann nicht selbst fragen.
+  if (process.env.SKIP_CONTEXT !== '1') {
+    const dir = path.join(DATA, 'context'); await mkdir(dir, { recursive: true });
+    const idxFile = path.join(dir, 'index.json');
+    const cidx = existsSync(idxFile) ? JSON.parse(await readFile(idxFile, 'utf8')) : { munis: {} };
+    const byAgs = new Map(); for (const v of dv.vehicles) { if (!v.ags) continue; if (!byAgs.has(v.ags)) byAgs.set(v.ags, []); byAgs.get(v.ags).push(v); }
+    const due = (a) => { const m = cidx.munis[a]; if (!m) return true; if (m.failedAt && now - m.failedAt < 6 * 3600e3) return false; return !m.at || now - m.at > 7 * 86400e3; };
+    const todo = [...byAgs].filter(([a, l]) => l.length >= 30 && due(a)).sort((a, b) => b[1].length - a[1].length).slice(0, +process.env.CONTEXT_PER_RUN || 2);
+    const t0 = Date.now(); const CATS = ['escooter', 'sharing', 'rad', 'official'];
+    for (const [ags, list] of todo) {
+      if (Date.now() - t0 > 120e3) break;
+      const qt = (arr, p) => { const x = arr.slice().sort((a, b) => a - b); return x[Math.floor(p * (x.length - 1))]; };
+      const la = list.map(v => v.lat), lo = list.map(v => v.lon);
+      const bbox = [qt(la, 0.02) - 0.004, qt(lo, 0.02) - 0.006, qt(la, 0.98) + 0.004, qt(lo, 0.98) + 0.006].map(x => +x.toFixed(4));
+      const q = `[out:json][timeout:110][bbox:${bbox.join(',')}];(nwr["amenity"~"^(kick-scooter_parking|small_vehicle_parking|small_electric_vehicle_parking|bicycle_rental|kick-scooter_rental|mobility_hub|bicycle_parking)$"];nwr["small_electric_vehicle"];node["highway"="bus_stop"];node["public_transport"="platform"];node["railway"~"^(tram_stop|station|halt)$"];);out center tags;`;
+      let els = null, ep = null;
+      for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']) {
+        const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), 120e3);
+        try { const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: q }), headers: { 'User-Agent': UA }, signal: ctrl.signal }); if (r.ok) { const j = await r.json(); if (Array.isArray(j.elements) && !j.remark) { els = j.elements; ep = url; } } } catch { /* nächster Spiegel */ }
+        clearTimeout(tm); if (els) break;
+      }
+      if (!els) { cidx.munis[ags] = { ...(cidx.munis[ags] || {}), failedAt: now }; log(`Umgebung ${ags}: Overpass ohne Antwort`); continue; }
+      const parking = OPS.parkingFromOsm(els).map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5), CATS.indexOf(p.cat), p.cat === 'rad' ? null : (p.name || null)]);
+      const transit = OPS.transitFromOsm(els).map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]);
+      const doc = JSON.stringify({ at: now, ags, bbox, source: 'OpenStreetMap (ODbL) via Overpass', cats: CATS, parkingFields: 'lat,lon,kategorie,name', parking, transit });
+      await writeFile(path.join(dir, `${ags}.json`), doc);
+      cidx.munis[ags] = { at: now, parking: parking.length, transit: transit.length, bytes: doc.length };
+      log(`Umgebung ${ags}: ${parking.length} Abstellflächen, ${transit.length} Haltepunkte (${(doc.length / 1e3).toFixed(0)} kB, ${new URL(ep).host})`);
+    }
+    await writeFile(idxFile, JSON.stringify(cidx));
   }
   await writeFile(path.join(DATA, 'idle.json'), JSON.stringify({ at: now, buckets: ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'], groups: tr.idle }));
   // Lange Standzeiten: je Gemeinde max. 400 Punkte (gleichmäßig ausgedünnt)
