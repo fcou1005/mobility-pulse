@@ -1,5 +1,5 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvwvi5il';
+import * as O from './pulse-ops.js?v=mvwvr3m2';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -235,7 +235,8 @@ function drawMap(fit) {
   if (S.show.fleet) {
     for (const v of p.fleet.vehicles) {
       const col = v.disabled ? '#ef6b6b' : v.battery != null && v.battery < num('#ops-swapthr', 25) ? '#e3b341' : (v.idleMin ?? 0) >= 1440 ? '#c084fc' : X.opColor(v.operator);
-      L.circleMarker([v.lat, v.lon], { radius: 3.5, weight: 0, fillColor: col, fillOpacity: .9 }).bindPopup(`<b>${esc(v.operator)}</b> · ${esc(X.TYPE[v.type] || v.type)}<br>${v.disabled ? 'gesperrt · ' : v.reserved ? 'reserviert · ' : ''}${v.battery != null ? `Akku ${f(v.battery)} % · ` : ''}${v.idleMin != null ? `steht seit ${f(v.idleMin / 60, 1)} h` : ''}`).addTo(Lx.fleet);
+      const plain = col === X.opColor(v.operator);
+      L.circleMarker([v.lat, v.lon], { radius: plain ? 2.5 : 3.5, weight: 0, fillColor: col, fillOpacity: plain ? .4 : .95 }).bindPopup(`<b>${esc(v.operator)}</b> · ${esc(X.TYPE[v.type] || v.type)}<br>${v.disabled ? 'gesperrt · ' : v.reserved ? 'reserviert · ' : ''}${v.battery != null ? `Akku ${f(v.battery)} % · ` : ''}${v.idleMin != null ? `steht seit ${f(v.idleMin / 60, 1)} h` : ''}`).addTo(Lx.fleet);
     }
     for (const s of p.fleet.stations) L.circleMarker([s.lat, s.lon], { radius: 5, weight: 2, color: X.opColor(s.operator), fillColor: s.bookable ? X.opColor(s.operator) : 'transparent', fillOpacity: .6 }).bindPopup(`<b>${esc(s.name || 'Station')}</b><br>${f(s.bookable)} buchbar · ${s.docks != null ? `${f(s.docks)} frei` : ''}${s.capacity ? ` · Kapazität ${f(s.capacity)}` : ''}`).addTo(Lx.fleet);
   }
@@ -257,7 +258,7 @@ function drawMap(fit) {
   }
   L.marker([p.depot.lat, p.depot.lon], { icon: L.divIcon({ className: 'ops-spot depot', html: 'D', iconSize: [24, 24] }) }).bindPopup('Depot · „Depot setzen“ und auf die Karte klicken, um es zu verschieben').addTo(Lx.depot);
   if (fit) {
-    const pts = [...p.spots.spots.map(s => [s.lat, s.lon]), ...p.fleet.vehicles.map(v => [v.lat, v.lon])];
+    const pts = p.spots.spots.length ? [...p.spots.spots.map(s => [s.lat, s.lon]), [p.depot.lat, p.depot.lon]] : p.fleet.vehicles.map(v => [v.lat, v.lon]);
     if (pts.length) S.map.fitBounds(L.latLngBounds(pts).pad(0.08));
   }
   $('#ops-map-sub').textContent = `${X.muniName(p.ags)} · ${p.op} · ${p.band === 'day' ? 'ganzer Tag' : O.BANDS[p.band].label}`;
