@@ -189,7 +189,7 @@ const pricing = [], zonesIndex = [];
 await mkdir(path.join(DATA, 'zones'), { recursive: true });
 for (const f of await readdir(path.join(DATA, 'zones')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'zones', f));
 const firstLang = (o) => o == null ? null : Array.isArray(o) ? (o.find(x => x?.language === 'de') || o[0])?.text ?? null : typeof o === 'object' ? (o.de ?? o.en ?? Object.values(o)[0] ?? null) : o;
-await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status)), async ({ src, sys }) => {
+await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status)), async ({ src, sys }) => { try {
   const rec = sourceOut.find(x => x.id === src.id);
   if (sys.feeds.system_pricing_plans) {
     const r = await fetchJson(sys.feeds.system_pricing_plans);
@@ -205,11 +205,14 @@ await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].inclu
     const r = await fetchJson(sys.feeds.geofencing_zones);
     const fc = r.json?.data?.geofencing_zones;
     if (fc?.features?.length) {
-      const feats = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')).map(f => {
+      const feats = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')).flatMap(f => { try { return [zoneFeature(f)]; } catch { return []; } });
+      function zoneFeature(f) {
         const rules = (f.properties?.rules || []).map(ru => ({ rideAllowed: C.bool(ru.ride_allowed ?? ru.ride_start_allowed), rideThrough: C.bool(ru.ride_through_allowed), endAllowed: C.bool(ru.ride_end_allowed), maxSpeed: C.num(ru.maximum_speed_kph), parking: C.bool(ru.station_parking) }));
-        const round = (c) => Array.isArray(c[0]) ? c.map(round) : [+c[0].toFixed(5), +c[1].toFixed(5)];
-        return { type: 'Feature', properties: { name: firstLang(f.properties?.name) || null, rules, start: f.properties?.start || null, end: f.properties?.end || null }, geometry: { type: f.geometry.type, coordinates: round(f.geometry.coordinates) } };
-      });
+        const round = (c) => Array.isArray(c[0]) ? c.map(round) : [+(+c[0]).toFixed(5), +(+c[1]).toFixed(5)];
+        const coords = round(f.geometry.coordinates);
+        if (JSON.stringify(coords).includes('null')) throw new Error('ungültige Koordinaten');
+        return { type: 'Feature', properties: { name: firstLang(f.properties?.name) || null, rules, start: f.properties?.start || null, end: f.properties?.end || null }, geometry: { type: f.geometry.type, coordinates: coords } };
+      }
       const doc = JSON.stringify({ type: 'FeatureCollection', sourceId: src.id, operator: src.operator, at: now, globalRules: (r.json?.data?.global_rules || []).map(ru => ({ rideAllowed: C.bool(ru.ride_allowed ?? ru.ride_start_allowed), rideThrough: C.bool(ru.ride_through_allowed), maxSpeed: C.num(ru.maximum_speed_kph) })), features: feats });
       if (doc.length <= 3e6) {
         const file = `${src.id.replace(/[^\w.-]+/g, '_')}.json`;
@@ -220,6 +223,7 @@ await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].inclu
       } else rec.zones = { count: feats.length, tooLarge: true };
     }
   }
+  } catch (e) { log(`Preise/Zonen ${src.id}: ${e.message}`); }
 }, 6);
 await writeFile(path.join(DATA, 'pricing.json'), JSON.stringify({ at: now, plans: pricing }));
 await writeFile(path.join(DATA, 'zones', 'index.json'), JSON.stringify({ at: now, zones: zonesIndex }));
