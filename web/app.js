@@ -16,7 +16,7 @@ const pctf = (a, b) => b ? `${fmt((a / b) * 100, a / b < 0.1 ? 1 : 0)} %` : 'k. 
 const ageText = (ms) => ms == null ? '–' : ms < 90e3 ? 'gerade' : ms < 3600e3 ? `${Math.round(ms / 60e3)} Min.` : ms < 48 * 3600e3 ? `${(ms / 3600e3).toFixed(1).replace('.', ',')} Std.` : `${Math.round(ms / 86400e3)} Tg.`;
 const timeText = (ms) => ms ? new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
 const TYPE = C.VEHICLE_TYPE_LABEL;
-const STATUS = C.FRESHNESS_LABEL;
+const STATUS = { ...C.FRESHNESS_LABEL, collector: 'Sammler-Stand' };
 const DIRS = { mobilitydata: 'MobilityData / Betreiber', mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', dott_direct: 'Dott · Direktfeed' };
 const OP_COLORS = { Bolt: '#34d399', Dott: '#60a5fa', Voi: '#f472b6', Lime: '#a3e635', nextbike: '#f59e0b', Zeus: '#c084fc', Donkey: '#fb923c', Bird: '#e879f9', 'DB Connect': '#ef4444', Yoio: '#22d3ee', sigo: '#fbbf24', StadtRAD: '#f87171' };
 const opColor = (op) => OP_COLORS[op] || `hsl(${parseInt(C.hashStr(op), 36) % 360} 60% 60%)`;
@@ -112,14 +112,15 @@ function operatorRows() {
     const st = C.sumStats(list);
     const ops = recs.filter(r => r.operator === op);
     const effective = ops.map(r => liveRec(r.id) || r);
-    const usable = effective.filter(r => r.status === 'live' || r.status === 'delayed');
+    const usable = effective.filter(r => r.status === 'live' || r.status === 'delayed' || r.status === 'collector');
     const age = usable.length ? Math.max(...usable.map(r => r.feedAgeMs ?? 0)) : (effective[0]?.feedAgeMs ?? null);
     const status = usable.some(r => r.status === 'live') ? 'live' : usable.length ? 'delayed' : (effective[0]?.status || 'unknown');
+    const ageAdj = effective.some(r => r.status === 'collector') && state.latest ? (Date.now() - state.latest.at) : 0;
     const dirs = [...new Set(effective.flatMap(r => r.directories || []))];
     const license = effective.map(r => r.license).find(Boolean) || null;
     const quality = usable.length ? Math.round(usable.reduce((a, r) => a + (r.quality || 0), 0) / usable.length) : null;
     const changed = effective.some(r => r.sourceChanged);
-    rows.push({ op, st, sources: effective, status, age, dirs, license, quality, changed, delta: deltaVsCollector(op) });
+    rows.push({ op, st, sources: effective, status, age: age != null ? age + ageAdj : null, dirs, license, quality, changed, delta: deltaVsCollector(op) });
   }
   // Bekannte Lücken im Scope
   for (const g of state.latest?.gaps || []) {
@@ -164,12 +165,19 @@ async function liveFetch() {
         // Zugangsquellen (MOBIDROM): Momentaufnahme des Sammlers
         for (const r of subs.length ? subs : [src]) {
           const snap = await getJson(CFG.DATA + `snapshot/${r.id.replace(/[^\w.-]+/g, '_')}.json`);
-          if (snap.ok) systems.set(r.id, snapshotToSystem(snap.json, r));
-          recsOut.set(r.id, { ...r, snapshot: true, checkedAt: snap.json?.at || r.checkedAt });
+          if (snap.ok) { systems.set(r.id, snapshotToSystem(snap.json, r)); recsOut.set(r.id, summarizeSnapshot(src, r, snap.json, now)); }
+          else recsOut.set(r.id, { ...r, status: 'collector', checkedAt: r.checkedAt });
         }
         return;
       }
       const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, getJson, { now }) : await C.readGbfsSystem(src, getJson, { now });
+      if (sys.httpStatus === 0 && !sys.vehicles.length && !sys.stations.length) {
+        // Browser darf die Quelle nicht lesen (kein CORS): Momentaufnahme des Sammlers
+        const r = recs.find(x => x.id === src.id);
+        const snap = await getJson(CFG.DATA + `snapshot/${src.id.replace(/[^\w.-]+/g, '_')}.json`);
+        if (snap.ok) { systems.set(src.id, snapshotToSystem(snap.json, src)); recsOut.set(src.id, summarizeSnapshot(src, r, snap.json, now)); return; }
+        if (r && ['live', 'delayed'].includes(r.status)) { recsOut.set(src.id, { ...r, status: 'collector', corsBlocked: true }); return; }
+      }
       systems.set(src.id, sys);
       recsOut.set(src.id, summarize(src, sys, now));
     } finally { done++; const p = $('#live-prog'); if (p) p.textContent = `${done} / ${targets.length}`; const bar = $('#notice [data-id=live] .progress i'); if (bar) bar.style.width = `${(done / targets.length) * 100}%`; }
@@ -199,9 +207,15 @@ async function liveFetch() {
   vehicles.sort((a, b) => a.priority - b.priority);
   const dv = C.dedupeVehicles(vehicles), ds = C.dedupeStations(stations);
   const groups = C.aggregateGroups(dv.vehicles, ds.stations, { chargeThreshold: state.thresholds.charge, rangeThreshold: state.thresholds.range });
+  // Quellen ohne Browserzugang und ohne Momentaufnahme: Sammler-Summen übernehmen
+  const have = new Set([...groups.keys()].map(k => k.split('|').slice(0, 2).join('|')));
+  for (const r of recsOut.values()) {
+    if (r.status !== 'collector') continue;
+    for (const ags of r.municipalities || []) { if (have.has(`${ags}|${r.operator}`)) continue; for (const [k, st] of Object.entries(state.latest?.groups || {})) if (k.startsWith(`${ags}|${r.operator}|`)) groups.set(k, { ...st }); }
+  }
   state.live = { at: now, systems, groups, vehicles: dv.vehicles, stations: ds.stations, recs: recsOut, dedupe: { ...dv.stats, stationDuplicates: ds.duplicates }, targets: targets.length };
   clearNotice('live'); btn.disabled = false;
-  const failed = [...recsOut.values()].filter(r => !['live', 'delayed'].includes(r.status));
+  const failed = [...recsOut.values()].filter(r => !['live', 'delayed', 'collector'].includes(r.status));
   if (failed.length) notice(`${failed.length} von ${recsOut.size} Quellen lieferten keine verwertbaren Live-Daten (${[...new Set(failed.map(r => STATUS[r.status] || r.status))].join(', ')}). Fehlende Anbieter bleiben aus dem Sammler-Stand sichtbar.`, 'warn', 'livefail'); else clearNotice('livefail');
   if (!state.bIndex) notice('Ohne Gemeindegrenzen (erster Sammler-Lauf fehlt) werden Live-Bestände nicht nach Ort getrennt.', 'warn', 'nob');
   state.mode = 'live'; $('#sel-mode').value = 'live';
@@ -221,6 +235,11 @@ function summarize(src, sys, now) {
   rec.fingerprint = C.fingerprint(sys); rec.quality = C.qualityScore(sys, now).score;
   const prev = state.latest?.sources.find(r => r.id === src.id); rec.sourceChanged = !!(prev?.fingerprint && prev.fingerprint !== rec.fingerprint);
   return rec;
+}
+function summarizeSnapshot(src, rec, snap, now) {
+  const age = (now - snap.at) + (snap.feedAgeMs || 0);
+  return { ...(rec || {}), id: src.id, operator: rec?.operator || snap.operator || src.operator, name: src.name || rec?.name, api: src.api, url: src.url, directories: src.directories || rec?.directories || [], priority: src.priority ?? 2,
+    status: C.freshness(age), feedAgeMs: age, vehicleFeedAgeMs: age, stationFeedAgeMs: age, snapshot: true, snapshotAt: snap.at, errors: [], httpStatus: rec?.httpStatus ?? null, quality: rec?.quality ?? null, fingerprint: rec?.fingerprint ?? null, license: rec?.license ?? null, checkedAt: snap.at, counts: { vehicles: (snap.vehicles || []).length, stations: (snap.stations || []).length } };
 }
 function snapshotToSystem(snap, rec) {
   return {
@@ -257,7 +276,7 @@ function renderLive() {
   const groups = scopeGroups(); const st = C.sumStats([...groups.values()]);
   const rows = operatorRows();
   const recs = sourcesForScope().map(r => liveRec(r.id) || r);
-  const usable = recs.filter(r => r.status === 'live' || r.status === 'delayed');
+  const usable = recs.filter(r => ['live', 'delayed', 'collector'].includes(r.status));
   const gaps = rows.filter(r => r.gap).length;
   const lowE = st.batteryKnown ? st.lowBattery / st.batteryKnown : null;
   $('#live-tiles').innerHTML = [
@@ -272,7 +291,7 @@ function renderLive() {
     const s = r.st;
     const d = r.delta ? `<span class="${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : ''}" style="color:var(--${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : 'muted'})">${r.delta.diff > 0 ? '+' : ''}${fmt(r.delta.diff)}</span><div class="sub-line">${ageText(r.delta.sinceMs)}</div>` : '—';
     if (r.gap) return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${esc(r.gap.city)} · seit ${esc(r.gap.since)}</div></td><td colspan="7" class="sub-line">${esc(r.gap.note)}</td><td><span class="pill gap">Datenlücke</span></td><td></td></tr>`;
-    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${r.sources.length} Quelle${r.sources.length === 1 ? '' : 'n'}${r.changed ? ' · Quellenwechsel' : ''}</div></td>
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${r.sources.length} Quelle${r.sources.length === 1 ? '' : 'n'}${r.changed ? ' · Quellenwechsel' : ''}${r.sources.some(x => x.snapshot) ? ' · Momentaufnahme Sammler' : ''}${r.sources.some(x => x.status === 'collector') ? ' · Sammler-Stand' : ''}</div></td>
       <td>${r.dirs.map(d => DIRS[d] || d).join(' · ') || '–'}<div class="sub-line">Qualität ${r.quality ?? '–'}/100</div></td>
       <td class="n">${fmt(s.available)}<div class="sub-line">${fmt(s.total)} gemeldet</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${d}</td>
       <td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `${fmt(s.batteryKnown)} mit Angabe` : ''}</div></td>

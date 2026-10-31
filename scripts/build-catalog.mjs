@@ -62,7 +62,8 @@ function operatorFor(name, id) {
   // längste Alias-Treffer zuerst
   const keys = Object.keys(manual.operator_aliases).sort((a, b) => b.length - a.length);
   for (const k of keys) if (hay.includes(k)) return manual.operator_aliases[k];
-  return name.split(/[\s·,-]/)[0] || id;
+  const n = name.replace(/^Gebündelte Daten\s+/i, '').replace(/\s+NRW$/i, '');
+  return n.split(/[\s·,-]/)[0] || id;
 }
 
 const sources = new Map(); // key: System-ID (Verzeichnisse teilen sich IDs) oder URL

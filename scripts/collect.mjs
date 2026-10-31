@@ -29,6 +29,7 @@ const prevSources = new Map((prev?.sources || []).map(s => [s.id, s]));
 
 // ---------- HTTP ----------
 const authHeaders = new Map(); // host → headers
+const corsByUrl = new Map(); // url → Access-Control-Allow-Origin
 async function fetchJson(url, { retry = 1 } = {}) {
   const t0 = Date.now();
   for (let attempt = 0; ; attempt++) {
@@ -39,6 +40,7 @@ async function fetchJson(url, { retry = 1 } = {}) {
       for (const [host, h] of authHeaders) if (url.includes(host)) Object.assign(headers, h);
       const r = await fetch(url, { signal: ctrl.signal, headers, redirect: 'follow' });
       clearTimeout(timer);
+      corsByUrl.set(url, r.headers.get('access-control-allow-origin'));
       let json = null, error = null;
       if (r.ok) { try { json = await r.json(); } catch (e) { error = 'kein JSON'; } }
       return { ok: r.ok && !!json, status: r.status, json, error, latencyMs: Date.now() - t0 };
@@ -122,7 +124,7 @@ for (const { src, sys, probe, error } of results) {
     feedAgeMs: null, vehicleFeedAgeMs: null, stationFeedAgeMs: null, fingerprint: null, quality: null, counts: {}, municipalities: [], vehicleTypes: [], checkedAt: now };
   if (!sys) { rec.errors = [error || probe?.error || `HTTP ${probe?.status}`]; rec.status = probe?.status === 404 || probe?.status === 410 ? 'gone' : probe?.status === 401 || probe?.status === 403 ? 'auth' : 'error'; sourceOut.push(rec); continue; }
   rec.errors = sys.errors;
-  if (src.parent) { const guess = C.operatorFromName(`${sys.systemInfo?.operator || ''} ${sys.systemInfo?.name || ''} ${src.id.split(':').pop()}`, manual.operator_aliases); if (guess) { rec.operator = guess; src.operator = guess; } }
+  if (src.parent) { const guess = C.operatorFromName(`${sys.systemInfo?.operator || ''} ${sys.systemInfo?.name || ''} ${src.id.split(':').pop()}`, manual.operator_aliases); rec.operator = src.operator = guess || sys.systemInfo?.operator || sys.systemInfo?.name || src.operator; }
   rec.license = sys.systemInfo?.licenseId || sys.systemInfo?.licenseUrl || src.license || null;
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
@@ -171,7 +173,9 @@ for (const { src, sys, probe, error } of results) {
   sourceOut.push(rec);
 
   // Momentaufnahme für Quellen, die der Browser nicht direkt lesen kann (Zugangsdaten), nur aktuelle/verzögerte
-  if (src.auth && usable) {
+  const corsOk = (() => { const h = corsByUrl.get(src.url); return h === '*' || (h && h.length > 0); })();
+  rec.cors = corsOk;
+  if ((src.auth || !corsOk) && usable) {
     snapshots.push({ id: src.id, at: now, feedAgeMs: rec.feedAgeMs, operator: src.operator,
       vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null]),
       stations: sys.stations.filter(s => C.validLatLon(s.lat, s.lon)).map(s => [+s.lat.toFixed(5), +s.lon.toFixed(5), s.name, s.physicalAvailable, s.bookable, s.docksAvailable, s.renting ? 1 : 0, s.returning ? 1 : 0]) });
