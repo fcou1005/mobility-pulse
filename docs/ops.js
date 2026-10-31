@@ -1,5 +1,5 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvwvu3ma';
+import * as O from './pulse-ops.js?v=mvww5n1y';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -185,6 +185,7 @@ async function computePlan() {
     S.routed = {};
     status(`${X.esc(op)} in ${X.esc(X.muniName(ags))} · Flotte vom ${new Date(fleet.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Nachfrage aus ${model.days} Tag${model.days === 1 ? '' : 'en'} (${X.fmt(model.hours, 1)} Messstunden)${bandNote ? ` · ${bandNote}` : ''}${osmNote}`);
     renderTiles(); drawMap(true); renderRuns(); renderSpots();
+    const plan = S.plan; X.econFor(ags, op, type).then(e => { if (S.plan === plan) { plan.econ = e || false; renderTiles(); } }).catch(() => { plan.econ = false; });
     if ($('#ops-route').checked) routeRuns();
   } catch (e) { console.error(e); status(`Fehler: ${X.esc(e.message)}`); }
   finally { S.busy = false; if (S.again) { S.again = false; setTimeout(computePlan, 0); } }
@@ -208,8 +209,8 @@ function renderTiles() {
     tile('Flotte', `${f(k.available)} / ${f(k.total)}`, `verfügbar / gemeldet · ${f(k.disabled)} gesperrt · Anteil ${f(p.share * 100)} %`),
     tile('Nachfrage', `${f(sph * p.share, 1)} /h`, `Fahrtbeginne ${p.band === 'day' ? 'im Tagesmittel' : O.BANDS[p.band].label} · Markt ${f(sph, 1)} /h`),
     tile('Spots', `${f(p.spots.spots.length)}`, `Ziel ${f(target)} Fzg. · fehlen ${f(need)}${p.spots.excluded ? ` · ${f(p.spots.excluded)} Zellen durch Zonen ausgeschlossen` : ''}`, need > target * 0.5 ? 'warn' : ''),
-    tile('Akku', k.batteryKnown ? `${f(k.low)}` : 'k. A.', k.batteryKnown ? `unter ${num('#ops-swapthr', 25)} % von ${f(k.batteryKnown)} mit Angabe` : 'Feed meldet keinen Ladestand', k.batteryKnown && k.low / k.batteryKnown > 0.25 ? 'warn' : ''),
-    tile('Standzeit', `${f(k.idle24)}`, `über 24 h unbewegt · Median ${k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h'}`, k.idleKnown && k.idle24 / k.idleKnown > 0.3 ? 'warn' : ''),
+    tile('Akku & Standzeit', k.batteryKnown ? `${f(k.low)}` : 'k. A.', `${k.batteryKnown ? `unter ${num('#ops-swapthr', 25)} % von ${f(k.batteryKnown)}` : 'kein Ladestand im Feed'} · ${f(k.idle24)} über 24 h unbewegt (Median ${k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h'})`, (k.batteryKnown && k.low / k.batteryKnown > 0.25) || (k.idleKnown && k.idle24 / k.idleKnown > 0.3) ? 'warn' : ''),
+    tile('Umsatz / Tag', p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? `${f(p.econ.revDay)} €` : '—', p.econ === undefined ? 'Schätzung wird geladen' : !p.econ ? 'keine Fahrtdaten für diesen Anbieter' : `${p.econ.plausible ? '' : 'Fahrtenzahl unplausibel · '}${f(p.econ.rvd, 2)} Rides/Fzg./Tag · Auslastung ${p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %'} · netto`, p.econ && !p.econ.plausible ? 'warn' : ''),
     tile('Touren', `${f(runs.length)}`, `${f(km, 1)} km · ${f(min / 60, 1)} h Einsatz${Object.keys(S.routed).length ? ' · Straßenrouting' : ' · Luftlinie × 1,35'}`),
   ].join('');
 }

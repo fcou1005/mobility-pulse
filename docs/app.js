@@ -1,5 +1,6 @@
-import * as C from './pulse-core.js?v=mvwvu3ma';
-import { initOps, renderOps } from './ops.js?v=mvwvu3ma';
+import * as C from './pulse-core.js?v=mvww5n1y';
+import { initOps, renderOps } from './ops.js?v=mvww5n1y';
+import * as E from './pulse-econ.js?v=mvww5n1y';
 
 const CFG = {
   DATA: (() => { const d = new URLSearchParams(location.search).get('data'); return d && /^(\/|https?:\/\/(localhost|127\.0\.0\.1)[:/])/.test(d) ? d : 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/'; })(), // ?data=/pfad/ nur lokal, für Tests
@@ -703,7 +704,69 @@ async function renderUsage() {
   // Tabelle je Anbieter
   $('#tbl-usage tbody').innerHTML = [...byOp].sort((a, b) => sum(b[1].start) - sum(a[1].start)).map(([name, a]) => { const fl = fleet.get(name) || 0; const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mode = modes.includes('stable') ? 'stabil' : modes.includes('rotating') ? 'rotierend' : 'offen';
     return `<tr><td><span class="op"><i style="background:${opColor(name)}"></i>${esc(name)}</span></td><td class="n">${fmt(sum(a.start))}</td><td class="n">${fmt(sum(a.end))}</td><td class="n">${fl ? fmt(sum(a.start) / fl, 2) : '—'}</td><td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${fmt(sum(a.reloc))}</td><td class="n">${fmt(sum(a.swap))}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.pickup))}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mode === 'stabil' ? 'Dauer/Distanz messbar' : mode === 'rotierend' ? 'nur Start/Ziel-Zählung' : 'noch zu wenige Läufe'}</div></td></tr>`; }).join('') || '<tr><td colspan="13" class="empty">Keine Ereignisse im Filter.</td></tr>';
-  renderCellsTable(day); renderQuota();
+  renderCellsTable(day); renderQuota(); renderEcon(day, doc).catch(e => console.error('Umsatz', e));
+}
+// ---------- Umsatz & Kennzahlen ----------
+function econOpts() {
+  const m = +$('#econ-min')?.value;
+  return { rideMin: Number.isFinite(m) && m > 0 ? m : null, realization: Math.min(1, Math.max(0.1, (+$('#econ-real')?.value || 85) / 100)), net: $('#econ-net') ? $('#econ-net').checked : true };
+}
+async function econProfile() {
+  if (state.usage.profile) return state.usage.profile;
+  const idx = await loadUsageIndex(); const days = (idx.days || []).slice(-8, -1); // abgeschlossene Tage
+  state.usage.profile = E.hourProfile(await Promise.all(days.map(loadEvents)));
+  return state.usage.profile;
+}
+// Kennzahlen je Gruppe (Gemeinde|Anbieter|Art) eines Tages; Ergebnis je Schlüssel
+async function econGroups(day, keep) {
+  const [doc, pricing, hist, prof] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile()]);
+  if (!doc) return null;
+  const obsMin = E.observedMinutes(doc.runs); const o = econOpts();
+  const planCache = new Map(); const out = new Map();
+  for (const [k, g] of Object.entries(doc.groups || {})) {
+    if (!keep(k)) continue;
+    const [ags, op, ty] = k.split('|');
+    const pk = `${op}|${ags}|${ty}`; if (!planCache.has(pk)) planCache.set(pk, E.planFor(pricing, op, ags, ty));
+    const pl = planCache.get(pk);
+    const series = hist?.series?.[k]?.total?.filter(x => x != null) || [];
+    const fleetFallback = series.length ? series.reduce((a, b) => a + b, 0) / series.length : (state.latest?.groups?.[k]?.total ?? null);
+    out.set(k, { ...E.kpis({ g, obsMin, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, realization: o.realization, net: o.net }), plan: pl, op, ty, ags });
+  }
+  return { out, doc, obsMin, profile: prof };
+}
+// für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter Tag)
+async function econFor(ags, op, type) {
+  const idx = await loadUsageIndex(); const day = (idx.days || []).slice(-1)[0]; if (!day) return null;
+  const r = await econGroups(day, (k) => { const [a, o, t] = k.split('|'); return a === ags && o === op && (type === 'all' || t === type); });
+  return r ? E.combine([...r.out.values()]) : null;
+}
+async function renderEcon(day) {
+  const r = await econGroups(day, groupInScope);
+  if (!r) { $('#econ-tiles').innerHTML = ''; $('#tbl-econ tbody').innerHTML = '<tr><td colspan="12" class="empty">Keine Daten.</td></tr>'; return; }
+  const byName = new Map();
+  for (const x of r.out.values()) { const name = `${x.op}|${x.ty}`; if (!byName.has(name)) byName.set(name, []); byName.get(name).push(x); }
+  const rows = [...byName].map(([name, list]) => { const [op, ty] = name.split('|'); const c = E.combine(list); const plans = [...new Set(list.map(x => x.plan?.plan ? E.planLabel(x.plan.plan) : null).filter(Boolean))]; return { op, ty, c, list, plans, planScope: list.find(x => x.plan)?.plan?.scope }; }).filter(x => x.c && x.c.fleet > 0).sort((a, b) => (b.c.revDay || 0) - (a.c.revDay || 0) || b.c.rides - a.c.rides);
+  const good = rows.filter(x => x.c.plausible);
+  const tot = E.combine(good.map(x => x.c));
+  const cov = Math.max(0, ...rows.map(x => x.c.coverage || 0));
+  const o = econOpts(); const euro = (v, d = 0) => v == null ? '—' : `${fmt(v, d)} €`;
+  $('#econ-tiles').innerHTML = tot ? [
+    tile('Fahrten / Tag', fmt(tot.ridesDay), `hochgerechnet aus ${fmt(tot.rides)} gemessenen · ${fmt(cov * 100)} % des Tagesgangs beobachtet`),
+    tile('Rides / Fzg. / Tag', fmt(tot.rvd, 2), `bezogen auf Ø ${fmt(tot.fleet)} Fahrzeuge auf der Straße`),
+    tile('Auslastung', tot.utilization == null ? '—' : `${fmt(tot.utilization * 100, 1)} %`, `Zeit in Fahrt · Ø ${fmt(tot.avgMin, 1)} Min. je Fahrt`),
+    tile(`Umsatz / Tag ${o.net ? 'netto' : 'brutto'}`, euro(tot.revDay), `Realisierung ${fmt(o.realization * 100)} % · Listenpreise der Feeds`),
+    tile('Umsatz / Fzg. / Tag', euro(tot.revPerVehicleDay, 2), `${euro(tot.perRide, 2)} je Fahrt`),
+    tile('Hochrechnung Monat', euro(tot.revDay != null ? tot.revDay * 30 : null), '30 Tage zum heutigen Niveau, ohne Saison'),
+  ].join('') : '';
+  $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.c; const warn = !c.plausible;
+    return `<tr${warn ? ' style="opacity:.6"' : ''}><td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${TYPE[x.ty] || x.ty}${state.scope === 'DE' ? ` · ${x.list.length} Gemeinde${x.list.length === 1 ? '' : 'n'}` : ''}</div></td>
+      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${c.rot ? `${fmt(c.rot)} Kennungswechsel` : ''}</div></td><td class="n">${fmt(c.ridesDay)}</td>
+      <td class="n"><b>${fmt(c.rvd, 2)}</b></td><td class="n">${c.utilization == null ? '—' : `${fmt(c.utilization * 100, 1)} %`}</td><td class="n">${fmt(c.avgMin, 1)} min</td>
+      <td class="small">${x.plans.slice(0, 2).map(esc).join('<br>') || '<span class="muted">kein Tarif im Feed</span>'}${x.planScope === 'Anbieter' ? '<div class="sub-line">Tarif anderer Stadt</div>' : ''}</td>
+      <td class="n">${euro(c.perRide, 2)}</td><td class="n"><b>${euro(c.revDay)}</b></td><td class="n">${euro(c.revPerVehicleDay, 2)}</td>
+      <td class="small">${c.flags.length ? esc(c.flags[0]) : '<span class="muted">—</span>'}</td></tr>`; }).join('') || '<tr><td colspan="12" class="empty">Keine Daten im Filter.</td></tr>';
+  const excludedN = rows.length - good.length;
+  $('#econ-note').innerHTML = `Fahrten = verschwundene verfügbare Fahrzeuge (Kennungswechsel ≤ 40 m am selben Ort zählen nicht). Hochrechnung auf 24 h über den Tagesgang (${esc(r.profile.source)}). Flotte = Ø Fahrzeuge auf der Straße inkl. gesperrter. Ø Fahrtdauer: ${o.rideMin ? `Vorgabe ${fmt(o.rideMin)} Min.` : 'gemessen, wo Kennungen stabil sind (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40)'}. Umsatz zu Listenpreisen des Standardtarifs, ${o.net ? 'ohne 19 % MwSt., ' : ''}mal Realisierungsquote (Pässe, Rabatte, Freiminuten). Betreiber-Umsetzungen, die das Fahrzeug aus dem Feed nehmen, zählen als Fahrt.${excludedN ? ` ${excludedN} Zeile${excludedN === 1 ? '' : 'n'} mit unplausibler Fahrtenzahl sind ausgegraut und nicht in den Summen.` : ''}`;
 }
 function T_empty() { return { start: new Array(24).fill(0), end: new Array(24).fill(0), reloc: new Array(24).fill(0), swap: new Array(24).fill(0), pickup: new Array(24).fill(0), disOn: new Array(24).fill(0), disOff: new Array(24).fill(0), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 }; }
 function T_add(a, g) { for (const f of ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff']) for (let i = 0; i < 24; i++) a[f][i] += g[f]?.[i] || 0; for (const f of ['swapWaitSum', 'swapWaitN', 'disDurSum', 'disDurN', 'tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN']) a[f] += g[f] || 0; }
@@ -1011,6 +1074,7 @@ function bind() {
   $('#chk-wfs').addEventListener('change', (e) => e.target.checked ? loadWfs() : (state.layers.wfs.clearLayers(), clearNotice('wfs')));
   $('#chk-zones').addEventListener('change', () => renderZonesLayer());
   $('#chk-weather').addEventListener('change', () => renderUsage());
+  ['econ-min', 'econ-real', 'econ-net'].forEach(id => $(`#${id}`).addEventListener('change', () => renderEcon(state.usage.day)));
   $('#usage-days').addEventListener('click', (e) => { const b = e.target.closest('[data-uday]'); if (!b) return; state.usage.day = b.dataset.uday; renderUsage(); });
   $('#btn-flow-map').addEventListener('click', () => { $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); window.scrollTo({ top: 0 }); });
   document.addEventListener('click', (e) => { const a = e.target.closest('.pick-cell'); if (!a) return; e.preventDefault(); $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); setTimeout(() => state.map.setView([+a.dataset.lat, +a.dataset.lon], 16), 300); });
@@ -1038,7 +1102,7 @@ function exportCsv() {
 async function init() {
   try { const t = localStorage.getItem('mp-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
   initMap(); bind();
-  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE });
+  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE, econFor });
   setView(location.hash.slice(1) || 'live');
   await loadBase();
   populateScope(); populateOperators();

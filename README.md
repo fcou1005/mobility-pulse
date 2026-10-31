@@ -40,6 +40,13 @@ Carsharing wird ausgeschlossen (`data/sources-manual.json`). Gemeindezuordnung �
 - **Touren:** Umsetzen (Überschuss → Spots mit Bedarf, Transporterkapazität, erst einsammeln, dann ausbringen), Akkutausch (Priorität aus Ladestand und Nachfrage), Werkstatt (gesperrte Fahrzeuge), Stationsausgleich (≤ 20 % aus ≥ 80 % auf 50 %). Reihenfolge Nächster Nachbar + 2-opt + Or-opt; optional OSRM-Straßenrouting im Browser.
 - **Exporte:** Spots-CSV im Backend-Format (`name,lat,lng,deploymentStatus,parkingStatus,deploymentRadius,deploymentVehicles`), Analyse-CSV, Touren-CSV, GeoJSON. Test: `node test/ops.test.mjs`.
 
+## Umsatz & Kennzahlen (`lib/pulse-econ.js`, Ansicht „Nutzung & Bewegung“)
+
+- **Fahrten:** verschwundene verfügbare Fahrzeuge; verschwindet eine Kennung und taucht ≤ 40 m daneben eine neue desselben Anbieters auf, ist das ein Kennungswechsel am Ort (keine Fahrt, Standzeit läuft weiter).
+- **Rides per Vehicle per Day (RVD):** Fahrten hochgerechnet auf 24 h (Tagesgang aus ≥ 3 vollen Tagen, sonst Standardkurve) ÷ Ø Fahrzeuge auf der Straße (Fahrzeugminuten aus den Sammler-Läufen).
+- **Auslastung:** RVD × Ø Fahrtdauer ÷ 1440 Min. Dauer gemessen bei stabilen Kennungen (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40).
+- **Umsatz:** Fahrten × Preis einer Ø Fahrt im Standardtarif aus `system_pricing_plans` (Abos/Pässe ausgeschlossen), netto ohne 19 % MwSt. und mit Realisierungsquote (Standard 85 %). RVD über 15 gilt als unplausibel und bleibt außerhalb der Summen. Test: `node test/econ.test.mjs`.
+
 ## Lokal
 
 ```
@@ -47,5 +54,5 @@ node scripts/build-catalog.mjs     # data/sources.json
 node scripts/prepare-boundaries.mjs # braucht gdal-bin, unzip
 node scripts/collect.mjs
 node test/run.mjs                   # Fixture-Test
-node test/track.test.mjs && node test/ops.test.mjs
+node test/track.test.mjs && node test/ops.test.mjs && node test/econ.test.mjs
 ```

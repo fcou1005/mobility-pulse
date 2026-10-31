@@ -51,3 +51,19 @@ const doc = T.mergeHourly(null, r.hourly, { day: r.day, at: t5, dt: 20 * 60e3, s
 assert(doc.runs.length === 1, 'Tagesdatei angelegt');
 const cd = T.mergeCells(null, cellsT4, munis, r.day);
 assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
+// Kennungswechsel am Ort: x verschwindet, y taucht 10 m daneben auf → keine Fahrt, Standzeit bleibt
+{
+  const u0 = Date.parse('2026-11-01T10:00:00Z');
+  let q1 = T.trackRun(null, { vehicles: [V('x', 48.60, 9.10), V('z', 48.61, 9.11)], stations: [], sourceRecs: recs, now: u0 });
+  q1 = T.trackRun(q1.state, { vehicles: [V('x', 48.60, 9.10), V('z', 48.61, 9.11)], stations: [], sourceRecs: recs, now: u0 + 20 * 60e3 });
+  const firstSeenX = q1.state.v[T.vehicleKey('Bolt', 'x')][7];
+  q1 = T.trackRun(q1.state, { vehicles: [V('y', 48.60009, 9.10), V('z', 48.61, 9.11)], stations: [], sourceRecs: recs, now: u0 + 40 * 60e3 });
+  const hh = q1.hourly.get('08416041|Bolt|scooter'), hr2 = T.hourOf(u0 + 40 * 60e3);
+  assert(hh.rot[hr2] === 1 && hh.start[hr2] === 0 && hh.end[hr2] === 0, 'Kennungswechsel am Ort: keine Fahrt, als Wechsel gezählt');
+  assert(q1.state.v[T.vehicleKey('Bolt', 'y')][7] === firstSeenX && !q1.state.v[T.vehicleKey('Bolt', 'x')], 'neue Kennung übernimmt erste Sichtung, alte entfernt');
+  assert(Math.abs(hh.vminTot[hr2] - 40) < 1e-9 && Math.abs(hh.vmin[hr2] - 40) < 1e-9, 'Fahrzeugminuten: 2 Fahrzeuge × 20 Min');
+  // echte Fahrt: 2 km weiter → Start + Ende
+  q1 = T.trackRun(q1.state, { vehicles: [V('w', 48.62, 9.10), V('z', 48.61, 9.11)], stations: [], sourceRecs: recs, now: u0 + 60 * 60e3 });
+  const h3 = q1.hourly.get('08416041|Bolt|scooter'), hr3 = T.hourOf(u0 + 60 * 60e3);
+  assert(h3.start[hr3] === 1 && h3.end[hr3] === 1 && h3.rot[hr3] === 0, 'Wechsel mit Ortswechsel bleibt Fahrt');
+}

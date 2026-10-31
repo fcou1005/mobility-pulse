@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr } from './pulse-core.js?v=mvwvu3ma';
+import { haversineM, normalizeId, hashStr } from './pulse-core.js?v=mvww5n1y';
 
 export const TRACK_VERSION = 2;
 export const MOVE_M = 150;        // ab hier gilt ein Positionswechsel bei gleicher Kennung als Umsetzung (bzw. Fahrt bei stabilen Kennungen)
@@ -38,7 +38,9 @@ function dictIdx(dict, name, value) { const arr = dict[name]; let i = arr.indexO
 
 const F_DISABLED = 1, F_RESERVED = 2, F_MISSING = 4;
 const arr = (n) => new Array(n).fill(0);
-export function emptyHourly() { return { start: arr(24), end: arr(24), reloc: arr(24), swap: arr(24), pickup: arr(24), disOn: arr(24), disOff: arr(24), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 }; }
+export const ROTATE_M = 40;     // Kennung verschwindet und neue taucht ≤ 40 m daneben auf: Kennungswechsel am Ort, keine Fahrt
+export const HOUR_FIELDS = ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff', 'rot', 'vmin', 'vminTot'];
+export function emptyHourly() { return { start: arr(24), end: arr(24), reloc: arr(24), swap: arr(24), pickup: arr(24), disOn: arr(24), disOff: arr(24), rot: arr(24), vmin: arr(24), vminTot: arr(24), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 }; }
 
 /**
  * Ein Sammler-Lauf gegen den letzten Zustand.
@@ -68,6 +70,8 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   // --- Fahrzeuge ---
   const idleAgg = new Map(); // key(ags|op|ty) → [b0..b4, n]
   const idleLong = [];
+  const dtMin = dt != null ? Math.min(dt, 45 * 60e3) / 60e3 : 0; // Beobachtungsfenster dieses Laufs (Fahrzeugminuten)
+  const appeared = []; // neue Kennungen: erst nach dem Abgleich mit verschwundenen als Fahrtende zählen
   for (const v of vehicles) {
     if (!Number.isFinite(v.lat) || !Number.isFinite(v.lon) || !v.ags || v.ags === 'unbekannt') continue;
     const key = vehicleKey(v.operator, v.rawId);
@@ -81,11 +85,12 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     const cell = cellOf(v.lat, v.lon);
     const c = CELL(v.ags, cell);
     if (!v.disabled && !v.reserved) { c[2]++; c[10 + band]++; } // präsent (verfügbar)
+    if (dtMin) { const hh = H(v.operator, v.ags, ty); hh.vminTot[hour] += dtMin; if (!v.disabled && !v.reserved) hh.vmin[hour] += dtMin; }
     if (!e) {
-      // neu aufgetaucht: Fahrtende (rotierende Kennungen) bzw. Neuaufstellung
+      // neu aufgetaucht: Fahrtende (rotierende Kennungen) bzw. Neuaufstellung – Zählung nach dem Abgleich unten
       s.newc++;
-      if (!first) { H(v.operator, v.ags, ty).end[hour]++; c[1]++; c[16 + band]++; }
       state.v[key] = [lat, lon, bat, flags, ty, op, ags, now, now, bat != null && bat < LOW_BATTERY ? now : 0, v.disabled ? now : 0, src, 0];
+      if (!first) appeared.push({ key, v, ty, c });
       continue;
     }
     s.present++;
@@ -129,6 +134,17 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     }
   }
   // --- Verschwundene Fahrzeuge ---
+  // Kennungswechsel am Ort: neue Kennung ≤ ROTATE_M neben einer gerade verschwundenen (gleicher Anbieter, gleiche Art)
+  // ist dasselbe Fahrzeug – keine Fahrt; Standzeit und erste Sichtung werden übernommen.
+  const grid = new Map(); const gk = (la, lo) => `${Math.floor(la / 0.0005)}:${Math.floor(lo / 0.0007)}`;
+  for (const a of appeared) { const k = gk(a.v.lat, a.v.lon); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(a); }
+  const takeRotated = (opName, ty, la, lo) => {
+    const [gi, gj] = gk(la, lo).split(':').map(Number); let best = null, bd = ROTATE_M;
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const a of grid.get(`${gi + di}:${gj + dj}`) || []) {
+      if (a.used || a.v.operator !== opName || a.ty !== ty) continue; const d = haversineM(la, lo, a.v.lat, a.v.lon); if (d <= bd) { bd = d; best = a; }
+    }
+    if (best) best.used = true; return best;
+  };
   if (!first) {
     for (const [key, e] of Object.entries(state.v)) {
       if (seen.has(key)) continue;
@@ -141,10 +157,18 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       const srcRec = sourceRecs.find(r => r.id === srcN);
       const srcUsable = !srcRec || srcRec.status === 'live' || srcRec.status === 'delayed';
       if (!srcUsable) { /* Quelle ausgefallen: nicht als Fahrt werten, Kennung behalten */ state.v[key] = [lat, lon, bat, flags | F_MISSING, ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now]; continue; }
+      const rot = takeRotated(opN, ty, lat / 1e5, lon / 1e5);
+      if (rot) {
+        h.rot[hour]++; s.gone--; s.rotated = (s.rotated || 0) + 1;
+        const ne = state.v[rot.key]; ne[7] = firstSeen; ne[8] = lastMoved; if (!ne[9] && lowSince) ne[9] = lowSince; if (!ne[10] && disSince && rot.v.disabled) ne[10] = disSince;
+        delete state.v[key]; continue;
+      }
       if ((flags & F_DISABLED) || (bat != null && bat < PICKUP_BATTERY)) { h.pickup[hour]++; }
       else { h.start[hour]++; c[0]++; c[4 + band]++; }
       state.v[key] = [lat, lon, bat, flags | F_MISSING, ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now];
     }
+    // übrige neue Kennungen = Fahrtende bzw. Neuaufstellung
+    for (const a of appeared) { if (a.used) continue; H(a.v.operator, a.v.ags, a.ty).end[hour]++; a.c[1]++; a.c[16 + band]++; }
   }
   // --- Quellenstatistik (rollierend, gedämpft) ---
   for (const [src, s] of Object.entries(srcRun)) {
@@ -191,7 +215,7 @@ export function mergeHourly(dayDoc, hourly, { day, at, dt, srcModes }) {
   doc.runs.push([at, dt]);
   for (const [k, h] of hourly) {
     const g = doc.groups[k] || (doc.groups[k] = emptyHourly());
-    for (const f of ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff']) for (let i = 0; i < 24; i++) g[f][i] += h[f][i];
+    for (const f of HOUR_FIELDS) { g[f] ??= arr(24); for (let i = 0; i < 24; i++) g[f][i] += h[f][i]; }
     for (const f of ['swapWaitSum', 'swapWaitN', 'disDurSum', 'disDurN', 'tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN']) g[f] += h[f];
   }
   doc.srcModes = srcModes;
