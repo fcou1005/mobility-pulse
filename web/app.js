@@ -721,7 +721,9 @@ async function econProfile() {
 async function econGroups(day, keep) {
   const [doc, pricing, hist, prof] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile()]);
   if (!doc) return null;
-  const obsMin = E.observedMinutes(doc.runs); const o = econOpts();
+  // Fahrzeugminuten nur nutzen, wenn alle Läufe des Tages sie gezählt haben (Umstellungstag: Ø Bestand aus dem Verlauf)
+  const vminOk = (doc.runs || []).every(r => r[1] == null || r[2] === 1);
+  const obsMin = E.observedMinutes(doc.runs), obsMinV = vminOk ? obsMin : new Array(24).fill(0); const o = econOpts();
   const planCache = new Map(); const out = new Map();
   for (const [k, g] of Object.entries(doc.groups || {})) {
     if (!keep(k)) continue;
@@ -730,7 +732,7 @@ async function econGroups(day, keep) {
     const pl = planCache.get(pk);
     const series = hist?.series?.[k]?.total?.filter(x => x != null) || [];
     const fleetFallback = series.length ? series.reduce((a, b) => a + b, 0) / series.length : (state.latest?.groups?.[k]?.total ?? null);
-    out.set(k, { ...E.kpis({ g, obsMin, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, realization: o.realization, net: o.net }), plan: pl, op, ty, ags });
+    out.set(k, { ...E.kpis({ g, obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, realization: o.realization, net: o.net }), plan: pl, op, ty, ags });
   }
   return { out, doc, obsMin, profile: prof };
 }

@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr } from './pulse-core.js?v=mvww5n1y';
+import { haversineM, normalizeId, hashStr } from './pulse-core.js?v=mvwwd5xp';
 
 export const TRACK_VERSION = 2;
 export const MOVE_M = 150;        // ab hier gilt ein Positionswechsel bei gleicher Kennung als Umsetzung (bzw. Fahrt bei stabilen Kennungen)
@@ -212,7 +212,7 @@ export function daysBetween(a, b) { return Math.round((Date.parse(b + 'T00:00:00
 // Tagesdatei zusammenführen: bestehende Stundenwerte + neue
 export function mergeHourly(dayDoc, hourly, { day, at, dt, srcModes }) {
   const doc = dayDoc && dayDoc.day === day ? dayDoc : { day, runs: [], groups: {}, version: TRACK_VERSION };
-  doc.runs.push([at, dt]);
+  doc.runs.push([at, dt, 1]); // 1 = Lauf zählt Fahrzeugminuten (vmin/vminTot)
   for (const [k, h] of hourly) {
     const g = doc.groups[k] || (doc.groups[k] = emptyHourly());
     for (const f of HOUR_FIELDS) { g[f] ??= arr(24); for (let i = 0; i < 24; i++) g[f][i] += h[f][i]; }

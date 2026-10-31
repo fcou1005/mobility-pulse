@@ -53,3 +53,7 @@ const hp = E.hourProfile([day, day, day]);
 assert(hp.source.startsWith('gemessen') && hp.profile[8] > hp.profile[3] * 2.5, 'Tagesgang aus 3 vollen Tagen gemessen');
 assert(E.hourProfile([day]).source === 'Standardkurve', 'zu wenige Tage: Standardkurve');
 assert(E.planLabel(bolt) === '0.99 € Start + 0.24 €/min', 'Tariflabel');
+// Fahrzeugminuten nur aus Läufen, die sie zählen
+const gv = { ...g, vminTot: g.vminTot.map((x, h) => (h === 23 ? 100 * 20 : 0)), vmin: g.vmin.map((x, h) => (h === 23 ? 90 * 20 : 0)) };
+const obsV = new Array(24).fill(0); obsV[23] = 20;
+assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scooter' }).fleet, 100), 'Flotte aus Fahrzeugminuten der zählenden Läufe');
