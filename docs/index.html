@@ -109,6 +109,7 @@ details summary{cursor:pointer;color:var(--fg-2)}
 .muted{color:var(--muted)}.small{font-size:12px}.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0}
 .prose{max-width:76ch;color:var(--fg-2)}.prose h3{color:var(--fg);margin:14px 0 4px;font-size:14px}.prose p{margin:0 0 8px}
+.hbar{display:grid;grid-template-columns:90px 1fr 60px;gap:8px;align-items:center;font-size:12px;margin:5px 0}.hbar .bar{height:10px}.hbar .n{text-align:right}
 .empty{padding:22px;text-align:center;color:var(--muted);border:1px dashed var(--line-2);border-radius:8px}
 .leaflet-container{font:12px var(--sans);background:var(--bg-2)}.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--fg);box-shadow:var(--shadow)}.leaflet-popup-content{margin:10px 12px;font-size:12px;line-height:1.45}
 .leaflet-control-attribution{background:color-mix(in srgb,var(--panel) 85%,transparent)!important;color:var(--muted)!important}.leaflet-control-attribution a{color:var(--fg-2)!important}
@@ -126,9 +127,10 @@ details summary{cursor:pointer;color:var(--fg-2)}
   <nav id="nav" aria-label="Ansichten">
     <a href="#live" data-view="live"><span class="k">01</span>Live Operations</a>
     <a href="#lab" data-view="lab"><span class="k">02</span>Performance Lab</a>
-    <a href="#signals" data-view="signals"><span class="k">03</span>Analyse &amp; Signale</a>
-    <a href="#coverage" data-view="coverage"><span class="k">04</span>Anbieter &amp; Abdeckung</a>
-    <a href="#sources" data-view="sources"><span class="k">05</span>Quellen &amp; Methodik</a>
+    <a href="#usage" data-view="usage"><span class="k">03</span>Nutzung &amp; Bewegung</a>
+    <a href="#signals" data-view="signals"><span class="k">04</span>Analyse &amp; Signale</a>
+    <a href="#coverage" data-view="coverage"><span class="k">05</span>Anbieter &amp; Abdeckung</a>
+    <a href="#sources" data-view="sources"><span class="k">06</span>Quellen &amp; Methodik</a>
   </nav>
   <div class="side-foot">
     <div>Offene Daten, geprüft und zusammengeführt. Kein Anbieterzugang, keine Fahrzeugwege.</div>
@@ -165,7 +167,8 @@ details summary{cursor:pointer;color:var(--fg-2)}
           <label><input type="checkbox" id="chk-stations" checked> Stationen</label>
           <label><input type="checkbox" id="chk-muni"> Gemeindegrenze</label>
           <label><input type="checkbox" id="chk-wfs"> MobiData-Karte (BW) ergänzen</label>
-          <label>Ebene <select id="sel-layer"><option value="points">Fahrzeuge &amp; Stationen</option><option value="density">Bestandsdichte · 500 m</option><option value="energy">Energiebedarf · 500 m</option></select></label>
+          <label><input type="checkbox" id="chk-zones"> Betriebszonen (GBFS)</label>
+          <label>Ebene <select id="sel-layer"><option value="points">Fahrzeuge &amp; Stationen</option><option value="density">Bestandsdichte · 500 m</option><option value="energy">Energiebedarf · 500 m</option><option value="flow">Start/Ziel heute · 250 m</option><option value="served">Bediente Zellen · 7 Tage</option><option value="idle">Lange Standzeiten (&gt; 2 Tage)</option></select></label>
           <button id="btn-fit">⌖ Einpassen</button>
         </div>
         <div id="map" role="img" aria-label="Karte der Fahrzeuge und Stationen"></div>
@@ -192,7 +195,23 @@ details summary{cursor:pointer;color:var(--fg-2)}
       <div class="panel c12"><div class="panel-head"><div><h2>Bestandsverlauf</h2><div class="sub" id="hist-sub">Verfügbare Fahrzeuge je Anbieter, Sammler-Punkte alle 20 Minuten</div></div><div class="chips" id="hist-days"></div></div><div id="chart-hist"></div><div class="legend" id="chart-legend"></div></div>
       <div class="panel c6"><div class="panel-head"><div><h2>Anbieter-Scorecard</h2><div class="sub">Verfügbarkeit, Sperrquote, Energie, Stationen und Quellenqualität</div></div></div><div class="tbl"><table id="tbl-score"><thead><tr><th>Anbieter</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th class="n">Sperrquote</th><th class="n">Energie niedrig</th><th class="n">Leere Stationen</th><th class="n">Quelle</th><th class="n">Score</th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel c6"><div class="panel-head"><div><h2 id="cities-title">Stadt- und Gebietsvergleich</h2><div class="sub">Verfügbare Fahrzeuge je Gemeinde aus dem Sammler-Stand, je 10.000 Einwohner wenn bekannt</div></div></div><div class="tbl"><table id="tbl-cities"><thead><tr><th>Gemeinde</th><th class="n">Verfügbar</th><th class="n">je 10.000 EW</th><th class="n">Anbieter</th><th class="n">E-Scooter</th><th class="n">Räder</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Preise</h2><div class="sub">Aus den Preisfeeds der Anbieter (system_pricing_plans), Stand des Sammler-Laufs</div></div></div><div class="tbl"><table id="tbl-pricing"><thead><tr><th>Anbieter</th><th>Tarif</th><th class="n">Entsperren</th><th class="n">je Minute</th><th class="n">je km</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div><div class="muted small" id="pricing-note"></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Marktanteile · 7 Tage</h2><div class="sub">Anteil am verfügbaren Bestand je Anbieter, Tagesmittel aus dem Sammler</div></div></div><div id="chart-share"></div><div class="legend" id="share-legend"></div></div>
       <div class="panel c12"><div class="panel-head"><div><h2>Versorgung an Haltestellen</h2><div class="sub">ÖPNV-Haltestellen aus OpenStreetMap, Luftlinie zum nächsten verfügbaren Fahrzeug</div></div><div class="inline-form"><label>Radius <select id="sel-radius"><option>200</option><option selected>300</option><option>500</option><option>1000</option></select> m</label><button id="btn-supply">Haltestellen prüfen</button><button id="btn-supply-map">Auf Karte zeigen</button></div></div><div id="supply"></div></div>
+    </div>
+  </section>
+
+
+  <section class="view" id="view-usage">
+    <div class="hero"><div class="eyebrow">Nutzung &amp; Bewegung</div><h1>Was sich <em>bewegt</em>.</h1><p>Aus dem Verschwinden und Auftauchen von Fahrzeug-Kennungen zwischen zwei Sammler-Läufen: geschätzte Fahrten, Standzeiten, Akkutausch, Umsetzungen und Sperrdauern. Alle 20 Minuten, anonym, ohne Einzelwege.</p></div>
+    <div class="panel"><div class="inline-form"><b>Tag</b><div class="chips" id="usage-days"></div><span class="muted small" id="usage-note"></span></div></div>
+    <div class="tiles" id="usage-tiles"></div>
+    <div class="grid">
+      <div class="panel c8"><div class="panel-head"><div><h2>Tagesgang</h2><div class="sub" id="usage-chart-sub">Fahrtbeginne je Stunde und Anbieter</div></div><div class="inline-form"><label><input type="checkbox" id="chk-weather" checked> Wetter (Open-Meteo)</label></div></div><div id="chart-usage"></div><div class="legend" id="usage-legend"></div></div>
+      <div class="panel c4"><div class="panel-head"><div><h2>Standzeiten</h2><div class="sub">Verfügbare Fahrzeuge nach Zeit seit letzter Bewegung</div></div></div><div id="idle-bars"></div></div>
+      <div class="panel c12"><div class="panel-head"><div><h2>Anbieter im Tagesvergleich</h2><div class="sub">Umschlag = Fahrten je verfügbarem Fahrzeug; Abholungen = Verschwinden gesperrter oder leerer Fahrzeuge</div></div></div><div class="tbl"><table id="tbl-usage"><thead><tr><th>Anbieter</th><th class="n">Fahrten (Start)</th><th class="n">Fahrtenden</th><th class="n">Umschlag/Fzg.</th><th class="n">Ø Dauer</th><th class="n">Ø Distanz</th><th class="n">Umsetzungen</th><th class="n">Akkutausch</th><th class="n">Ø Wartezeit bis Tausch</th><th class="n">Abholungen</th><th class="n">Gesperrt → frei</th><th class="n">Ø Sperrdauer</th><th>Kennungen</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Nachfrage-Räume</h2><div class="sub">Zellen (≈ 250 m) mit den meisten Fahrtbeginnen und Netto-Abfluss heute</div></div><button id="btn-flow-map">Auf Karte zeigen</button></div><div class="tbl"><table id="tbl-cells"><thead><tr><th>Zelle</th><th class="n">Starts</th><th class="n">Ziele</th><th class="n">Netto</th><th class="n">Präsenz</th><th class="n">Umsetzungen</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Stationen: Verfügbarkeitsquote</h2><div class="sub">Anteil der Sammler-Läufe der letzten 7 Tage, in denen die Station leer bzw. voll war</div></div></div><div class="tbl"><table id="tbl-quota"><thead><tr><th>Station</th><th>Anbieter</th><th class="n">Läufe</th><th class="n">Leer</th><th class="n">Voll</th></tr></thead><tbody></tbody></table></div></div>
     </div>
   </section>
 
@@ -222,7 +241,7 @@ details summary{cursor:pointer;color:var(--fg-2)}
     <div class="cards" id="dirs"></div>
     <div class="panel">
       <div class="panel-head"><div><h2>Einzelquellen</h2><div class="sub">Zustand des letzten Sammler-Laufs; Fingerabdruck erkennt Quellenwechsel</div></div><div class="inline-form"><input type="search" id="src-search" placeholder="Quelle suchen"><select id="src-status"><option value="all">Alle Zustände</option><option value="live">Aktuell</option><option value="delayed">Verzögert</option><option value="stale">Veraltet</option><option value="unknown">Zeit unklar</option><option value="empty">Leer</option><option value="error">Fehler</option><option value="gone">Nicht erreichbar</option><option value="auth">Zugang nötig</option><option value="foreign">Außerhalb DE</option></select></div></div>
-      <div class="tbl"><table id="tbl-src"><thead><tr><th>Quelle</th><th>Anbieter</th><th>Verzeichnis</th><th class="n">Version</th><th class="n">Fahrzeuge</th><th class="n">Stationen</th><th class="n">Orte</th><th class="n">Alter</th><th class="n">Qualität</th><th>Status</th><th>Lizenz</th></tr></thead><tbody></tbody></table></div>
+      <div class="tbl"><table id="tbl-src"><thead><tr><th>Quelle</th><th>Anbieter</th><th>Verzeichnis</th><th class="n">Version</th><th class="n">Fahrzeuge</th><th class="n">Stationen</th><th class="n">Orte</th><th class="n">Alter</th><th class="n">Qualität</th><th class="n">Verfügb. 7 T.</th><th>Status</th><th>Lizenz</th></tr></thead><tbody></tbody></table></div>
       <div class="muted small" id="src-more"></div>
     </div>
     <div class="panel prose" id="method"></div>
