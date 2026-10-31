@@ -1,5 +1,5 @@
-import * as C from './pulse-core.js?v=mvwvepie';
-import { initOps, renderOps } from './ops.js?v=mvwvepie';
+import * as C from './pulse-core.js?v=mvwvi5il';
+import { initOps, renderOps } from './ops.js?v=mvwvi5il';
 
 const CFG = {
   DATA: (() => { const d = new URLSearchParams(location.search).get('data'); return d && /^(\/|https?:\/\/(localhost|127\.0\.0\.1)[:/])/.test(d) ? d : 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/'; })(), // ?data=/pfad/ nur lokal, für Tests

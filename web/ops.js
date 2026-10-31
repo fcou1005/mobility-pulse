@@ -132,13 +132,17 @@ async function computePlan() {
     const [fleet, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 3)]);
     if (!fleet) { status(`Noch keine Dispositionsdaten (<span class="mono">ops/${stCode}.json</span>). Sie entstehen mit dem nächsten Sammler-Lauf.`); return; }
     const inMuni = fleet.vehicles.filter(v => v.ags === ags), stInMuni = fleet.stations.filter(s => s.ags === ags);
-    const counts = new Map(); for (const v of inMuni) counts.set(v.operator, (counts.get(v.operator) || 0) + 1); for (const s of stInMuni) if (!counts.has(s.operator)) counts.set(s.operator, 0);
-    const ops = [...counts].sort((a, b) => b[1] - a[1]);
-    if (!ops.length) { status('Keine Fahrzeuge oder Stationen dieser Gemeinde im letzten Sammler-Lauf.'); return; }
-    let op = S.op && counts.has(S.op) ? S.op : st.operator !== 'all' && counts.has(st.operator) ? st.operator : ops[0][0];
-    S.op = op;
-    $('#ops-op').innerHTML = ops.map(([o, n]) => `<option value="${X.esc(o)}"${o === op ? ' selected' : ''}>${X.esc(o)} · ${X.fmt(n)} Fzg.</option>`).join('');
+    // Anbieter mit Fahrzeugen der gewählten Art zuerst; Stationsanbieter nur bei Rädern
     const type = $('#ops-type').value;
+    const typeOk = (t) => type === 'all' || t === type;
+    const counts = new Map(); for (const v of inMuni) if (typeOk(v.type)) counts.set(v.operator, (counts.get(v.operator) || 0) + 1);
+    if (type === 'all' || type === 'bike' || type === 'ebike') for (const s of stInMuni) if (!counts.has(s.operator)) counts.set(s.operator, 0);
+    const ops = [...counts].sort((a, b) => b[1] - a[1]);
+    if (!ops.length) { status(`Keine ${type === 'all' ? 'Fahrzeuge oder Stationen' : X.TYPE[type] || type} in dieser Gemeinde im letzten Sammler-Lauf — andere Fahrzeugart wählen.`); for (const k in S.layers) S.layers[k].clearLayers(); $('#ops-op').innerHTML = ''; return; }
+    const pick = (o) => o && counts.has(o) && (counts.get(o) > 0 || ops[0][1] === 0);
+    let op = pick(S.op) ? S.op : pick(st.operator) ? st.operator : ops[0][0];
+    S.op = op;
+    $('#ops-op').innerHTML = ops.map(([o, n]) => `<option value="${X.esc(o)}"${o === op ? ' selected' : ''}>${X.esc(o)} · ${n ? `${X.fmt(n)} Fzg.` : 'Stationen'}</option>`).join('');
     const vehicles = inMuni.filter(v => v.operator === op && (type === 'all' || v.type === type));
     const stations = stInMuni.filter(s => s.operator === op);
     const marketAvail = inMuni.filter(v => O.isAvailable(v) && (type === 'all' || v.type === type)).length;
