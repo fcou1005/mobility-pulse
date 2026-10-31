@@ -13,8 +13,8 @@ const OUT = process.env.BOUNDARIES_OUT || path.join(ROOT, 'data', 'boundaries.js
 const CANDIDATES = [
   process.argv[2],
   process.env.VG250_URL,
+  'https://daten.gdz.bkg.bund.de/produkte/vg/vg250-ew_ebenen_0101/aktuell/vg250-ew_01-01.utm32s.shape.ebenen.zip', // mit Einwohnerzahl (EWZ)
   'https://daten.gdz.bkg.bund.de/produkte/vg/vg250_ebenen_0101/aktuell/vg250_01-01.utm32s.shape.ebenen.zip',
-  'https://daten.gdz.bkg.bund.de/produkte/vg/vg250_ebenen_0101/aktuell/vg250_01-01.gk3.shape.ebenen.zip',
 ].filter(Boolean);
 const log = (...a) => console.error('[boundaries]', ...a);
 
@@ -38,7 +38,8 @@ if (!find.length) { log('VG250_GEM.shp nicht im Archiv'); process.exit(2); }
 const shp = find[0];
 const raw = path.join(WORK, 'gem.geojson');
 log('ogr2ogr', shp);
-execFileSync('ogr2ogr', ['-f', 'GeoJSON', '-t_srs', 'EPSG:4326', '-select', 'AGS,GEN,BEZ,SN_L,EWZ', '-where', 'GF=4', '-simplify', '0.0003', '-lco', 'COORDINATE_PRECISION=5', raw, shp], { stdio: 'inherit' });
+const ogr = (fields) => execFileSync('ogr2ogr', ['-f', 'GeoJSON', '-t_srs', 'EPSG:4326', '-select', fields, '-where', 'GF=4', '-simplify', '0.0003', '-lco', 'COORDINATE_PRECISION=5', raw, shp], { stdio: 'inherit' });
+try { ogr('AGS,GEN,BEZ,SN_L,EWZ'); } catch { log('Feld EWZ fehlt – ohne Einwohnerzahl'); await rm(raw, { force: true }); ogr('AGS,GEN,BEZ,SN_L'); }
 const fc = JSON.parse(await readFile(raw, 'utf8'));
 const STATES = { '01': 'SH', '02': 'HH', '03': 'NI', '04': 'HB', '05': 'NW', '06': 'HE', '07': 'RP', '08': 'BW', '09': 'BY', '10': 'SL', '11': 'BE', '12': 'BB', '13': 'MV', '14': 'SN', '15': 'ST', '16': 'TH' };
 const bboxOf = (geom) => {
