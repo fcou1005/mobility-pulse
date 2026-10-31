@@ -879,7 +879,10 @@ async function checkSupply() {
   const q = `[out:json][timeout:25];(node["highway"="bus_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="tram_stop"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="station"](${b[1]},${b[0]},${b[3]},${b[2]});node["railway"="halt"](${b[1]},${b[0]},${b[3]},${b[2]}););out body 800;`;
   const r = await getJson(`${CFG.OVERPASS}?data=${encodeURIComponent(q)}`, { timeout: 40000 });
   if (!r.ok) { box.innerHTML = `<div class="empty">Overpass nicht erreichbar (${r.error || r.status}).</div>`; return; }
-  const stops = (r.json.elements || []).filter(e => C.assignMunicipality(state.bIndex, e.lat, e.lon)?.ags === state.scope).map(e => ({ id: e.id, name: e.tags?.name || 'Haltestelle', lat: e.lat, lon: e.lon, kind: e.tags?.railway ? 'Bahn/Tram' : 'Bus' }));
+  const rawStops = (r.json.elements || []).filter(e => C.assignMunicipality(state.bIndex, e.lat, e.lon)?.ags === state.scope).map(e => ({ id: e.id, name: e.tags?.name || 'Haltestelle', lat: e.lat, lon: e.lon, kind: e.tags?.railway ? 'Bahn/Tram' : 'Bus' }));
+  // Gegenüberliegende Haltepunkte gleichen Namens (innerhalb 80 m) zu einer Haltestelle zusammenfassen
+  const stops = [];
+  for (const st of rawStops) { const twin = stops.find(o => o.name === st.name && C.haversineM(o.lat, o.lon, st.lat, st.lon) <= 80); if (twin) { twin.n = (twin.n || 1) + 1; twin.lat = (twin.lat * (twin.n - 1) + st.lat) / twin.n; twin.lon = (twin.lon * (twin.n - 1) + st.lon) / twin.n; continue; } stops.push({ ...st, n: 1 }); }
   const { vehicles } = livePoints(); const avail = vehicles.filter(v => !v.disabled && !v.reserved);
   // Luftlinie: drei nächste Kandidaten je Haltestelle
   for (const s of stops) {
@@ -891,10 +894,10 @@ async function checkSupply() {
   let routed = 0, routeFail = 0;
   if (useWalk && stops.length) {
     const limit = Math.max(radius * 2, 1500);
-    const todo = stops.filter(s => s.dist != null && s.dist <= limit).slice(0, 300);
+    const todo = stops.filter(s => s.dist != null && s.dist <= limit).slice(0, 600);
     const batches = []; for (let i = 0; i < todo.length; i += 24) batches.push(todo.slice(i, i + 24));
-    let done = 0;
-    for (const batch of batches) {
+    let done = 0, bi = 0;
+    const runBatch = async (batch) => {
       box.innerHTML = `<div class="muted small">Fußwege werden berechnet … ${done} / ${todo.length} Haltestellen</div><div class="progress"><i style="width:${(done / todo.length) * 100}%"></i></div>`;
       const coords = [], targetIdx = new Map();
       batch.forEach(s => coords.push(`${s.lon.toFixed(6)},${s.lat.toFixed(6)}`));
@@ -902,7 +905,7 @@ async function checkSupply() {
       const sources = batch.map((_, i) => i).join(';'), dests = [...targetIdx.values()].join(';');
       const url = `${CFG.OSRM_FOOT}/table/v1/driving/${coords.join(';')}?sources=${sources}&destinations=${dests}&annotations=distance,duration`;
       const rr = await getJson(url, { timeout: 30000 });
-      if (!rr.ok || rr.json?.code !== 'Ok') { routeFail += batch.length; done += batch.length; continue; }
+      if (!rr.ok || rr.json?.code !== 'Ok') { routeFail += batch.length; done += batch.length; return; }
       const destList = [...targetIdx.keys()];
       batch.forEach((s, i) => {
         let best = Infinity, bestMin = null, bestOp = null;
@@ -910,18 +913,19 @@ async function checkSupply() {
         if (Number.isFinite(best)) { s.walk = Math.round(best); s.walkMin = bestMin != null ? Math.round(bestMin / 60) : null; s.walkOp = bestOp; routed++; }
       });
       done += batch.length;
-      await new Promise(res => setTimeout(res, 120));
-    }
+    };
+    await Promise.all(Array.from({ length: 3 }, async () => { while (bi < batches.length) await runBatch(batches[bi++]); }));
   }
-  const eff = (s) => useWalk ? (s.walk ?? (s.dist != null && s.dist > Math.max(radius * 2, 1500) ? s.dist : null)) : s.dist;
+  // Fußweg, sonst Luftlinie (nicht geroutet oder außerhalb des Routing-Limits)
+  const eff = (s) => useWalk ? (s.walk ?? s.dist) : s.dist;
   stops.sort((a, b) => (eff(b) ?? 1e9) - (eff(a) ?? 1e9));
   const gaps = stops.filter(s => eff(s) == null || eff(s) > radius);
   state.supply = { stops, radius, useWalk, eff };
   const vals = stops.map(eff).filter(v => v != null).sort((a, b) => a - b);
   const med = vals.length ? vals[Math.floor(vals.length / 2)] : null;
   const ratio = (() => { const pairs = stops.filter(s => s.walk != null && s.dist); return pairs.length ? pairs.reduce((a, s) => a + s.walk / s.dist, 0) / pairs.length : null; })();
-  box.innerHTML = `<div class="tiles" style="margin-bottom:10px">${tile('Haltestellen', fmt(stops.length), `OSM, innerhalb ${esc(muniName(state.scope))}`)}${tile(`Ohne Fahrzeug in ${radius} m ${useWalk ? 'Fußweg' : 'Luftlinie'}`, fmt(gaps.length), pctf(gaps.length, stops.length) + ' der Haltestellen', gaps.length / Math.max(1, stops.length) > 0.4 ? 'warn' : '')}${tile(`Median ${useWalk ? 'Fußweg' : 'Luftlinie'}`, med == null ? '—' : `${fmt(med)} m`, 'zum nächsten verfügbaren Fahrzeug')}${useWalk ? tile('Umweg-Faktor', ratio == null ? '—' : fmt(ratio, 2), `${fmt(routed)} Haltestellen geroutet${routeFail ? ` · ${fmt(routeFail)} ohne Route` : ''} · Fußweg ÷ Luftlinie`) : ''}</div>
-  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Luftlinie</th>${useWalk ? '<th class="n">Fußweg</th><th class="n">Gehzeit</th>' : ''}<th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td>${useWalk ? `<td class="n">${s.walk == null ? '<span class="muted">nicht geroutet</span>' : `${fmt(s.walk)} m`}</td><td class="n">${s.walkMin == null ? '—' : `${fmt(s.walkMin)} Min.`}</td>` : ''}<td>${esc((useWalk && s.walkOp) || s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}<div class="muted small" style="margin-top:6px">${useWalk ? 'Fußwege über das OSRM-Fußgängerprofil von routing.openstreetmap.de (FOSSGIS); je Haltestelle die drei nächsten Fahrzeuge geprüft. Haltestellen mit Luftlinie über ' + fmt(Math.max(radius * 2, 1500)) + ' m werden nicht geroutet.' : 'Luftlinie; Fußweg-Routing per Häkchen aktivierbar.'}</div>`;
+  box.innerHTML = `<div class="tiles" style="margin-bottom:10px">${tile('Haltestellen', fmt(stops.length), `OSM, innerhalb ${esc(muniName(state.scope))} · ${fmt(rawStops.length)} Haltepunkte zusammengefasst`)}${tile(`Ohne Fahrzeug in ${radius} m ${useWalk ? 'Fußweg' : 'Luftlinie'}`, fmt(gaps.length), pctf(gaps.length, stops.length) + ' der Haltestellen', gaps.length / Math.max(1, stops.length) > 0.4 ? 'warn' : '')}${tile(`Median ${useWalk ? 'Fußweg' : 'Luftlinie'}`, med == null ? '—' : `${fmt(med)} m`, 'zum nächsten verfügbaren Fahrzeug')}${useWalk ? tile('Umweg-Faktor', ratio == null ? '—' : fmt(ratio, 2), `${fmt(routed)} Haltestellen geroutet${routeFail ? ` · ${fmt(routeFail)} ohne Route` : ''} · Fußweg ÷ Luftlinie`) : ''}</div>
+  <div class="tbl"><table><thead><tr><th>Haltestelle</th><th>Art</th><th class="n">Luftlinie</th>${useWalk ? '<th class="n">Fußweg</th><th class="n">Gehzeit</th>' : ''}<th>Anbieter</th></tr></thead><tbody>${gaps.slice(0, 40).map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind}</td><td class="n">${s.dist == null ? '—' : `${fmt(s.dist)} m`}</td>${useWalk ? `<td class="n">${s.walk == null ? `<span class="muted">${s.dist != null && s.dist > Math.max(radius * 2, 1500) ? 'außer Reichweite' : 'nicht geroutet'}</span>` : `${fmt(s.walk)} m`}</td><td class="n">${s.walkMin == null ? '—' : `${fmt(s.walkMin)} Min.`}</td>` : ''}<td>${esc((useWalk && s.walkOp) || s.op || '–')}</td></tr>`).join('')}</tbody></table></div>${gaps.length > 40 ? `<div class="muted small">${gaps.length - 40} weitere Haltestellen ohne Fahrzeug im Radius.</div>` : ''}<div class="muted small" style="margin-top:6px">${useWalk ? 'Fußwege über das OSRM-Fußgängerprofil von routing.openstreetmap.de (FOSSGIS); je Haltestelle die drei nächsten Fahrzeuge geprüft. Haltestellen mit Luftlinie über ' + fmt(Math.max(radius * 2, 1500)) + ' m werden nicht geroutet.' : 'Luftlinie; Fußweg-Routing per Häkchen aktivierbar.'}</div>`;
 }
 function renderSupplyLayer() {
   const L_ = state.layers; L_.supply.clearLayers(); if (!state.supply) return;
