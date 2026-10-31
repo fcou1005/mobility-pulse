@@ -1,0 +1,4 @@
+{"type":"FeatureCollection","attribution":"Test","features":[
+ {"type":"Feature","properties":{"ags":"08416041","name":"Tübingen","state":"BW","pop":90000},"geometry":{"type":"Polygon","coordinates":[[[9.0,48.49],[9.12,48.49],[9.12,48.56],[9.0,48.56],[9.0,48.49]]]}},
+ {"type":"Feature","properties":{"ags":"08111000","name":"Stuttgart","state":"BW","pop":630000},"geometry":{"type":"Polygon","coordinates":[[[9.05,48.7],[9.3,48.7],[9.3,48.87],[9.05,48.87],[9.05,48.7]]]}}
+]}

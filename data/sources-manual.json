@@ -1,0 +1,39 @@
+{
+  "_comment": "Handgepflegte Ergänzungen zum automatisch erzeugten Katalog. Muster werden auf id|name|url (kleingeschrieben) geprüft.",
+  "exclude_patterns": [
+    "carsharing", "car_sharing", "car-sharing", "stadtmobil", "teilauto", "getaround", "flinkster", "cambio",
+    "ford_", "deer", "mikar", "miles", "sharenow", "share_now", "sixt", "conficars", "swu2go", "stadtwerk",
+    "oberschwabenmobil", "einfach_unterwegs", "seefahrer", "szabo", "hertlein", "car_ship", "car-ship", "stella", "freibe",
+    "oekostadt", "gruene-flotte", "naturenergie", "mobility_ch", "edrivecarsharing", "mybuxi", "liemobil",
+    "_ch$", "-ch$", "bird-basel", "bird-biel", "bird-grenchen", "bird-kloten", "bird-schaffhausen", "bird-zurich",
+    "bolt_basel", "bolt_zurich", "epfl_lausanne", "donkey_ge$", "donkey_kreuzlingen", "donkey_neuchatel", "donkey_thun",
+    "donkey_yverdon", "dott_basel", "dott_st_gallen", "dott_zurich", "lime_basel", "lime_opfikon", "lime_uster", "lime_zurich",
+    "velospot", "pickebike", "share_birrer", "bird-chalons", "bird-sarreguemines", "nancy$", "velo-fluo", "nextbike_ae$"
+  ],
+  "operator_aliases": {
+    "zeus scooters": "Zeus", "zeus": "Zeus", "dott": "Dott", "nextbike": "nextbike", "donkey republic": "Donkey", "donkey": "Donkey",
+    "lime": "Lime", "limebike": "Lime", "bolt": "Bolt", "voi": "Voi", "yoio": "Yoio", "bird": "Bird", "tier": "TIER",
+    "call a bike": "DB Connect", "callabike": "DB Connect", "call-a-bike": "DB Connect", "db connect": "DB Connect", "deutsche bahn": "DB Connect",
+    "sigo": "sigo", "lara to go": "LaRa to go", "lara_to_go": "LaRa to go", "lastenkarle": "Lastenkarle Karlsruhe", "lastenvelo": "LastenVelo Freiburg",
+    "hopp": "Hopp Konstanz", "esel": "esel.ac", "swabi": "swabi - augsburg", "regiorad": "RegioRad Stuttgart", "stadtrad": "StadtRAD", "ab mit lara": "AB mit Lara",
+    "alf": "ALF - das Affstätter Lastenfahrrad", "fare": "FaRe - das Bananologen Lastenrad", "gülf": "Gülf - das Gültsteiner Lastenrad", "guelf": "Gülf - das Gültsteiner Lastenrad"
+  },
+  "dott_direct_candidates": [
+    "tubingen", "bochum", "bonn", "dortmund", "duisburg", "gelsenkirchen", "oberhausen", "mulheim", "frankfurt", "nurnberg",
+    "mannheim", "karlsruhe", "freiburg", "bremen", "hamburg", "dresden", "wiesbaden", "mainz", "augsburg", "braunschweig"
+  ],
+  "known_gaps": [
+    {
+      "operator": "Dott",
+      "city": "Tübingen",
+      "since": "2026-09-25",
+      "note": "MobiData BW führt Dott Tübingen als „Aktuell nicht verfügbar (25.09.2026)“; CityBikes-Spiegel steht auf dem 23.09.2026. Fehlender Datenzugang ist kein Betriebsende.",
+      "probe_url": "https://gbfs.api.ridedott.com/public/v2/tubingen/gbfs.json"
+    }
+  ],
+  "mobidata_wfs": {
+    "base": "https://api.mobidata-bw.de/geoserver/MobiData-BW/ows",
+    "layer": "MobiData-BW:sharing_vehicles",
+    "note": "Kartenquelle der offiziellen MobiData-BW-Sharing-Karte (WFS, GeoJSON). Wird im Dashboard als Ersatzebene geprüft."
+  }
+}

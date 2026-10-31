@@ -1,0 +1,16 @@
+import { spawn } from 'node:child_process';
+import { rm, mkdir, readFile } from 'node:fs/promises';
+const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
+await new Promise(r => setTimeout(r, 800));
+await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
+const run = spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json' } });
+await new Promise(r => run.on('exit', r));
+srv.kill();
+const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
+assert(d.counts.vehicles === 3, 'Dubletten/Geo-Ausschluss → 3 Fahrzeuge');
+assert(d.groups['08416041|Bolt|scooter']?.lowBattery === 1, 'Niedrigakku erkannt');
+assert(d.sources.find(s => s.id === 'gone_test')?.status === 'gone', '404 → gone');
+assert(d.sources.find(s => s.id === 'dott_test')?.status === 'stale', '40 Min alter Feed → stale');
+assert(!d.municipalities['08111000'], 'veraltete Quelle liefert keine Ortszuordnung');
+assert(d.groups['08416041|nextbike|bike']?.stationsEmpty === 1, 'leere Station erkannt');

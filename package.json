@@ -1,0 +1,14 @@
+{
+  "name": "mobility-pulse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobility Pulse – Sharing-Datensammler (GBFS/MobiData BW/MOBIDROM NRW/CityBikes) und Dashboard für Deutschland",
+  "scripts": {
+    "catalog": "node scripts/build-catalog.mjs",
+    "boundaries": "node scripts/prepare-boundaries.mjs",
+    "collect": "node scripts/collect.mjs",
+    "test": "node test/run.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

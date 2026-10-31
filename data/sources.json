@@ -1,0 +1,3200 @@
+{
+ "generatedAt": "2026-10-31T17:14:40.330Z",
+ "count": 179,
+ "directories": {
+  "mobilitydata": "https://github.com/MobilityData/gbfs/blob/master/systems.csv",
+  "mobidata_bw": "https://api.mobidata-bw.de/sharing/gbfs",
+  "mobidrom_nrw": "https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet",
+  "citybikes": "https://api.citybik.es/v2/networks",
+  "dott_direct": "https://gbfs.api.ridedott.com/public/v2/"
+ },
+ "known_gaps": [
+  {
+   "operator": "Dott",
+   "city": "Tübingen",
+   "since": "2026-09-25",
+   "note": "MobiData BW führt Dott Tübingen als „Aktuell nicht verfügbar (25.09.2026)“; CityBikes-Spiegel steht auf dem 23.09.2026. Fehlender Datenzugang ist kein Betriebsende.",
+   "probe_url": "https://gbfs.api.ridedott.com/public/v2/tubingen/gbfs.json"
+  }
+ ],
+ "mobidata_wfs": {
+  "base": "https://api.mobidata-bw.de/geoserver/MobiData-BW/ows",
+  "layer": "MobiData-BW:sharing_vehicles",
+  "note": "Kartenquelle der offiziellen MobiData-BW-Sharing-Karte (WFS, GeoJSON). Wird im Dashboard als Ersatzebene geprüft."
+ },
+ "sources": [
+  {
+   "id": "5534922f6997f4d861ce1b33f2efce21a470c22",
+   "name": "AB mit Lara",
+   "location": "Aschaffenburg",
+   "api": "gbfs",
+   "url": "https://abmitlara.de/wp-json/commonsbooking/v1/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.abmitlara.de",
+   "operator": "AB mit Lara",
+   "priority": 2
+  },
+  {
+   "id": "herrenberg_alf",
+   "name": "ALF - das Affstätter Lastenfahrrad",
+   "location": "Herrenberg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/herrenberg_alf/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://herrenberg.adfc.de/adfc-herrenberg",
+   "operator": "ALF - das Affstätter Lastenfahrrad",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/herrenberg_alf/gbfs"
+   ]
+  },
+  {
+   "id": "bird-munich",
+   "name": "Bird Munich",
+   "location": "Munich",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/munich/gbfs.json",
+   "versions": [
+    "1.1",
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.bird.co",
+   "operator": "Bird",
+   "priority": 2
+  },
+  {
+   "id": "bird-ulm",
+   "name": "Bird Ulm",
+   "location": "Ulm",
+   "api": "gbfs",
+   "url": "https://mds.bird.co/gbfs/v2/public/ulm/gbfs.json",
+   "versions": [
+    "1.1",
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.bird.co",
+   "operator": "Bird",
+   "priority": 2
+  },
+  {
+   "id": "bolt_karlsruhe",
+   "name": "Bolt Technology OÜ",
+   "location": "Karlsruhe",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/bolt_karlsruhe/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.bolt.eu/",
+   "operator": "Bolt",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/bolt_karlsruhe/gbfs"
+   ]
+  },
+  {
+   "id": "bolt_reutlingen_tuebingen",
+   "name": "Bolt Technology OÜ",
+   "location": "Reutlingen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/bolt_reutlingen_tuebingen/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.bolt.eu/",
+   "operator": "Bolt",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/bolt_reutlingen_tuebingen/gbfs"
+   ]
+  },
+  {
+   "id": "bolt_stuttgart",
+   "name": "Bolt Technology OÜ",
+   "location": "Stuttgart",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/bolt_stuttgart/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.bolt.eu/",
+   "operator": "Bolt",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/bolt_stuttgart/gbfs"
+   ]
+  },
+  {
+   "id": "callabike",
+   "name": "Call a Bike",
+   "location": "Germany",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/callabike/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.callabike.de/",
+   "operator": "DB Connect",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/callabike/gbfs"
+   ]
+  },
+  {
+   "id": "Augsburg",
+   "name": "Donkey Republic Augsburg",
+   "location": "Augsburg",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/Augsburg/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "bayern_komplett",
+   "name": "Donkey Republic Bayern Komplett",
+   "location": "Bayern",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/bayern_komplett/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_bamberg",
+   "name": "Donkey Republic Bamberg",
+   "location": "Bamberg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/donkey_bamberg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 1,
+   "altUrls": [
+    "https://stables.donkey.bike/api/public/gbfs/3.0/Bamberg/gbfs.json"
+   ]
+  },
+  {
+   "id": "donkey_hannover",
+   "name": "Donkey Republic Hannover",
+   "location": "Hanover",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_hannover/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike/cities/hanover",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_kiel",
+   "name": "Donkey Republic Kiel",
+   "location": "Kiel",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/donkey_kiel/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.donkey.bike/cities/bike-rental-kiel/",
+   "operator": "Donkey",
+   "priority": 1,
+   "altUrls": [
+    "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_kiel/gbfs.json"
+   ]
+  },
+  {
+   "id": "donkey_kielsmile",
+   "name": "Donkey KielRegion+Smile24",
+   "location": "Kiel Region",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_kielsmile/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_munich",
+   "name": "Donkey Republic Munich",
+   "location": "Munich",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_munich/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike/cities/bike-rental-munich/",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_ochtrup",
+   "name": "Donkey Ochtrup",
+   "location": "Ochtrup",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_ochtrup/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_regensburg",
+   "name": "Donkey Republic Regensburg",
+   "location": "Regensburg",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_regensburg/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike/cities/bike-rental-regensburg/",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_regensburg_straubing",
+   "name": "Donkey Regensburg",
+   "location": "Regensburg",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_regensburg_straubing/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "donkey_schleswig",
+   "name": "Donkey Republic Schleswig",
+   "location": "Schleswig",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/donkey_schleswig/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike/cities/schlei-region/",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "Donkey-Prignitz",
+   "name": "Donkey Prignitz",
+   "location": "Wittenberge",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/Donkey-Prignitz/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike/cities/prignitz",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "Ergolding",
+   "name": "Donkey Ergolding",
+   "location": "Ergolding",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/Ergolding/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "Kelheim",
+   "name": "Donkey Kelheim",
+   "location": "Kelheim",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/Kelheim/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "Neutraubling",
+   "name": "Donkey Neutraubling",
+   "location": "Neutraubling",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/Neutraubling/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "Obertraubling",
+   "name": "Donkey Obertraubling",
+   "location": "Obertraubling",
+   "api": "gbfs",
+   "url": "https://stables.donkey.bike/api/public/gbfs/3.0/Obertraubling/gbfs.json",
+   "versions": [
+    "1.0",
+    "2.3",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.donkey.bike",
+   "operator": "Donkey",
+   "priority": 2
+  },
+  {
+   "id": "dott_heidelberg",
+   "name": "dott heidelberg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/dott_heidelberg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Dott"
+  },
+  {
+   "id": "dott_heilbronn",
+   "name": "dott heilbronn",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/dott_heilbronn/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Dott"
+  },
+  {
+   "id": "dott_kaiserslautern",
+   "name": "dott kaiserslautern",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/dott_kaiserslautern/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Dott"
+  },
+  {
+   "id": "dott_stuttgart",
+   "name": "dott stuttgart",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/dott_stuttgart/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Dott"
+  },
+  {
+   "id": "dott-aachen",
+   "name": "Dott Aachen",
+   "location": "Aachen",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/aachen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-augsburg",
+   "name": "Dott augsburg",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/augsburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-berlin",
+   "name": "Dott Berlin",
+   "location": "Berlin",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/berlin/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-bochum",
+   "name": "Dott bochum",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/bochum/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-bonn",
+   "name": "Dott bonn",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/bonn/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-braunschweig",
+   "name": "Dott braunschweig",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/braunschweig/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-bremen",
+   "name": "Dott bremen",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/bremen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-cologne",
+   "name": "Dott Cologne",
+   "location": "Cologne",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/cologne/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-dortmund",
+   "name": "Dott dortmund",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/dortmund/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-dresden",
+   "name": "Dott dresden",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/dresden/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-duisburg",
+   "name": "Dott duisburg",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/duisburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-dusseldorf",
+   "name": "Dott Dusseldorf",
+   "location": "Dusseldorf",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/dusseldorf/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-essen",
+   "name": "Dott Essen",
+   "location": "Essen",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/essen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-frankfurt",
+   "name": "Dott frankfurt",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/frankfurt/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-freiburg",
+   "name": "Dott freiburg",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/freiburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-gelsenkirchen",
+   "name": "Dott gelsenkirchen",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/gelsenkirchen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-hamburg",
+   "name": "Dott hamburg",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/hamburg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-hannover",
+   "name": "Dott Hannover",
+   "location": "Hannover",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/hannover/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-heidelberg",
+   "name": "Dott Heidelberg",
+   "location": "Heidelberg",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/heidelberg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-heilbronn",
+   "name": "Dott Heilbronn",
+   "location": "Heilbronn",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/heilbronn/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-kaiserslautern",
+   "name": "Dott Kaiserslautern",
+   "location": "Kaiserslautern",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/kaiserslautern/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-karlsruhe",
+   "name": "Dott karlsruhe",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/karlsruhe/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-langenfeld",
+   "name": "Dott Langenfeld",
+   "location": "Langenfeld",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/langenfeld/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-leipzig",
+   "name": "Dott Leipzig",
+   "location": "Leipzig",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/leipzig/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-mainz",
+   "name": "Dott mainz",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/mainz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-mannheim",
+   "name": "Dott mannheim",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/mannheim/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-mulheim",
+   "name": "Dott mulheim",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/mulheim/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-munich",
+   "name": "Dott Munich",
+   "location": "Munich",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/munich/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-munster",
+   "name": "Dott Münster",
+   "location": "Münster",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/munster/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-nurnberg",
+   "name": "Dott nurnberg",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/nurnberg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-oberhausen",
+   "name": "Dott oberhausen",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/oberhausen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-potsdam",
+   "name": "Dott Potsdam",
+   "location": "Potsdam",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/potsdam/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-stuttgart",
+   "name": "Dott Stuttgart",
+   "location": "Stuttgart",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/stuttgart/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://ridedott.com/",
+   "operator": "Dott",
+   "priority": 2
+  },
+  {
+   "id": "dott-tubingen",
+   "name": "Dott tubingen",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/tubingen/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "dott-wiesbaden",
+   "name": "Dott wiesbaden",
+   "operator": "Dott",
+   "api": "gbfs",
+   "url": "https://gbfs.api.ridedott.com/public/v2/wiesbaden/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "dott_direct"
+   ],
+   "candidate": true,
+   "priority": 2
+  },
+  {
+   "id": "esel_ac",
+   "name": "esel.ac",
+   "location": "Aachen",
+   "api": "gbfs",
+   "url": "https://di.esel.ac/gbfs/gbfs.json",
+   "versions": [
+    "2.1"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://esel.ac/",
+   "operator": "esel.ac",
+   "priority": 2
+  },
+  {
+   "id": "herrenberg_fare",
+   "name": "FaRe - das Bananologen Lastenrad",
+   "location": "Herrenberg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/herrenberg_fare/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://bananologen-herrenberg.jimdosite.com/",
+   "operator": "FaRe - das Bananologen Lastenrad",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/herrenberg_fare/gbfs"
+   ]
+  },
+  {
+   "id": "herrenberg_guelf",
+   "name": "Gülf - das Gültsteiner Lastenrad",
+   "location": "Herrenberg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/herrenberg_guelf/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://gueltsteinmobil.de/guelf-unser-lastenfahrrad/guelf-unser-lastenfahrrad",
+   "operator": "Gülf - das Gültsteiner Lastenrad",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/herrenberg_guelf/gbfs"
+   ]
+  },
+  {
+   "id": "hopp_konstanz",
+   "name": "Hopp Konstanz",
+   "location": "Konstanz",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/hopp_konstanz/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://hopp.bike/",
+   "operator": "Hopp Konstanz",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/hopp_konstanz/gbfs"
+   ]
+  },
+  {
+   "id": "lara_to_go",
+   "name": "LaRa to go",
+   "location": "Waiblingen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/lara_to_go/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://energieagentur-remsmurr.de/projekte/Lastenradverleih",
+   "operator": "LaRa to go",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/lara_to_go/gbfs"
+   ]
+  },
+  {
+   "id": "lastenkarle",
+   "name": "Lastenkarle Karlsruhe",
+   "location": "Karlsruhe",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/lastenkarle/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://lastenkarle.de/",
+   "operator": "Lastenkarle Karlsruhe",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/lastenkarle/gbfs"
+   ]
+  },
+  {
+   "id": "lastenvelo_fr",
+   "name": "LastenVelo Freiburg",
+   "location": "Freiburg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/lastenvelo_fr/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.lastenvelofreiburg.de/",
+   "operator": "LastenVelo Freiburg",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/lastenvelo_fr/gbfs"
+   ]
+  },
+  {
+   "id": "lime_bw",
+   "name": "Lime Stuttgart-Konstanz",
+   "location": "Stuttgart-Konstanz",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/lime_bw/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.li.me/",
+   "operator": "Lime",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/lime_bw/gbfs"
+   ]
+  },
+  {
+   "id": "lime_dresden",
+   "name": "Lime Dresden",
+   "location": "Dresden",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/dresden/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.li.me/",
+   "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "lime_frankfurt",
+   "name": "Lime Frankfurt",
+   "location": "Frankfurt",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/frankfurt/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.li.me",
+   "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "lime_hamburg",
+   "name": "Lime Hamburg",
+   "location": "Hamburg",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/hamburg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://li.me",
+   "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "lime_oberhausen",
+   "name": "Lime Oberhausen",
+   "location": "Oberhausen",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/oberhausen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.li.me",
+   "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "lime_stuttgart",
+   "name": "Lime Stuttgart",
+   "location": "Stuttgart",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v3/lime_stuttgart/gbfs",
+   "versions": [
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.li.me/",
+   "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "lime_wuppertal",
+   "name": "Lime Wuppertal",
+   "location": "Wuppertal",
+   "api": "gbfs",
+   "url": "https://data.lime.bike/api/partners/v2/gbfs/wuppertal/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.li.me",
+   "operator": "Lime",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ac",
+   "name": "Bergisches e-Bike",
+   "location": "Bergisches e-Bike",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ac/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/bergisches-ebike/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_am",
+   "name": "moin mobil Achim",
+   "location": "Achim",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_am/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/moinmobil/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_an",
+   "name": "euregiobike",
+   "location": "Aachen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_an/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.euregiobike.eu/de",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_bn",
+   "name": "nextbike Berlin",
+   "location": "Berlin",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bn/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/berlin/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_bq",
+   "name": "Bre.Bike",
+   "location": "Bremen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bq/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/bre.bike/de/de/bremen/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_cb",
+   "name": "Campus Berlin-Buch",
+   "location": "Berlin-Buch",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_cb/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/de/berlin-buch/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_da",
+   "name": "Graben - ready4green",
+   "location": "Graben",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_da/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/ready4green/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dc",
+   "name": "Potsdam Rad",
+   "location": "Potsdam",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dc/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/potsdam/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dd",
+   "name": "nextbike Düsseldorf",
+   "location": "Düsseldorf",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dd/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/duesseldorf/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_df",
+   "name": "Frelo",
+   "location": "Freiburg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_df/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.frelo-freiburg.de/de/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_df/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_dg",
+   "name": "meinSiggi",
+   "location": "Bielefeld",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/bielefeld/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dh",
+   "name": "nextbike Hannover",
+   "location": "Hannover",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dh/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/hannover/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dj",
+   "name": "nextbike Gütersloh",
+   "location": "Gütersloh",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dj/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/guetersloh/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dk",
+   "name": "nextbike Kassel",
+   "location": "Kassel",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dk/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/kassel/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dn",
+   "name": "Veloleo",
+   "location": "Braunschweig",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dn/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/veloleo/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_do",
+   "name": "nextbike Rüsselsheim am Main",
+   "location": "Rüsselsheim",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_do/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/ruesselsheim/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ds",
+   "name": "SAP Walldorf",
+   "location": "Walldorf",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_ds/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.nextbike.de/walldorf/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ds/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_dv",
+   "name": "VAG_Rad",
+   "location": "Nuremberg",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dv/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.vagrad.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dw",
+   "name": "wupsiRad Leverkusen",
+   "location": "Leverkusen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dw/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.wupsirad.de/leverkusen/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_dx",
+   "name": "MOBIbike",
+   "location": "Dresden",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_dx/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/dresden",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_eb",
+   "name": "Eifel e-Bike",
+   "location": "Eifel",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_eb/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/eifel-ebike/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ed",
+   "name": "EDEKA Grünheide",
+   "location": "Grünheide (Mark)",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ed/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/gruenheide/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_eh",
+   "name": "EinfachMobil",
+   "location": "Ortenaukreis",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_eh/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.nextbike.de/einfachmobil/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_eh/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_ev",
+   "name": "flux Bikesharing",
+   "location": "Friedrichsdorf",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ev/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/flux-bikesharing/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_fg",
+   "name": "KVV.nextbike",
+   "location": "Karlsruhe",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_fg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.kvv-nextbike.de/de/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_fg/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_gh",
+   "name": "westBike",
+   "location": "Heinsberg",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_gh/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.west-bike.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_hb",
+   "name": "HelBi (Kreis Soest)",
+   "location": "DE",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_hb/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/helbi/de",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_kg",
+   "name": "KVB Rad",
+   "location": "Cologne",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_kg/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.kvb-rad.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_kk",
+   "name": "Mein konrad",
+   "location": "Konstanz",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_kk/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.stadtwerke-konstanz.de/mobilitaet/fahrradmietsystem/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_kk/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_lc",
+   "name": "Landkreis Nordsachsen",
+   "location": "Nordsachsen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_lc/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/nordsachsen/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_le",
+   "name": "nextbike Leipzig",
+   "location": "Leipzig",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_le/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/leipzig/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_lr",
+   "name": "LVR Bike",
+   "location": "Langenfeld",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_lr/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/lvr-langenfeld/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ml",
+   "name": "MyRadl",
+   "location": "Munich",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ml/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://myradl.de/de",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_mr",
+   "name": "nextbike Ruhrgebiet",
+   "location": "Ruhr",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_mr/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/stadtlastenrad/de",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ms",
+   "name": "nextbike ms",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_ms/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "nextbike"
+  },
+  {
+   "id": "nextbike_mx",
+   "name": "movemix_bike",
+   "location": "Halle",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_mx/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.movemix-bike.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_mz",
+   "name": "meinRad",
+   "location": "Mainz",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_mz/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.mainzer-mobilitaet.de/mehr-mobilitaet/meinrad/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ng",
+   "name": "nextbike Gießen",
+   "location": "Gießen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ng/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/giessen/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_nm",
+   "name": "nextbike Marburg",
+   "location": "Marburg",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_nm/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/marburg/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_nn",
+   "name": "nextbike Norderstedt",
+   "location": "Norderstedt",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_nn/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.nextbike.de/norderstedt/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_nn/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_re",
+   "name": "mobic",
+   "location": "Rhein-Erft-Kreis",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_re/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/mobic",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_rh",
+   "name": "AW-bike",
+   "location": "Remagen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_rh/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/aw-bike/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_rr",
+   "name": "Roche - Bike",
+   "location": "Mannheim",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_rr/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/dcs-bike/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_sn",
+   "name": "NEW MöBus nextbike",
+   "location": "Mönchengladbach",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_sn/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/moenchengladbach/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_st",
+   "name": "StadtRad Neustrelitz",
+   "location": "Neustrelitz",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_st/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://stadtrad-neustrelitz.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ug",
+   "name": "StadtRad Greifswald",
+   "location": "Greifswald",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ug/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://stadtrad-greifswald.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_um",
+   "name": "MV-Rad",
+   "location": "Mecklenburg-Vorpommern",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_um/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://mv-rad.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_ur",
+   "name": "UsedomRad",
+   "location": "Usedom",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ur/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://usedomrad.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_vn",
+   "name": "VRNnextbike",
+   "location": "Rhine-Neckar",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/nextbike_vn/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.vrnnextbike.de/",
+   "operator": "nextbike",
+   "priority": 1,
+   "altUrls": [
+    "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_vn/gbfs.json"
+   ]
+  },
+  {
+   "id": "nextbike_wa",
+   "name": "welo",
+   "location": "Bonn",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_wa/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_wd",
+   "name": "WinsenRad",
+   "location": "Winsen (Luhe)",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_wd/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.winsenrad.de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_wn",
+   "name": "nextbike Wiesbaden",
+   "location": "Wiesbaden",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_wn/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/wiesbaden/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "nextbike_wp",
+   "name": "Bikesharing Amprion",
+   "location": "Rommerskirchen",
+   "api": "gbfs",
+   "url": "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_wp/gbfs.json",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://www.nextbike.de/amprion/de/",
+   "operator": "nextbike",
+   "priority": 2
+  },
+  {
+   "id": "regiorad_stuttgart",
+   "name": "RegioRadStuttgart",
+   "location": "Stuttgart",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/regiorad_stuttgart/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.regioradstuttgart.de/",
+   "operator": "RegioRad Stuttgart",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/regiorad_stuttgart/gbfs"
+   ]
+  },
+  {
+   "id": "herrenberg_stadtrad",
+   "name": "stadtRad - das stadtnavi Lastenrad",
+   "location": "Herrenberg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/herrenberg_stadtrad/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.herrenberg.de/Mobilit%C3%A4t/Leihbares-Lastenrad",
+   "operator": "StadtRAD",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/herrenberg_stadtrad/gbfs"
+   ]
+  },
+  {
+   "id": "stadtrad_hamburg",
+   "name": "StadtRadHamburg",
+   "location": "Hamburg",
+   "api": "gbfs",
+   "url": "https://apis.deutschebahn.com/db-api-marketplace/apis/shared-mobility-gbfs/v2/de/StadtRadHamburg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": {
+    "type": "2",
+    "param": "DB-Client-Id|DB-Api-Key",
+    "info": "https://developers.deutschebahn.com/db-api-marketplace/apis/start"
+   },
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://stadtrad.hamburg.de/",
+   "operator": "StadtRAD",
+   "disabled": "Zugangsdaten erforderlich (2)",
+   "priority": 2
+  },
+  {
+   "id": "stadtrad_lueneburg",
+   "name": "StadtRADLueneburg",
+   "location": "Lüneburg",
+   "api": "gbfs",
+   "url": "https://apis.deutschebahn.com/db-api-marketplace/apis/shared-mobility-gbfs/v2/de/StadtRADLueneburg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": {
+    "type": "2",
+    "param": "DB-Client-Id|DB-Api-Key",
+    "info": "https://developers.deutschebahn.com/db-api-marketplace/apis/start"
+   },
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://stadtradlueneburg.de/",
+   "operator": "StadtRAD",
+   "disabled": "Zugangsdaten erforderlich (2)",
+   "priority": 2
+  },
+  {
+   "id": "swabi",
+   "name": "swabi - augsburg",
+   "location": "Augsburg",
+   "api": "gbfs",
+   "url": "https://gbfs.partners.fifteen.eu/gbfs/2.2/swabi/en/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://swabi.eu/",
+   "operator": "swabi - augsburg",
+   "priority": 2
+  },
+  {
+   "id": "voi_de",
+   "name": "Voi",
+   "location": "Germany",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/voi_de/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://www.voi.com/",
+   "operator": "Voi",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/voi_de/gbfs"
+   ]
+  },
+  {
+   "id": "159",
+   "name": "Yoio Erfurt",
+   "location": "Erfurt",
+   "api": "gbfs",
+   "url": "https://yoio.rideatom.com/gbfs/159/v3.0/gbfs",
+   "versions": [
+    "2.2",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://yoio.app/",
+   "operator": "Yoio",
+   "priority": 2
+  },
+  {
+   "id": "71",
+   "name": "Yoio Freiburg",
+   "location": "Freiburg im Breisgau",
+   "api": "gbfs",
+   "url": "https://yoio.rideatom.com/gbfs/71/v3.0/gbfs",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "http://www.yoio.app",
+   "operator": "Yoio",
+   "priority": 2
+  },
+  {
+   "id": "9",
+   "name": "Yoio Göttingen",
+   "location": "Göttingen",
+   "api": "gbfs",
+   "url": "https://yoio.rideatom.com/gbfs/9/v3.0/gbfs",
+   "versions": [
+    "2.2",
+    "3.0"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://yoio.app/",
+   "operator": "Yoio",
+   "priority": 2
+  },
+  {
+   "id": "yoio_freiburg",
+   "name": "yoio freiburg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/yoio_freiburg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Yoio"
+  },
+  {
+   "id": "zeo_bruchsal",
+   "name": "zeo bruchsal",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeo_bruchsal/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "zeo"
+  },
+  {
+   "id": "zeus_bamberg",
+   "name": "Zeus Bamberg",
+   "location": "Bamberg",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/bamberg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_castrop-rauxel",
+   "name": "Zeus Castrop Rauxel",
+   "location": "Castrop Rauxel",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/castrop-rauxel/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_donaueschingen",
+   "name": "Zeus Donaueschingen",
+   "location": "Donaueschingen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_donaueschingen/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/zeus_donaueschingen/gbfs"
+   ]
+  },
+  {
+   "id": "zeus_duisburg",
+   "name": "Zeus Duisburg",
+   "location": "Druisburg",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/duisburg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_freiburg",
+   "name": "zeus freiburg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_freiburg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Zeus"
+  },
+  {
+   "id": "zeus_freiburg im breisgau",
+   "name": "Zeus Freiburg",
+   "location": "Freiburg im Breisgau",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/freiburg%20im%20breisgau/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_friedberg",
+   "name": "Zeus Friedberg",
+   "location": "Friedberg",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/friedberg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_gera",
+   "name": "Zeus Gera",
+   "location": "Gera",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/gera/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_goppingen",
+   "name": "Zeus Göppingen",
+   "location": "Göppingen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/goppingen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_hagen",
+   "name": "Zeus Hagen",
+   "location": "Hagen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/hagen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_hattingen",
+   "name": "Zeus Hattingen",
+   "location": "Hattingen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/hattingen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_heidelberg",
+   "name": "Zeus Heidelberg",
+   "location": "Heidelberg",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/heidelberg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_heilbronn",
+   "name": "Zeus Heilbronn",
+   "location": "Heilbronn",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/heilbronn/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_hemmingen",
+   "name": "Zeus Hemmingen",
+   "location": "Hemmingen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/hemmingen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_herne",
+   "name": "Zeus Herne",
+   "location": "Herne",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/herne/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_jena",
+   "name": "Zeus Jena",
+   "location": "Jena",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/jena/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_kempten",
+   "name": "Zeus Kempten",
+   "location": "Kempten",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/kempten/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_konstanz",
+   "name": "Zeus Konstanz",
+   "location": "Konstanz",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_konstanz/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://zeus.city/api/v1/mds/gbfs/konstanz/gbfs.json"
+   ]
+  },
+  {
+   "id": "zeus_leimen_walldorf_wiesloch",
+   "name": "Zeus Leimen",
+   "location": "Leimen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_leimen_walldorf_wiesloch/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/zeus_leimen_walldorf_wiesloch/gbfs"
+   ]
+  },
+  {
+   "id": "zeus_limburgerhof",
+   "name": "Zeus Limburgerhof",
+   "location": "Limburgerhof",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/limburgerhof/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_ludwigsburg",
+   "name": "Zeus Ludwigsburg",
+   "location": "Ludwigsburg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_ludwigsburg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://zeus.city/api/v1/mds/gbfs/ludwigsburg/gbfs.json"
+   ]
+  },
+  {
+   "id": "zeus_marburg",
+   "name": "Zeus Marburg",
+   "location": "Marburg",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/marburg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_neustadt",
+   "name": "Zeus Neustadt",
+   "location": "Neustadt",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_neustadt/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://zeus.city/api/v1/mds/gbfs/neustadt/gbfs.json"
+   ]
+  },
+  {
+   "id": "zeus_pforzheim",
+   "name": "Zeus Pforzheim",
+   "location": "Pforzheim",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/pforzheim/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_regensburg",
+   "name": "Zeus Regensburg",
+   "location": "Regensburg",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/regensburg/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_renningen_malmsheim",
+   "name": "zeus renningen malmsheim",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_renningen_malmsheim/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Zeus"
+  },
+  {
+   "id": "zeus_renningen-malmsheim",
+   "name": "Zeus Renningen-Malmsheim",
+   "location": "Renningen-Malmsheim",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/renningen-malmsheim/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_reutlingen",
+   "name": "Zeus Reutlingen",
+   "location": "Reutlingen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/reutlingen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_russelsheim",
+   "name": "Zeus Russelsheim",
+   "location": "Russelsheim",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/russelsheim/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_schwabisch gmund",
+   "name": "Zeus Schwäbisch Gmünd",
+   "location": "Schwäbisch Gmünd",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/schwabisch%20gmund/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_schweinfurt",
+   "name": "Zeus Schweinfurt",
+   "location": "Schweinfurt",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/schweinfurt/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_singen",
+   "name": "Zeus Singen",
+   "location": "Singen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_singen/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://api.mobidata-bw.de/sharing/gbfs/v3/zeus_singen/gbfs"
+   ]
+  },
+  {
+   "id": "zeus_straubing",
+   "name": "Zeus Straubing",
+   "location": "Straubing",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/straubing/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_tubingen",
+   "name": "Zeus Tübingen",
+   "location": "Tübingen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/tubingen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_tuttlingen",
+   "name": "Zeus Tuttlingen",
+   "location": "Tuttlingen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_tuttlingen/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://zeus.city/api/v1/mds/gbfs/tuttlingen/gbfs.json"
+   ]
+  },
+  {
+   "id": "zeus_villingen_schwenningen",
+   "name": "zeus villingen schwenningen",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_villingen_schwenningen/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobidata_bw"
+   ],
+   "priority": 1,
+   "operator": "Zeus"
+  },
+  {
+   "id": "zeus_villingen-schwenningen",
+   "name": "Zeus Villingen-Schwenningen",
+   "location": "Villingen-Schwenningen",
+   "api": "gbfs",
+   "url": "https://zeus.city/api/v1/mds/gbfs/villingen-schwenningen/gbfs.json",
+   "versions": [
+    "2.2"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 2
+  },
+  {
+   "id": "zeus_wurzburg",
+   "name": "Zeus Wurzburg",
+   "location": "Wurzburg",
+   "api": "gbfs",
+   "url": "https://api.mobidata-bw.de/sharing/gbfs/v2/zeus_wurzburg/gbfs",
+   "versions": [
+    "2.3"
+   ],
+   "auth": null,
+   "directories": [
+    "mobilitydata",
+    "mobidata_bw"
+   ],
+   "homepage": "https://zeusscooters.com/",
+   "operator": "Zeus",
+   "priority": 1,
+   "altUrls": [
+    "https://zeus.city/api/v1/mds/gbfs/wurzburg/gbfs.json"
+   ]
+  }
+ ]
+}

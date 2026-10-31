@@ -1,0 +1,85 @@
+name: Sammler
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+    inputs:
+      rebuild_boundaries:
+        description: 'Gemeindegrenzen neu aufbereiten'
+        type: boolean
+        default: false
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bisherigen Datenstand (Branch data) holen
+        run: |
+          mkdir -p out
+          if git fetch --depth 1 origin data:refs/remotes/origin/data 2>/dev/null; then
+            git archive refs/remotes/origin/data | tar -x -C out
+            echo "Datenstand übernommen: $(ls out | tr '\n' ' ')"
+          else
+            echo "Noch kein Datenstand"
+          fi
+
+      - name: Monat für Grenzen-Cache
+        id: month
+        run: echo "m=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Gemeindegrenzen aus Cache
+        id: bcache
+        if: ${{ !inputs.rebuild_boundaries }}
+        uses: actions/cache@v4
+        with:
+          path: cache/boundaries.json
+          key: vg250-${{ steps.month.outputs.m }}-v1
+
+      - name: Gemeindegrenzen aufbereiten (BKG VG250)
+        if: ${{ steps.bcache.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin unzip >/dev/null
+          mkdir -p cache
+          BOUNDARIES_OUT=cache/boundaries.json node scripts/prepare-boundaries.mjs
+
+      - name: Quellenkatalog aktualisieren
+        run: node scripts/build-catalog.mjs
+
+      - name: Sammeln
+        env:
+          DATA_DIR: out
+          BOUNDARIES: cache/boundaries.json
+          SOURCES_FILE: data/sources.json
+          HISTORY_DAYS: '30'
+        run: |
+          cp data/sources.json out/sources.json
+          node scripts/collect.mjs
+          ls -la out out/history | head -40
+
+      - name: Veröffentlichen (Branch data, ein Commit)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out
+          rm -rf .git
+          git init -q
+          git checkout -q --orphan data
+          git add -A
+          git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Daten $(date -u +%FT%TZ)"
+          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" data:data
+          echo "veröffentlicht: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/latest.json"
