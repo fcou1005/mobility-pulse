@@ -1,7 +1,8 @@
-import * as C from './pulse-core.js?v=mvwtt5ym';
+import * as C from './pulse-core.js?v=mvwuxwtg';
+import { initOps, renderOps } from './ops.js?v=mvwuxwtg';
 
 const CFG = {
-  DATA: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/',
+  DATA: (() => { const d = new URLSearchParams(location.search).get('data'); return d && /^(\/|https?:\/\/(localhost|127\.0\.0\.1)[:/])/.test(d) ? d : 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/'; })(), // ?data=/pfad/ nur lokal, für Tests
   MAIN: 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/main/data/',
   REPO: 'https://github.com/fcou1005/mobility-pulse',
   WFS: 'https://api.mobidata-bw.de/geoserver/MobiData-BW/ows',
@@ -19,7 +20,7 @@ const ageText = (ms) => ms == null ? '–' : ms < 90e3 ? 'gerade' : ms < 3600e3 
 const timeText = (ms) => ms ? new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
 const TYPE = C.VEHICLE_TYPE_LABEL;
 const STATUS = { ...C.FRESHNESS_LABEL, collector: 'Sammler-Stand' };
-const DIRS = { mobilitydata: 'MobilityData / Betreiber', mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', dott_direct: 'Dott · Direktfeed' };
+const DIRS = { mobilitydata: 'MobilityData / Betreiber', mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', dott_direct: 'Dott · Direktfeed', lime_direct: 'Lime · Direktfeed', zeus_direct: 'Zeus · Direktfeed', bird_direct: 'Bird · Direktfeed', db_api: 'DB API Marketplace' };
 const OP_COLORS = { Bolt: '#34d399', Dott: '#60a5fa', Voi: '#f472b6', Lime: '#a3e635', nextbike: '#f59e0b', Zeus: '#c084fc', Donkey: '#fb923c', Bird: '#e879f9', 'DB Connect': '#ef4444', Yoio: '#22d3ee', sigo: '#fbbf24', StadtRAD: '#f87171' };
 const opColor = (op) => OP_COLORS[op] || `hsl(${parseInt(C.hashStr(op), 36) % 360} 60% 60%)`;
 
@@ -54,6 +55,7 @@ async function loadBase() {
   const [status, latest, sources, hist] = await Promise.all([getJson(CFG.DATA + 'status.json'), getJson(CFG.DATA + 'latest.json'), getJson(CFG.DATA + 'sources.json'), getJson(CFG.DATA + 'history/index.json')]);
   state.status = status.json; state.latest = latest.json; state.histIndex = hist.json;
   state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
+  if (state.status?.at && Date.now() - state.status.at > 45 * 60e3) notice(`Der letzte Sammler-Lauf ist ${ageText(Date.now() - state.status.at)} alt (Plan: alle 20 Min.). Zahlen gelten für ${new Date(state.status.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}; <a href="${CFG.REPO}/actions">Läufe ansehen</a>.`, 'warn', 'stale');
   if (!state.latest) {
     notice(`Der Sammler hat noch keinen Datenstand veröffentlicht (<a href="${CFG.REPO}/actions">Actions</a>). Live-Abruf funktioniert trotzdem; Ortszuordnung erst nach dem ersten Lauf.`, 'warn', 'nolatest');
     state.mode = 'live'; $('#sel-mode').value = 'live';
@@ -63,6 +65,7 @@ async function loadBoundaries() {
   if (state.bIndex) return state.bIndex;
   const r = await getJson(CFG.DATA + 'boundaries-active.json', { timeout: 60000 });
   if (!r.ok) return null;
+  for (const f of r.json.features || []) if (!f.bbox) { const c = JSON.stringify(f.geometry?.coordinates || []).match(/-?\d+(\.\d+)?/g) || []; let x0 = 999, y0 = 999, x1 = -999, y1 = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } f.bbox = [x0, y0, x1, y1]; }
   state.boundaries = r.json; state.bIndex = C.buildMunicipalityIndex(r.json);
   return state.bIndex;
 }
@@ -172,6 +175,14 @@ async function liveFetch() {
         }
         return;
       }
+      const known = recs.find(x => x.id === src.id);
+      if (known?.cors === false) {
+        // Sammler hat festgestellt: kein CORS-Header → gar nicht erst im Browser versuchen
+        const snap = await getJson(CFG.DATA + `snapshot/${src.id.replace(/[^\w.-]+/g, '_')}.json`);
+        if (snap.ok) { systems.set(src.id, snapshotToSystem(snap.json, src)); recsOut.set(src.id, summarizeSnapshot(src, known, snap.json, now)); return; }
+        if (['live', 'delayed'].includes(known.status)) { recsOut.set(src.id, { ...known, status: 'collector', corsBlocked: true }); return; }
+      }
+      if (known?.candidate && !['live', 'delayed', 'stale', 'unknown'].includes(known.status)) { recsOut.set(src.id, known); return; }
       const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, getJson, { now }) : await C.readGbfsSystem(src, getJson, { now });
       if (sys.httpStatus === 0 && !sys.vehicles.length && !sys.stations.length) {
         // Browser darf die Quelle nicht lesen (kein CORS): Momentaufnahme des Sammlers
@@ -253,18 +264,22 @@ function snapshotToSystem(snap, rec) {
 
 // ---------- Rendering ----------
 function setView(name) {
-  const views = ['live', 'lab', 'usage', 'signals', 'coverage', 'sources'];
+  const views = ['live', 'lab', 'usage', 'ops', 'signals', 'coverage', 'sources'];
   if (!views.includes(name)) name = 'live';
   $$('section.view').forEach(s => s.classList.toggle('active', s.id === `view-${name}`));
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.view === name));
   if (name === 'live') setTimeout(() => state.map?.invalidateSize(), 50);
   if (name === 'lab') { renderHistory(); renderPricing(); renderShareChart(); }
   if (name === 'usage') renderUsage();
+  if (name === 'ops') renderOps();
 }
 function renderAll() {
-  renderHeader(); renderLive(); renderLab(); renderSignals(); renderCoverage(); renderSources();
-  if ($('#view-usage').classList.contains('active')) renderUsage();
-  if ($('#view-lab').classList.contains('active')) { renderPricing(); renderShareChart(); }
+  // Ein fehlerhaftes Panel darf die übrigen nicht mitreißen
+  const safe = (f) => { try { const r = f(); if (r?.catch) r.catch(e => console.error(f.name, e)); } catch (e) { console.error(f.name, e); } };
+  [renderHeader, renderLive, renderLab, renderSignals, renderCoverage, renderSources].forEach(safe);
+  if ($('#view-usage').classList.contains('active')) safe(renderUsage);
+  if ($('#view-ops').classList.contains('active')) safe(renderOps);
+  if ($('#view-lab').classList.contains('active')) { safe(renderPricing); safe(renderShareChart); }
 }
 function renderHeader() {
   $('#crumb-scope').textContent = scopeLabel();
@@ -620,11 +635,13 @@ function renderSources() {
 function relCell(id) { const r = state.usage?.reliability?.sources?.[id]; if (!r || !r.runs) return '<span class="muted">–</span>'; const ok = (r.live + r.delayed) / r.runs; return `<span style="color:var(--${ok >= 0.95 ? 'ok' : ok >= 0.8 ? 'warn' : 'bad'})">${pctf(r.live + r.delayed, r.runs)}</span><div class="sub-line">${r.runs} Läufe · Ø ${fmt(r.latencyAvg)} ms</div>`; }
 function renderSourceTable() {
   const q = ($('#src-search').value || '').toLowerCase(); const stf = $('#src-status').value;
-  const recs = (state.latest?.sources || []).filter(r => (stf === 'all' || r.status === stf) && (!q || `${r.id} ${r.name} ${r.operator} ${r.url}`.toLowerCase().includes(q)));
+  const all = (state.latest?.sources || []).filter(r => (stf === 'all' || r.status === stf) && (!q || `${r.id} ${r.name} ${r.operator} ${r.url}`.toLowerCase().includes(q)));
+  const hidden = all.filter(r => r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(r.status) && !q);
+  const recs = all.filter(r => !hidden.includes(r));
   const munis = state.latest?.municipalities || {};
   const show = recs.slice(0, 300);
   $('#tbl-src tbody').innerHTML = show.map(r => `<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a><div class="sub-line mono">${esc(r.id)}${r.sourceChanged ? ' · Quellenwechsel' : ''}</div></td><td>${esc(r.operator)}</td><td class="small">${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}</td><td class="n">${esc(r.version || '–')}</td><td class="n">${fmt(r.counts?.vehicles)}<div class="sub-line">${r.counts?.outside ? `${fmt(r.counts.outside)} außerhalb` : ''}${r.counts?.missing ? ` ${fmt(r.counts.missing)} o. Koord.` : ''}</div></td><td class="n">${fmt(r.counts?.stations)}</td><td class="n" title="${(r.municipalities || []).slice(0, 12).map(a => munis[a]?.name || a).join(', ')}">${fmt((r.municipalities || []).length)}</td><td class="n">${ageText(r.feedAgeMs)}</td><td class="n">${r.quality ?? '–'}</td><td class="n">${relCell(r.id)}</td><td><span class="pill ${r.status}">${STATUS[r.status] || r.status}</span>${r.errors?.length ? `<div class="sub-line">${esc(r.errors[0]).slice(0, 60)}</div>` : ''}</td><td class="small">${r.license ? (/^https?:/.test(r.license) ? `<a href="${esc(r.license)}" target="_blank" rel="noopener">Lizenz ↗</a>` : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`).join('') || '<tr><td colspan="12" class="empty">Keine Treffer.</td></tr>';
-  $('#src-more').textContent = recs.length > show.length ? `${recs.length - show.length} weitere Quellen – Suche eingrenzen.` : '';
+  $('#src-more').textContent = [recs.length > show.length ? `${recs.length - show.length} weitere Quellen – Suche eingrenzen.` : '', hidden.length ? `${hidden.length} geprüfte Direktfeed-Kandidaten ohne Daten ausgeblendet (Suche nach Anbieter zeigt sie).` : ''].filter(Boolean).join(' ');
 }
 // ---------- Nutzung & Bewegung ----------
 state.usage = { index: null, day: null, docs: {}, cells: {}, idle: null, idleLong: null, quota: null, pricing: null, zonesIndex: null, zones: {}, reliability: null, consistency: null, weather: {} };
@@ -1020,6 +1037,7 @@ function exportCsv() {
 async function init() {
   try { const t = localStorage.getItem('mp-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
   initMap(); bind();
+  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE });
   setView(location.hash.slice(1) || 'live');
   await loadBase();
   populateScope(); populateOperators();
