@@ -813,14 +813,15 @@ async function renderZonesLayer() {
     const inB = (f) => { if (!b) return true; const c = JSON.stringify(f.geometry.coordinates).match(/-?\d+\.\d+/g); if (!c) return true; let minX = 999, maxX = -999, minY = 999, maxY = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; } return !(maxX < b[0] - .05 || minX > b[2] + .05 || maxY < b[1] - .05 || minY > b[3] + .05); };
     for (const f of fc.features.filter(inB)) {
       const ru = f.properties.rules || [];
-      const noRide = ru.some(r => r.rideAllowed === false), noThrough = ru.some(r => r.rideThrough === false), noEnd = ru.some(r => r.endAllowed === false), slow = ru.find(r => r.maxSpeed != null)?.maxSpeed;
-      const col = noRide || noThrough ? '#ef6b6b' : noEnd ? '#e3b341' : slow != null ? '#c084fc' : opColor(z.operator);
-      L.geoJSON(f, { style: { color: col, weight: noRide ? 1 : 1.5, fillOpacity: noRide ? .05 : .07, dashArray: noEnd && !noRide ? '4 3' : null } })
-        .bindPopup(`<b>${esc(z.operator)}</b> · ${esc(f.properties.name || 'Zone')}<br>${noRide ? 'Fahren verboten' : noThrough ? 'Durchfahrt verboten' : 'Fahren erlaubt'}${noEnd ? ' · Abstellen verboten' : ''}${slow != null ? ` · max. ${fmt(slow)} km/h` : ''}${ru.some(r => r.parking) ? ' · Stationsparken' : ''}`).addTo(L_.zones);
+      // GBFS 2.x: ride_allowed = Fahrt darf hier beginnen/enden; ride_through_allowed = Durchfahrt; station_parking = nur an Stationen abstellen
+      const mpz = ru.some(r => r.parking === true), noRide = ru.some(r => r.rideThrough === false), noEnd = !mpz && ru.some(r => r.endAllowed === false || r.rideAllowed === false), slow = ru.find(r => r.maxSpeed != null)?.maxSpeed;
+      const col = noRide ? '#ef6b6b' : noEnd ? '#e3b341' : mpz ? '#60a5fa' : slow != null ? '#c084fc' : opColor(z.operator);
+      L.geoJSON(f, { style: { color: col, weight: noRide ? 1 : 1.5, fillOpacity: noRide ? .05 : .07, dashArray: (noEnd || mpz) && !noRide ? '4 3' : null } })
+        .bindPopup(`<b>${esc(z.operator)}</b> · ${esc(f.properties.name || 'Zone')}<br>${noRide ? 'Fahren verboten' : 'Fahren erlaubt'}${noEnd ? ' · Abstellen verboten' : ''}${mpz ? ' · Abstellen nur an Stationen' : ''}${slow != null ? ` · max. ${fmt(slow)} km/h` : ''}`).addTo(L_.zones);
       n++;
     }
   }
-  notice(`Betriebszonen: ${fmt(n)} Polygone aus ${list.length} Feed${list.length === 1 ? '' : 's'} (${[...new Set(list.map(z => z.operator))].join(', ')}). Rot = Fahrverbot/Durchfahrt, gestrichelt = Abstellverbot, violett = Tempolimit, Anbieterfarbe = Betriebsgebiet.`, '', 'zones');
+  notice(`Betriebszonen: ${fmt(n)} Polygone aus ${list.length} Feed${list.length === 1 ? '' : 's'} (${[...new Set(list.map(z => z.operator))].join(', ')}). Rot = Fahrverbot, gelb gestrichelt = Abstellverbot, blau gestrichelt = Abstellen nur an Stationen, violett = Tempolimit, Anbieterfarbe = Betriebsgebiet.`, '', 'zones');
 }
 
 // ---------- Preise, Marktanteile, Zuverlässigkeit ----------
