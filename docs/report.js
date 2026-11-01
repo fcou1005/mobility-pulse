@@ -2,10 +2,11 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvy5xgdj';
-import * as K from './pulse-calib.js?v=mvy5xgdj';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy5xgdj';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy5xgdj';
+import * as R from './pulse-report.js?v=mvy6blnf';
+import * as K from './pulse-calib.js?v=mvy6blnf';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy6blnf';
+import { decodeFleet } from './pulse-ops.js?v=mvy6blnf';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy6blnf';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -784,8 +785,8 @@ export async function renderCaps(el, ctx) {
   try {
     const ref = await reference(ctx); if (tok !== s.tok) return;
     if (!ref) { el.innerHTML = title + emptyBox(t('rep.referenceValuesNotLoadable'), t('rep.referenceJsonIsMissingOr')); return; }
-    const [{ docs }, log, zw] = await Promise.all([allDocs(ctx), fetchJson(ctx, 'caps-log.json', true), fetchJson(ctx, 'zone-watch.json', true)]); if (tok !== s.tok) return;
-    const caps = R.capsCheck(ref, state.latest.groups, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now(), zoneWatch: zw });
+    const [{ docs }, log, zw] = await Promise.all([allDocs(ctx), fetchJson(ctx, 'caps-log.json', true), zoneData(ctx)]); if (tok !== s.tok) return;
+    const caps = R.capsCheck(ref, state.latest.groups, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now(), zoneWatch: zw.log });
     s.viol = log ? R.capsViolations(log, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() }) : null;
     const violFor = (c) => (log ? s.viol.find(v => v.ags === R.capLogKey(c)) || null : undefined); // je Gemeinde und Art
     const repFor = (ags, ty) => (docs.length ? R.municipalReport({ docs, ags, pop: state.latest.municipalities?.[ags]?.pop || null, type: ty, latestGroups: state.latest.groups }) : null);
@@ -844,6 +845,33 @@ function weekTable(ctx, hm) {
 // ======================================================================
 // Zonen-Beobachtung: Bestand je privat hinterlegter Zone (Umrisse nicht veröffentlicht) und Anbieter, 30 Tage (zone-watch.json)
 // ======================================================================
+// Zonen: Protokoll des Sammlers (zone-watch.json); fehlt es (noch), zählt die Seite den aktuellen Sammler-Stand selbst aus
+// ops/<Land>.json mit den vermuteten Umrissen aus data/zonen-vermutet.json (main) – ein Lauf, ohne Verlauf (live: true)
+async function zoneData(ctx) {
+  const [log, zdoc] = await Promise.all([fetchJson(ctx, 'zone-watch.json', true), fetchJson(ctx, 'zonen-vermutet.json', false, ctx.CFG.MAIN)]);
+  const zones = zdoc ? R.parseZoneWatch(JSON.stringify(zdoc)) : [];
+  if (log?.zones?.length) return { log, zones };
+  if (!zones.length) return { log: null, zones };
+  const lands = [...new Set(zones.map(z => ctx.state.latest?.municipalities?.[z.ags]?.state).filter(Boolean))];
+  const fleets = (await Promise.all(lands.map(l => fetchJson(ctx, `ops/${l}.json`, true)))).filter(Boolean).map(decodeFleet);
+  if (!fleets.length) return { log: null, zones };
+  const at = Math.max(...fleets.map(f => f.at || 0)) || ctx.state.latest?.at || Date.now();
+  const live = R.zoneLogUpdate(null, zones, R.zoneCounts(zones, fleets.flatMap(f => f.vehicles)), { at });
+  return { log: { ...live, live: true }, zones };
+}
+// kleine Karte der vermuteten Umrisse (gestrichelt), Leaflet global
+function zoneMap(el, s, zones, ctx) {
+  const box = el.querySelector('.rp-zonemap'); if (!box || typeof L === 'undefined' || !zones.length) return;
+  if (s.zmap && s.zmap.getContainer() !== box) { s.zmap.remove(); s.zmap = null; }
+  if (!s.zmap) {
+    s.zmap = L.map(box, { zoomControl: true, scrollWheelZoom: false, zoomAnimation: false, fadeAnimation: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.zmap);
+  }
+  const layers = zones.map((z, i) => L.polygon(z.polys.map(rs => rs.map(r => r.map(([x, y]) => [y, x]))), { color: i ? '#c2410c' : '#0f766e', weight: 2.5, dashArray: '7 6', fillOpacity: 0.06 })
+    .bindTooltip(`<b>${ctx.esc(z.name)}</b><br>${t('rep.zwAssumed', { m: ctx.fmt(z.accuracyM || 0) })}`, { sticky: true }).addTo(s.zmap));
+  s.zmap.fitBounds(L.featureGroup(layers).getBounds(), { padding: [12, 12] });
+  setTimeout(() => s.zmap?.invalidateSize(), 0);
+}
 function sparkline(ctx, series) {
   const pts = (series || []).filter(([, v]) => Number.isFinite(v));
   if (pts.length < 2) return '<span class="muted">–</span>';
@@ -855,10 +883,10 @@ function sparkline(ctx, series) {
 export async function renderZoneWatch(el, ctx) {
   if (!el) return;
   const s = prep2(el, ctx); const { state, esc, fmt } = ctx; const tok = ++s.tok;
-  const log = await fetchJson(ctx, 'zone-watch.json', true); if (tok !== s.tok) return;
+  const { log, zones: shapes } = await zoneData(ctx); if (tok !== s.tok) return;
   const scope = state.scope || 'DE';
   const zones = log ? R.zoneSummary(log, { operator: state.operator || 'all', type: state.type || 'all' }).filter(z => !z.retired && (scope === 'DE' || z.ags === scope)) : [];
-  if (!zones.length) { el.hidden = true; el.innerHTML = ''; return; }
+  if (!zones.length) { el.hidden = true; el.innerHTML = ''; s.zmap?.remove(); s.zmap = null; return; }
   el.hidden = false;
   const num = (v) => (v == null ? '<span class="muted">–</span>' : esc(fmt(v, Number.isInteger(v) ? 0 : 1)));
   const opCell = (op) => (op === '*' ? `<b>${t('rep.zwAll')}</b>` : `<span class="op"><i style="background:${ctx.opColor(op)}"></i>${esc(op)}</span>`);
@@ -868,7 +896,11 @@ export async function renderZoneWatch(el, ctx) {
     const city = z.ags ? (ctx.muniName?.(z.ags) || z.ags) : '';
     return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th><th>${t('rep.zwTrend')}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
   }).join('');
-  el.innerHTML = head(t('rep.zwTitle'), t('rep.zwSub', { at: stamp(zones[0].at || log.updatedAt) })) + blocks + `<p class="note small" style="margin:var(--s3) 0 0">${t('rep.zwNote', { days: log.days || R.ZONE_LOG_DAYS })}</p>`;
+  const shown = shapes.filter(z => zones.some(x => x.id === z.id));
+  s.zmap?.remove(); s.zmap = null;
+  el.innerHTML = head(t('rep.zwTitle'), t('rep.zwSub', { at: stamp(zones[0].at || log.updatedAt) })) + (log.live ? `<div class="note small" style="margin-bottom:var(--s2)">${t('rep.zwLive')}</div>` : '')
+    + (shown.length ? `<div class="rp-zonemap" role="region" aria-label="${t('rep.zwMapAria')}"></div>` : '') + blocks + `<p class="note small" style="margin:var(--s3) 0 0">${t('rep.zwNote', { days: log.days || R.ZONE_LOG_DAYS })}</p>`;
+  zoneMap(el, s, shown, ctx);
 }
 
 export async function renderWeekHeatmap(el, ctx) {
@@ -1044,7 +1076,7 @@ svg.rp-line circle.end{stroke:var(--panel);stroke-width:2}svg.rp-line circle.sel
 .rp-captable td.n .sub-line{font-family:var(--sans);white-space:normal;min-width:7em}
 .rp-captable tr.rp-sum td{font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
 .rp-h3{font-size:14px;font-weight:600;margin:var(--s4) 0 var(--s2)}.rp-h3:first-of-type{margin-top:var(--s2)}
-.rp-root tr.rp-sum td{font-weight:600}.rp-root tr.rp-zonesub>td{padding-top:0;border-top:0}.rp-spark{display:block;overflow:visible}
+.rp-root tr.rp-sum td{font-weight:600}.rp-zonemap{height:300px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg-2);margin-bottom:var(--s3);isolation:isolate}.rp-root tr.rp-zonesub>td{padding-top:0;border-top:0}.rp-spark{display:block;overflow:visible}
 .rp-captable tbody.rp-selg>tr>*{background:color-mix(in srgb,var(--accent) 11%,transparent)}.rp-captable tbody.rp-selg th{box-shadow:inset 3px 0 0 var(--accent)}.rp-captable tbody.rp-selg .muted,.rp-captable tbody.rp-selg .sub-line{color:var(--fg-2)}
 .rp-over{font-size:11.5px;margin-left:4px;vertical-align:1px}.rp-over i{width:14px;height:14px;font-size:9px}
 .rp-prof{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}

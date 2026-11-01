@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvy5xgdj';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvy6blnf';
 
 export const TRACK_VERSION = 2;
 export const GAP_MS = 45 * 60e3;  // größerer Abstand zum vorigen Lauf = Lücke: Zustand fortschreiben, keine Ereignisse zählen

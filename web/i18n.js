@@ -2511,6 +2511,8 @@ const DE = {
   "rep.capZoneDaysOver": "Tage über Grenze",
   "rep.capZoneDaysOf": "von {n}",
   "rep.capZoneTotal": "Alle Anbieter",
+  "rep.zwLive": "Noch kein Protokoll des Sammlers: Bestand direkt aus dem aktuellen Sammler-Stand gezählt (ein Zeitpunkt, Verlauf folgt mit den nächsten Läufen).",
+  "rep.zwMapAria": "Karte der vermuteten Teilgebiete",
 };
 const EN = {
   // index.html
@@ -4893,5 +4895,7 @@ const EN = {
   "rep.capZoneDaysOver": "Days over cap",
   "rep.capZoneDaysOf": "of {n}",
   "rep.capZoneTotal": "All operators",
+  "rep.zwLive": "No collector log yet: fleet counted directly from the current collector snapshot (one point in time; history follows with the next runs).",
+  "rep.zwMapAria": "Map of the assumed sub-areas",
 };
 export const DICT = { de: DE, en: EN };
