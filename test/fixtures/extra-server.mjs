@@ -1,0 +1,52 @@
+// Zusatz-Fixtures für test/run.mjs (eigener Port, im Prozess von run.mjs): Lizenz/Namensnennung, Tarif mit eingeschleuster Währung,
+// virtuelle Stationen, CityBikes-Kopie unter anderem Anbieternamen, Zugangsdaten (nur exakter Host, keine fremden Weiterleitungen),
+// langsame und zu große Antworten.
+import http from 'node:http';
+
+export async function startExtra() {
+  const log = []; // { path, host, key }
+  const st = { price: 1.0 };
+  let base = '', other = '';
+  const n = () => Math.floor(Date.now() / 1000);
+  const head = (data, extra = {}) => ({ last_updated: n(), ttl: 60, version: '2.3', data, ...extra });
+  const SPOTS = [...Array(6)].map((_, i) => ({ id: (i < 3 ? 'z' : 'd') + i, name: `Platz ${i + 1}`, lat: +(48.77 + i * 0.002).toFixed(5), lon: 9.17 }));
+  const p = {
+    'gbfs.json': () => head({ de: { feeds: ['system_information', 'vehicle_types', 'station_information', 'station_status', 'free_bike_status', 'system_pricing_plans'].map(f => ({ name: f, url: `${base}/p/${f}.json` })) } }),
+    'system_information.json': () => head({ system_id: 'p_test', name: 'Rad Test', operator: 'RegioRad Stuttgart', timezone: 'Europe/Berlin', language: 'de', license_id: 'cc-by-sa-40', attribution_organization_name: 'Teststadt Mobil GmbH', attribution_url: 'https://example.org' }),
+    'vehicle_types.json': () => head({ vehicle_types: [{ vehicle_type_id: 'bk', form_factor: 'bicycle', propulsion_type: 'human' }] }),
+    'station_information.json': () => head({ stations: SPOTS.map(s => ({ station_id: s.id, name: s.name, lat: s.lat, lon: s.lon })) }),
+    // z0–z2 ohne num_docks_available (Abstellzonen), d3–d5 mit Docks; d3 leer, d4/d5 je ein Rad
+    'station_status.json': () => head({ stations: SPOTS.map((s, i) => ({ station_id: s.id, num_bikes_available: i >= 4 ? 1 : 0, ...(i >= 3 ? { num_docks_available: 5 } : {}), is_installed: true, is_renting: true, is_returning: true, last_reported: n() })) }),
+    'free_bike_status.json': () => head({ bikes: [{ bike_id: 'r1', station_id: 'd4', is_reserved: false, is_disabled: false, vehicle_type_id: 'bk', last_reported: n() }, { bike_id: 'r2', station_id: 'd5', is_reserved: false, is_disabled: false, vehicle_type_id: 'bk', last_reported: n() }, { bike_id: 'r3', lat: 48.80, lon: 9.20, is_reserved: false, is_disabled: false, vehicle_type_id: 'bk', last_reported: n() }] }),
+    'system_pricing_plans.json': () => head({ plans: [{ plan_id: 'std', name: 'Standard', currency: '<img src=x onerror=alert(1)>', price: st.price, is_taxable: true, description: 'Test', per_min_pricing: [{ start: 0, rate: 0.1, interval: 1 }] }, { plan_id: 'eur', name: 'Euro', currency: 'EUR', price: 0, is_taxable: true, description: 'Test' }] }),
+  };
+  // CityBikes-Kopie derselben Stationen (≈ 11 m versetzt, gleiche Namen) unter „Deutsche Bahn AG“
+  const cb = () => ({ network: { id: 'stadtrad-stuttgart', name: 'RegioRadStuttgart', company: ['Deutsche Bahn AG'], location: { city: 'Stuttgart', country: 'DE' }, stations: SPOTS.map((s, i) => ({ id: 'c' + i, name: s.name, latitude: s.lat + 0.0001, longitude: s.lon, free_bikes: i >= 4 ? 1 : 0, empty_slots: 5, timestamp: new Date().toISOString(), extra: { uid: 'u' + i, renting: 1, returning: 1 } })) } });
+  const authFeeds = () => head({ de: { feeds: [
+    { name: 'system_information', url: `${base}/auth/system_information.json` },
+    { name: 'free_bike_status', url: `${other}/leak/free_bike_status.json?via=${encodeURIComponent(base.replace(/^http:\/\//, ''))}` }, // anderer Host, Host-Name als Text in der URL
+    { name: 'vehicle_types', url: `${base}/auth/redir` }, // Weiterleitung auf anderen Host
+  ] } });
+  const srv = http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://x'); const key = req.headers['x-api-key'] || null;
+    log.push({ path: u.pathname, host: req.headers.host, key });
+    const json = (b, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
+    const [, kind, file] = u.pathname.split('/');
+    if (kind === 'p' && p[file]) return json(p[file]());
+    if (kind === 'cb') return json(cb());
+    if (kind === 'auth') {
+      if (key !== 'geheim-123') return json({}, 401);
+      if (file === 'gbfs.json') return json(authFeeds());
+      if (file === 'system_information.json') return json(head({ system_id: 'auth_test', name: 'Auth', timezone: 'Europe/Berlin' }));
+      if (file === 'redir') { res.writeHead(302, { location: `${other}/leak/vehicle_types.json` }); return res.end(); }
+    }
+    if (kind === 'leak') return json(head(file.startsWith('free_bike') ? { bikes: [{ bike_id: 'x1', lat: 48.79, lon: 9.19, is_reserved: false, is_disabled: false }] } : { vehicle_types: [] }));
+    if (kind === 'slow') { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"data":'); const t = setTimeout(() => { try { res.end('{}}'); } catch {} }, 6000); res.on('close', () => clearTimeout(t)); return; }
+    if (kind === 'big') { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"data":"'); for (let i = 0; i < 30; i++) res.write('x'.repeat(10000)); return res.end('"}'); }
+    res.writeHead(404); res.end('nf');
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const port = srv.address().port;
+  base = `http://127.0.0.1:${port}`; other = `http://localhost:${port}`;
+  return { port, base, log, st, close: () => { srv.closeAllConnections?.(); srv.close(); } };
+}

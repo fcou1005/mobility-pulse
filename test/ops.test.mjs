@@ -54,6 +54,15 @@ const sp3 = O.scoreSpots(m, { topN: 3, minSpacingM: 200, parking: park, transit:
 const s1 = sp3.spots.find(s => s.cell === cellAt(0, 0));
 assert(s1 && Math.abs(s1.lat - park[0].lat) < 1e-9 && s1.park.cat === 'escooter' && s1.factors.parking === 1, 'Spot auf ausgewiesene Stellfläche gesetzt');
 assert(sp3.activeFactors.length === 4, 'mit ÖPNV und Abstellflächen vier Faktoren aktiv');
+// Rasterindex: Fläche 140 m entfernt (über Rasterzellen hinweg) wird gefunden, 175 m nicht; Haltepunkte ≤ 200 m gezählt
+{
+  const dLat = (m) => m / 111320;
+  const s4 = O.scoreSpots(m, { topN: 1, minSpacingM: 200, parking: [{ lat: clat + dLat(140), lon: clon, cat: 'escooter' }], transit: [{ lat: clat + dLat(190), lon: clon }, { lat: clat, lon: clon + dLat(190) * 1.5 }, { lat: clat + dLat(230), lon: clon }] }).spots[0];
+  assert(s4.park?.cat === 'escooter' && Math.abs(s4.lat - (clat + dLat(140))) < 1e-9, 'Rasterindex: Abstellfläche in 140 m gefunden');
+  const s5 = O.scoreSpots(m, { topN: 5, minSpacingM: 100, parking: [{ lat: clat + dLat(175), lon: clon, cat: 'escooter' }] }).spots.find(s => s.cell === cellAt(0, 0));
+  assert(s5 && !s5.park && s5.factors.parking === 0, 'Rasterindex: Abstellfläche in 175 m nicht genommen (> 160 m)');
+  assert(s4.factors.transit === +(2 / 3).toFixed(2), `Rasterindex: 2 von 3 Haltepunkten ≤ 200 m (Faktor ${s4.factors.transit})`);
+}
 
 // --- Rebalancing
 const depot = { lat: base[0] - 0.02, lon: base[1] - 0.02 };
@@ -92,6 +101,96 @@ assert(ws.disabled === 2 && ws.runs.length === 2, 'gesperrte Fahrzeuge in Werkst
 const line = [5, 1, 4, 2, 3, 0].map(k => ({ lat: 48.5, lon: 9 + k * 0.01, k }));
 const ord = O.orderStops(line, { start: { lat: 48.5, lon: 8.99 } });
 assert(ord.map(p => p.k).join() === '0,1,2,3,4,5', 'Punkte auf einer Linie in Reihenfolge');
+// Delta-Bewertung muss zum vollen Tourpreis passen: Ergebnis ist Permutation und lokal optimal (kein 2-opt-/Or-opt-Zug verbessert
+// die volle Tour mehr), auch bei asymmetrischen Kosten (wie OSRM); zufällige Instanzen mit Seed
+{
+  let seed = 11; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const inst = (n) => [...Array(n)].map((_, i) => ({ lat: 52.45 + rnd() * 0.1, lon: 13.3 + rnd() * 0.15, i }));
+  const D0 = { lat: 52.5, lon: 13.4 };
+  const full = (seq, cost) => { let s = 0; for (let i = 0; i < seq.length - 1; i++) s += cost(seq[i], seq[i + 1]); return s; };
+  const locallyOptimal = (t, start, end, cost) => {
+    const seq = (x) => [...(start ? [start] : []), ...x, ...(end ? [end] : [])]; const c0 = full(seq(t), cost);
+    for (let i = 0; i < t.length - 1; i++) for (let k = i + 1; k < t.length; k++) if (full(seq(t.slice(0, i).concat(t.slice(i, k + 1).reverse(), t.slice(k + 1))), cost) < c0 - 1e-6) return false;
+    for (let L = 1; L <= 3; L++) for (let i = 0; i + L <= t.length; i++) { const sg = t.slice(i, i + L), rest = t.slice(0, i).concat(t.slice(i + L)); for (let p = 0; p <= rest.length; p++) if (p !== i && full(seq(rest.slice(0, p).concat(sg, rest.slice(p))), cost) < c0 - 1e-6) return false; }
+    return true;
+  };
+  const asym = (a, b) => O.dist(a, b) * (b.lat > a.lat ? 1.3 : 1); // nach Norden teurer
+  let okPerm = true, okSym = true, okAsym = true, okStartEnd = true;
+  for (let k = 0; k < 20; k++) {
+    const n = 5 + Math.floor(rnd() * 30), stops = inst(n), start = k % 3 ? D0 : null, end = k % 2 ? D0 : null;
+    const r = O.orderStops(stops, { start, end });
+    if (r.length !== n || new Set(r.map(x => x.i)).size !== n) okPerm = false;
+    if (!locallyOptimal(r, start, end, O.makeCost())) okSym = false;
+    const ra = O.orderStops(stops, { start, end, cost: asym });
+    if (!locallyOptimal(ra, start, end, asym)) okAsym = false;
+    if (!stops.includes(r[0]) || !stops.includes(ra[n - 1])) okStartEnd = false;
+  }
+  assert(okPerm && okStartEnd, 'orderStops: Ergebnis ist Permutation der Stopps (ohne Start/Ende)');
+  assert(okSym, 'orderStops: lokal optimal gegenüber vollem Tourpreis (symmetrisch, 20 Instanzen)');
+  assert(okAsym, 'orderStops: lokal optimal auch bei asymmetrischen Kosten (20 Instanzen)');
+  const big = inst(50); const t0 = performance.now(); const rb = O.orderStops(big, { start: D0, end: D0 }); const ms = performance.now() - t0;
+  assert(rb.length === 50 && ms < 100, `orderStops: 50 Stopps in ${ms.toFixed(1)} ms (< 100 ms)`);
+  const huge = inst(100); const t1 = performance.now(); O.orderStops(huge, { start: D0, end: D0 }); const ms2 = performance.now() - t1;
+  assert(ms2 < 300, `orderStops: 100 Stopps in ${ms2.toFixed(1)} ms (< 300 ms)`);
+  // Vergleich mit der bisherigen Fassung (volle Tour je Zug neu gerechnet, Stand vor der Delta-Bewertung): feste Daten (Seed),
+  // mit/ohne Start und Ende, symmetrisch und asymmetrisch → Tourlänge nie länger als vorher
+  const refOrder = (stops, { start = null, end = null, cost = O.makeCost() } = {}) => {
+    if (stops.length <= 1) return stops.slice();
+    const tourCost = (t) => { let s = 0; const seq = [...(start ? [start] : []), ...t, ...(end ? [end] : [])]; for (let i = 0; i < seq.length - 1; i++) s += cost(seq[i], seq[i + 1]); return s; };
+    let best = null, bc = Infinity;
+    for (let s = 0; s < Math.min(6, stops.length); s++) {
+      const left = stops.slice(); const seq = []; let cur = start;
+      if (!cur || s > 0) { const f = left.splice(s === 0 ? 0 : (s * 7919) % left.length, 1)[0]; seq.push(f); cur = f; }
+      while (left.length) { let bi = 0, bv = Infinity; left.forEach((x, i) => { const c = cost(cur, x); if (c < bv) { bv = c; bi = i; } }); cur = left.splice(bi, 1)[0]; seq.push(cur); }
+      let t = seq, improved = true, guard = 0;
+      while (improved && guard++ < 60) {
+        improved = false;
+        for (let i = 0; i < t.length - 1; i++) for (let k = i + 1; k < t.length; k++) { const u = t.slice(0, i).concat(t.slice(i, k + 1).reverse(), t.slice(k + 1)); if (tourCost(u) < tourCost(t) - 1e-6) { t = u; improved = true; } }
+        for (let L = 1; L <= 3; L++) for (let i = 0; i + L <= t.length; i++) { const sg = t.slice(i, i + L), rest = t.slice(0, i).concat(t.slice(i + L)); for (let p = 0; p <= rest.length; p++) { if (p === i) continue; const u = rest.slice(0, p).concat(sg, rest.slice(p)); if (tourCost(u) < tourCost(t) - 1e-6) { t = u; improved = true; break; } } }
+      }
+      const c = tourCost(t); if (c < bc) { bc = c; best = t; }
+    }
+    return best;
+  };
+  seed = 2026; let worse = 0, same = 0, cmp = 0, maxRatio = 0;
+  for (let k = 0; k < 24; k++) {
+    const n = 4 + Math.floor(rnd() * 27), stops = inst(n), start = k % 4 ? D0 : null, end = k % 3 ? D0 : null, cost = k % 2 ? asym : O.makeCost();
+    const seq = (t) => [...(start ? [start] : []), ...t, ...(end ? [end] : [])];
+    const a = full(seq(refOrder(stops, { start, end, cost })), cost), b = full(seq(O.orderStops(stops, { start, end, cost })), cost);
+    cmp++; if (b > a + 1e-6) worse++; if (Math.abs(a - b) < 1e-6) same++; maxRatio = Math.max(maxRatio, b / a);
+  }
+  assert(worse === 0, `orderStops: nie länger als die bisherige Fassung (${cmp} feste Instanzen, ${same} gleich lang, max. neu/alt ${maxRatio.toFixed(4)})`);
+}
+
+// --- Einsatzzeit je Tour (≤ 4 h) und Bündelung nach Raum
+{
+  let seed = 5; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  // 260 Fahrzeuge mit leerem Akku über ~12 × 12 km verstreut, Depot in der Mitte
+  const D1 = { lat: 48.78, lon: 9.18 };
+  const spreadV = [...Array(260)].map(() => V(D1.lat + (rnd() - 0.5) * 0.11, D1.lon + (rnd() - 0.5) * 0.16, { battery: 5 + Math.floor(rnd() * 15) }));
+  const open = O.planSwaps({ vehicles: spreadV, model: m, depot: D1, swapCapacity: 50, swapThreshold: 25, maxRuns: 6, maxRunMin: Infinity });
+  const cap = O.planSwaps({ vehicles: spreadV, model: m, depot: D1, swapCapacity: 50, swapThreshold: 25, maxRuns: 6 });
+  const veh = (p) => p.runs.reduce((s, r) => s + r.vehicles, 0);
+  assert(open.runs.some(r => r.totalMin > 240), `ohne Grenze gibt es Touren über 4 h (längste ${Math.max(...open.runs.map(r => r.totalMin))} min)`);
+  assert(cap.limitMin === 240 && cap.runs.every(r => r.totalMin <= 240), `Akkutausch: jede Tour ≤ 4 h (längste ${Math.max(...cap.runs.map(r => r.totalMin))} min)`);
+  assert(veh(cap) + cap.unplanned === cap.below && cap.below === 260, `Akkutausch: eingeplant ${veh(cap)} + nicht eingeplant ${cap.unplanned} = ${cap.below}`);
+  assert(cap.runs.length <= 6 && cap.unplanned > 0, `Akkutausch: höchstens 6 Touren, Rest (${cap.unplanned}) als nicht eingeplant`);
+  // Kompaktheit: mittlerer Tour-Radius (weitester Stopp vom Tour-Mittelpunkt) sinkt
+  const radius = (p) => p.runs.reduce((s, r) => { const c = { lat: r.stops.reduce((a, x) => a + x.lat, 0) / r.stops.length, lon: r.stops.reduce((a, x) => a + x.lon, 0) / r.stops.length }; return s + Math.max(...r.stops.map(x => O.dist(c, x))); }, 0) / p.runs.length;
+  assert(radius(cap) < radius(open), `Akkutausch: kompaktere Touren, Ø Radius ${(radius(cap) / 1000).toFixed(1)} statt ${(radius(open) / 1000).toFixed(1)} km`);
+  // einzelner Auftrag weiter weg als die Einsatzzeit erlaubt: nicht eingeplant, keine Endlosschleife
+  const lone = O.planWorkshop({ vehicles: [V(D1.lat + 1.2, D1.lon, { disabled: true }), V(D1.lat + 0.001, D1.lon, { disabled: true })], depot: D1, maxRunMin: 240 });
+  assert(lone.runs.length === 1 && lone.runs[0].vehicles === 1 && lone.unplanned === 1, 'Werkstatt: Auftrag 130 km entfernt ist allein zu lang → nicht eingeplant');
+  // Umsetzen: viele Spots über die Stadt, Überschuss am Rand → Touren ≤ 4 h, Umsetzungen = eingeplant + nicht eingeplant
+  const cells = new Map(); const spotsR = [];
+  for (let i = 0; i < 24; i++) { const lat = D1.lat + (rnd() - 0.5) * 0.09, lon = D1.lon + (rnd() - 0.5) * 0.13, cell = O.cellOf(lat, lon); spotsR.push({ rank: i + 1, cell, lat, lon, score: 1 - i / 30, target: 6 }); cells.set(cell, { startsPerHour: 0 }); }
+  const sur = [...Array(120)].map(() => V(D1.lat + (rnd() - 0.5) * 0.12, D1.lon + (rnd() - 0.5) * 0.17, { idleMin: 3000 }));
+  const rbo = O.planRebalance({ spots: spotsR, vehicles: sur, model: { cells }, depot: D1, vanCapacity: 30, maxRuns: 8, maxRunMin: Infinity });
+  const rbc = O.planRebalance({ spots: spotsR, vehicles: sur, model: { cells }, depot: D1, vanCapacity: 30, maxRuns: 8 });
+  assert(rbo.runs.some(r => r.totalMin > 240) && rbc.runs.every(r => r.totalMin <= 240), `Umsetzen: ohne Grenze bis ${Math.max(...rbo.runs.map(r => r.totalMin))} min, mit Grenze ≤ 240 min`);
+  assert(veh(rbc) + rbc.unplanned === rbc.moves && rbc.runs.every(r => r.vehicles <= 30), `Umsetzen: ${veh(rbc)} eingeplant + ${rbc.unplanned} nicht eingeplant = ${rbc.moves} Umsetzungen, Kapazität eingehalten`);
+  assert(rbc.runs.every(r => { const fd = r.stops.findIndex(s => s.type === 'drop'); return fd > 0 && r.stops.slice(fd).every(s => s.type === 'drop'); }), 'Umsetzen mit Grenze: erst einsammeln, dann ausbringen');
+}
 
 // --- Links und Exporte
 const pts = [...Array(19)].map((_, i) => ({ lat: 48 + i / 100, lon: 9 }));
@@ -127,3 +226,37 @@ const stn = { lat: clat + 0.0006, lon: clon, name: 'Dott Hub Markt' };
 const sp5 = O.scoreSpots(m, { topN: 5, minSpacingM: 200, mandatory: zc.mandatory, stations: [stn] });
 assert(sp5.spots.length >= 1 && sp5.spots[0].lat === stn.lat && sp5.spots[0].park.cat === 'station', 'Spot auf Anbieter-Station gesetzt');
 assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zellen ohne Station in der Pflichtzone ausgeschlossen');
+
+// --- Amtliche Daten der Städte (Fixtures nach dem Muster Berlin-WFS bzw. München-Open-Data-Portal; die Hosts sind in der Sandbox nicht erreichbar)
+{
+  // Berlin parkverbot_mikromob als WFS-2.0-GeoJSON in lat/lon-Reihenfolge (EPSG:4326 nach URN-Achsen) → wird zu lon/lat gedreht
+  const latLonPoly = (lat, lon, d) => ({ type: 'Polygon', coordinates: [[[lat - d, lon - d], [lat - d, lon + d], [lat + d, lon + d], [lat + d, lon - d], [lat - d, lon - d]]] });
+  const wfsFc = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { name: 'Parkverbotszone Markt' }, geometry: latLonPoly(clat, clon, 0.001) }] };
+  const fx = O.lonLatFc(wfsFc);
+  assert(fx.swapped === 5 && fx.projected === 0 && Math.abs(fx.features[0].geometry.coordinates[0][0][0] - (clon - 0.001)) < 1e-12, 'amtliche Daten: lat/lon-Achsen erkannt und gedreht');
+  assert(O.lonLatFc({ features: [{ geometry: { type: 'Point', coordinates: [389000, 5819000] } }] }).projected === 1, 'amtliche Daten: projizierte Koordinaten (UTM) erkannt, nicht geraten');
+  const offNo = O.noParkFromFc(fx);
+  assert(offNo.length === 1 && O.geomContains(offNo[0], clat, clon), 'Abstellverbotszone als Fläche übernommen');
+  // Ausschluss wie GBFS-Verbot (Constraint, kein Gewicht) …
+  const sv = O.scoreSpots(m, { topN: 5, minSpacingM: 400, officialNoPark: offNo });
+  assert(sv.excludedBy.official === 1 && !sv.spots.some(s => s.cell === cellAt(0, 0)), 'Abstellverbot laut Stadt schließt die Zelle aus');
+  // … außer der Spot liegt auf einer ausgewiesenen Abstellfläche (München: Verbot im Umkreis, Fläche selbst erlaubt)
+  const abst = O.parkingFromWfs(O.lonLatFc({ features: [{ properties: { bezeichnung: 'Abstellfläche Markt' }, geometry: { type: 'Polygon', coordinates: [[[clon + 0.0002, clat + 0.0003], [clon + 0.0004, clat + 0.0003], [clon + 0.0004, clat + 0.0005], [clon + 0.0002, clat + 0.0005], [clon + 0.0002, clat + 0.0003]]] } }] }), 'official');
+  assert(abst.length === 1 && Math.abs(abst[0].lat - (clat + 0.0004)) < 1e-9 && Math.abs(abst[0].lon - (clon + 0.0003)) < 1e-9 && abst[0].name === 'Abstellfläche Markt', 'Abstellfläche (Polygon) → Mittelpunkt als amtliche Fläche');
+  const sa = O.scoreSpots(m, { topN: 5, minSpacingM: 400, officialNoPark: offNo, parking: abst });
+  const top = sa.spots.find(s => s.cell === cellAt(0, 0));
+  assert(sa.excludedBy.official === 0 && top && top.park.cat === 'official' && Math.abs(top.lat - abst[0].lat) < 1e-9, 'Spot auf amtlicher Abstellfläche in der Verbotszone bleibt erlaubt');
+  // Radabstellanlage in der Verbotszone hebt das Verbot nicht auf
+  const sr = O.scoreSpots(m, { topN: 5, minSpacingM: 400, officialNoPark: offNo, parking: [{ lat: clat + 0.0002, lon: clon, cat: 'rad' }] });
+  assert(sr.excludedBy.official === 1, 'Radabstellanlage in der Verbotszone: weiter ausgeschlossen');
+  // WFS-Adresse: GetFeature, GeoJSON, WGS84; typeNames nach Berliner Muster
+  const wu = new URL(O.wfsGetFeatureUrl('https://gdi.berlin.de/services/wfs/parkverbot_mikromob'));
+  assert(wu.searchParams.get('request') === 'GetFeature' && wu.searchParams.get('typeNames') === 'parkverbot_mikromob:parkverbot_mikromob' && wu.searchParams.get('outputFormat') === 'application/json' && wu.searchParams.get('srsName') === 'EPSG:4326', 'WFS-GetFeature-Adresse (Berlin-Muster)');
+  // Open-Data-Portal München (CKAN package_show): GeoJSON-Ressource bevorzugt, sonst WFS mit typeName, sonst nichts
+  const pkg = (resources) => ({ success: true, result: { name: 'opendata_ruhver_mim_geofence_poly', resources } });
+  const wfsRes = { format: 'WFS', url: 'https://geoportal.muenchen.de/geoserver/gsm_wfs/ows?service=WFS&request=GetCapabilities&typeName=gsm_wfs:mim_geofence' };
+  assert(O.pickCkanResource(pkg([wfsRes, { format: 'GeoJSON', url: 'https://opendata.muenchen.de/dataset/x/resource/y/download/geofence.geojson' }])).type === 'geojson', 'Portal: GeoJSON-Ressource vor WFS');
+  const pw = O.pickCkanResource(pkg([{ format: 'PDF', url: 'https://x/beschreibung.pdf' }, wfsRes]));
+  assert(pw?.type === 'wfs' && new URL(pw.url).searchParams.get('typeNames') === 'gsm_wfs:mim_geofence' && new URL(pw.url).searchParams.get('request') === 'GetFeature', 'Portal: WFS-Ressource → GetFeature mit typeName aus der Ressource');
+  assert(O.pickCkanResource(pkg([{ format: 'PDF', url: 'https://x/a.pdf' }])) === null, 'Portal: ohne GeoJSON/WFS → null (Warnung statt stillem Ausfall)');
+}

@@ -2,12 +2,17 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
+<!-- Content-Security-Policy: Skripte nur von hier und unpkg (Leaflet mit SRI); Daten per fetch von allen https-Hosts, weil der Live-Abruf
+     die Feeds der Anbieter direkt liest (raw.githubusercontent.com, api.mobidata-bw.de, gbfs.* …, OSRM, Nominatim, Overpass, Open-Meteo, Valhalla);
+     http://127.0.0.1 und localhost nur für lokale Tests mit ?data=. Kacheln von OpenStreetMap. frame-ancestors geht per meta nicht. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Mobility Pulse</title>
 <meta name="description" content="Sharing-Daten für Deutschland: E-Scooter, Bikesharing und Lastenräder aus offenen Quellen – live, geprüft, mit Verlauf.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
 /* Layout: Seitenleiste mit drei Hauptbereichen, transluzente Kopfzeile mit Segmenten, Panels im 12er-Raster.
    Abstände nur aus der Skala 4/8/12/16/24/32; Daten in Mono mit Tabellenziffern. */
@@ -23,19 +28,21 @@
   --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.22);--shadow-sm:0 1px 2px rgba(0,0,0,.28);
   color-scheme:dark;
 }
+/* Hell: Akzent, ok und Warnung ≥ 4,5:1 auf Weiß und auf --panel-2 (vorher 4,39 / 3,28 / 3,64) */
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
   --bg:#f3f5f7;--bg-2:#eaeef2;--panel:#ffffff;--panel-2:#f6f8fa;--line:#dbe2ea;--line-2:#c9d3de;
-  --fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#13877a;--accent-2:#0f6f64;--accent-ink:#ffffff;
-  --ok:#2a9d47;--warn:#b7791f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);
+  --fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#0f766e;--accent-2:#0b5e58;--accent-ink:#ffffff;
+  --ok:#1e7b38;--warn:#8f5d0f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);
   --shadow:0 1px 2px rgba(16,24,32,.06);--shadow-sm:0 1px 2px rgba(16,24,32,.12);color-scheme:light}}
 :root[data-theme="light"]{
   --bg:#f3f5f7;--bg-2:#eaeef2;--panel:#ffffff;--panel-2:#f6f8fa;--line:#dbe2ea;--line-2:#c9d3de;
-  --fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#13877a;--accent-2:#0f6f64;--accent-ink:#ffffff;
-  --ok:#2a9d47;--warn:#b7791f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);
+  --fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#0f766e;--accent-2:#0b5e58;--accent-ink:#ffffff;
+  --ok:#1e7b38;--warn:#8f5d0f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);
   --shadow:0 1px 2px rgba(16,24,32,.06);--shadow-sm:0 1px 2px rgba(16,24,32,.12);color-scheme:light}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;scroll-padding-top:72px}
+.vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);letter-spacing:0;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-underline-offset:2px}
 button,select,input,summary{font:inherit;color:inherit}
@@ -180,6 +187,25 @@ tbody tr:hover td.empty{background:none}
 .chip{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--line-2);background:transparent;font-size:12px;font-weight:500}
 .chip.on{background:var(--accent);color:var(--accent-ink);border-color:transparent}a.chip{text-decoration:none;color:var(--fg)}
 svg.chart{width:100%;height:auto;display:block}svg.chart text{font-family:var(--mono);font-size:10px;fill:var(--muted)}svg.chart .grid{stroke:var(--line);stroke-width:1}
+/* nicht gemessene Zeiten: graue Fläche statt Nulllinie */
+svg.chart rect.gap{fill:color-mix(in srgb,var(--line) 70%,transparent)}.sq.gap-key{background:color-mix(in srgb,var(--line) 70%,transparent);border-color:transparent}
+svg.chart rect.hit{fill:transparent;pointer-events:all}svg.chart rect.hit:hover{fill:color-mix(in srgb,var(--fg) 5%,transparent)}
+svg.chart rect.rain,.sq.rain-key{fill:color-mix(in srgb,var(--info) 45%,transparent);background:color-mix(in srgb,var(--info) 45%,transparent);border-color:transparent}
+svg.chart text.hol{fill:var(--fg-2);font-family:var(--sans);font-size:11px;font-weight:600}
+.chip.special{border-style:dashed}
+/* Lange Tabellen: weitere Zeilen auf Wunsch */
+.more-rows{min-height:28px;font-size:12px;margin:var(--s2) var(--s2) 0 0}
+/* Briefing kompakt: Zahl + eine Zeile, Begründung aufklappbar */
+.card .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px;font-weight:600;margin-right:4px}
+.card details>summary{font-size:12px;margin-top:2px}.card details[open]>summary{margin-bottom:var(--s1)}
+/* Umsatz: nicht belastbare Zeilen gekennzeichnet (Rand + Marke), nicht ausgegraut */
+tr.row-excl td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+.pill.excl-tag{font-size:11px;padding:0 8px;margin-top:4px;border-style:dashed;color:var(--fg-2)}.pill.excl-tag::before{background:var(--warn)}
+.flag-line{white-space:normal;min-width:22ch;max-width:30ch}
+.calib-box{display:flex;flex-direction:column;gap:var(--s1);margin:0 0 var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);font-size:12.5px;color:var(--fg-2)}.calib-box:empty{display:none}
+.calib-box b{color:var(--fg)}.calib-box .pick{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}.calib-box .calib-act{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+/* Fußzeile: Datenquellen und Lizenzen in allen Ansichten */
+.page-foot{display:flex;flex-direction:column;gap:2px;margin-top:var(--s6);padding-top:var(--s3);border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.page-foot b{color:var(--fg-2);font-weight:600;margin-right:4px}.page-foot a{color:var(--fg-2)}
 .legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
 details>summary{list-style:none;cursor:pointer;color:var(--fg-2);display:inline-flex;align-items:center;gap:var(--s2);user-select:none;border-radius:6px}
 details>summary::-webkit-details-marker{display:none}
@@ -222,14 +248,33 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
 
 /* Kundenansicht und Demo-Stand */
 .mode-client .internal,.mode-client [data-group="vertrauen"],.mode-client .est{display:none!important}
+.client-only{display:none}.mode-client .client-only{display:inline}
+.mode-client .card .foot{display:none} /* Begründungsquelle (Feldnamen, Mittelwerte) nur intern */
 .mode-demo .live-only{display:none!important}
 
 @media (max-width:980px){.c8,.c6,.c4,.c3{grid-column:span 12}}
 @media (max-width:820px){:root{--gut:16px}.app{grid-template-columns:1fr}aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);flex-direction:row;flex-wrap:wrap;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4)}#nav{flex-direction:row;flex-wrap:wrap;gap:var(--s1)}#nav .nav-h,#nav a small,#nav a .k{display:none}#nav a{padding:6px 10px}.side-foot{display:none}.topbar{position:static}.seg{max-width:100%;overflow-x:auto}#map,#ops-map{height:380px}.ops-runs-panel{max-height:none}.tbl{max-height:none}}
+/* Platz reservieren, bevor Daten da sind (CLS): Platzhalter-Kacheln (app.js), Unterzeile mit fester Mindesthöhe, Kernaussage mit Zeilenreserve */
+.tile.skel .v{color:var(--line-2)}.tile .s{min-height:1.4em}
+.lede{min-height:1.45em}
+/* Telefon: Kacheln zweispaltig, erste Tabellenspalte bleibt beim Querscrollen stehen */
+@media (max-width:820px){
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.tile{padding:var(--s2) var(--s3)}.tile .v{font-size:21px}.tile .s{min-height:4.2em}
+  .lede{min-height:4.35em}
+  .tbl td:first-child:not(.empty),.tbl th:first-child{position:sticky;left:0;z-index:1;background:var(--th-bg,var(--panel));box-shadow:1px 0 0 var(--line)}
+  .tbl th:first-child{z-index:2}.tbl td:first-child:not(.empty){min-width:9.5em;max-width:44vw}
+}
+/* Finger statt Maus: Bedienelemente mindestens 44 px */
+@media (pointer:coarse){
+  button,select,input[type=number],input[type=search],input[type=text]{min-height:44px}
+  .chip,.seg a,.toolbar .tog,#nav a,details>summary,.leaflet-bar a{min-height:44px}
+  .leaflet-bar a{width:44px!important;line-height:44px!important}
+  input[type=checkbox]{width:22px;height:22px}
+}
 @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;animation-iteration-count:1!important}}
 /* Druck / Kundenmodus auf Papier: helles Schema, keine Bedienelemente, nichts abgeschnitten */
 @media print{
-  :root,:root[data-theme]{--bg:#ffffff;--bg-2:#eaeef2;--panel:#ffffff;--panel-2:#f6f8fa;--line:#dbe2ea;--line-2:#c9d3de;--fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#13877a;--accent-2:#0f6f64;--accent-ink:#ffffff;--ok:#2a9d47;--warn:#b7791f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);--shadow:none;--shadow-sm:none;color-scheme:light}
+  :root,:root[data-theme]{--bg:#ffffff;--bg-2:#eaeef2;--panel:#ffffff;--panel-2:#f6f8fa;--line:#dbe2ea;--line-2:#c9d3de;--fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#0f766e;--accent-2:#0b5e58;--accent-ink:#ffffff;--ok:#1e7b38;--warn:#8f5d0f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);--shadow:none;--shadow-sm:none;color-scheme:light}
   aside,.filters,#notice,.seg,.leaflet-control-zoom,button,.toolbar,.chips,#ops-layers,.ops-form,details.ops-params>summary,.inline-form label,.inline-form input,.inline-form select,.skip,input.calib{display:none!important}
   .app{display:block}main{padding:0}
   .topbar{position:static;-webkit-backdrop-filter:none;backdrop-filter:none;background:none;box-shadow:none;margin:0 0 var(--s2);padding:0}
@@ -287,7 +332,7 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
     <div class="grid">
       <div class="panel c8 map-wrap">
         <div class="panel-head"><div><h2 id="map-title">Karte</h2><div class="sub" id="map-sub">Fahrzeuge und Stationen</div></div>
-          <div class="inline-form"><label>Ebene <select id="sel-layer"><option value="points">Fahrzeuge &amp; Stationen</option><option value="density">Bestandsdichte · 500 m</option><option value="energy">Energiebedarf · 500 m</option><option value="flow">Start/Ziel heute · 250 m</option><option value="served">Bediente Zellen · 7 Tage</option><option value="idle">Lange Standzeiten (&gt; 2 Tage)</option></select></label><button id="btn-fit" title="Karte auf das Gebiet einpassen">⌖ Einpassen</button></div></div>
+          <div class="inline-form"><label>Ebene <select id="sel-layer"><option value="points">Fahrzeuge &amp; Stationen</option><option value="density">Bestandsdichte · 500 m</option><option value="energy">Energiebedarf · 500 m</option><option value="flow" class="internal">Start/Ziel heute · 250 m</option><option value="served" class="internal">Bediente Zellen · 7 Tage</option><option value="idle" class="internal">Lange Standzeiten (&gt; 2 Tage)</option></select></label><button id="btn-fit" title="Karte auf das Gebiet einpassen">⌖ Einpassen</button></div></div>
         <div class="map-controls toolbar" role="toolbar" aria-label="Kartenebenen">
           <label class="tog"><input type="checkbox" id="chk-vehicles" checked> Fahrzeuge</label>
           <label class="tog"><input type="checkbox" id="chk-stations" checked> Stationen</label>
@@ -295,7 +340,7 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
           <label class="tog" title="Betriebszonen aus den GBFS-Feeds der Anbieter"><input type="checkbox" id="chk-zones"> Betriebszonen</label>
           <label class="tog" title="Offizielle MobiData-BW-Kartenebene ergänzen (nur Baden-Württemberg)"><input type="checkbox" id="chk-wfs"> MobiData BW</label>
         </div>
-        <div id="map" role="img" aria-label="Karte der Fahrzeuge und Stationen"></div>
+        <div id="map" role="region" aria-label="Karte der Fahrzeuge und Stationen"></div>
         <div class="map-legend" id="map-legend"></div><div class="map-legend" id="map-legend-ops"></div><div class="map-legend" id="map-legend-zones"></div>
       </div>
       <div class="panel c4">
@@ -304,24 +349,27 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
       </div>
       <div class="panel c12">
         <div class="panel-head"><div><h2>Anbieter vor Ort</h2><div class="sub">Bestand, Verfügbarkeit, Datenalter und Quelle je Anbieter</div></div><button id="btn-csv">↓ CSV exportieren</button></div>
-        <div class="tbl"><table id="tbl-operators"><thead><tr><th>Anbieter</th><th>Quelle</th><th class="n">Verfügbar</th><th class="n">Gesperrt</th><th class="n">Δ Sammler</th><th class="n">Energie niedrig</th><th class="n" title="Leer = kein buchbares Fahrzeug und keins im Umkreis von 50 m">Leer / Stationen</th><th class="n">Datenalter</th><th>Status</th><th>Lizenz</th></tr></thead><tbody></tbody></table></div>
+        <div class="tbl" tabindex="0" role="region" aria-label="Anbieter vor Ort"><table id="tbl-operators"><thead><tr><th>Anbieter</th><th class="internal">Quelle</th><th class="n">Verfügbar</th><th class="n">Gesperrt</th><th class="n">Δ Sammler</th><th class="n">Energie niedrig</th><th class="n"><abbr data-gloss="empty" title="Leer = kein buchbares Fahrzeug und keins im Umkreis von 50 m">Leer</abbr> / Stationen</th><th class="n"><abbr data-gloss="fresh" title="Datenalter jetzt">Datenalter</abbr></th><th>Status</th></tr></thead><tbody></tbody></table></div>
       </div>
     </div>
   </section>
 
   <section class="view" id="view-lab">
     <div class="hero"><h1>Zahlen, die <em>tragen</em>.</h1><p>Energie, Fahrzeugarten, Verläufe und eine Scorecard je Anbieter.</p></div>
-    <div class="panel"><div class="inline-form"><b>Energieregeln</b><label>Ladestand unter <input type="number" id="in-charge" min="1" max="99" value="20"> %</label><label>Reichweite unter <input type="number" id="in-range" min="1" max="100" value="5"> km</label><span class="muted small">Nenner sind nur Fahrzeuge mit der jeweiligen Angabe. Im Sammler-Stand gelten 20 % / 5 km; eigene Grenzen wirken im Live-Abruf.</span></div></div>
+    <div class="panel internal"><div class="inline-form"><b>Energieregeln</b><label>Ladestand unter <input type="number" id="in-charge" min="1" max="99" value="20"> %</label><label>Reichweite unter <input type="number" id="in-range" min="1" max="100" value="5"> km</label><span class="muted small">Nenner sind nur Fahrzeuge mit der jeweiligen Angabe. Im Sammler-Stand gelten 20 % / 5 km; eigene Grenzen wirken im Live-Abruf.</span></div></div>
     <div class="tiles" id="lab-tiles"></div>
     <div class="grid">
       <div class="panel c12"><div class="panel-head"><div><h2>Bestandsverlauf</h2><div class="sub" id="hist-sub">Verfügbare Fahrzeuge je Anbieter, Sammler-Punkte alle 20 Minuten</div></div><div class="chips" id="hist-days"></div></div><div id="chart-hist" data-empty="Verlauf wird geladen …"></div><div class="legend" id="chart-legend"></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Vergleich nach Fahrzeugart</h2><div class="sub">Bestand, Verfügbarkeit, Sperren und Energie je Art</div></div></div><div class="tbl"><table id="tbl-types"><thead><tr><th>Fahrzeugart</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th class="n">Gesperrt</th><th class="n">Ladestand niedrig</th><th class="n">Reichweite niedrig</th></tr></thead><tbody></tbody></table></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Stationen</h2><div class="sub">Physischer Bestand, buchbarer Bestand und Rückgabe getrennt</div></div></div><div class="tbl"><table id="tbl-stations"><thead><tr><th>Anbieter</th><th class="n">Stationen</th><th class="n">Vermietend</th><th class="n" title="Kein buchbares Fahrzeug und keins im Umkreis von 50 m">Leer</th><th class="n">Voll</th><th class="n">Physisch</th><th class="n">Buchbar</th><th class="n">Freie Plätze</th></tr></thead><tbody></tbody></table></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Anbieter-Scorecard</h2><div class="sub">Verfügbarkeit, Sperrquote, Energie, Stationen und Quellenqualität</div></div></div><div class="tbl"><table id="tbl-score"><thead><tr><th>Anbieter</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th class="n">Sperrquote</th><th class="n">Energie niedrig</th><th class="n">Leere Stationen</th><th class="n">Quelle</th><th class="n"><abbr title="Mittel aus Verfügbarkeit, 100 − Sperrquote, 100 − Anteil Energie niedrig, 100 − Anteil leerer Stationen und Quellenqualität (0–100)">Score</abbr></th></tr></thead><tbody></tbody></table></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2 id="cities-title">Stadt- und Gebietsvergleich</h2><div class="sub">Verfügbare Fahrzeuge je Gemeinde aus dem Sammler-Stand, je 10.000 Einwohner wenn bekannt</div></div></div><div class="tbl"><table id="tbl-cities"><thead><tr><th>Gemeinde</th><th class="n">Verfügbar</th><th class="n">je 10.000 EW</th><th class="n">Anbieter</th><th class="n">E-Scooter</th><th class="n">Räder</th></tr></thead><tbody></tbody></table></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Preise</h2><div class="sub">Aus den Preisfeeds der Anbieter (system_pricing_plans), Stand des Sammler-Laufs</div></div></div><div class="tbl"><table id="tbl-pricing"><thead><tr><th>Anbieter</th><th>Tarif</th><th class="n">Entsperren</th><th class="n">je Minute</th><th class="n">je km</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div><div class="muted small" id="pricing-note"></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Anteil an erfassten Fahrzeugen · 7 Tage</h2><div class="sub">Tagesmittel des verfügbaren Bestands je Anbieter; offene Feeds decken nicht alle Anbieter ab</div></div></div><div id="chart-share" data-empty="Verlauf wird geladen …"></div><div class="legend" id="share-legend"></div></div>
-      <div class="panel c12"><div class="panel-head"><div><h2>Versorgung an Haltestellen</h2><div class="sub">ÖPNV-Haltestellen aus OpenStreetMap, Fußweg (OSRM) oder Luftlinie zum nächsten verfügbaren Fahrzeug</div></div><div class="inline-form"><label>Radius <select id="sel-radius"><option>200</option><option selected>300</option><option>500</option><option>1000</option></select> m</label><label><input type="checkbox" id="chk-walk" checked> Fußweg statt Luftlinie</label><button id="btn-supply">Haltestellen prüfen</button><button id="btn-supply-map">Auf Karte zeigen</button></div></div><div id="supply" data-empty="Gemeinde wählen und „Haltestellen prüfen“ klicken: zeigt Haltestellen ohne verfügbares Fahrzeug im Radius."></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Vergleich nach Fahrzeugart</h2><div class="sub">Bestand, Verfügbarkeit, Sperren und Energie je Art</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Vergleich nach Fahrzeugart"><table id="tbl-types"><thead><tr><th>Fahrzeugart</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th class="n">Gesperrt</th><th class="n">Ladestand niedrig</th><th class="n">Reichweite niedrig</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Stationen</h2><div class="sub">Physischer Bestand, buchbarer Bestand und Rückgabe getrennt</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Stationen je Anbieter"><table id="tbl-stations"><thead><tr><th>Anbieter</th><th class="n">Stationen</th><th class="n">Vermietend</th><th class="n"><abbr data-gloss="empty" title="Kein buchbares Fahrzeug und keins im Umkreis von 50 m">Leer</abbr></th><th class="n">Voll</th><th class="n">Physisch</th><th class="n">Buchbar</th><th class="n">Freie Plätze</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Anbieter-Scorecard</h2><div class="sub">Score = Mittel der vorhandenen Teilwerte, <b>gleich gewichtet</b>: Verfügbar-Anteil, 100 − Sperrquote, 100 − Energie niedrig, 100 − leere Stationen, Quellenqualität (je 0–100). Fehlende Teile zählen nicht; Werte je Zeile im Tooltip.</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Anbieter-Scorecard"><table id="tbl-score"><thead><tr><th>Anbieter</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th class="n">Sperrquote</th><th class="n">Energie niedrig</th><th class="n">Leere Stationen</th><th class="n">Quelle</th><th class="n"><abbr data-gloss="score" title="Gleich gewichtetes Mittel der vorhandenen Teilwerte">Score</abbr></th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2 id="cities-title">Stadt- und Gebietsvergleich</h2><div class="sub">Verfügbare Fahrzeuge je Gemeinde <span class="internal">aus dem Sammler-Stand</span>, je 10.000 Einwohner wenn bekannt</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Stadt- und Gebietsvergleich"><table id="tbl-cities"><thead><tr><th>Gemeinde</th><th class="n">Verfügbar</th><th class="n">je 10.000 EW</th><th class="n">Anbieter</th><th class="n">E-Scooter</th><th class="n">Räder</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Preise</h2><div class="sub"><span class="internal">Aus den Preisfeeds der Anbieter (system_pricing_plans), Stand des Sammler-Laufs</span><span class="client-only">Aus den veröffentlichten Tarifen der Anbieter</span></div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Preise"><table id="tbl-pricing"><thead><tr><th>Anbieter</th><th>Tarif</th><th class="n">Entsperren</th><th class="n">je Minute</th><th class="n">je km</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div><div class="muted small" id="pricing-note"></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Anteil an erfassten Fahrzeugen · 7 Tage</h2><div class="sub">Tagesmittel des verfügbaren Bestands je Anbieter; <span class="internal">offene Feeds decken nicht alle Anbieter ab</span><span class="client-only">nicht alle Anbieter veröffentlichen Daten</span></div></div></div><div id="chart-share" data-empty="Verlauf wird geladen …"></div><div class="legend" id="share-legend"></div></div>
+      <div class="panel c12" id="rp-avail"></div>
+      <div class="panel c12" id="rp-rank"></div>
+      <div class="panel c12" id="rp-scatter"></div>
+      <div class="panel c12 internal"><div class="panel-head"><div><h2>Versorgung an Haltestellen</h2><div class="sub">ÖPNV-Haltestellen aus OpenStreetMap, Fußweg (OSRM) oder Luftlinie zum nächsten verfügbaren Fahrzeug</div></div><div class="inline-form"><label>Radius <select id="sel-radius"><option>200</option><option selected>300</option><option>500</option><option>1000</option></select> m</label><label><input type="checkbox" id="chk-walk" checked> Fußweg statt Luftlinie</label><button id="btn-supply">Haltestellen prüfen</button><button id="btn-supply-map">Auf Karte zeigen</button></div></div><div id="supply" data-empty="Gemeinde wählen und „Haltestellen prüfen“ klicken: zeigt Haltestellen ohne verfügbares Fahrzeug im Radius."></div></div>
     </div>
   </section>
 
@@ -333,16 +381,18 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
       <div class="panel c8"><div class="panel-head"><div><h2>Tagesgang</h2><div class="sub" id="usage-chart-sub">Fahrtbeginne je Stunde und Anbieter</div></div><div class="inline-form"><label>Anbieter <select id="usage-op" title="Nur für den Tagesgang; Vorgabe aus dem Filter oben"><option value="all">Alle</option></select></label><label>Fahrzeugart <select id="usage-type" title="Nur für den Tagesgang; Vorgabe aus dem Filter oben"><option value="all">Alle</option></select></label><label><input type="checkbox" id="chk-weather" checked> Wetter (Open-Meteo)</label></div></div><div id="chart-usage" data-empty="Tagesgang wird geladen …"></div><div class="legend" id="usage-legend"></div></div>
       <div class="panel c4"><div class="panel-head"><div><h2>Standzeiten</h2><div class="sub">Verfügbare Fahrzeuge nach Zeit seit letzter Bewegung</div></div></div><div id="idle-bars" data-empty="Standzeiten werden geladen …"></div></div>
       <div class="panel c12"><div class="panel-head"><div><h2>Anbieter im Tagesvergleich</h2><div class="sub">Gemessene Fahrten und Betreiber-Einsätze je Anbieter am gewählten Tag</div></div></div>
-        <div class="tbl"><table id="tbl-usage"><thead><tr><th>Anbieter</th><th class="n">Fahrten</th><th class="n">Fahrtenden</th><th class="n"><abbr title="Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: vom Betreiber transportiert">Umsetzungen</abbr></th><th class="n">Akkutausch</th><th class="n"><abbr title="Gesperrte oder fast leere Fahrzeuge, die aus dem Feed verschwinden (Werkstatt, Laden)">Abholungen</abbr></th></tr></thead><tbody></tbody></table></div>
-        <details class="more"><summary>Weitere Spalten</summary><div class="tbl"><table id="tbl-usage-more"><thead><tr><th>Anbieter</th><th class="n">Ø Dauer</th><th class="n">Ø Distanz</th><th class="n">Ø Wartezeit bis Tausch</th><th class="n">Gesperrt → frei</th><th class="n">Ø Sperrdauer</th><th>Kennungen</th></tr></thead><tbody></tbody></table></div></details></div>
-      <div class="panel c12 est" id="econ-panel"><div class="panel-head"><div><h2>Umsatz &amp; Kennzahlen <span class="pill plain badge" id="econ-badge"></span><span class="pill prelim badge" id="econ-prelim" hidden>vorläufig</span></h2><div class="sub">Schätzung aus gemessenen Fahrten und den Tarifen der Feeds: <abbr title="Rides per Vehicle per Day: Fahrten je Fahrzeug und Tag (Fahrten/Tag ÷ Ø Flotte auf der Straße)">RVD</abbr>, Auslastung, Umsatz je Fahrt, Fahrzeug und Tag</div></div>
-        <div class="inline-form"><label>Ø Fahrt <input type="number" id="econ-min" min="1" max="120" placeholder="auto" style="width:72px"> Min.</label><label><abbr title="Anteil des Listenpreises, der tatsächlich bezahlt wird (Pässe, Rabatte, Freiminuten)">Realisierung</abbr> <input type="number" id="econ-real" min="10" max="100" value="85" style="width:64px"> %</label><label><input type="checkbox" id="econ-net" checked> netto (ohne MwSt.)</label></div></div>
+        <div class="tbl" tabindex="0" role="region" aria-label="Anbieter im Tagesvergleich"><table id="tbl-usage"><thead><tr><th>Anbieter</th><th class="n">Fahrten</th><th class="n">Fahrtenden</th><th class="n"><abbr data-gloss="reloc" title="vom Betreiber transportiert">Umsetzungen</abbr></th><th class="n">Akkutausch</th><th class="n"><abbr data-gloss="pickup" title="aus dem Feed verschwunden (Werkstatt, Laden)">Abholungen</abbr></th></tr></thead><tbody></tbody></table></div>
+        <details class="more"><summary>Weitere Spalten</summary><div class="tbl" tabindex="0" role="region" aria-label="Anbieter im Tagesvergleich, weitere Spalten"><table id="tbl-usage-more"><thead><tr><th>Anbieter</th><th class="n">Ø Dauer</th><th class="n">Ø Distanz</th><th class="n">Ø Wartezeit bis Tausch</th><th class="n">Gesperrt → frei</th><th class="n">Ø Sperrdauer</th><th>Kennungen</th></tr></thead><tbody></tbody></table></div></details></div>
+      <div class="panel c12 est" id="econ-panel"><div class="panel-head"><div><h2>Umsatz &amp; Kennzahlen <span class="pill plain badge" id="econ-badge"></span><span class="pill prelim badge" id="econ-prelim" hidden>vorläufig</span></h2><div class="sub">Schätzung aus gemessenen Fahrten und den Tarifen der Feeds: <abbr data-gloss="rvd" title="Rides per Vehicle per Day">RVD</abbr>, Auslastung, Umsatz je Fahrt, Fahrzeug und Tag</div></div>
+        <div class="inline-form"><label>Ø Fahrt <input type="number" id="econ-min" min="1" max="120" placeholder="auto" style="width:72px"> Min.</label><label><abbr data-gloss="real" title="Anteil des Listenpreises, der tatsächlich bezahlt wird">Realisierung</abbr> <input type="number" id="econ-real" min="10" max="100" value="85" style="width:64px"> %</label><label><input type="checkbox" id="econ-net" checked> netto (ohne MwSt.)</label></div></div>
         <div class="tiles" id="econ-tiles"></div>
         <div class="excl" id="econ-excl"></div>
-        <div class="tbl"><table id="tbl-econ"><thead><tr><th>Anbieter</th><th class="n">Ø Flotte</th><th class="n">Fahrten gemessen</th><th class="n"><abbr title="Faktor auf die gemessenen Fahrten dieses Anbieters, z. B. aus bekannten Betreiberzahlen. Wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz. Nur in diesem Browser gespeichert.">Korrektur&nbsp;×</abbr></th><th class="n">Fahrten / Tag</th><th class="n"><abbr title="Rides per Vehicle per Day: Fahrten je Fahrzeug und Tag (Fahrten/Tag ÷ Ø Flotte auf der Straße)">Rides / Fzg. / Tag</abbr></th><th class="n"><abbr title="Anteil der Zeit, in der ein Fahrzeug fährt (Rides/Fzg./Tag × Ø Fahrtdauer ÷ 24 h)">Auslastung</abbr></th><th class="n">Ø Fahrt</th><th>Tarif (Standard)</th><th class="n">€ / Fahrt</th><th class="n">Umsatz / Tag</th><th class="n">€ / Fzg. / Tag</th></tr></thead><tbody></tbody></table></div>
+        <div class="calib-box" id="econ-calib" aria-live="polite"></div>
+        <div class="tbl" tabindex="0" role="region" aria-label="Umsatz und Kennzahlen je Anbieter"><table id="tbl-econ"><thead><tr><th>Anbieter</th><th class="n">Ø Flotte</th><th class="n">Fahrten gemessen</th><th class="n">Fahrten / Tag</th><th class="n"><abbr data-gloss="rvd" title="Rides per Vehicle per Day">Rides / Fzg. / Tag</abbr></th><th class="n">Umsatz / Tag</th></tr></thead><tbody></tbody></table></div>
+        <details class="more"><summary>Weitere Spalten: Korrektur, Auslastung, Tarif, Einzelpreise</summary><div class="tbl" tabindex="0" role="region" aria-label="Umsatz und Kennzahlen, weitere Spalten"><table id="tbl-econ-more"><thead><tr><th>Anbieter</th><th class="n"><abbr data-gloss="calib" title="Faktor auf die gemessenen Fahrten">Korrektur&nbsp;×</abbr></th><th class="n"><abbr data-gloss="util" title="Anteil der Zeit in Fahrt">Auslastung</abbr></th><th class="n">Ø Fahrt</th><th>Tarif (Standard)</th><th class="n">€ / Fahrt</th><th class="n">€ / Fzg. / Tag</th></tr></thead><tbody></tbody></table></div></details>
         <div class="muted small" id="econ-note" style="margin-top:var(--s3)"></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Nachfrage-Räume</h2><div class="sub"><abbr title="Raster von etwa 250 × 250 m; Starts, Ziele und Bestand werden je Zelle gezählt">Zellen</abbr> (≈ 250 m) mit den meisten Fahrtbeginnen und Netto-Abfluss heute</div></div><button id="btn-flow-map">Auf Karte zeigen</button></div><div class="tbl"><table id="tbl-cells"><thead><tr><th>Zelle</th><th class="n">Starts</th><th class="n">Ziele</th><th class="n">Netto</th><th class="n">Präsenz</th><th class="n"><abbr title="Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: vom Betreiber transportiert">Umsetzungen</abbr></th></tr></thead><tbody></tbody></table></div></div>
-      <div class="panel c6"><div class="panel-head"><div><h2>Stationen: Verfügbarkeitsquote</h2><div class="sub">Anteil der Sammler-Läufe der letzten 7 Tage, in denen die Station leer bzw. voll war</div></div></div><div class="tbl"><table id="tbl-quota"><thead><tr><th>Station</th><th>Anbieter</th><th class="n">Läufe</th><th class="n">Leer</th><th class="n">Voll</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Nachfrage-Räume</h2><div class="sub"><abbr data-gloss="cell" title="Raster von etwa 250 × 250 m">Zellen</abbr> (≈ 250 m) mit den meisten Fahrtbeginnen und Netto-Abfluss am Tag; Lage per OpenStreetMap/Nominatim</div></div><button id="btn-flow-map">Auf Karte zeigen</button></div><div class="tbl" tabindex="0" role="region" aria-label="Nachfrage-Räume"><table id="tbl-cells"><thead><tr><th>Lage</th><th class="n">Starts</th><th class="n">Ziele</th><th class="n">Netto</th><th class="n"><abbr data-gloss="reloc" title="vom Betreiber transportiert">Umsetzungen</abbr></th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c6"><div class="panel-head"><div><h2>Stationen: Verfügbarkeitsquote</h2><div class="sub">Anteil der Sammler-Läufe der letzten 7 Tage, in denen die Station leer bzw. voll war</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Stationen: Verfügbarkeitsquote"><table id="tbl-quota"><thead><tr><th>Station</th><th>Anbieter</th><th class="n">Läufe</th><th class="n">Leer</th><th class="n">Voll</th></tr></thead><tbody></tbody></table></div></div>
     </div>
   </section>
 
@@ -366,6 +416,7 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
           <label>Akkus je Tour (max. 50)<input type="number" id="ops-swapcap" value="50" min="2" max="50"></label>
           <label>Tausch unter (%)<input type="number" id="ops-swapthr" value="25" min="5" max="60"></label>
           <label>Touren je Art<input type="number" id="ops-maxruns" value="6" min="1" max="20"></label>
+          <label>Einsatz je Tour (h)<input type="number" id="ops-maxh" value="4" min="1" max="12" step="0.5"></label>
           <label class="chk"><input type="checkbox" id="ops-osm" checked> ÖPNV &amp; Abstellflächen (OSM)</label>
           <label class="chk"><input type="checkbox" id="ops-route" checked> Straßenrouting (km nach Straße, OSRM)</label>
           <div class="ops-actions"><button id="ops-depot" title="Danach auf die Karte klicken">⌖ Depot setzen</button></div>
@@ -376,14 +427,14 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
     </div>
     <div class="tiles" id="ops-tiles"></div>
     <div class="grid">
-      <div class="panel c8 map-wrap"><div class="panel-head"><div><h2>Plan-Karte</h2><div class="sub" id="ops-map-sub">Nachfrage, Flotte, Spots und Touren</div></div><div class="chips" id="ops-layers"></div></div><div id="ops-map" role="img" aria-label="Karte mit Deploy-Spots und Touren"></div><div class="map-legend" id="ops-legend"></div></div>
+      <div class="panel c8 map-wrap"><div class="panel-head"><div><h2>Plan-Karte</h2><div class="sub" id="ops-map-sub">Nachfrage, Flotte, Spots und Touren</div></div><div class="chips" id="ops-layers"></div></div><div id="ops-map" role="region" aria-label="Karte mit Deploy-Spots und Touren"></div><div class="map-legend" id="ops-legend"></div></div>
       <div class="panel c4 ops-runs-panel"><div class="panel-head"><div><h2>Touren</h2><div class="sub" id="ops-runs-sub">Reihenfolge optimiert; lange Touren in mehrere Routen geteilt</div></div><button id="ops-runs-all" hidden>Alle Touren zeigen</button></div><div id="ops-runs" data-empty="Touren erscheinen, sobald ein Plan berechnet ist."></div></div>
       <div class="panel c12"><div class="panel-head"><div><h2>Deploy-Spots</h2><div class="sub" id="ops-spots-sub"></div></div><div class="inline-form"><button id="ops-csv-spots" title="Spalten name, lat, lng, deploymentStatus, parkingStatus, deploymentRadius, deploymentVehicles">↓ Spots-CSV</button><button id="ops-csv-analysis">↓ Analyse-CSV</button><button id="ops-csv-runs">↓ Touren-CSV</button><button id="ops-geojson">↓ GeoJSON</button></div></div>
-        <div class="tbl"><table id="ops-spots"><thead><tr><th class="n">Rang</th><th>Lage</th><th class="n">Ziel</th><th class="n">Vorhanden</th><th class="n">Fehlen</th><th class="n">Starts/h</th><th class="n">Ø Bestand</th><th class="n"><abbr title="Gewichtete Summe der Faktoren N, U, Ö, A (AHP-Gewichte, 0–1)">Score</abbr></th><th><abbr title="N = Nachfrage (Starts/h), U = Unterversorgung (Starts/h ÷ Bestand), Ö = ÖPNV-Nähe, A = Abstellfläche; Balken 0–1">Faktoren</abbr></th><th><abbr title="Wie sicher der Spot bei ±20 % Gewichtsänderung in der Auswahl bleibt; erst ab 24 Messstunden aussagekräftig">Stabilität</abbr></th></tr></thead><tbody></tbody></table></div></div>
+        <div class="tbl" tabindex="0" role="region" aria-label="Deploy-Spots"><table id="ops-spots"><thead><tr><th class="n">Rang</th><th>Lage</th><th class="n">Ziel</th><th class="n">Vorhanden</th><th class="n">Fehlen</th><th class="n">Starts/h</th><th class="n">Ø Bestand</th><th class="n"><abbr title="Gewichtete Summe der Faktoren N, U, Ö, A (AHP-Gewichte, 0–1)">Score</abbr></th><th><abbr title="N = Nachfrage (Starts/h), U = Unterversorgung (Starts/h ÷ Bestand), Ö = ÖPNV-Nähe, A = Abstellfläche; Balken 0–1">Faktoren</abbr></th><th><abbr title="Wie sicher der Spot bei ±20 % Gewichtsänderung in der Auswahl bleibt; erst ab 24 Messstunden aussagekräftig">Stabilität</abbr></th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel c12"><div class="panel-head"><div><h2>Vermutete Deploy-Spots des Anbieters (aus Beobachtung)</h2><div class="sub" id="ops-groups-sub"></div></div></div>
-        <div class="tbl"><table id="ops-groups"><thead><tr><th>Lage</th><th class="n">Ausbringungen</th><th class="n">zuletzt</th><th class="n">Ø Fahrzeuge</th><th class="n">nächster eigener Spot</th></tr></thead><tbody></tbody></table></div>
+        <div class="tbl" tabindex="0" role="region" aria-label="Vermutete Deploy-Spots des Anbieters"><table id="ops-groups"><thead><tr><th>Lage</th><th class="n">Ausbringungen</th><th class="n">zuletzt</th><th class="n">Ø Fahrzeuge</th><th class="n">nächster eigener Spot</th></tr></thead><tbody></tbody></table></div>
         <div class="note" style="margin-top:var(--s3)">Abgeleitet aus Beobachtung, keine Anbieterdaten: Ein Ort entsteht, wenn mindestens 5 Fahrzeuge des Anbieters in einem Sammler-Lauf gemeinsam innerhalb von 40 m auftauchen (Transporter-Ausbringung). Ausbringungen bis 60 m Abstand sind zusammengefasst; Zeitraum bis 30 Tage.</div></div>
-      <div class="panel c12 prose quiet" id="ops-method"></div>
+      <div class="panel c12 prose quiet internal" id="ops-method"></div>
     </div>
   </section>
 
@@ -392,19 +443,31 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
     <div class="panel"><div class="chips" id="sig-filter"></div></div>
     <div class="cards" id="signals" data-empty="Signale werden geprüft …"></div>
     <div class="grid">
-      <div class="panel c12"><div class="panel-head"><div><h2>Bestandsstabilität</h2><div class="sub">Spanne und letzte Änderung je Anbieter aus den Sammler-Punkten des Tages</div></div></div><div class="tbl"><table id="tbl-stability"><thead><tr><th>Anbieter</th><th class="n">Punkte</th><th class="n">Min</th><th class="n">Max</th><th class="n">Zuletzt</th><th class="n">Änderung</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c12"><div class="panel-head"><div><h2>Bestandsstabilität</h2><div class="sub">Spanne und letzte Änderung je Anbieter aus den Sammler-Punkten des Tages</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Bestandsstabilität"><table id="tbl-stability"><thead><tr><th>Anbieter</th><th class="n"><abbr data-gloss="point" title="Sammler-Punkte">Punkte</abbr></th><th class="n">Min</th><th class="n">Max</th><th class="n">Zuletzt</th><th class="n">Änderung</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div></div>
     </div>
   </section>
 
   <section class="view" id="view-coverage">
-    <div class="hero"><h1>Die Abdeckung ist <em>sichtbar</em>.</h1><p>Anbieter je Ort, zugeordnet über GPS und Gemeindegrenze; bekannte Lücken stehen dabei.</p></div>
+    <div class="hero"><h1>Die Abdeckung ist <em>sichtbar</em>.</h1><p>Anbieter je Ort<span class="internal">, zugeordnet über GPS und Gemeindegrenze</span>; bekannte Lücken stehen dabei.</p></div>
     <div class="tiles" id="cov-tiles"></div>
     <div class="panel">
-      <div class="panel-head"><div><h2>Anbieter nach Ort</h2><div class="sub" id="cov-sub"></div></div><div class="inline-form"><input type="search" id="cov-search" placeholder="Ort oder Anbieter suchen" aria-label="Ort oder Anbieter suchen"><select id="cov-dir" aria-label="Verzeichnis"><option value="all">Alle Verzeichnisse</option><option value="mobilitydata">MobilityData / Betreiber</option><option value="mobidata_bw">MobiData BW</option><option value="mobidrom_nrw">MOBIDROM NRW</option><option value="citybikes">CityBikes</option><option value="dott_direct">Dott · Direktfeed</option></select></div></div>
-      <div class="tbl"><table id="tbl-cov"><thead><tr><th>Anbieter</th><th>Ort</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th>Quellen</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="panel-head"><div><h2>Anbieter nach Ort</h2><div class="sub" id="cov-sub"></div></div><div class="inline-form"><input type="search" id="cov-search" placeholder="Ort oder Anbieter suchen" aria-label="Ort oder Anbieter suchen"><select id="cov-dir" class="internal" aria-label="Verzeichnis"><option value="all">Alle Verzeichnisse</option><option value="mobilitydata">MobilityData / Betreiber</option><option value="mobidata_bw">MobiData BW</option><option value="mobidrom_nrw">MOBIDROM NRW</option><option value="citybikes">CityBikes</option><option value="dott_direct">Dott · Direktfeed</option></select></div></div>
+      <div class="tbl" tabindex="0" role="region" aria-label="Anbieter nach Ort"><table id="tbl-cov"><thead><tr><th>Anbieter</th><th>Ort</th><th class="n">Bestand</th><th class="n">Verfügbar</th><th class="internal">Quellen</th><th>Status</th><th><span class="vh">Ort öffnen</span></th></tr></thead><tbody></tbody></table></div>
       <div class="muted small" id="cov-more"></div>
     </div>
     <div class="panel"><div class="panel-head"><div><h2>Bekannte Datenlücken</h2><div class="sub">Betreiber mit Angebot, aber ohne öffentlichen Feed</div></div></div><div class="cards" id="gaps" data-empty="Lücken werden geladen …"></div></div>
+  </section>
+
+  <section class="view" id="view-bericht">
+    <div class="hero"><h1>Bericht für die <em>Kommune</em>.</h1><p>Kennzahlen je Gemeinde zum Drucken und als CSV, Obergrenzen, Gebühren und Wochenmuster.</p></div>
+    <div class="panel" id="rp-report"></div>
+    <div class="grid">
+      <div class="panel c12" id="rp-reg"></div>
+      <div class="panel c12" id="rp-caps"></div>
+      <div class="panel c12" id="rp-fees"></div>
+      <div class="panel c12" id="rp-week"></div>
+      <div class="panel c12" id="rp-hot"></div>
+    </div>
   </section>
 
   <section class="view" id="view-sources">
@@ -418,19 +481,22 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
     <div class="cards" id="dirs"></div>
     <div class="panel">
       <div class="panel-head"><div><h2>Konsistenz zwischen Quellen</h2><div class="sub" id="cons-sub">Landesfeed gegen Betreiberfeed desselben Systems und mehrere Quellen desselben Anbieters in einer Gemeinde: Bestand, Kennungs-Überlappung, Positionsabweichung</div></div></div>
-      <div class="tbl"><table id="tbl-cons"><thead><tr><th>Vergleich</th><th>Anbieter</th><th class="n">Bestand A</th><th class="n">Bestand B</th><th class="n">Abweichung</th><th class="n">Kennungen gemeinsam</th><th class="n">Positionen gleich</th><th class="n">Median-Abstand</th><th>Urteil</th></tr></thead><tbody></tbody></table></div>
+      <div class="tbl" tabindex="0" role="region" aria-label="Konsistenz zwischen Quellen"><table id="tbl-cons"><thead><tr><th>Vergleich</th><th>Anbieter</th><th class="n">Bestand A</th><th class="n">Bestand B</th><th class="n">Abweichung</th><th class="n">Kennungen gemeinsam</th><th class="n">Positionen gleich</th><th class="n">Median-Abstand</th><th>Urteil</th></tr></thead><tbody></tbody></table></div>
       <div class="muted small" id="cons-note"></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div><h2>Einzelquellen</h2><div class="sub">Zustand des letzten Sammler-Laufs; Fingerabdruck erkennt Quellenwechsel</div></div><div class="inline-form"><input type="search" id="src-search" placeholder="Quelle suchen" aria-label="Quelle suchen"><select id="src-status" aria-label="Zustand"><option value="all">Alle Zustände</option><option value="live">Aktuell</option><option value="delayed">Verzögert</option><option value="stale">Veraltet</option><option value="unknown">Zeit unklar</option><option value="empty">Leer</option><option value="error">Fehler</option><option value="gone">Nicht erreichbar</option><option value="auth">Zugang nötig</option><option value="foreign">Außerhalb DE</option></select></div></div>
-      <div class="tbl"><table id="tbl-src"><thead><tr><th>Quelle</th><th>Anbieter</th><th>Verzeichnis</th><th class="n">Version</th><th class="n">Fahrzeuge</th><th class="n">Stationen</th><th class="n">Orte</th><th class="n">Alter</th><th class="n">Qualität</th><th class="n">Verfügb. 7 T.</th><th>Status</th><th>Lizenz</th></tr></thead><tbody></tbody></table></div>
+      <div class="panel-head"><div><h2>Einzelquellen</h2><div class="sub">Zustand des letzten Sammler-Laufs; Fingerabdruck erkennt Quellenwechsel</div></div><div class="inline-form"><input type="search" id="src-search" placeholder="Quelle suchen" aria-label="Quelle suchen"><select id="src-status" aria-label="Zustand"><option value="all">Alle Zustände</option><option value="live">Aktuell</option><option value="delayed">Verzögert</option><option value="stale">Veraltet</option><option value="unknown">Zeit unklar</option><option value="empty">Leer</option><option value="error">Fehler</option><option value="gone">Nicht erreichbar</option><option value="auth">Zugang nötig</option><option value="foreign">Außerhalb DE</option><option value="duplicate">Dublette (kein Fehler)</option><option value="retired">Länger weg (kein Fehler)</option></select></div></div>
+      <div class="tbl" tabindex="0" role="region" aria-label="Einzelquellen"><table id="tbl-src"><thead><tr><th>Quelle</th><th>Anbieter</th><th>Verzeichnis</th><th class="n">Version</th><th class="n">Fahrzeuge</th><th class="n">Stationen</th><th class="n">Orte</th><th class="n">Alter</th><th class="n">Qualität</th><th class="n">Verfügb. 7 T.</th><th>Status</th><th>Lizenz</th></tr></thead><tbody></tbody></table></div>
       <div class="muted small" id="src-more"></div>
     </div>
+    <div class="panel" id="rp-feedchecks"></div>
+    <div class="panel" id="rp-pricelog"></div>
     <div class="panel prose quiet" id="method"></div>
   </section>
+  <footer class="page-foot" id="page-foot" aria-label="Datenquellen und Lizenzen">Daten: offene GBFS-Feeds der Anbieter · Gemeindegrenzen © GeoBasis-DE / BKG, VG250, dl-de/by-2-0 · Karten © OpenStreetMap-Mitwirkende (ODbL)</footer>
 </main>
 </div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script type="module" src="app.js?v=mvxjtwjp"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script type="module" src="app.js?v=mvxtwqwd"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 import * as E from '../lib/pulse-econ.js';
+import * as C from '../lib/pulse-core.js';
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
 const near = (a, b, eps = 0.011) => Math.abs(a - b) < eps;
 // Tarife (GBFS-Segmente)
@@ -25,7 +26,7 @@ assert(E.planFor(pricing, 'Lime', 'A', 'scooter') === null, 'ohne Tarif: null');
 const at = (h) => Date.parse(`2026-11-01T${String(h - 1).padStart(2, '0')}:30:00Z`); // Berlin = UTC+1
 const runs = [[at(8), null], [at(8) + 20 * 60e3, 20 * 60e3], [at(8) + 40 * 60e3, 20 * 60e3], [at(9) + 0, 20 * 60e3]];
 const obs = E.observedMinutes(runs);
-assert(obs[8] === 20 && obs[9] === 40 && E.observedMinutes([[at(10), 3 * 3600e3]])[10] === 45, 'beobachtete Minuten je Stunde, Fenster ≤ 45 Min');
+assert(obs[8] === 20 && obs[9] === 40 && E.observedMinutes([[at(10), 40 * 60e3, 1]])[10] === 40, 'beobachtete Minuten je Stunde');
 // 100 Fahrzeuge, ganzer Tag beobachtet, 300 Fahrten → RVD 3
 const full = new Array(24).fill(60);
 const g = { start: new Array(24).fill(12.5), end: new Array(24).fill(12.5), rot: new Array(24).fill(0), vmin: new Array(24).fill(90 * 60), vminTot: new Array(24).fill(100 * 60), tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 };
@@ -57,3 +58,34 @@ assert(E.planLabel(bolt) === '0.99 € Start + 0.24 €/min', 'Tariflabel');
 const gv = { ...g, vminTot: g.vminTot.map((x, h) => (h === 23 ? 100 * 20 : 0)), vmin: g.vmin.map((x, h) => (h === 23 ? 90 * 20 : 0)) };
 const obsV = new Array(24).fill(0); obsV[23] = 20;
 assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scooter' }).fleet, 100), 'Flotte aus Fahrzeugminuten der zählenden Läufe');
+// M1 – Lücken: Lauf nach Lücke (Flag 0 oder Altbestand dt > 45 Min.) macht die Stunde „gestört“: keine Beobachtung, Ereignisse zählen nicht
+{
+  const r2 = [[at(7), 20 * 60e3, 1], [at(8) + 5 * 60e3, 456 * 60e3, 1], [at(8) + 25 * 60e3, 20 * 60e3, 1], [at(9), 20 * 60e3, 1]];
+  const gh = E.gapHours(r2), om = E.observedMinutes(r2);
+  assert(gh[8] && !gh[7] && !gh[9] && om[8] === 0 && om[7] === 20 && om[9] === 20, 'Altbestand dt 456 Min.: Stunde 8 gestört, 0 Min. beobachtet');
+  assert(E.gapHours([[at(12), 60 * 60e3, 0]])[12] && E.observedMinutes([[at(12), 20 * 60e3, 0]])[12] === 0, 'Flag 0 = gestört, auch bei kurzem dt (noEvents)');
+  // Voi Stuttgart 01.11.: 348 von 492 Fahrtbeginnen in der gestörten Stunde → fallen aus der Hochrechnung
+  const st = new Array(24).fill(0); st[0] = 106; st[8] = 348; st[9] = 38;
+  const obsD = new Array(24).fill(0); obsD[0] = 60; obsD[9] = 60; obsD[8] = 0;
+  const kd = E.kpis({ g: { ...g, start: st, vminTot: new Array(24).fill(1000 * 20), vmin: new Array(24).fill(900 * 20) }, obsMin: obsD, profile: flat, plan: bolt, type: 'scooter' });
+  assert(kd.rides === 144 && near(kd.coverage, 2 / 24, 1e-9) && near(kd.fleet, 1000 * 20 * 2 / 120), 'gestörte Stunde: Fahrten und Fahrzeugminuten nicht gezählt');
+}
+// M17a – Preisänderungen je Quelle/Tarif
+{
+  const p0 = { plans: [{ sourceId: 's', operator: 'Bolt', plans: [{ id: 'a', name: 'Standard', currency: 'EUR', unlock: 1, perMin: [{ start: 0, rate: 0.22, interval: 1, end: null }], perKm: [] }, { id: 'old', name: 'Alt', unlock: 0, perMin: [], perKm: [] }] },
+    { sourceId: 'x', operator: 'Voi', plans: [{ id: 'v', name: 'Pay', unlock: 1, perMin: [], perKm: [] }] }] };
+  const p1 = { plans: [{ sourceId: 's', operator: 'Bolt', plans: [{ id: 'a', name: 'Standard', currency: 'EUR', unlock: 1.5, perMin: [{ start: 0, rate: 0.25, interval: 1, end: null }], perKm: [] }, { id: 'neu', name: 'Nacht', unlock: 0, perMin: [], perKm: [] }] }] };
+  const ch = E.pricingChanges(p0, p1, 123);
+  const f = ch.map(c => `${c[3]}:${c[4]}`).sort().join(',');
+  assert(f === 'a:perMin,a:unlock,neu:+plan,old:-plan' && ch.find(c => c[4] === 'unlock')[5] === 1 && ch.find(c => c[4] === 'unlock')[6] === 1.5 && ch.every(c => c[0] === 123 && c[1] === 's'), 'Änderungen: Entsperrpreis, Minutenpreis, neuer und entfallener Tarif; Quelle ohne aktuellen Stand (Ausfall) ohne Eintrag');
+}
+// Zeitumstellung 25.10.2026: Stunde 2 gibt es zweimal (120 Min.) – Fahrten je Tag nicht doppelt hochrechnen
+{
+  const day = '2026-10-25', hm = C.hourMinutes(day);
+  const runsD = []; for (let t = Date.parse('2026-10-24T22:00:00Z'); t < Date.parse('2026-10-25T23:00:00Z'); t += 20 * 60e3) runsD.push([t, 20 * 60e3, 1]); // 25 Ortsstunden
+  const om = E.observedMinutes(runsD);
+  assert(hm[2] === 120 && om[2] === 120 && om[3] === 60 && om.reduce((a, b) => a + b, 0) === 1500, 'Zeitumstellung: Stunde 2 = 120 Min. beobachtet, Tag 25 h');
+  const st = new Array(24).fill(10); st[2] = 20; // je echte Stunde 10 Fahrten
+  const kd = E.kpis({ g: { ...g, start: st }, obsMin: om, hourMin: hm, profile: flat, plan: bolt, type: 'scooter' });
+  assert(near(kd.coverage, 25 / 24, 1e-9) && near(kd.ridesDay, 240, 1e-6), 'Zeitumstellung: Hochrechnung auf 24 h (250 Fahrten in 25 h → 240 je Tag)');
+}

@@ -4,23 +4,21 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fetchLimited } from '../lib/pulse-core.js';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
-const CACHE = path.join(ROOT, 'data', 'cache');
-const OUT = path.join(ROOT, 'data', 'sources.json');
+const CACHE = process.env.CATALOG_CACHE || path.join(ROOT, 'data', 'cache');
+const OUT = process.env.CATALOG_OUT || path.join(ROOT, 'data', 'sources.json'); // CATALOG_OUT/CATALOG_CACHE nur für Prüfläufe
 const manual = JSON.parse(await readFile(path.join(ROOT, 'data', 'sources-manual.json'), 'utf8'));
 
 const log = (...a) => console.error('[catalog]', ...a);
 
-async function fetchText(url, cacheName, { timeout = 25000 } = {}) {
+// Timeout gilt bis zum Ende des Lesens, Antwort höchstens MAX_BYTES (Standard 50 MB)
+const MAX_BYTES = +process.env.MAX_BYTES || 50e6;
+async function fetchText(url, cacheName, { timeout = +process.env.FETCH_TIMEOUT || 25000 } = {}) {
   const cacheFile = path.join(CACHE, cacheName);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeout);
-    const r = await fetch(url, { signal: ctrl.signal, headers: { 'user-agent': 'mobility-pulse/1.0 (+github.com/fcou1005/mobility-pulse)' } });
-    clearTimeout(t);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const txt = await r.text();
+    const txt = await fetchLimited(url, { timeout, max: MAX_BYTES, headers: { 'user-agent': 'mobility-pulse/1.0 (+github.com/fcou1005/mobility-pulse)' } });
     await mkdir(CACHE, { recursive: true });
     await writeFile(cacheFile, txt);
     return { text: txt, fromCache: false };
@@ -66,10 +64,13 @@ function operatorFor(name, id) {
   return n.split(/[\s·,-]/)[0] || id;
 }
 
+// Marke je System (Vorrang vor Namensregeln): DB Connect betreibt RegioRad Stuttgart, StadtRAD, Call a Bike
+const bySystem = Object.fromEntries(Object.entries(manual.operator_by_system || {}).filter(([k]) => !k.startsWith('_')));
 const sources = new Map(); // key: System-ID (Verzeichnisse teilen sich IDs) oder URL
 const normUrl = (u) => (u || '').replace(/\/$/, '').replace(/\/gbfs\.json$/, '/gbfs');
 const add = (s) => {
   s.priority ??= 2;
+  if (bySystem[s.id]) s.operator = bySystem[s.id];
   const byId = sources.get(s.id);
   const byUrl = [...sources.values()].find(x => normUrl(x.url) === normUrl(s.url));
   const prev = byId || byUrl;
@@ -102,7 +103,13 @@ const add = (s) => {
     };
     s.operator = operatorFor(s.name, s.id);
     if (isExcluded(s)) continue;
-    if (s.auth && s.auth.type) { s.disabled = `Zugangsdaten erforderlich (${s.auth.type})`; }
+    if (s.auth && s.auth.type) {
+      // Zugang über einen bekannten Anbieter (auth_sources, gleicher Host, z. B. DB API für StadtRAD Hamburg/Lüneburg): freigeschaltet, sobald die Secrets gesetzt sind
+      const host = (() => { try { return new URL(s.url).host; } catch { return null; } })();
+      const prov = Object.entries(manual.auth_sources || {}).find(([k, c]) => !k.startsWith('_') && c.host === host);
+      if (prov) { s.auth = { type: 'header', provider: prov[0] }; if (!prov[1].env.every(e => process.env[e])) s.disabled = `Zugangsdaten fehlen (${prov[1].env.join(', ')} als Repository-Secret setzen)`; }
+      else s.disabled = `Zugangsdaten erforderlich (${s.auth.type})`;
+    }
     add(s);
   }
 }

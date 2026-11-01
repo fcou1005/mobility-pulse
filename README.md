@@ -7,7 +7,7 @@ Sharing-Daten für Deutschland (E-Scooter, Bikesharing, Lastenräder) aus offene
   `latest.json`, `status.json`, `sources.json`, `history/<Tag>.json`, `snapshot/*.json`, `boundaries-active.json`,
   `events/<Tag>.json` (Fahrten, Umsetzungen, Akkutausch, Abholungen, Sperren je Stunde und Gemeinde × Anbieter × Fahrzeugart),
   `cells/<Tag>/<Land>.json` (Start/Ziel/Präsenz je ≈250-m-Zelle), `idle.json`, `idle-long.json`, `stations-quota.json`,
-  `reliability.json`, `pricing.json`, `zones/*.json` (GBFS-Betriebszonen, täglich), `track/state.json.gz` (gehashte Kennungen, interner Zustand),
+  `reliability.json`, `pricing.json`, `zones/*.json` (GBFS-Betriebszonen, täglich), `pricing-log.json` (Tarifänderungen, 180 Tage), `history/daily.json` (verdichtete Tageswerte), `DATA-LICENSE.md` (Quellen und Lizenzen). Der Verfolgungszustand (Kennungen per HMAC mit privatem Salt) liegt seit 01.11.2026 im Actions-Cache (`TRACK_DIR`), nicht mehr auf `data`;
   `ops/<Land>.json` (Flotte je Bundesland mit Akku, Reichweite, Standzeit, Stationsfüllstand – Grundlage der Disposition).
 
 ## Quellen
@@ -31,7 +31,7 @@ Carsharing wird ausgeschlossen (`data/sources-manual.json`). Gemeindezuordnung �
 - Quellenwechsel: Fingerabdruck aus Endpunkt, Version, Feeds, Fahrzeugarten – Wechsel bricht Zeitvergleiche.
 - Energie: Ladestand und Reichweite mit getrennten Nennern (nur Fahrzeuge mit Angabe).
 - Fehlender öffentlicher Datenzugang (z. B. Dott Tübingen seit 25.09.2026) wird als Datenlücke geführt, nicht als Nullbestand.
-- Bewegung: Kennung verschwindet = Fahrtbeginn (gesperrt/leer = Abholung), neue Kennung = Fahrtende, bekannte Kennung kehrt zurück = Fahrtende mit Dauer (stabile Kennungen), gleiche Kennung > 150 m versetzt ohne Verschwinden = Umsetzung, Ladestand < 40 % → ≥ 85 % am Ort = Akkutausch. Quellenausfälle erzeugen keine Ereignisse. `lib/pulse-track.js`, Test `test/track.test.mjs`.
+- Bewegung: Kennung verschwindet = Fahrtbeginn (gesperrt/leer = Abholung), neue Kennung = Fahrtende, bekannte Kennung kehrt zurück = Fahrtende mit Dauer (stabile Kennungen). Kennungswechsel am Ort: verschwundene und neue Kennungen werden je Anbieter global nach Abstand und Ladestand gepaart (gleicher Ladestand ± 2 Punkte bis 100 m, ohne Ladestand bis 40 m). Stabile Kennungen: Versatz ≥ 150 m ist eine Fahrt (3,5–24 km/h), Sammeltransport (≥ 3 Ankünfte ≤ 40 m) oder Sperrung eine Umsetzung. Ladestand < 40 % → ≥ 85 % am Ort = Akkutausch. Läufe nach Lücken > 45 Min. zählen keine Ereignisse; Quellenausfälle erzeugen keine Ereignisse. `lib/pulse-track.js`, Test `test/track.test.mjs`.
 
 ## Disposition (`lib/pulse-ops.js`, Ansicht „Disposition“)
 
@@ -54,5 +54,5 @@ node scripts/build-catalog.mjs     # data/sources.json
 node scripts/prepare-boundaries.mjs # braucht gdal-bin, unzip
 node scripts/collect.mjs
 node test/run.mjs                   # Fixture-Test
-node test/track.test.mjs && node test/ops.test.mjs && node test/econ.test.mjs
+node test/track.test.mjs && node test/ops.test.mjs && node test/econ.test.mjs && node test/core.test.mjs && node test/report.test.mjs
 ```

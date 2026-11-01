@@ -2,28 +2,187 @@
   "_hinweis": "Öffentliche Referenzwerte zur Einordnung der eigenen Schätzungen. Nur Werte, die in der genannten Quelle stehen. Fahrten je Fahrzeug und Tag = TVD/RVD.",
   "updatedAt": "2026-11-01",
   "rvd": [
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "zeitraum": "Q1/2025", "wert": 1.54, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "zeitraum": "Q2/2025", "wert": 2.25, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "zeitraum": "Q3/2025", "wert": 2.31, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "zeitraum": "Q4/2025", "wert": 1.72, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "zeitraum": "Q1/2026", "wert": 1.42, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": null, "ort": "Europa", "type": "scooter", "zeitraum": "2024", "wert": 1.6, "quelle": "Fluctuo, Europe vs North America 2024", "url": "https://blog.fluctuo.com/europe-vs-north-america-2024-shared-mobility/" },
-    { "ags": null, "ort": "Europa", "type": "bike", "zeitraum": "2024", "wert": 2.4, "quelle": "Fluctuo, Europe vs North America 2024 (stationsbasierte Räder)", "url": "https://blog.fluctuo.com/europe-vs-north-america-2024-shared-mobility/" },
-    { "ags": null, "ort": "Voi gesamt", "type": "scooter", "zeitraum": "Q4/2025", "wert": 2.4, "quelle": "micromobility.io, Voi Q4 2025", "url": "https://micromobility.io/news/voi-finishes-2025-strong-with-45-q4-revenue-growth" }
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q1/2025",
+      "wert": 1.54,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q2/2025",
+      "wert": 2.25,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q3/2025",
+      "wert": 2.31,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q4/2025",
+      "wert": 1.72,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q1/2026",
+      "wert": 1.42,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": null,
+      "ort": "Europa",
+      "type": "scooter",
+      "zeitraum": "2024",
+      "wert": 1.6,
+      "quelle": "Fluctuo, Europe vs North America 2024",
+      "url": "https://blog.fluctuo.com/europe-vs-north-america-2024-shared-mobility/"
+    },
+    {
+      "ags": null,
+      "ort": "Europa",
+      "type": "bike",
+      "zeitraum": "2024",
+      "wert": 2.4,
+      "quelle": "Fluctuo, Europe vs North America 2024 (stationsbasierte Räder)",
+      "url": "https://blog.fluctuo.com/europe-vs-north-america-2024-shared-mobility/"
+    },
+    {
+      "ags": null,
+      "ort": "Voi gesamt",
+      "type": "scooter",
+      "zeitraum": "Q4/2025",
+      "wert": 2.4,
+      "quelle": "micromobility.io, Voi Q4 2025",
+      "url": "https://micromobility.io/news/voi-finishes-2025-strong-with-45-q4-revenue-growth"
+    }
   ],
   "fahrt": [
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "zeitraum": "2025", "kmMin": 1.3, "kmMax": 1.8, "minMin": 6.4, "minMax": 8.5, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": "08121000", "ort": "Heilbronn (Dott, Betreiberdaten)", "type": "scooter", "zeitraum": "04/2025–04/2026", "minMedian": 6.9, "kmMedian": 2.22, "quelle": "Fraunhofer IAO/TUM, arXiv 2606.25484", "url": "https://arxiv.org/abs/2606.25484" }
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "2025",
+      "kmMin": 1.3,
+      "kmMax": 1.8,
+      "minMin": 6.4,
+      "minMax": 8.5,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "08121000",
+      "ort": "Heilbronn (Dott, Betreiberdaten)",
+      "type": "scooter",
+      "zeitraum": "04/2025–04/2026",
+      "minMedian": 6.9,
+      "kmMedian": 2.22,
+      "quelle": "Fraunhofer IAO/TUM, arXiv 2606.25484",
+      "url": "https://arxiv.org/abs/2606.25484"
+    }
   ],
   "flotte": [
-    { "ags": "11000000", "ort": "Berlin", "type": "scooter", "stand": "2026-04-01", "wert": 46450, "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915", "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" },
-    { "ags": "09162000", "ort": "München", "type": "scooter", "stand": "2025-11-04", "wert": 21000, "quelle": "Stadtrat München, Dokument 9389374", "url": "https://risi.muenchen.de/risi/dokument/v/9389374" }
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "stand": "2026-04-01",
+      "wert": 46450,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "09162000",
+      "ort": "München",
+      "type": "scooter",
+      "stand": "2025-11-04",
+      "wert": 21000,
+      "quelle": "Stadtrat München, Dokument 9389374",
+      "url": "https://risi.muenchen.de/risi/dokument/v/9389374"
+    }
   ],
   "fahrten": [
-    { "ags": "06412000", "ort": "Frankfurt am Main", "type": "scooter", "zeitraum": "2025", "wert": 10490000, "quelle": "traffiQ, Pressemitteilung 26.02.2026", "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf" }
+    {
+      "ags": "06412000",
+      "ort": "Frankfurt am Main",
+      "type": "scooter",
+      "zeitraum": "2025",
+      "wert": 10490000,
+      "quelle": "traffiQ, Pressemitteilung 26.02.2026",
+      "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf"
+    }
   ],
   "obergrenzen": [
-    { "ags": "08111000", "ort": "Stuttgart", "type": "scooter", "gesamt": 6000, "jeAnbieter": 1500, "innenstadtbezirke": 800, "zentraleInnenstadt": 100, "seit": "2024-01", "quelle": "Stadt Stuttgart, 20.10.2026", "url": "https://www.stuttgart.de/service/aktuelle-meldungen/2026/oktober/zwei-jahre-sonderregeln-fuer-e-scooter-in-stuttgart-stadt-zieht-positive-bilanz" },
-    { "ags": "06412000", "ort": "Frankfurt am Main", "type": "scooter", "gesamt": 12000, "ab": "2026-07-01", "gesamtAb": 10500, "quelle": "traffiQ, Pressemitteilung 26.02.2026", "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf" }
-  ]
+    {
+      "ags": "08111000",
+      "ort": "Stuttgart",
+      "type": "scooter",
+      "gesamt": 6000,
+      "jeAnbieter": 1500,
+      "innenstadtbezirke": 800,
+      "zentraleInnenstadt": 100,
+      "seit": "2024-01",
+      "quelle": "Stadt Stuttgart, 20.10.2026",
+      "url": "https://www.stuttgart.de/service/aktuelle-meldungen/2026/oktober/zwei-jahre-sonderregeln-fuer-e-scooter-in-stuttgart-stadt-zieht-positive-bilanz"
+    },
+    {
+      "ags": "06412000",
+      "ort": "Frankfurt am Main",
+      "type": "scooter",
+      "gesamt": 12000,
+      "ab": "2026-07-01",
+      "gesamtAb": 10500,
+      "quelle": "traffiQ, Pressemitteilung 26.02.2026",
+      "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf"
+    }
+  ],
+  "gebuehren": [
+    {
+      "ags": "05315000",
+      "ort": "Köln",
+      "type": "scooter",
+      "satz": [
+        85,
+        130
+      ],
+      "einheit": "€ je Fahrzeug und Jahr",
+      "gebiet": "standortabhängig, drei Gebührenzonen (Innenstadt, Mittelzone, Außenbezirke); Zuordnung der Sätze zu den Zonen nennt die Quelle nicht",
+      "quelle": "Stadt Köln, Pressemitteilung vom 06.05.2022",
+      "url": "https://www.stadt-koeln.de/politik-und-verwaltung/presse/mitteilungen/24620/index.html",
+      "stand": "2022-05-06"
+    },
+    {
+      "ags": "05315000",
+      "ort": "Köln",
+      "type": [
+        "bike",
+        "cargo"
+      ],
+      "satz": 10,
+      "einheit": "€ je Fahrzeug und Jahr",
+      "gebiet": "Stadtgebiet; Leihfahrräder, Leih-Lastenräder und Ähnliches",
+      "quelle": "Stadt Köln, Pressemitteilung vom 06.05.2022",
+      "url": "https://www.stadt-koeln.de/politik-und-verwaltung/presse/mitteilungen/24620/index.html",
+      "stand": "2022-05-06"
+    }
+  ],
+  "_hinweis_gebuehren": "Berlin: Die Sharing-Strategie 2035 nennt ein Entgelt pro Fahrzeug und Monat, aber keinen Betrag – deshalb kein Eintrag."
 }

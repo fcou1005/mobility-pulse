@@ -7,7 +7,9 @@ import path from 'node:path';
 import * as C from '../lib/pulse-core.js';
 import * as T from '../lib/pulse-track.js';
 import * as OPS from '../lib/pulse-ops.js';
+import * as E from '../lib/pulse-econ.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
+import { createHmac, randomBytes } from 'node:crypto';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const DATA = process.env.DATA_DIR || path.join(ROOT, 'data');
@@ -15,8 +17,25 @@ const now = Date.now();
 const log = (...a) => console.error('[collect]', ...a);
 const CONCURRENCY = +process.env.CONCURRENCY || 8;
 const TIMEOUT = +process.env.FETCH_TIMEOUT || 20000;
+const MAX_BYTES = +process.env.MAX_BYTES || 40e6; // Obergrenze je Antwort
 const HISTORY_DAYS = +process.env.HISTORY_DAYS || 30;
 const UA = 'mobility-pulse/1.0 (+https://github.com/fcou1005/mobility-pulse)';
+
+// Verfolgungszustand: mit TRACK_DIR (privater Cache des Workflows) gesalzene HMAC-Schlüssel und kein out/track mehr;
+// ohne TRACK_DIR wie bisher (out/track, nachrechenbarer Hash) – so läuft der alte Workflow unverändert weiter.
+const TRACK_DIR = process.env.TRACK_DIR ? path.resolve(process.env.TRACK_DIR) : null;
+if (TRACK_DIR && (TRACK_DIR + path.sep).startsWith(path.resolve(DATA) + path.sep)) { console.error('[collect] TRACK_DIR liegt im veröffentlichten Datenverzeichnis – Abbruch'); process.exit(2); }
+let hmac = null, keyId = null;
+if (TRACK_DIR) {
+  await mkdir(TRACK_DIR, { recursive: true });
+  const saltFile = path.join(TRACK_DIR, 'salt');
+  let salt = existsSync(saltFile) ? (await readFile(saltFile, 'utf8')).trim() : '';
+  if (!/^[0-9a-f]{64}$/.test(salt)) { salt = randomBytes(32).toString('hex'); await writeFile(saltFile, salt + '\n', { mode: 0o600 }); log('Track-Salt neu erzeugt'); }
+  const key = Buffer.from(salt, 'hex');
+  hmac = (s) => T.keyFromDigest(createHmac('sha256', key).update(s).digest());
+  keyId = hmac('#mobility-pulse-key-check'); // passt der Zustand zum Salt? (sonst wären alle Kennungen „neu“ → Scheinfahrten)
+}
+const vkey = (operator, rawId) => T.vehicleKey(operator, rawId, hmac);
 
 const catalog = JSON.parse(await readFile(process.env.SOURCES_FILE || path.join(DATA, 'sources.json'), 'utf8'));
 const manual = JSON.parse(await readFile(path.join(ROOT, 'data', 'sources-manual.json'), 'utf8'));
@@ -31,25 +50,40 @@ const prev = existsSync(path.join(DATA, 'latest.json')) ? JSON.parse(await readF
 const prevSources = new Map((prev?.sources || []).map(s => [s.id, s]));
 
 // ---------- HTTP ----------
-const authHeaders = new Map(); // host → headers
+const authRules = []; // { host, path, headers }: Zugangsdaten nur an genau diesen Host (und Pfadpräfix)
+const authFor = (url) => { let u; try { u = new URL(url); } catch { return null; } const r = authRules.find(a => a.host === u.host && (!a.path || u.pathname.startsWith(a.path))); return r ? r.headers : null; };
 const corsByUrl = new Map(); // url → Access-Control-Allow-Origin
+// Antwort mit Obergrenze lesen (C.readLimited); der Timeout-Timer läuft bis zum Ende des Lesens
 async function fetchJson(url, { retry = 1 } = {}) {
   const t0 = Date.now();
   for (let attempt = 0; ; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
     try {
-      const headers = { 'user-agent': UA, accept: 'application/json' };
-      for (const [host, h] of authHeaders) if (url.includes(host)) Object.assign(headers, h);
-      const r = await fetch(url, { signal: ctrl.signal, headers, redirect: 'follow' });
-      clearTimeout(timer);
+      let target = url, r;
+      for (let hop = 0; ; hop++) {
+        const auth = authFor(target);
+        const headers = { 'user-agent': UA, accept: 'application/json', ...(auth || {}) };
+        // mit Zugangsdaten Weiterleitungen selbst prüfen: nur zum selben Host folgen
+        r = await fetch(target, { signal: ctrl.signal, headers, redirect: auth ? 'manual' : 'follow' });
+        if (!auth || r.status < 300 || r.status >= 400) break;
+        const loc = r.headers.get('location');
+        if (!loc) break;
+        await r.body?.cancel().catch(() => {});
+        const next = new URL(loc, target);
+        if (next.host !== new URL(target).host) throw Object.assign(new Error('Weiterleitung mit Zugangsdaten verweigert'), { final: true });
+        if (hop >= 5) throw Object.assign(new Error('zu viele Weiterleitungen'), { final: true });
+        target = next.href;
+      }
       corsByUrl.set(url, r.headers.get('access-control-allow-origin'));
       let json = null, error = null;
-      if (r.ok) { try { json = await r.json(); } catch (e) { error = 'kein JSON'; } }
+      if (r.ok) { try { json = JSON.parse(await C.readLimited(r, MAX_BYTES)); } catch (e) { error = e.message === 'Antwort zu groß' ? e.message : e.name === 'AbortError' ? 'Timeout' : 'kein JSON'; } }
+      else await r.body?.cancel().catch(() => {});
+      clearTimeout(timer);
       return { ok: r.ok && !!json, status: r.status, json, error, latencyMs: Date.now() - t0 };
     } catch (e) {
       clearTimeout(timer);
-      if (attempt < retry) continue;
+      if (attempt < retry && !e.final) continue;
       return { ok: false, status: 0, json: null, error: e.name === 'AbortError' ? 'Timeout' : (e.cause?.code || e.message), latencyMs: Date.now() - t0 };
     }
   }
@@ -68,10 +102,10 @@ async function setupMobidrom(sources) {
     const clientId = s.auth.clientId || (notes.match(/Client ID:\*\*\s*`?([\w-]+)/i) || [])[1] || 'gbfs-api';
     if (!secret || !tokenUrl) { log('MOBIDROM: Zugangsdaten nicht in CKAN-Notes gefunden'); return; }
     const body = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: secret });
-    const tr = await fetch(tokenUrl, { method: 'POST', body, headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': UA } });
+    const tr = await fetch(tokenUrl, { method: 'POST', body, headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': UA }, redirect: 'error' }); // Geheimnis folgt keiner Weiterleitung
     const tok = await tr.json().catch(() => null);
     if (!tr.ok || !tok?.access_token) { log('MOBIDROM: Token fehlgeschlagen', tr.status); return; }
-    authHeaders.set('mobilitaetsdaten.nrw/api/systemadapter', { authorization: `Bearer ${tok.access_token}` });
+    authRules.push({ host: new URL(s.url).host, path: '/api/systemadapter', headers: { authorization: `Bearer ${tok.access_token}` } });
     log('MOBIDROM: Token erhalten');
   } catch (e) { log('MOBIDROM: ', e.message); }
 }
@@ -79,7 +113,7 @@ async function setupMobidrom(sources) {
 // Header-Zugänge (z. B. DB API Marketplace) aus Umgebungsvariablen
 for (const [key, cfg] of Object.entries(catalog.auth_sources || {})) {
   if (!cfg.env.every(e => process.env[e])) continue;
-  authHeaders.set(cfg.host, Object.fromEntries(Object.entries(cfg.headers).map(([h, e]) => [h, process.env[e]])));
+  authRules.push({ host: cfg.host, path: cfg.path || null, headers: Object.fromEntries(Object.entries(cfg.headers).map(([h, e]) => [h, process.env[e]])) });
   log(`Zugang ${key}: aktiv`);
 }
 
@@ -123,23 +157,35 @@ const results = await pool(expanded, async (src) => {
 });
 
 // ---------- Auswertung ----------
-const allVehicles = [], allStations = [], sourceOut = [], snapshots = [];
+let allVehicles = [], allStations = [], snapshots = [];
+const sourceOut = [];
 const ghostKeys = []; // verwaiste Einträge: aus dem Verfolgungszustand entfernen, ohne Ereignis
 const munis = new Map(); // ags → {name,state,pop,bbox}
+const muniInfo = new Map(); // ags → Eigenschaften aller zugeordneten Gemeinden (zum Neuaufbau nach der Quellen-Dublettenprüfung)
+const centroids = new Map(boundaries ? boundaries.features.map(f => [f.properties.ags, C.geomCentroid(f.geometry)]) : []);
+const areas = new Map(boundaries ? boundaries.features.map(f => [f.properties.ags, C.geomAreaKm2(f.geometry)]) : []); // km² (vereinfachte Grenzen, ca. ±1 %)
 const typeOrder = C.VEHICLE_TYPES;
 const chargeThreshold = 20, rangeThreshold = 5;
 
+const operatorBySystem = Object.fromEntries(Object.entries(manual.operator_by_system || {}).filter(([k]) => !k.startsWith('_')));
 for (const { src, sys, probe, error } of results) {
+  if (operatorBySystem[src.id]) src.operator = operatorBySystem[src.id]; // Marke je System (DB Connect → RegioRad Stuttgart, StadtRAD …)
   const rec = { id: src.id, parent: src.parent || null, operator: src.operator, name: src.name, api: src.api, url: src.url, directories: src.directories, priority: src.priority ?? 2, candidate: !!src.candidate,
-    status: 'error', httpStatus: probe?.status ?? sys?.httpStatus ?? null, latencyMs: probe?.latencyMs ?? sys?.latencyMs ?? null, errors: [], license: null, version: sys?.version || null,
+    status: 'error', httpStatus: probe?.status ?? sys?.httpStatus ?? null, latencyMs: probe?.latencyMs ?? sys?.latencyMs ?? null, errors: [], license: null, licenseId: null, licenseUrl: null, attribution: null, attributionUrl: null, checks: null, version: sys?.version || null,
     feedAgeMs: null, vehicleFeedAgeMs: null, stationFeedAgeMs: null, fingerprint: null, quality: null, counts: {}, municipalities: [], vehicleTypes: [], checkedAt: now };
-  if (!sys) { rec.errors = [error || probe?.error || `HTTP ${probe?.status}`]; rec.status = probe?.status === 404 || probe?.status === 410 ? 'gone' : probe?.status === 401 || probe?.status === 403 ? 'auth' : 'error'; sourceOut.push(rec); continue; }
+  // „weg“: 404/410, bei Direktfeed-Kandidaten auch 400 (Stadt gibt es beim Betreiber nicht)
+  const goneHttp = (st) => st === 404 || st === 410 || (src.candidate && st === 400);
+  if (!sys) { rec.errors = [error || probe?.error || `HTTP ${probe?.status}`]; rec.status = goneHttp(probe?.status) ? 'gone' : probe?.status === 401 || probe?.status === 403 ? 'auth' : 'error'; sourceOut.push(rec); continue; }
   rec.errors = sys.errors;
   if (src.parent) { const guess = C.operatorFromName(`${sys.systemInfo?.operator || ''} ${sys.systemInfo?.name || ''} ${src.id.split(':').pop()}`, manual.operator_aliases); rec.operator = src.operator = guess || sys.systemInfo?.operator || sys.systemInfo?.name || src.operator; }
   rec.license = sys.systemInfo?.licenseId || sys.systemInfo?.licenseUrl || src.license || null;
+  { const l = C.normalizeLicense(sys.systemInfo?.licenseId || src.license || sys.systemInfo?.licenseUrl, sys.systemInfo?.licenseUrl || null); rec.licenseId = l.id; rec.licenseUrl = l.url; }
+  rec.attribution = sys.systemInfo?.attribution || null; // Namensnennung (GBFS attribution_organization_name)
+  rec.attributionUrl = sys.systemInfo?.attributionUrl || null;
+  rec.checks = sys.checks || null; // Basisprüfung (C.checkGbfs), nur GBFS
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
-  if (sys.httpStatus === 404 || sys.httpStatus === 410) rec.status = 'gone';
+  if (goneHttp(sys.httpStatus)) rec.status = 'gone';
   else if (sys.httpStatus === 401 || sys.httpStatus === 403) rec.status = 'auth';
   else if (!sys.vehicles.length && !sys.stations.length) rec.status = sys.errors.length ? 'error' : 'empty';
   else {
@@ -156,8 +202,10 @@ for (const { src, sys, probe, error } of results) {
   rec.sourceChanged = !!(prevRec?.fingerprint && prevRec.fingerprint !== rec.fingerprint);
   rec.vehicleTypes = [...new Set([...Object.values(sys.vehicleTypes).map(t => t.type), ...sys.vehicles.map(v => v.type)])];
 
-  for (const id of sys.ghostIds || []) if (id != null) ghostKeys.push(T.vehicleKey(src.operator, id));
+  for (const id of sys.ghostIds || []) if (id != null) ghostKeys.push(vkey(src.operator, id));
   const counts = { vehicles: sys.vehicles.length, stations: sys.stations.length, assigned: 0, unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0, posStale: 0, ghosts: sys.ghosts || 0 };
+  // Reichweite je Quelle: Median und Fahrzeuge unter 25 % des 95. Perzentils (Energie-Alarm für Quellen ohne Ladestand)
+  { const rg = sys.vehicles.map(v => v.rangeKm).filter(x => x != null).map(x => x * 1000).sort((a, b) => a - b); counts.rangeMedianM = rg.length ? Math.round(rg[Math.floor(rg.length / 2)]) : null; counts.lowRangeRel = rg.length ? rg.filter(x => x < 0.25 * rg[Math.floor(0.95 * (rg.length - 1))]).length : null; }
   const agsSet = new Set();
   const usable = rec.status === 'live' || rec.status === 'delayed';
   for (const v of sys.vehicles) {
@@ -169,7 +217,7 @@ for (const { src, sys, probe, error } of results) {
     const m = index ? C.assignMunicipality(index, v.lat, v.lon) : null;
     if (!m) { counts.unassigned++; continue; }
     counts.assigned++; agsSet.add(m.ags);
-    if (usable && !munis.has(m.ags)) munis.set(m.ags, { ags: m.ags, name: m.name, state: m.state, pop: m.pop });
+    if (!muniInfo.has(m.ags)) muniInfo.set(m.ags, { ags: m.ags, name: m.name, state: m.state, pop: m.pop });
     if (usable) allVehicles.push({ ...v, operator: src.operator, sourceId: src.id, priority: src.priority ?? 2, ags: m.ags, feedAgeMs: rec.vehicleFeedAgeMs });
   }
   for (const s of sys.stations) {
@@ -177,10 +225,10 @@ for (const { src, sys, probe, error } of results) {
     const m = index ? C.assignMunicipality(index, s.lat, s.lon) : null;
     if (!m) continue;
     agsSet.add(m.ags);
-    if (usable && !munis.has(m.ags)) munis.set(m.ags, { ags: m.ags, name: m.name, state: m.state, pop: m.pop });
+    if (!muniInfo.has(m.ags)) muniInfo.set(m.ags, { ags: m.ags, name: m.name, state: m.state, pop: m.pop });
     if (usable) allStations.push({ ...s, operator: src.operator, sourceId: src.id, priority: src.priority ?? 2, ags: m.ags, hasVehicleList: !!sys.vehicleListPresent, feedAgeMs: rec.stationFeedAgeMs });
   }
-  rec.counts = counts; rec.municipalities = [...agsSet];
+  rec.counts = counts; rec.municipalities = [...agsSet]; rec.countOnly = !sys.vehicleListPresent; // Stationen zählen Fahrzeuge (keine Fahrzeugliste)
   if (usable && !agsSet.size && (counts.outside || counts.unassigned)) rec.status = 'foreign';
   sourceOut.push(rec);
 
@@ -192,6 +240,13 @@ for (const { src, sys, probe, error } of results) {
       vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null]),
       stations: sys.stations.filter(s => C.validLatLon(s.lat, s.lon)).map(s => [+s.lat.toFixed(5), +s.lon.toFixed(5), s.name, s.physicalAvailable, s.bookable, s.docksAvailable, s.renting ? 1 : 0, s.returning ? 1 : 0]) });
   }
+}
+
+// Seit über 14 Tagen „weg“ (404/410): eigener Status retired, zählt nicht mehr als Fehler (goneSince aus dem vorigen Stand)
+for (const rec of sourceOut) {
+  if (rec.status !== 'gone') continue;
+  rec.goneSince = prevSources.get(rec.id)?.goneSince ?? now;
+  if (now - rec.goneSince > C.RETIRED_MS) rec.status = 'retired';
 }
 
 // ---------- Preise und Betriebszonen (GBFS system_pricing_plans / geofencing_zones) ----------
@@ -214,7 +269,8 @@ await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].inclu
     const out = plans.slice(0, 12).map(pl => {
       const perMin = (pl.per_min_pricing || []).map(x => ({ start: C.num(x.start), rate: C.num(x.rate), interval: C.num(x.interval), end: C.num(x.end) }));
       const perKm = (pl.per_km_pricing || []).map(x => ({ start: C.num(x.start), rate: C.num(x.rate), interval: C.num(x.interval), end: C.num(x.end) }));
-      return { id: pl.plan_id, name: firstLang(pl.name), currency: pl.currency || null, unlock: C.num(pl.price), perMin, perKm, taxable: C.bool(pl.is_taxable), desc: String(firstLang(pl.description) || '').slice(0, 240), surge: C.bool(pl.surge_pricing) };
+      const cur = typeof pl.currency === 'string' && /^[A-Z]{3}$/.test(pl.currency) ? pl.currency : undefined; // nur ISO-4217-Kürzel, sonst weglassen (Schutz vor eingeschleustem Text)
+      return { id: String(pl.plan_id ?? '').slice(0, 80), name: String(firstLang(pl.name) ?? '').slice(0, 120), currency: cur, unlock: C.num(pl.price), perMin, perKm, taxable: C.bool(pl.is_taxable), desc: String(firstLang(pl.description) || '').slice(0, 240), surge: C.bool(pl.surge_pricing) };
     });
     if (out.length) { pricing.push({ sourceId: src.id, operator: src.operator, municipalities: rec.municipalities, plans: out, at: now }); rec.pricingPlans = out.length; }
   }
@@ -242,10 +298,22 @@ await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].inclu
   }
   } catch (e) { log(`Preise/Zonen ${src.id}: ${e.message}`); }
 }, 6);
+const prevPricing = existsSync(path.join(DATA, 'pricing.json')) ? JSON.parse(await readFile(path.join(DATA, 'pricing.json'), 'utf8')) : null;
+for (const p of prevPricing?.plans || []) for (const x of p.plans || []) if (!/^[A-Z]{3}$/.test(String(x.currency ?? ''))) delete x.currency; // Altbestand ohne Prüfung
 await writeFile(path.join(DATA, 'pricing.json'), JSON.stringify({ at: now, plans: pricing }));
+// Preisänderungs-Log (180 Tage): je Quelle/Tarif Zeitpunkt, Feld, alt, neu
+{
+  const f = path.join(DATA, 'pricing-log.json');
+  const log0 = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : { changes: [] };
+  const ch = prevPricing ? E.pricingChanges(prevPricing, { plans: pricing }, now) : [];
+  const changes = [...(log0.changes || []), ...ch].filter(c => now - c[0] <= 180 * 86400e3);
+  await writeFile(f, JSON.stringify({ updatedAt: now, days: 180, fields: ['at', 'sourceId', 'operator', 'planId', 'field', 'old', 'new'], changes }));
+  if (ch.length) log(`Preisänderungen: ${ch.length}`);
+}
 await writeFile(zonesIdxFile, JSON.stringify({ at: now, zones: zonesIndex }));
 log(`Preise: ${pricing.length} Quellen · Zonen: ${zonesIndex.length} Quellen`);
 }
+if (!existsSync(path.join(DATA, 'pricing-log.json'))) await writeFile(path.join(DATA, 'pricing-log.json'), JSON.stringify({ updatedAt: now, days: 180, fields: ['at', 'sourceId', 'operator', 'planId', 'field', 'old', 'new'], changes: [] }));
 
 // ---------- Konsistenz: Alternativ-Feeds desselben Systems und mehrere Quellen je Anbieter × Gemeinde ----------
 const consistency = { at: now, systems: [], pairs: [] };
@@ -326,6 +394,25 @@ const consistency = { at: now, systems: [], pairs: [] };
   log(`Konsistenz: ${consistency.systems.length} Alternativ-Feeds ${JSON.stringify(vc)} · ${consistency.pairs.length} Quellenpaare je Anbieter×Gemeinde`);
 }
 
+// ---------- Quellen-Dubletten: Zählquellen ohne Fahrzeugliste (CityBikes), deren Stationen ≤ 30 m neben gleichnamigen Stationen einer stärkeren Quelle liegen ----------
+// z. B. CityBikes „stadtrad-stuttgart“ = RegioRad Stuttgart (MobiData BW). Die Kopie bleibt in sources sichtbar (status duplicate), zählt aber nirgends.
+const dupOf = new Map(); // sourceId → Quelle, die stattdessen zählt
+{
+  const recOf = new Map(sourceOut.map(r => [r.id, r]));
+  const cp = C.findSourceCopies(allStations, sourceOut.filter(r => r.status === 'live' || r.status === 'delayed').map(r => ({ id: r.id, priority: r.priority, directories: r.directories, countOnly: r.countOnly })));
+  const root = (id) => { const seen = new Set(); while (cp.has(id) && !seen.has(id)) { seen.add(id); id = cp.get(id).of; } return id; };
+  for (const [id, c] of cp) {
+    const r = recOf.get(id), of = root(id), o = recOf.get(of);
+    dupOf.set(id, of); r.feedStatus = r.status; r.status = 'duplicate'; r.duplicateOf = of; r.duplicateShare = c.share;
+    if (o?.quality != null && r.quality != null && r.quality >= o.quality) r.quality = Math.max(0, o.quality - 1); // Kopie nie besser bewertet als das Original
+  }
+  if (dupOf.size) log(`Quellen-Dubletten: ${[...dupOf].map(([a, b]) => `${a} → ${b}`).join(', ')}`);
+}
+allVehicles = allVehicles.filter(v => !dupOf.has(v.sourceId));
+allStations = allStations.filter(s => !dupOf.has(s.sourceId));
+snapshots = snapshots.filter(s => !dupOf.has(s.id));
+for (const x of [...allVehicles, ...allStations]) if (!munis.has(x.ags)) munis.set(x.ags, muniInfo.get(x.ags));
+
 // Dedupe über alle Quellen (je Anbieter)
 allVehicles.sort((a, b) => a.priority - b.priority);
 const dv = C.dedupeVehicles(allVehicles);
@@ -342,7 +429,7 @@ const muniOut = {};
 for (const [ags, m] of munis) {
   const ops = {};
   for (const [k, st] of groups) { const [a, op, ty] = k.split('|'); if (a !== ags) continue; ops[op] ??= { total: 0, available: 0, types: {} }; ops[op].total += st.total; ops[op].available += st.available; ops[op].types[ty] = st.total; }
-  muniOut[ags] = { ...m, operators: ops };
+  muniOut[ags] = { ...m, c: centroids.get(ags) || null, areaKm2: areas.get(ags) ?? null, operators: ops }; // c = [lat, lon] Flächenschwerpunkt, areaKm2 aus den Grenzen
 }
 const totals = {};
 for (const [k, st] of groups) { const ty = k.split('|')[2]; totals[ty] ??= C.emptyStats(); for (const f of Object.keys(st)) totals[ty][f] += st[f]; }
@@ -357,11 +444,17 @@ for (const gap of catalog.known_gaps || []) {
 const statusCounts = {};
 let runEv = null; // Ereignisse dieses Laufs (für runs.json)
 for (const s of sourceOut) statusCounts[s.status] = (statusCounts[s.status] || 0) + 1;
+// Fehler-Zähler: retired (> 14 Tage weg) und duplicate (Kopie einer anderen Quelle) sind keine Fehler
+const FAILING = ['error', 'gone', 'auth', 'unknown'];
+const failing = FAILING.reduce((a, k) => a + (statusCounts[k] || 0), 0);
+// Fehler nach Ursache (Quellen mit Status error/gone/auth/unknown): timeout, http404, http429, noJson, tooLarge, tls, dns, connection, redirect, noFeeds, other
+const errorCauses = {};
+for (const r of sourceOut) { if (!FAILING.includes(r.status)) continue; r.errorCause = C.errorCause(r.errors, r.httpStatus); errorCauses[r.errorCause] = (errorCauses[r.errorCause] || 0) + 1; }
 const latest = {
   at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt,
   boundaries: boundaries ? { count: boundaries.features.length, attribution: boundaries.attribution, source: boundaries.source } : null,
-  counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, groups: groups.size },
-  dedupe: { ...dv.stats, stationDuplicates: ds.duplicates },
+  counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
+  dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size },
   thresholds: { chargeThreshold, rangeThreshold },
   sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps,
 };
@@ -374,39 +467,81 @@ await writeFile(path.join(DATA, 'status.json'), JSON.stringify({ at: now, genera
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
 
-// Verlauf (spaltenweise je Tag)
-const day = new Date(now).toISOString().slice(0, 10);
+// ---------- Fahrzeug-Verfolgung: Zustand lesen (ggf. auf gesalzene Schlüssel umziehen) und Lauf auswerten ----------
+// Vor dem Verlauf, damit die Tagesdatei das Lauf-Flag (Lücke) mitführt.
+const readState = async (f) => { if (!existsSync(f)) return null; try { return JSON.parse(gunzipSync(await readFile(f)).toString('utf8')); } catch (e) { log('Track-Zustand unlesbar, Neustart:', e.message); return null; } };
+const stateFile = TRACK_DIR ? path.join(TRACK_DIR, 'state.json.gz') : path.join(DATA, 'track', 'state.json.gz');
+let prevState = await readState(stateFile);
+// ungesalzener Zustand im Cache oder anderer Salt: wie fehlend behandeln (Umzug aus out/track bzw. Neustart)
+if (TRACK_DIR && prevState && (!prevState.salted || prevState.keyId !== keyId)) { log('Track-Zustand passt nicht zum Salt – verworfen'); prevState = null; }
+let migrated = false;
+if (TRACK_DIR && !prevState) {
+  const old = await readState(path.join(DATA, 'track', 'state.json.gz'));
+  if (old?.v && !old.salted) { const mig = T.migrateState(old, dv.vehicles, (op, id) => T.vehicleKey(op, id), vkey); prevState = mig.state; migrated = true; log(`Track-Zustand umgezogen: ${mig.moved} Fahrzeuge übernommen, ${mig.dropped} verworfen (Lauf zählt keine Ereignisse)`); }
+}
+if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwinden still, keine Abholung
+// Umzugslauf zählt nichts: verworfene alte Einträge (ohne aktuelle Kennung nicht umschlüsselbar) würden sonst Fahrtenden ohne Beginn erzeugen
+const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs })), now, hmac, noEvents: migrated });
+if (keyId) tr.state.keyId = keyId;
+if (tr.gap) log(migrated ? 'Umzugslauf – Ereignisse dieses Laufs zählen nicht' : `Lücke: ${Math.round(tr.dt / 60e3)} Min seit dem letzten Lauf – Ereignisse dieses Laufs zählen nicht`);
+
+// Verlauf (spaltenweise je Tag); f je Lauf: 1 = zählt, 0 = Lauf nach Lücke (Vertrag 5/6), null = unbekannt (ältere Läufe)
+const day = T.dayOf(now); // Tagesschnitt wie Ereignisse/Zellen in Europe/Berlin (bis 01.11.2026 in UTC)
 const histFile = path.join(DATA, 'history', `${day}.json`);
 const hist = existsSync(histFile) ? JSON.parse(await readFile(histFile, 'utf8')) : { day, t: [], series: {} };
-const FIELDS = ['total', 'available', 'disabled', 'lowBattery', 'batteryKnown', 'stations', 'stationsEmpty', 'stationBookable'];
+const FIELDS = ['total', 'available', 'disabled', 'lowBattery', 'batteryKnown', 'stations', 'stationsEmpty', 'stationBookable', 'stationsEmptyDock'];
 const n = hist.t.length;
 hist.t.push(now);
-for (const key of Object.keys(hist.series)) if (!groups.has(key)) for (const f of FIELDS) hist.series[key][f].push(null);
-for (const [key, st] of groups) {
-  if (!hist.series[key]) { hist.series[key] = {}; for (const f of FIELDS) hist.series[key][f] = new Array(n).fill(null); }
-  for (const f of FIELDS) hist.series[key][f].push(st[f]);
-}
-for (const ty of Object.keys(totals)) { const key = `DE||${ty}`; if (!hist.series[key]) { hist.series[key] = {}; for (const f of FIELDS) hist.series[key][f] = new Array(n).fill(null); } for (const f of FIELDS) hist.series[key][f].push(totals[ty][f]); }
+hist.f = hist.f || new Array(n).fill(null); hist.f.push(tr.gap ? 0 : 1);
+const serOf = (key) => { const ser = (hist.series[key] ??= {}); for (const f of FIELDS) ser[f] ??= new Array(n).fill(null); return ser; }; // neue Felder in alten Tagesdateien mit null auffüllen
+for (const key of Object.keys(hist.series)) if (!groups.has(key) && !key.startsWith('DE||')) { const ser = serOf(key); for (const f of FIELDS) ser[f].push(null); }
+for (const [key, st] of groups) { if (key.startsWith('DE||')) continue; const ser = serOf(key); for (const f of FIELDS) ser[f].push(st[f]); } // DE-Summen nur einmal (unten aus totals), sonst doppelt je Lauf
+for (const key of Object.keys(hist.series)) if (key.startsWith('DE||') && !totals[key.slice(4)]) { const ser = serOf(key); for (const f of FIELDS) ser[f].push(null); }
+for (const ty of Object.keys(totals)) { const ser = serOf(`DE||${ty}`); for (const f of FIELDS) ser[f].push(totals[ty][f]); }
 hist.fields = FIELDS;
 await writeFile(histFile, JSON.stringify(hist));
 // alte Tage entfernen
 const days = (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
 for (const f of days.slice(0, Math.max(0, days.length - HISTORY_DAYS))) await rm(path.join(DATA, 'history', f));
-await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days: (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), fields: FIELDS, updatedAt: now }));
+const histDays = (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort();
+await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days: histDays, fields: FIELDS, updatedAt: now }));
+// Tagesmittel über mehrere Tage (Vertrag 6): je Schlüssel und Tag [available, total, disabled, lowBattery, Läufe]; Läufe mit Flag 0 nicht im Mittel.
+// Frühere Tage werden aus der vorhandenen daily.json übernommen, nur der aktuelle Tag (und fehlende) neu gerechnet.
+{
+  const DAILY = ['available', 'total', 'disabled', 'lowBattery', 'stations', 'stationsEmptyDock'];
+  const dailyFile = path.join(DATA, 'history', 'daily.json');
+  const prevDaily = existsSync(dailyFile) ? JSON.parse(await readFile(dailyFile, 'utf8')) : { days: [], series: {} };
+  const useDays = histDays.slice(-30);
+  const series = {};
+  const dayRows = (h) => { // Map key → Zeile
+    const flags = h.f || [], runs = h.t.length;
+    let use = [...Array(runs).keys()].filter(i => flags[i] !== 0); if (!use.length) use = [...Array(runs).keys()]; // Tag nur mit Lücken-Läufen: alle
+    const out = new Map();
+    for (const [key, ser] of Object.entries(h.series)) {
+      const idx = use.filter(i => ser.total?.[i] != null); if (!idx.length) continue;
+      // Mittel je Feld über die Läufe mit Wert (stationsEmptyDock fehlt in älteren Tagen → null)
+      out.set(key, [...DAILY.map(f => { const xs = idx.filter(i => ser[f]?.[i] != null); return xs.length ? +(xs.reduce((a, i) => a + ser[f][i], 0) / xs.length).toFixed(1) : null; }), idx.length]);
+    }
+    return out;
+  };
+  for (const d of useDays) {
+    const reuse = d !== day && prevDaily.days.includes(d) && JSON.stringify(prevDaily.fields) === JSON.stringify([...DAILY, 'runs']); // nur bei gleichem Feldaufbau übernehmen
+    if (reuse) { for (const [key, byDay] of Object.entries(prevDaily.series)) if (byDay[d]) (series[key] ??= {})[d] = byDay[d]; continue; }
+    const h = d === day ? hist : JSON.parse(await readFile(path.join(DATA, 'history', `${d}.json`), 'utf8'));
+    for (const [key, row] of dayRows(h)) (series[key] ??= {})[d] = row;
+  }
+  await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series }));
+}
 
 // ---------- Fahrzeug-Verfolgung (Fahrten, Standzeiten, Tausch, Umsetzungen, Sperren, Zellen, Stationsquote, Zuverlässigkeit) ----------
 {
-  await mkdir(path.join(DATA, 'track'), { recursive: true });
   await mkdir(path.join(DATA, 'events'), { recursive: true });
   await mkdir(path.join(DATA, 'cells'), { recursive: true });
-  const stateFile = path.join(DATA, 'track', 'state.json.gz');
-  let prevState = null;
-  if (existsSync(stateFile)) { try { prevState = JSON.parse(gunzipSync(await readFile(stateFile)).toString('utf8')); } catch (e) { log('Track-Zustand unlesbar, Neustart:', e.message); } }
-  if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwinden still, keine Abholung
-  const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, latencyMs: r.latencyMs })), now });
+  if (TRACK_DIR) await rm(path.join(DATA, 'track'), { recursive: true, force: true }); // Zustand liegt privat im Cache, nicht mehr auf dem Datenzweig
+  else await mkdir(path.join(DATA, 'track'), { recursive: true });
   await writeFile(stateFile, gzipSync(JSON.stringify(tr.state)));
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
-  const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes });
+  const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes, gap: tr.gap });
   await writeFile(evFile, JSON.stringify(evDoc));
   // Gruppen-Ereignisse (≥ 5 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt), 30 Tage
   {
@@ -426,9 +561,11 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
     const month = tr.day.slice(0, 7), arFile = path.join(arDir, `${month}.json`);
     const ar = existsSync(arFile) ? JSON.parse(await readFile(arFile, 'utf8')) : { month, days: {} };
     ar.fields = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
-    const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0);
-    const obsMin = (evDoc.runs || []).reduce((a, r) => a + (r[1] == null ? 0 : Math.min(r[1], 45 * 60e3) / 60e3), 0);
-    const vminOk = (evDoc.runs || []).every(r => r[1] == null || r[2] === 1);
+    // gestörte Stunden (Lauf nach Lücke, auch Altbestand) zählen weder mit Ereignissen noch mit Beobachtungszeit
+    const obsH = E.observedMinutes(evDoc.runs);
+    const s = (a) => (a || []).reduce((x, y, h) => x + (obsH[h] > 0 ? (y || 0) : 0), 0);
+    const obsMin = obsH.reduce((a, b) => a + b, 0);
+    const vminOk = (evDoc.runs || []).every(r => r[1] == null || r[2] === 1 || r[2] === 0);
     const rows = {};
     for (const [k, g] of Object.entries(evDoc.groups || {})) {
       const hs = hist.series[k]?.total?.filter(x => x != null) || [];
@@ -437,11 +574,15 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
     }
     ar.days[tr.day] = rows; ar.updatedAt = now;
     await writeFile(arFile, JSON.stringify(ar));
-    await writeFile(path.join(arDir, 'index.json'), JSON.stringify({ months: (await readdir(arDir)).filter(f => /^\d{4}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 7)).sort(), fields: ar.fields, updatedAt: now }));
+    // Index mit Tagen und erstem Tag (Vertrag 7), damit das Dashboard nicht alle Monatsdateien laden muss
+    const months = (await readdir(arDir)).filter(f => /^\d{4}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 7)).sort();
+    const allDays = []; for (const m of months) { const d = m === month ? ar : JSON.parse(await readFile(path.join(arDir, `${m}.json`), 'utf8')); allDays.push(...Object.keys(d.days || {})); }
+    allDays.sort();
+    await writeFile(path.join(arDir, 'index.json'), JSON.stringify({ months, fields: ar.fields, days: allDays.length, firstDay: allDays[0] || null, updatedAt: now }));
   }
   const cellsDir = path.join(DATA, 'cells');
   const cellFile = path.join(cellsDir, `${tr.day}.json`);
-  const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day, { dt: tr.dt, hour: tr.hour });
+  const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day, { dt: tr.dt, hour: tr.hour, gap: tr.gap });
   await writeFile(cellFile, JSON.stringify(cellDoc));
   // je Bundesland aufgeteilt (kleinere Downloads)
   await mkdir(path.join(cellsDir, tr.day), { recursive: true });
@@ -456,7 +597,7 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
     const idx = (arr, v) => { let i = arr.indexOf(v); if (i < 0) { i = arr.length; arr.push(v); } return i; };
     for (const v of dv.vehicles) {
       const st = muniOut[v.ags]?.state; if (!st) continue; const o = S(st);
-      const e = tr.state.v[T.vehicleKey(v.operator, v.rawId)];
+      const e = tr.state.v[vkey(v.operator, v.rawId)];
       const idleMin = e ? Math.round((now - e[8]) / 60e3) : null;
       o.vehicles.push([+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags)]);
     }
@@ -505,7 +646,7 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   const byAgs = new Map(); for (const p of tr.idleLong) { if (!byAgs.has(p.ags)) byAgs.set(p.ags, []); byAgs.get(p.ags).push(p); }
   const longOut = []; for (const [, list] of byAgs) { list.sort((a, b) => b.hours - a.hours); const step = Math.max(1, Math.ceil(list.length / 400)); for (let i = 0; i < list.length; i += step) longOut.push(list[i]); }
   await writeFile(path.join(DATA, 'idle-long.json'), JSON.stringify({ at: now, total: tr.idleLong.length, points: longOut }));
-  await writeFile(path.join(DATA, 'stations-quota.json'), JSON.stringify({ at: now, days: 7, fields: ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns'], stations: T.stationQuota(tr.state) }));
+  await writeFile(path.join(DATA, 'stations-quota.json'), JSON.stringify({ at: now, days: 7, fields: ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns', 'virtual'], stations: T.stationQuota(tr.state) }));
   await writeFile(path.join(DATA, 'reliability.json'), JSON.stringify({ at: now, days: 7, sources: T.reliability(tr.state) }));
   // Ereignis- und Zellendateien: 30 bzw. 14 Tage behalten
   for (const f of (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -HISTORY_DAYS)) await rm(path.join(DATA, 'events', f));
@@ -524,13 +665,40 @@ if (boundaries) {
   await writeFile(path.join(DATA, 'boundaries-active.json'), JSON.stringify({ type: 'FeatureCollection', attribution: boundaries.attribution, license: boundaries.license, generatedAt: latest.generatedAt, features: feats }));
   log(`Aktive Gemeinden: ${feats.length}`);
 }
+// Namensnennung und Lizenzen des Datenstands (DATA-LICENSE.md im Datenzweig)
+{
+  const md = (x) => String(x ?? '').replace(/[\r\n|]+/g, ' ').replace(/[<>]/g, '').replace(/([\[\]`*_\\])/g, '\\$1').trim(); // Text aus Feeds entschärfen (Markdown/HTML)
+  const counted = sourceOut.filter(r => ['live', 'delayed', 'stale'].includes(r.status));
+  const byLic = new Map();
+  for (const r of counted) { const k = r.licenseId || r.licenseUrl || 'ohne Angabe'; if (!byLic.has(k)) byLic.set(k, []); byLic.get(k).push(r); }
+  const lic = [...byLic].sort((a, b) => b[1].length - a[1].length);
+  const sa = counted.filter(r => /^CC-BY-SA/.test(r.licenseId || ''));
+  const lines = [
+    '# Daten und Lizenzen', '',
+    `Stand: ${new Date(now).toISOString()} · erzeugt vom Sammler (scripts/collect.mjs) bei jedem Lauf.`, '',
+    'Dieser Datenzweig enthält aus offenen Quellen abgeleitete Daten: Bestände, Ereignisse (Fahrten, Umsetzungen, Akkutausch), Zellen, Archiv und Momentaufnahmen. Die Lizenzangaben stammen aus den Feeds (GBFS `system_information`: `license_id`, `license_url`, `attribution_organization_name`) bzw. aus den Verzeichnissen; maßgeblich sind die Bedingungen der jeweiligen Quelle. Je Quelle stehen sie auch in `latest.json` → `sources[]` (`licenseId`, `licenseUrl`, `attribution`, `attributionUrl`).', '',
+    '## Grundlagen', '',
+    `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
+    '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
+    '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
+    '## Quellen nach Lizenz', '',
+    `${counted.length} Quellen mit Daten in diesem Stand (Kopien anderer Quellen und nicht erreichbare Quellen ausgenommen).`, '',
+    '| Lizenz | Quellen | Namensnennung / Anbieter |', '|---|---|---|',
+    ...lic.map(([k, list]) => { const names = [...new Set(list.map(r => r.attribution || r.systemOperator || r.operator).filter(Boolean).map(md))]; const url = list.find(r => r.licenseUrl)?.licenseUrl; return `| ${md(k)}${url && url !== k ? ` (${md(url)})` : ''} | ${list.length} | ${names.slice(0, 25).join(', ')}${names.length > 25 ? ` u. a. (${names.length})` : ''} |`; }),
+    '', '## Weitergabe unter gleichen Bedingungen', '',
+    sa.length ? `${sa.length} Quellen stehen unter CC BY-SA (${[...new Set(sa.map(r => md(r.operator)))].join(', ')}). Daten, die aus diesen Quellen abgeleitet sind (Bestände, Ereignisse, Zellen, Archiv der betroffenen Gebiete und Anbieter), stehen unter CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).` : 'In diesem Stand liefert keine Quelle Daten unter CC BY-SA.',
+    'Aus OpenStreetMap abgeleitete Datenbankteile (`context/`) stehen unter der ODbL 1.0.',
+    '', 'Quellen ohne Lizenzangabe sind oben als „ohne Angabe“ geführt; für sie gelten die Nutzungsbedingungen des jeweiligen Betreibers bzw. Verzeichnisses.', '',
+  ];
+  await writeFile(path.join(DATA, 'DATA-LICENSE.md'), lines.join('\n'));
+}
 // Sammler-Monitor: ein Eintrag je Lauf, 7 Tage (Lücken, Ausfälle, Zählungen)
 {
   const f = path.join(DATA, 'runs.json');
   const doc = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : { runs: [] };
   doc.fields = ['at', 'dauer_ms', 'quellen', 'aktuell', 'verzoegert', 'veraltet', 'fehler', 'fahrzeuge', 'stationen', 'fahrten', 'fahrtenden', 'kennungswechsel', 'ausloeser'];
   const st = statusCounts;
-  doc.runs.push([now, Date.now() - now, sourceOut.length, st.live || 0, st.delayed || 0, st.stale || 0, Object.entries(st).filter(([k]) => !['live', 'delayed', 'stale', 'empty', 'foreign'].includes(k)).reduce((a, [, v]) => a + v, 0), dv.vehicles.length, ds.stations.length, runEv?.start ?? null, runEv?.end ?? null, runEv?.rot ?? null, process.env.GITHUB_EVENT_NAME || 'lokal']);
+  doc.runs.push([now, Date.now() - now, sourceOut.length, st.live || 0, st.delayed || 0, st.stale || 0, failing, dv.vehicles.length, ds.stations.length, runEv?.start ?? null, runEv?.end ?? null, runEv?.rot ?? null, process.env.GITHUB_EVENT_NAME || 'lokal']);
   doc.runs = doc.runs.filter(r => now - r[0] <= 7 * 86400e3).slice(-600);
   await writeFile(f, JSON.stringify(doc));
 }

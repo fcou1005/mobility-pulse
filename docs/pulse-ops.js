@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM } from './pulse-core.js?v=mvxjtwjp';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxjtwjp';
+import { haversineM } from './pulse-core.js?v=mvxtwqwd';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxtwqwd';
 
 export { BANDS, bandOf };
 
@@ -19,6 +19,7 @@ export const DEFAULTS = {
   vanCapacity: 20, swapCapacity: 50, workshopCapacity: 12, maxRuns: 6, maxPickupM: 4000,
   detour: 1.35, speedKmh: 18, pickupMin: 1.5, dropMin: 1.0, swapMin: 2.5, workshopMin: 3,
   swapThreshold: 25, minBatteryForMove: 30, idleSurplusMin: 24 * 60,
+  maxRunMin: 240, // Einsatz je Tour höchstens 4 h (Fahrt + vor Ort); was nicht passt, bildet weitere Touren oder bleibt „nicht eingeplant“
 };
 
 const sum = (a) => a.reduce((x, y) => x + y, 0);
@@ -40,6 +41,22 @@ export function geomContains(geom, lat, lon) {
   if (geom.type === 'Polygon') return poly(geom.coordinates);
   if (geom.type === 'MultiPolygon') return geom.coordinates.some(poly);
   return false;
+}
+// Geometrien mit Begrenzungsrechteck: Punkt-in-Polygon nur, wenn der Punkt im Rechteck liegt (viele Zonen × viele Zellen)
+function boxed(geoms) {
+  return (geoms || []).map(g => { const b = [Infinity, Infinity, -Infinity, -Infinity]; const walk = (c) => { if (typeof c[0] === 'number') { if (c[0] < b[0]) b[0] = c[0]; if (c[0] > b[2]) b[2] = c[0]; if (c[1] < b[1]) b[1] = c[1]; if (c[1] > b[3]) b[3] = c[1]; } else c.forEach(walk); }; walk(g.coordinates || []); return { g, b }; });
+}
+const boxedContains = (list, lat, lon) => list.some(({ g, b }) => lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3] && geomContains(g, lat, lon));
+// Rasterindex für Punktmengen (≈ 330 m Zellen): Nachbarn in maxM, ohne jeden Punkt zu prüfen
+const GRID_LAT = 0.003, GRID_LON = 0.005;
+function gridIndex(points) {
+  const g = new Map();
+  for (const p of points || []) { const k = `${Math.floor(p.lat / GRID_LAT)}:${Math.floor(p.lon / GRID_LON)}`; const l = g.get(k); if (l) l.push(p); else g.set(k, [p]); }
+  return (p, maxM) => {
+    const r = Math.ceil(maxM / 250), i0 = Math.floor(p.lat / GRID_LAT), j0 = Math.floor(p.lon / GRID_LON), out = [];
+    for (let i = i0 - r; i <= i0 + r; i++) for (let j = j0 - r; j <= j0 + r; j++) for (const q of g.get(`${i}:${j}`) || []) if (haversineM(p.lat, p.lon, q.lat, q.lon) <= maxM) out.push(q);
+    return out;
+  };
 }
 
 // ---------- Kontextdaten ----------
@@ -73,15 +90,48 @@ export function parkingFromOsm(elements) {
 export function transitFromOsm(elements) {
   return (elements || []).filter(e => { const t = e.tags || {}; return t.highway === 'bus_stop' || t.public_transport === 'platform' || t.public_transport === 'stop_position' || /^(tram_stop|station|halt|subway_entrance)$/.test(t.railway || ''); }).map(elPos).filter(Boolean);
 }
-// Amtliche Abstellflächen (z. B. Berlin, WFS abstell_mikromob): Punkte oder Multipunkte
+// Amtliche Geodaten (WFS, Open-Data-Portal) in lon/lat bringen: WFS 2.0 liefert EPSG:4326 je nach Server als lat/lon.
+// In Deutschland (lat 47–55, lon 5–16) ist die Reihenfolge eindeutig erkennbar; projizierte Koordinaten (> 180) werden gezählt, nicht geraten.
+export function lonLatFc(fc) {
+  let swapped = 0, projected = 0, n = 0;
+  const fix = (c) => { if (!Array.isArray(c)) return c; if (typeof c[0] !== 'number') return c.map(fix); n++;
+    if (Math.abs(c[0]) > 180 || Math.abs(c[1]) > 90) { projected++; return c; }
+    if (c[0] > 46 && c[0] < 56 && c[1] > 4 && c[1] < 17) { swapped++; return [c[1], c[0], ...c.slice(2)]; }
+    return c; };
+  const features = (fc?.features || []).map(f => f?.geometry ? { ...f, geometry: { ...f.geometry, coordinates: fix(f.geometry.coordinates) } } : f);
+  return { type: 'FeatureCollection', features, swapped, projected, n };
+}
+const ringCenter = (r) => { const q = r.length > 3 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1] ? r.slice(0, -1) : r; return [sum(q.map(p => p[0])) / q.length, sum(q.map(p => p[1])) / q.length]; };
+const featName = (pr = {}) => pr.name || pr.bezeichnung || pr.standort || pr.titel || pr.typ || null;
+// Amtliche Abstellflächen (Berlin WFS abstell_mikromob, München Abstellflächen): Punkte, Multipunkte oder Flächen (→ Mittelpunkt)
 export function parkingFromWfs(fc, cat = 'official') {
   const out = [];
   for (const f of fc?.features || []) {
     const g = f.geometry; if (!g) continue;
-    const pts = g.type === 'Point' ? [g.coordinates] : g.type === 'MultiPoint' ? g.coordinates : [];
-    for (const [lon, lat] of pts) out.push({ lat, lon, cat, name: f.properties?.name || f.properties?.typ || null });
+    const pts = g.type === 'Point' ? [g.coordinates] : g.type === 'MultiPoint' ? g.coordinates : g.type === 'Polygon' ? [ringCenter(g.coordinates[0])] : g.type === 'MultiPolygon' ? g.coordinates.map(p => ringCenter(p[0])) : [];
+    for (const [lon, lat] of pts) if (Number.isFinite(lat) && Number.isFinite(lon)) out.push({ lat, lon, cat, name: featName(f.properties) });
   }
   return out;
+}
+// Amtliche Abstellverbotszonen (Berlin parkverbot_mikromob, München Geofences um Abstellflächen): Flächen als Ausschluss
+export const noParkFromFc = (fc) => (fc?.features || []).map(f => f.geometry).filter(g => g && (g.type === 'Polygon' || g.type === 'MultiPolygon'));
+// WFS-GetFeature als GeoJSON in WGS84; typeNames Standard „<letzter Pfadteil>:<letzter Pfadteil>“ (Berliner GDI-Muster)
+export function wfsGetFeatureUrl(base, typeNames) {
+  const u = new URL(base); const seg = u.pathname.split('/').filter(Boolean).pop();
+  const tn = typeNames || u.searchParams.get('typeNames') || u.searchParams.get('typeName') || `${seg}:${seg}`;
+  for (const k of [...u.searchParams.keys()]) if (/^(service|version|request|typenames?|outputformat|srsname)$/i.test(k)) u.searchParams.delete(k);
+  for (const [k, v] of Object.entries({ service: 'WFS', version: '2.0.0', request: 'GetFeature', typeNames: tn, outputFormat: 'application/json', srsName: 'EPSG:4326' })) u.searchParams.set(k, v);
+  return u.toString();
+}
+// Open-Data-Portal (CKAN, z. B. opendata.muenchen.de): aus package_show die Ressource wählen – GeoJSON vor JSON vor WFS
+export function pickCkanResource(pkg, typeNames = null) {
+  const res = (pkg?.result || pkg)?.resources || [];
+  const fmt = (r) => `${r.format || ''} ${r.mimetype || ''}`.toLowerCase(), url = (r) => String(r.url || '');
+  const gj = res.find(r => /geo\+?json/.test(fmt(r)) || /\.geojson(\?|$)/i.test(url(r))) || res.find(r => /(^|\s)json\b/.test(fmt(r)) || /\.json(\?|$)/i.test(url(r)));
+  if (gj) return { url: url(gj), type: 'geojson' };
+  const wfs = res.find(r => /wfs/.test(fmt(r)) || /service=wfs|\/wfs\b/i.test(url(r)));
+  if (wfs) { const tn = typeNames || new URL(url(wfs)).searchParams.get('typeName') || new URL(url(wfs)).searchParams.get('typeNames'); if (tn) return { url: wfsGetFeatureUrl(url(wfs), tn), type: 'wfs' }; }
+  return null;
 }
 
 // ---------- Flotte ----------
@@ -152,7 +202,6 @@ function nearestWithin(points, p, maxM) {
   for (const q of points) { const d = haversineM(p.lat, p.lon, q.lat, q.lon); if (d < bd && d <= maxM) { bd = d; best = q; } }
   return best ? { item: best, d: bd } : null;
 }
-function countWithin(points, p, maxM) { let n = 0; for (const q of points) if (haversineM(p.lat, p.lon, q.lat, q.lon) <= maxM) n++; return n; }
 const PARK_RANK = { station: 0, escooter: 0, sharing: 1, official: 0, rad: 2 };
 
 function rank(cands, weights, topN, minSpacingM) {
@@ -167,7 +216,10 @@ function rank(cands, weights, topN, minSpacingM) {
 
 /**
  * Deploy-Spots für einen Anbieter.
- * ctx: { transit: [{lat,lon}] | null, parking: [{lat,lon,cat,name}] | null, noPark: [geometry], mandatory: [geometry], stations: [{lat,lon,name}], share, horizonH, topN, minSpacingM, weights }
+ * ctx: { transit: [{lat,lon}] | null, parking: [{lat,lon,cat,name}] | null, noPark: [geometry], mandatory: [geometry], officialNoPark: [geometry],
+ *        stations: [{lat,lon,name}], share, horizonH, topN, minSpacingM, weights }
+ * officialNoPark (Abstellverbot laut Stadt) ist wie noPark ein Ausschluss, gilt aber nicht für einen Spot auf einer ausgewiesenen
+ * Abstellfläche (amtlich oder E-Scooter-Stellfläche): dort ist Abstellen erlaubt (München: Verbot im Umkreis, Fläche frei).
  */
 export function scoreSpots(model, ctx = {}) {
   const o = { ...DEFAULTS, ...ctx };
@@ -176,26 +228,29 @@ export function scoreSpots(model, ctx = {}) {
   const weights = { ...AHP.weights, ...(o.weights || {}) };
   if (!o.transit) weights.transit = 0;
   if (!o.parking && !o.mandatory?.length) weights.parking = 0;
+  const parkNear = gridIndex(o.parking), transitNear = gridIndex(o.transit), noPark = boxed(o.noPark), mandatory = boxed(o.mandatory), offNo = boxed(o.officialNoPark);
   for (const c of cands) {
     // Standort: offizielle/ausgewiesene Fläche in der Zelle, sonst Zellmitte
     let loc = { lat: c.lat, lon: c.lon }, park = null;
     if (o.parking?.length) {
-      const near = o.parking.filter(p => haversineM(c.lat, c.lon, p.lat, p.lon) <= 160).sort((a, b) => (PARK_RANK[a.cat] ?? 3) - (PARK_RANK[b.cat] ?? 3) || haversineM(c.lat, c.lon, a.lat, a.lon) - haversineM(c.lat, c.lon, b.lat, b.lon));
+      const near = parkNear(c, 160).sort((a, b) => (PARK_RANK[a.cat] ?? 3) - (PARK_RANK[b.cat] ?? 3) || haversineM(c.lat, c.lon, a.lat, a.lon) - haversineM(c.lat, c.lon, b.lat, b.lon));
       const pick = near.find(p => p.cat !== 'rad') || near.find(p => haversineM(c.lat, c.lon, p.lat, p.lon) <= 80);
       if (pick) { loc = { lat: pick.lat, lon: pick.lon }; park = pick; }
     }
     c.excluded = null;
     // Pflicht-Abstellzone: Spot nur an einer Station des Anbieters (≤ 150 m), sonst ausgeschlossen
-    if (o.mandatory?.length && o.mandatory.some(g => geomContains(g, c.lat, c.lon))) {
+    if (mandatory.length && boxedContains(mandatory, c.lat, c.lon)) {
       const st = nearestWithin(o.stations || [], c, 150);
       if (st) { loc = { lat: st.item.lat, lon: st.item.lon }; park = { cat: 'station', name: st.item.name || null }; }
       else c.excluded = 'Pflicht-Abstellzone ohne Station in 150 m';
     }
     c.loc = loc; c.park = park;
-    c.f.transit = o.transit ? Math.min(1, countWithin(o.transit, loc, 200) / 3) : 0;
+    c.f.transit = o.transit ? Math.min(1, transitNear(loc, 200).length / 3) : 0;
     c.f.parking = o.parking || park?.cat === 'station' ? (park ? (PARK_RANK[park.cat] <= 1 ? 1 : 0.5) : 0) : 0;
-    if (!c.excluded && (o.noPark || []).some(g => geomContains(g, loc.lat, loc.lon))) c.excluded = 'Abstellverbot laut Betreiber-Zonen';
+    if (!c.excluded && boxedContains(noPark, loc.lat, loc.lon)) c.excluded = 'Abstellverbot laut Betreiber-Zonen';
+    if (!c.excluded && offNo.length && !(park && (park.cat === 'official' || park.cat === 'escooter')) && boxedContains(offNo, loc.lat, loc.lon)) c.excluded = 'Abstellverbot laut Stadt';
   }
+  const why = (r) => cands.filter(c => c.excluded === r).length;
   const top = rank(cands, weights, o.topN, o.minSpacingM);
   // Sensitivität: jedes aktive Gewicht ±20 %, neu normiert
   const active = Object.keys(weights).filter(k => weights[k] > 0);
@@ -205,6 +260,7 @@ export function scoreSpots(model, ctx = {}) {
   for (const w of variants) { const r = rank(cands, w, o.topN, o.minSpacingM); for (const t of r) if (hits.has(t.cell)) hits.set(t.cell, hits.get(t.cell) + 1); }
   return {
     weights, activeFactors: active, excluded: cands.filter(c => c.excluded).length, candidates: cands.length, perturbations: variants.length,
+    excludedBy: { operator: why('Abstellverbot laut Betreiber-Zonen'), mandatory: why('Pflicht-Abstellzone ohne Station in 150 m'), official: why('Abstellverbot laut Stadt') },
     spots: top.map((t, i) => {
       const sphOp = t.startsPerHour * share;
       const target = Math.max(o.minPerSpot, Math.min(o.maxPerSpot, Math.ceil(sphOp * o.horizonH)));
@@ -217,42 +273,102 @@ export function scoreSpots(model, ctx = {}) {
 }
 
 // ---------- Touren ----------
+export const EXACT_MAX = 12; // orderStops: bis zu so vielen Stopps exakt
 export function makeCost(o = {}) { const detour = o.detour ?? DEFAULTS.detour; return (a, b) => dist(a, b) * detour; }
-// Reihenfolge: Nächster Nachbar + 2-opt + Or-opt (wie im Routenplaner-Skill). start/end: Punkte oder null.
-export function orderStops(stops, { start = null, end = null, cost = makeCost() } = {}) {
-  if (stops.length <= 1) return stops.slice();
-  const tourCost = (t) => { let s = 0; const seq = [...(start ? [start] : []), ...t, ...(end ? [end] : [])]; for (let i = 0; i < seq.length - 1; i++) s += cost(seq[i], seq[i + 1]); return s; };
+// Reihenfolge: Nächster Nachbar + 2-opt + Or-opt (wie im Routenplaner-Skill). start/end: Punkte oder null. starts/exact: Probe mit 1 Start, ohne exakt.
+// Kostenmatrix einmal je Tour, jede Verbesserung nur über die betroffenen Kanten (Delta); cost(a, b) bleibt
+// injizierbar und darf asymmetrisch sein (OSRM-Matrix): dann zählt bei 2-opt auch die Umkehr der inneren Kanten.
+export function orderStops(stops, { start = null, end = null, cost = makeCost(), starts: maxStarts = 6, exact = true } = {}) {
+  const n = stops.length; if (n <= 1) return stops.slice();
+  const pts = stops.slice(); const S = start ? pts.push(start) - 1 : -1, E = end ? pts.push(end) - 1 : -1, N = pts.length;
+  const M = pts.map(a => pts.map(b => a === b ? 0 : cost(a, b)));
+  let sym = true; for (let i = 0; i < N && sym; i++) for (let j = i + 1; j < N; j++) if (Math.abs(M[i][j] - M[j][i]) > 1e-6 * Math.max(1, Math.abs(M[i][j]))) { sym = false; break; }
+  const e = (a, b) => a < 0 || b < 0 ? 0 : M[a][b];
+  const total = (t) => { let s = e(S, t[0]) + e(t[n - 1], E); for (let i = 0; i < n - 1; i++) s += M[t[i]][t[i + 1]]; return s; };
+  // Bis 12 Stopps exakt (Held-Karp wie im Routenplaner-Skill): garantiert kürzeste Reihenfolge, nie länger als die Heuristik
+  if (exact && n <= EXACT_MAX) {
+    const F = 1 << n, dp = new Float64Array(F * n).fill(Infinity), par = new Int8Array(F * n).fill(-1);
+    for (let j = 0; j < n; j++) dp[(1 << j) * n + j] = e(S, j);
+    for (let m = 1; m < F; m++) for (let j = 0; j < n; j++) {
+      const v = dp[m * n + j]; if (v === Infinity || !(m & (1 << j))) continue;
+      for (let k = 0; k < n; k++) if (!(m & (1 << k))) { const T = m | (1 << k), c = v + M[j][k]; if (c < dp[T * n + k]) { dp[T * n + k] = c; par[T * n + k] = j; } }
+    }
+    let bj = 0, bv = Infinity; for (let j = 0; j < n; j++) { const c = dp[(F - 1) * n + j] + e(j, E); if (c < bv) { bv = c; bj = j; } }
+    const seq = []; for (let m = F - 1, j = bj; j >= 0;) { seq.push(j); const pj = par[m * n + j]; m &= ~(1 << j); j = pj; }
+    return seq.reverse().map(i => stops[i]);
+  }
   let best = null, bc = Infinity;
-  const starts = Math.min(6, stops.length);
+  const starts = Math.min(maxStarts, n); // wie bisher 6 Starts: gleiche Züge, gleiches Ergebnis, nur schneller bewertet
   for (let s = 0; s < starts; s++) {
-    const left = stops.slice(); const seq = [];
-    let cur = start;
-    if (!cur || s > 0) { const f = left.splice(s === 0 ? 0 : (s * 7919) % left.length, 1)[0]; seq.push(f); cur = f; }
-    while (left.length) { let bi = 0, bv = Infinity; left.forEach((x, i) => { const c = cost(cur, x); if (c < bv) { bv = c; bi = i; } }); cur = left.splice(bi, 1)[0]; seq.push(cur); }
-    let t = seq, improved = true, guard = 0;
+    const left = [...Array(n).keys()], t = [];
+    let cur = S;
+    if (cur < 0 || s > 0) { cur = left.splice(s === 0 ? 0 : (s * 7919) % left.length, 1)[0]; t.push(cur); }
+    while (left.length) { let bi = 0, bv = Infinity; for (let i = 0; i < left.length; i++) { const c = M[cur][left[i]]; if (c < bv) { bv = c; bi = i; } } cur = left.splice(bi, 1)[0]; t.push(cur); }
+    // Präfixsummen der Kanten vorwärts/rückwärts, nur bei asymmetrischen Kosten nötig
+    const F = new Float64Array(n), B = new Float64Array(n);
+    const prefix = () => { if (sym) return; for (let i = 1; i < n; i++) { F[i] = F[i - 1] + M[t[i - 1]][t[i]]; B[i] = B[i - 1] + M[t[i]][t[i - 1]]; } };
+    prefix();
+    let improved = true, guard = 0;
     while (improved && guard++ < 60) {
       improved = false;
-      for (let i = 0; i < t.length - 1; i++) for (let k = i + 1; k < t.length; k++) { const u = t.slice(0, i).concat(t.slice(i, k + 1).reverse(), t.slice(k + 1)); if (tourCost(u) < tourCost(t) - 1e-6) { t = u; improved = true; } }
-      for (let L = 1; L <= 3; L++) for (let i = 0; i + L <= t.length; i++) { const seg = t.slice(i, i + L), rest = t.slice(0, i).concat(t.slice(i + L)); for (let p = 0; p <= rest.length; p++) { if (p === i) continue; const u = rest.slice(0, p).concat(seg, rest.slice(p)); if (tourCost(u) < tourCost(t) - 1e-6) { t = u; improved = true; break; } } }
+      // 2-opt: Abschnitt t[i..k] umkehren, Delta aus den zwei äußeren Kanten (+ innere bei Asymmetrie)
+      for (let i = 0; i < n - 1; i++) for (let k = i + 1; k < n; k++) {
+        const a = i > 0 ? t[i - 1] : S, d = k < n - 1 ? t[k + 1] : E;
+        let delta = e(a, t[k]) - e(a, t[i]) + e(t[i], d) - e(t[k], d);
+        if (!sym) delta += (B[k] - B[i]) - (F[k] - F[i]);
+        if (delta < -1e-6) { for (let x = i, y = k; x < y; x++, y--) { const h = t[x]; t[x] = t[y]; t[y] = h; } prefix(); improved = true; }
+      }
+      // Or-opt: Abschnitt (1–3 Stopps) ohne Umkehr an anderer Stelle einfügen, Delta aus drei Kanten
+      for (let L = 1; L <= 3; L++) for (let i = 0; i + L <= n; i++) {
+        const u = t[i], v = t[i + L - 1], pu = i > 0 ? t[i - 1] : S, nv = i + L < n ? t[i + L] : E;
+        const rem = e(pu, nv) - e(pu, u) - e(v, nv), m = n - L, rest = (q) => q < i ? t[q] : t[q + L];
+        for (let p = 0; p <= m; p++) {
+          if (p === i) continue;
+          const a = p > 0 ? rest(p - 1) : S, b = p < m ? rest(p) : E;
+          if (rem + e(a, u) + e(v, b) - e(a, b) < -1e-6) { const seg = t.splice(i, L); t.splice(p, 0, ...seg); prefix(); improved = true; break; }
+        }
+      }
     }
-    const c = tourCost(t); if (c < bc) { bc = c; best = t; }
+    const c = total(t); if (c < bc) { bc = c; best = t; }
   }
-  return best;
+  return best.map(i => stops[i]);
 }
-// Stopps in Läufe gleicher Kapazität bündeln: Sweep vom Depot aus, dann nächstgelegene auffüllen
-export function clusterRuns(items, capacity, depot, maxRuns = Infinity, weight = () => 1) {
-  const left = items.slice(); const runs = [];
+// Stopps in Läufe gleicher Kapazität bündeln: Sweep vom Depot aus (weitester zuerst), dann die dem Tour-Mittelpunkt nächsten auffüllen.
+// fit(run) → { back, ok }: Einsatzzeit prüfen; ein zu langer Lauf behält nur einen Teil (in place), back geht in den Vorrat zurück,
+// ok = false: schon der nächstgelegene Auftrag allein ist zu lang (nicht eingeplant).
+const centerOf = (pts) => ({ lat: sum(pts.map(p => p.lat)) / pts.length, lon: sum(pts.map(p => p.lon)) / pts.length });
+export function clusterRuns(items, capacity, depot, maxRuns = Infinity, weight = () => 1, fit = null) {
+  const dd = new Map(items.map(x => [x, dist(depot, x)])), byDepot = (a, b) => dd.get(b) - dd.get(a);
+  const left = items.slice().sort(byDepot), runs = [], tooLong = []; // einmal sortiert, Reihenfolge bleibt beim Entnehmen
   while (left.length && runs.length < maxRuns) {
-    left.sort((a, b) => dist(depot, b) - dist(depot, a));
-    const seed = left.shift(); const run = [seed]; let load = weight(seed);
+    const seed = left.shift(); const run = [seed]; let load = weight(seed), sl = seed.lat, so = seed.lon;
     while (left.length && load < capacity) {
-      const cx = { lat: sum(run.map(r => r.lat)) / run.length, lon: sum(run.map(r => r.lon)) / run.length };
-      let bi = -1, bd = Infinity; left.forEach((x, i) => { if (load + weight(x) > capacity) return; const d = dist(cx, x); if (d < bd) { bd = d; bi = i; } });
-      if (bi < 0) break; const x = left.splice(bi, 1)[0]; run.push(x); load += weight(x);
+      const cx = { lat: sl / run.length, lon: so / run.length };
+      let bi = -1, bd = Infinity; for (let i = 0; i < left.length; i++) { const x = left[i]; if (load + weight(x) > capacity) continue; const d = dist(cx, x); if (d < bd) { bd = d; bi = i; } }
+      if (bi < 0) break; const x = left.splice(bi, 1)[0]; run.push(x); load += weight(x); sl += x.lat; so += x.lon;
     }
+    if (fit) { const f = fit(run); if (f.back.length) { left.push(...f.back); left.sort(byDepot); } if (!f.ok) { tooLong.push(...run); continue; } }
     runs.push(run);
   }
-  return { runs, unplanned: left };
+  return { runs, unplanned: [...left, ...tooLong] };
+}
+// Einsatzzeit je Tour begrenzen (Fahrt + vor Ort ≤ maxMin): Aufträge nach Abstand zum Tour-Mittelpunkt ordnen und per
+// Halbierung die meisten nahen behalten, die noch passen; die fernen gehen zurück in den Vorrat und bilden eigene Touren.
+// spread(x, c): Abstand eines Auftrags zum Mittelpunkt (Umsetzen: weiterer von Abhol- und Zielort). memo: fertige Tour je Lauf.
+function timeCap(build, maxMin, spread = (x, c) => dist(c, x)) {
+  const memo = new Map();
+  const fit = (run) => {
+    const all = build(run);
+    if (!(maxMin > 0) || all.totalMin <= maxMin) { memo.set(run, all); return { back: [], ok: true }; }
+    const c = centerOf(run), ranked = run.map(x => [x, spread(x, c)]).sort((a, b) => a[1] - b[1]).map(a => a[0]);
+    // größtes k < n, für das die k nächsten passen; Probe schnell mit einem Startpunkt, danach die kürzere von Probe und voller Rechnung
+    let lo = 0, hi = ranked.length - 1, probe = null;
+    while (lo < hi) { const k = (lo + hi + 1) >> 1, r = build(ranked.slice(0, k), true); if (r.totalMin <= maxMin) { lo = k; probe = r; } else hi = k - 1; }
+    const k = Math.max(1, lo); run.length = 0; run.push(...ranked.slice(0, k));
+    if (probe) { const r = build(run); memo.set(run, r.totalMin <= probe.totalMin ? r : probe); }
+    return { back: ranked.slice(k), ok: !!probe };
+  };
+  return { fit, built: (run) => memo.get(run) || build(run) };
 }
 function routeSummary(seq, o, cost) {
   let m = 0; for (let i = 0; i < seq.length - 1; i++) m += cost(seq[i], seq[i + 1]);
@@ -292,31 +408,31 @@ export function planRebalance({ spots, vehicles, model, share = 1, depot, ...opt
   }
   // Zuordnung: Spots nach Score, je fehlendem Fahrzeug das nächste Überschussfahrzeug
   for (const v of spotExtra) if (v.battery == null || v.battery >= o.minBatteryForMove) surplus.push({ ...v, cell: cellOf(v.lat, v.lon), fromSpot: true });
-  const pool = surplus.slice(); const moves = [];
+  // je Spot die Kandidaten in Reichweite einmal nach Entfernung sortieren (statt je fehlendem Fahrzeug den ganzen Pool)
+  const taken = new Set(); const moves = [];
   for (const n of needs.sort((a, b) => b.spot.score - a.spot.score)) {
-    for (let k = 0; k < n.need && pool.length; k++) {
-      let bi = -1, bd = Infinity; pool.forEach((v, i) => { if (v.fromSpot && dist(v, n.spot) <= o.spotRadiusM) return; const d = dist(v, n.spot); if (d < bd) { bd = d; bi = i; } });
-      if (bi < 0 || bd > o.maxPickupM) break;
-      const v = pool.splice(bi, 1)[0]; moves.push({ lat: v.lat, lon: v.lon, vehicle: v, spot: n.spot, distM: Math.round(bd) });
-    }
+    const cands = surplus.map(v => ({ v, d: dist(v, n.spot) })).filter(x => x.d <= o.maxPickupM && !(x.v.fromSpot && x.d <= o.spotRadiusM)).sort((a, b) => a.d - b.d);
+    let k = 0;
+    for (const { v, d } of cands) { if (k >= n.need) break; if (taken.has(v)) continue; taken.add(v); k++; moves.push({ lat: v.lat, lon: v.lon, vehicle: v, spot: n.spot, distM: Math.round(d) }); }
   }
   const missing = sum(needs.map(n => n.need)) - moves.length;
-  // Touren nach dem Mittelpunkt aus Abhol- und Zielort bündeln: jede Tour bleibt in einem Stadtbereich
+  // Touren nach dem Mittelpunkt aus Abhol- und Zielort bündeln: jede Tour bleibt in einem Stadtbereich; Lage = weiterer der beiden Orte
   const mids = moves.map(m => ({ lat: (m.lat + m.spot.lat) / 2, lon: (m.lon + m.spot.lon) / 2, m }));
-  const cl = clusterRuns(mids, o.vanCapacity, depot, o.maxRuns);
-  const groups = cl.runs.map(g => g.map(x => x.m)), unplanned = cl.unplanned;
-  const runs = groups.map((g, i) => {
+  const spread = (x, c) => Math.max(dist(c, x.m), dist(c, x.m.spot));
+  const build = (run, quick) => {
+    const g = run.map(x => x.m), st = quick ? 1 : 6;
     const pickups = groupStops(g, () => 'p');
     const drops = groupStops(g.map(m => ({ ...m.spot, move: m })), s => s.cell, 5);
-    const pOrd = orderStops(pickups, { start: depot, cost });
-    const dOrd = orderStops(drops, { start: pOrd[pOrd.length - 1], end: depot, cost });
-    const seq = [depot, ...pOrd, ...dOrd, depot];
-    const r = routeSummary(seq, o, cost);
+    const pOrd = orderStops(pickups, { start: depot, cost, starts: st, exact: !quick });
+    const dOrd = orderStops(drops, { start: pOrd[pOrd.length - 1], end: depot, cost, starts: st, exact: !quick });
+    const r = routeSummary([depot, ...pOrd, ...dOrd, depot], o, cost);
     const handle = g.length * (o.pickupMin + o.dropMin);
-    return { id: `R${i + 1}`, kind: 'rebalance', vehicles: g.length, stops: [...pOrd.map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.vehicle.idleMin ?? 0)) / 60), battery: s.items.map(x => x.vehicle.battery).filter(b => b != null) })),
+    return { kind: 'rebalance', vehicles: g.length, stops: [...pOrd.map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.vehicle.idleMin ?? 0)) / 60), battery: s.items.map(x => x.vehicle.battery).filter(b => b != null) })),
       ...dOrd.map(s => ({ type: 'drop', lat: s.lat, lon: s.lon, count: s.count, spotRank: s.items[0].rank, target: s.items[0].target }))], ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
-  });
-  return { needs: needs.sort((a, b) => a.spot.rank - b.spot.rank).map(n => ({ rank: n.spot.rank, cell: n.spot.cell, target: n.spot.target, have: n.have, need: n.need })), surplus: surplus.length, moves: moves.length, missing, unplanned: unplanned.length, runs };
+  };
+  const cap = timeCap(build, o.maxRunMin, spread), cl = clusterRuns(mids, o.vanCapacity, depot, o.maxRuns, undefined, cap.fit);
+  const runs = cl.runs.map((g, i) => ({ id: `R${i + 1}`, ...cap.built(g) }));
+  return { needs: needs.sort((a, b) => a.spot.rank - b.spot.rank).map(n => ({ rank: n.spot.rank, cell: n.spot.cell, target: n.spot.target, have: n.have, need: n.need })), surplus: surplus.length, moves: moves.length, missing, unplanned: cl.unplanned.length, limitMin: o.maxRunMin, runs };
 }
 
 /**
@@ -333,15 +449,17 @@ export function planSwaps({ vehicles, model, depot, ...opts }) {
     v.priority = +(0.6 * (1 - v.battery / o.swapThreshold) + 0.4 * Math.min(1, d) + ((v.idleMin ?? 0) > 360 ? 0.05 : 0)).toFixed(3);
   }
   const chosen = low.sort((a, b) => b.priority - a.priority).slice(0, o.swapCapacity * o.maxRuns);
-  const { runs: groups, unplanned } = clusterRuns(chosen, o.swapCapacity, depot, o.maxRuns);
-  const runs = groups.map((g, i) => {
+  const build = (g, quick) => {
+    const st = quick ? 1 : 6;
     const stops = groupStops(g, () => 's', 25);
-    const ord = orderStops(stops, { start: depot, end: depot, cost });
+    const ord = orderStops(stops, { start: depot, end: depot, cost, starts: st, exact: !quick });
     const r = routeSummary([depot, ...ord, depot], o, cost);
     const handle = g.length * o.swapMin;
-    return { id: `S${i + 1}`, kind: 'swap', vehicles: g.length, stops: ord.map(s => ({ type: 'swap', lat: s.lat, lon: s.lon, count: s.count, battery: s.items.map(x => x.battery), priority: Math.max(...s.items.map(x => x.priority)) })), ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
-  });
-  return { below: low.length, chosen: chosen.length, unplanned: unplanned.length + (low.length - chosen.length), runs };
+    return { kind: 'swap', vehicles: g.length, stops: ord.map(s => ({ type: 'swap', lat: s.lat, lon: s.lon, count: s.count, battery: s.items.map(x => x.battery), priority: Math.max(...s.items.map(x => x.priority)) })), ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
+  };
+  const cap = timeCap(build, o.maxRunMin), { runs: groups, unplanned } = clusterRuns(chosen, o.swapCapacity, depot, o.maxRuns, undefined, cap.fit);
+  const runs = groups.map((g, i) => ({ id: `S${i + 1}`, ...cap.built(g) }));
+  return { below: low.length, chosen: chosen.length, unplanned: unplanned.length + (low.length - chosen.length), limitMin: o.maxRunMin, runs };
 }
 
 /** Werkstatt: gesperrte Fahrzeuge einsammeln und zum Depot bringen. */
@@ -349,15 +467,17 @@ export function planWorkshop({ vehicles, depot, ...opts }) {
   const o = { ...DEFAULTS, ...opts };
   const cost = makeCost(o);
   const dis = vehicles.filter(v => v.disabled).sort((a, b) => (b.idleMin ?? 0) - (a.idleMin ?? 0));
-  const { runs: groups, unplanned } = clusterRuns(dis, o.workshopCapacity, depot, o.maxRuns);
-  const runs = groups.map((g, i) => {
+  const build = (g, quick) => {
+    const st = quick ? 1 : 6;
     const stops = groupStops(g, () => 'w', 25);
-    const ord = orderStops(stops, { start: depot, end: depot, cost });
+    const ord = orderStops(stops, { start: depot, end: depot, cost, starts: st, exact: !quick });
     const r = routeSummary([depot, ...ord, depot], o, cost);
     const handle = g.length * o.workshopMin;
-    return { id: `W${i + 1}`, kind: 'workshop', vehicles: g.length, stops: ord.map(s => ({ type: 'pickup_disabled', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.idleMin ?? 0)) / 60) })), ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
-  });
-  return { disabled: dis.length, unplanned: unplanned.length, runs };
+    return { kind: 'workshop', vehicles: g.length, stops: ord.map(s => ({ type: 'pickup_disabled', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.idleMin ?? 0)) / 60) })), ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
+  };
+  const cap = timeCap(build, o.maxRunMin), { runs: groups, unplanned } = clusterRuns(dis, o.workshopCapacity, depot, o.maxRuns, undefined, cap.fit);
+  const runs = groups.map((g, i) => ({ id: `W${i + 1}`, ...cap.built(g) }));
+  return { disabled: dis.length, unplanned: unplanned.length, limitMin: o.maxRunMin, runs };
 }
 
 /**
@@ -383,19 +503,21 @@ export function planStationBalance({ stations, depot, low = 0.2, high = 0.8, fil
     }
   }
   const mids = moves.map(m => ({ lat: (m.lat + m.to.lat) / 2, lon: (m.lon + m.to.lon) / 2, m }));
-  const cl = clusterRuns(mids, o.vanCapacity, depot, o.maxRuns);
-  const groups = cl.runs.map(g => g.map(x => x.m)), unplanned = cl.unplanned;
-  const runs = groups.map((g, i) => {
+  const spread = (x, c) => Math.max(dist(c, x.m), dist(c, x.m.to));
+  const build = (run, quick) => {
+    const g = run.map(x => x.m), st = quick ? 1 : 6;
     const pickups = groupStops(g, m => m.from.name || '', 5);
     const drops = groupStops(g.map(m => ({ lat: m.to.lat, lon: m.to.lon, to: m.to })), x => x.to.name || '', 5);
-    const pOrd = orderStops(pickups, { start: depot, cost });
-    const dOrd = orderStops(drops, { start: pOrd[pOrd.length - 1], end: depot, cost });
+    const pOrd = orderStops(pickups, { start: depot, cost, starts: st, exact: !quick });
+    const dOrd = orderStops(drops, { start: pOrd[pOrd.length - 1], end: depot, cost, starts: st, exact: !quick });
     const r = routeSummary([depot, ...pOrd, ...dOrd, depot], o, cost);
     const handle = g.length * (o.pickupMin + o.dropMin) * 0.6; // an Stationen schneller als frei abgestellt
-    return { id: `B${i + 1}`, kind: 'station', vehicles: g.length, stops: [...pOrd.map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, station: s.items[0].from.name, fill: `${s.items[0].from.bookable}/${s.items[0].from.cap}` })),
+    return { kind: 'station', vehicles: g.length, stops: [...pOrd.map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, station: s.items[0].from.name, fill: `${s.items[0].from.bookable}/${s.items[0].from.cap}` })),
       ...dOrd.map(s => ({ type: 'drop', lat: s.lat, lon: s.lon, count: s.count, station: s.items[0].to.name, fill: `${s.items[0].to.bookable}/${s.items[0].to.cap}` }))], ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
-  });
-  return { stations: list.length, empty: deficits.length, full: givers.length, moves: moves.length, missing: sum(deficits.map(d => d.need)) - moves.length, unplanned: unplanned.length, runs };
+  };
+  const cap = timeCap(build, o.maxRunMin, spread), cl = clusterRuns(mids, o.vanCapacity, depot, o.maxRuns, undefined, cap.fit);
+  const runs = cl.runs.map((g, i) => ({ id: `B${i + 1}`, ...cap.built(g) }));
+  return { stations: list.length, empty: deficits.length, full: givers.length, moves: moves.length, missing: sum(deficits.map(d => d.need)) - moves.length, unplanned: cl.unplanned.length, limitMin: o.maxRunMin, runs };
 }
 
 /** Navigationslinks: Google Maps erlaubt bis zu 10 Punkte je Link (Start, 8 Zwischenziele, Ziel). */

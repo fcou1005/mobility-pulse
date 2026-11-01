@@ -102,6 +102,12 @@
   "gülf": "Gülf - das Gültsteiner Lastenrad",
   "guelf": "Gülf - das Gültsteiner Lastenrad"
  },
+ "operator_by_system": {
+  "_comment": "Anbieter je System-ID, Vorrang vor operator_aliases (Katalog und Sammler). CityBikes führt DB-Systeme als „Deutsche Bahn AG“ (→ DB Connect); die Marke ist je System verschieden: RegioRad Stuttgart, StadtRAD (Hamburg, Lüneburg), Call a Bike (übrige Städte = DB Connect wie im GBFS-Feed callabike). Kopien werden zusätzlich über Stationskoordinaten erkannt (C.findSourceCopies).",
+  "citybikes_stadtrad-stuttgart": "RegioRad Stuttgart",
+  "citybikes_stadtrad-hamburg-db": "StadtRAD",
+  "citybikes_stadtrad-lueneburg": "StadtRAD"
+ },
  "known_gaps": [
   {
    "operator": "Dott",
@@ -305,7 +311,7 @@
   }
  },
  "auth_sources": {
-  "_comment": "Quellen mit persönlichem Zugang. Werden nur aufgenommen, wenn die Zugangsdaten als Repository-Secrets gesetzt sind (DB_CLIENT_ID, DB_API_KEY). Registrierung kostenlos im DB API Marketplace (Produkt Shared Mobility GBFS).",
+  "_comment": "Quellen mit persönlichem Zugang. Werden nur aufgenommen, wenn die Zugangsdaten als Repository-Secrets gesetzt sind (DB_CLIENT_ID, DB_API_KEY). Registrierung kostenlos im DB API Marketplace (Produkt Shared Mobility GBFS). MobilityData-Systeme mit Zugang auf demselben Host (stadtrad_hamburg, stadtrad_lueneburg) werden damit ebenfalls freigeschaltet; db_stadtrad nutzt dieselbe Adresse wie stadtrad_hamburg (laut systems.csv) und wird mit ihr zusammengeführt.",
   "db": {
    "env": [
     "DB_CLIENT_ID",
@@ -327,18 +333,47 @@
      "id": "db_stadtrad",
      "name": "StadtRAD Hamburg (DB)",
      "operator": "StadtRAD",
-     "url": "https://apis.deutschebahn.com/db-api-marketplace/apis/shared-mobility-gbfs/v2/de/StadtRAD/gbfs"
+     "url": "https://apis.deutschebahn.com/db-api-marketplace/apis/shared-mobility-gbfs/v2/de/StadtRadHamburg/gbfs"
     }
    ]
   }
  },
  "parking_reference": {
-  "_comment": "Offizielle Abstellflächen für Mikromobilität, zum Ausrichten von Deploy-Spots. Weitere Städte über OpenStreetMap (amenity=small_vehicle_parking, small_electric_vehicle=designated, Mobilitätsstationen).",
+  "_comment": "Amtliche Daten der Städte für die Disposition (im Browser geladen). kind: parking = Abstellflächen (Spot rastet ein, Standard), noPark = Abstellverbotszonen (Ausschluss, außer auf einer ausgewiesenen Abstellfläche). Quelle: wfs (+ typeNames, Standard <Pfadende>:<Pfadende>), url (GeoJSON) oder ckan + dataset (Open-Data-Portal, GeoJSON- oder WFS-Ressource). Weitere Städte über OpenStreetMap (amenity=small_vehicle_parking, small_electric_vehicle=designated, Mobilitätsstationen).",
   "berlin": {
    "ags": "11000000",
+   "name": "Abstellflächen Mikromobilität Berlin",
    "wfs": "https://gdi.berlin.de/services/wfs/abstell_mikromob",
    "license": "dl-de/zero-2-0",
    "source": "https://gdi.berlin.de/geonetwork/srv/api/records/6185b5fb-156a-3ebd-846a-9fbc9008e690"
+  },
+  "berlin_parkverbot": {
+   "ags": "11000000",
+   "kind": "noPark",
+   "name": "Parkverbotszonen Mikromobilität Berlin",
+   "wfs": "https://gdi.berlin.de/services/wfs/parkverbot_mikromob",
+   "typeNames": "parkverbot_mikromob:parkverbot_mikromob",
+   "license": "dl-de/zero-2-0",
+   "source": "https://gdi.berlin.de/services/wfs/parkverbot_mikromob?service=WFS&request=GetCapabilities"
+  },
+  "muenchen": {
+   "ags": "09162000",
+   "name": "Abstellflächen Mikromobilität München",
+   "ckan": "https://opendata.muenchen.de",
+   "dataset": "opendata_ruhver_mim_abstellflaeche_poly",
+   "license": "dl-de/by-2-0",
+   "attribution": "Landeshauptstadt München",
+   "source": "https://opendata.muenchen.de/dataset/opendata_ruhver_mim_abstellflaeche_poly"
+  },
+  "muenchen_geofence": {
+   "ags": "09162000",
+   "kind": "noPark",
+   "name": "Geofences Abstellverbot München (100 m um die Abstellflächen)",
+   "ckan": "https://opendata.muenchen.de",
+   "dataset": "opendata_ruhver_mim_geofence_poly",
+   "license": "dl-de/by-2-0",
+   "attribution": "Landeshauptstadt München",
+   "source": "https://opendata.muenchen.de/dataset/opendata_ruhver_mim_geofence_poly"
   }
  }
 }
