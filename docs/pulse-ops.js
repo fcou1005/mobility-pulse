@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM } from './pulse-core.js?v=mvxjq4h9';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxjq4h9';
+import { haversineM } from './pulse-core.js?v=mvxjtwjp';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxjtwjp';
 
 export { BANDS, bandOf };
 
@@ -322,8 +322,9 @@ export function planRebalance({ spots, vehicles, model, share = 1, depot, ...opt
 /**
  * Akku-Tausch: Fahrzeuge unter der Schwelle, priorisiert nach Ladestand und Nachfrage am Standort.
  */
+export const MAX_SWAP = 50; // höchstens 50 Akkus je Tour (Ladekapazität eines Tauschfahrzeugs)
 export function planSwaps({ vehicles, model, depot, ...opts }) {
-  const o = { ...DEFAULTS, ...opts };
+  const o = { ...DEFAULTS, ...opts }; o.swapCapacity = Math.max(1, Math.min(MAX_SWAP, o.swapCapacity));
   const cost = makeCost(o);
   const low = vehicles.filter(v => !v.disabled && v.battery != null && v.battery < o.swapThreshold).map(v => ({ ...v }));
   const sphMax = Math.max(0.01, ...[...model.cells.values()].map(c => c.startsPerHour ?? 0));

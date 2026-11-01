@@ -77,6 +77,10 @@ const sw = O.planSwaps({ vehicles: [...fleet.map((v, i) => ({ ...v, battery: i *
 assert(sw.below === 6, '6 Fahrzeuge unter 25 %');
 assert(sw.runs.every(r => r.vehicles <= 3), 'Swap-Kapazität je Tour');
 assert(fleet.every(v => v.priority === undefined), 'Eingabe bleibt unverändert');
+// höchstens 50 Akkus je Tour, auch wenn mehr eingestellt ist
+const many = [...Array(130)].map((_, i) => V(clat + (i % 13) * 0.0004, clon + Math.floor(i / 13) * 0.0004, { battery: 5 }));
+const sw50 = O.planSwaps({ vehicles: many, model: m, depot, swapCapacity: 80, swapThreshold: 25 });
+assert(sw50.runs.length === 3 && sw50.runs.every(r => r.vehicles <= 50) && sw50.runs[0].vehicles === 50, 'Akkutausch: max. 50 Akkus je Tour');
 const top = sw.runs.flatMap(r => r.stops).sort((a, b) => b.priority - a.priority)[0];
 assert(top.battery.includes(0) || top.battery.includes(10), 'höchste Priorität: leerster Akku oder Nachfrage-Zentrum');
 

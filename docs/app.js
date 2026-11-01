@@ -1,6 +1,6 @@
-import * as C from './pulse-core.js?v=mvxjq4h9';
-import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvxjq4h9';
-import * as E from './pulse-econ.js?v=mvxjq4h9';
+import * as C from './pulse-core.js?v=mvxjtwjp';
+import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvxjtwjp';
+import * as E from './pulse-econ.js?v=mvxjtwjp';
 
 const QS = new URLSearchParams(location.search);
 const DEMO = QS.get('demo') === '1'; // eingefrorener Demo-Stand (Branch demo), ohne Live-Abruf und ohne Nachladen

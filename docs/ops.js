@@ -1,5 +1,5 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvxjq4h9';
+import * as O from './pulse-ops.js?v=mvxjtwjp';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -434,7 +434,8 @@ async function roadOptimize(r, p) {
   const coords = [D0, ...W].map(x => `${x.lon.toFixed(5)},${x.lat.toFixed(5)}`).join(';');
   const t = (await X.getJson(`https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration,distance`, { timeout: 30000 })).json;
   if (t?.code !== 'Ok') return false;
-  const cost = (a, b) => t.durations[a.i][b.i] ?? 1e7;
+  // optimiert wird nach Fahrzeugkilometern (Straßendistanz), Fahrzeit nur als Ersatz
+  const cost = (a, b) => t.distances?.[a.i]?.[b.i] ?? (t.durations[a.i][b.i] != null ? t.durations[a.i][b.i] * 8 : 1e9);
   // Umsetzen/Stationen: erst alle Abholungen, dann ausbringen; sonst eine Rundtour
   const pick = W.filter(x => x.st.type === 'pickup'), drop = W.filter(x => x.st.type === 'drop');
   let order;
@@ -453,12 +454,15 @@ async function roadOptimize(r, p) {
 async function routeRuns() {
   const p = S.plan; if (!p) return;
   // Reihenfolge: fokussierte Tour, dann sichtbare Arten, dann der Rest
-  const runs = allRuns().filter(r => !S.routed[r.id]).sort((a, b) => (b.id === S.focus) - (a.id === S.focus) || (S.show[b.kind] ? 1 : 0) - (S.show[a.kind] ? 1 : 0));
+  // Reihenfolge wird je Schritt neu bestimmt: eine während des Routings angeklickte Tour kommt als nächste dran
+  const tried = new Set(), total = allRuns().filter(r => !S.routed[r.id]).length;
+  const next = () => allRuns().filter(r => !S.routed[r.id] && !tried.has(r.id)).sort((a, b) => (b.id === S.focus) - (a.id === S.focus) || (S.show[b.kind] ? 1 : 0) - (S.show[a.kind] ? 1 : 0))[0];
   const base = () => $('#ops-status').textContent.split(' · Straßenrouting')[0];
-  let n = 0, ok = 0;
-  for (const r of runs) {
+  let n = 0, ok = 0, r;
+  while ((r = next())) {
     if (S.plan !== p) return;
-    status(`${base()} · Straßenrouting ${++n}/${runs.length} (Reihenfolge und km nach Straße) …`);
+    tried.add(r.id);
+    status(`${base()} · Straßenrouting ${++n}/${total} (Reihenfolge und km nach Straße) …`);
     try { if (await roadOptimize(r, p)) ok++; } catch { /* Tour bleibt bei Luftlinie */ }
     if (S.plan !== p) return;
     renderTiles(); renderRuns(); markFocus(); drawMap(false);
@@ -473,6 +477,6 @@ function renderMethod() {
   <h3>Deploy-Spots (MCDA)</h3><p>Faktoren auf 0–1 standardisiert (95. Perzentil als Obergrenze): <b>Nachfrage</b> (Starts/h), <b>Unterversorgung</b> (Starts/h ÷ (Bestand + 0,5)), <b>ÖPNV-Nähe</b> (Haltepunkte ≤ 200 m, 3 = voll), <b>Abstellfläche</b> (E-Scooter-Stellfläche, amtliche Fläche oder Sharing-Punkt ≤ 160 m = 1, Radabstellanlage ≤ 80 m = 0,5). Der Spot rastet auf die Fläche ein. Abstellverbote aus den GBFS-Zonen des Anbieters sind ein Ausschluss, kein Gewicht. In Pflicht-Abstellzonen (GBFS <span class="mono">station_parking</span>, z. B. Dott Leipzig) rastet der Spot auf die nächste Station des Anbieters (≤ 150 m) ein, ohne Station fällt die Zelle weg. Mindestabstand zwischen Spots, Ziel = Starts/h × Anteil × Horizont (2–15 Fzg.).</p>
   <div class="tbl"><table><thead><tr><th>AHP</th>${A.criteria.map(c => `<th class="n">${A.labels[c]}</th>`).join('')}<th class="n">Gewicht</th></tr></thead><tbody>${A.criteria.map((c, i) => `<tr><td>${A.labels[c]}</td>${A.matrix[i].map(x => `<td class="n mono">${f(x)}</td>`).join('')}<td class="n mono"><b>${A.weights[c].toFixed(3)}</b></td></tr>`).join('')}</tbody></table></div>
   <p class="small">Saaty-Skala, Eigenvektor-Gewichte, Konsistenzquote CR = ${A.cr.toFixed(3)} (&lt; 0,10). Fehlt ein Faktor (z. B. OSM nicht erreichbar), wird er ausgelassen und die übrigen Gewichte neu normiert. <b>Sensitivität:</b> jedes Gewicht ±20 %, neu normiert; „stabil“ = Spot bleibt in allen Varianten in der Auswahl, „mittel“ ≥ 75 %, sonst „unsicher“.</p>
-  <h3>Touren</h3><p><b>Umsetzen:</b> Überschuss sind Fahrzeuge über dem erwarteten Bedarf ihrer Zelle im Horizont, Fahrzeuge über 24 h unbewegt und überzählige an Spots; Akku unter 30 % wird nicht umgesetzt, sondern getauscht. Zuordnung nach Spot-Rang zum nächsten Überschussfahrzeug (≤ 4 km), Bündelung nach Transporterkapazität, erst einsammeln, dann ausbringen. <b>Akkutausch:</b> Priorität = 0,6 × Ladestand-Lücke + 0,4 × Nachfrage am Standort. <b>Werkstatt:</b> gesperrte Fahrzeuge, längste Sperre zuerst. <b>Stationen:</b> Füllgrad ≤ 20 % aus Stationen ≥ 80 % auf 50 % auffüllen. Reihenfolge je Tour: Nächster Nachbar mit mehreren Starts, 2-opt, Or-opt. Fahrzeit ohne Straßenrouting: Luftlinie × 1,35 bei 18 km/h; mit „Straßenrouting“ OSRM (Demo-Server, ohne Verkehr). Vor-Ort-Zeiten: 1,5 min abholen, 1 min ausbringen, 2,5 min Akku, 3 min Werkstatt.</p>
+  <h3>Touren</h3><p><b>Umsetzen:</b> Überschuss sind Fahrzeuge über dem erwarteten Bedarf ihrer Zelle im Horizont, Fahrzeuge über 24 h unbewegt und überzählige an Spots; Akku unter 30 % wird nicht umgesetzt, sondern getauscht. Zuordnung nach Spot-Rang zum nächsten Überschussfahrzeug (≤ 4 km), Bündelung nach Transporterkapazität, erst einsammeln, dann ausbringen. <b>Akkutausch:</b> Priorität = 0,6 × Ladestand-Lücke + 0,4 × Nachfrage am Standort, höchstens 50 Akkus je Tour. <b>Werkstatt:</b> gesperrte Fahrzeuge, längste Sperre zuerst. <b>Stationen:</b> Füllgrad ≤ 20 % aus Stationen ≥ 80 % auf 50 % auffüllen. Reihenfolge je Tour: Nächster Nachbar mit mehreren Starts, 2-opt, Or-opt. Mit „Straßenrouting“ (Standard) wird die Reihenfolge nach Fahrzeugkilometern auf der Straße optimiert (OSRM-Distanzmatrix), km und Fahrzeit kommen aus der gefahrenen Route (OSRM-Demo-Server, ohne Verkehr). Ohne Straßenrouting oder bei Ausfall: Luftlinie × 1,35 bei 18 km/h. Vor-Ort-Zeiten: 1,5 min abholen, 1 min ausbringen, 2,5 min Akku, 3 min Werkstatt.</p>
   <h3>Grenzen</h3><p>Standzeit zählt ab der ersten Sichtung durch den Sammler. Anbieter mit wechselnden Kennungen erzeugen mehr Starts und Ziele als echte Fahrten; bei ihnen ist die Nachfrage relativ zu lesen. Unterdrückte Nachfrage (niemand findet ein Fahrzeug) wird nicht gemessen, die Unterversorgung fängt sie nur teilweise auf. Abstellflächen und Haltepunkte aus OpenStreetMap sind so vollständig wie die Karte.</p>`;
 }
