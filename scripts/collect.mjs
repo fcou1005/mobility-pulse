@@ -408,6 +408,17 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
   const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes });
   await writeFile(evFile, JSON.stringify(evDoc));
+  // Gruppen-Ereignisse (≥ 5 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt), 30 Tage
+  {
+    const gf = path.join(DATA, 'groups.json');
+    const gd = existsSync(gf) ? JSON.parse(await readFile(gf, 'utf8')) : { events: [] };
+    gd.fields = ['at', 'art', 'anbieter', 'gemeinde', 'lat', 'lon', 'anzahl', 'arten'];
+    for (const g of tr.groups || []) gd.events.push([g.at, g.kind, g.op, g.ags, g.lat, g.lon, g.n, g.types]);
+    gd.events = gd.events.filter(e => now - e[0] <= 30 * 86400e3);
+    gd.updatedAt = now;
+    await writeFile(gf, JSON.stringify(gd));
+    if (tr.groups?.length) log(`Gruppen: ${tr.groups.filter(g => g.kind === 'deploy').length} ausgebracht, ${tr.groups.filter(g => g.kind === 'collect').length} eingesammelt`);
+  }
   { const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0); runEv = { start: 0, end: 0, rot: 0 }; for (const h of tr.hourly.values()) { runEv.start += s(h.start); runEv.end += s(h.end); runEv.rot += s(h.rot); } }
   // Langzeit-Archiv: Tageswerte je Gemeinde|Anbieter|Art, eine Datei je Monat, wird nie gekürzt
   {

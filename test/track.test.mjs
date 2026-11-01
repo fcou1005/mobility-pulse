@@ -67,3 +67,19 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   const h3 = q1.hourly.get('08416041|Bolt|scooter'), hr3 = T.hourOf(u0 + 60 * 60e3);
   assert(h3.start[hr3] === 1 && h3.end[hr3] === 1 && h3.rot[hr3] === 0, 'Wechsel mit Ortswechsel bleibt Fahrt');
 }
+// Gruppen: 6 neue Kennungen am selben Ort = Ausbringen; 6 verschwinden zusammen = Einsammeln
+{
+  const u0 = Date.parse('2026-11-02T10:00:00Z');
+  const base = [...Array(40)].map((_, i) => V('b' + i, 48.40 + i * 0.01, 9.00));
+  let q = T.trackRun(null, { vehicles: base, stations: [], sourceRecs: recs, now: u0 });
+  q = T.trackRun(q.state, { vehicles: base, stations: [], sourceRecs: recs, now: u0 + 20 * 60e3 });
+  const drop = [...Array(6)].map((_, i) => V('d' + i, 48.70 + i * 0.00005, 9.20));
+  q = T.trackRun(q.state, { vehicles: [...base, ...drop], stations: [], sourceRecs: recs, now: u0 + 40 * 60e3 });
+  const g = q.groups.filter(x => x.kind === 'deploy');
+  assert(g.length === 1 && g[0].n === 6 && g[0].op === 'Bolt', 'Ausbringen: 6 Fahrzeuge ≤ 40 m als Gruppe erkannt');
+  q = T.trackRun(q.state, { vehicles: base, stations: [], sourceRecs: recs, now: u0 + 60 * 60e3 });
+  assert(q.groups.some(x => x.kind === 'collect' && x.n === 6), 'Einsammeln: 6 verschwinden zusammen');
+  const few = [...Array(3)].map((_, i) => V('f' + i, 48.80, 9.30 + i * 0.00005));
+  q = T.trackRun(q.state, { vehicles: [...base, ...few], stations: [], sourceRecs: recs, now: u0 + 80 * 60e3 });
+  assert(!q.groups.length, 'unter 5 Fahrzeugen keine Gruppe');
+}
