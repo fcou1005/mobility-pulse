@@ -355,6 +355,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   assert(two.runs[0].id === 'R1' && two.runs[0].prio === 6 && two.runs[1].prio === 2, 'R1 = Tour zur größten Fehlmenge');
   const rc = O.runsCsv(two.runs, D2);
   assert(/Spot 2 \(Bedarf 6, Bestand 0, Fehlmenge 6\)/.test(rc), 'Touren-CSV nennt Bedarf, Bestand, Fehlmenge');
+  const rcEn = O.runsCsv(two.runs, D2, 'en');
+  assert(rcEn.split('\n')[0] === 'run,type,stop,kind,lat,lng,count,info' && /Spot 2 \(need 6, fleet 0, shortfall 6\)/.test(rcEn) && rcEn.split('\n')[1].includes(',depot,'), 'Touren-CSV englisch: Spalten und Info-Text, Komma-Trennung');
 }
 // --- Analyse-CSV mit allen Zahlen
 {
@@ -362,6 +364,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const head = csvA[0].split(';'), row = csvA[1].split(';'), at = (k) => row[head.indexOf(k)];
   assert(head.join() === O.SPOTS_ANALYSIS_FIELDS.join() && head.includes('netto_abfluss_je_h_anbieter') && head.includes('fehlmenge') && !head.includes('f_unterversorgung'), 'Analyse-CSV: Netto-Abfluss, Bedarf, Fehlmenge statt Unterversorgung');
   assert(at('starts_markt') === '12' && at('enden_markt') === '10' && at('messstunden') === '3' && at('bedarf_fzg') === '3' && at('grundbestand') === '2' && at('abfluss_im_horizont') === '1', 'Analyse-CSV: Zahlen von Spot 1');
+  const en = O.spotsAnalysisCsv(sp.spots, plan.needs, { lang: 'en' }).split('\n'), hE = en[0].split(','), rE = en[1].split(','), atE = (k) => rE[hE.indexOf(k)];
+  assert(hE.length === head.length && hE.includes('net_outflow_per_h_operator') && hE.includes('shortfall') && atE('starts_market') === '12' && atE('need_veh') === '3' && ['stable', 'medium', 'uncertain'].includes(atE('stability')), 'Analyse-CSV englisch: Spaltennamen, gleiche Zahlen, Stabilität übersetzt');
 }
 // --- CSV-Formelschutz
 {
@@ -390,6 +394,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   assert(O.sortPlaces(g.deploy, 'count', 'asc')[0].count === 1 && O.sortPlaces(g.deploy, 'count', 'desc')[0].count === 3 && O.sortPlaces(g.deploy, 'near', 'desc', { nearOf: near })[0].count === 1 && O.sortPlaces(g.deploy, 'lage', 'asc', { labelOf: label })[0].op === 'Bolt', 'Sortierung je Spalte (Anzahl, Abstand, Lage)');
   const csv = O.placesCsv(O.sortPlaces(g.deploy, 'count'), { labelOf: (p) => p.op === 'Bolt' ? '=HYPERLINK("evil")' : 'Markt; Ecke', nearOf: near }).split('\n');
   assert(csv[0] === O.PLACES_FIELDS.join(';') && csv.length === 4 && csv[1].startsWith('Ausbringen;Dott;"Markt; Ecke";') && csv.some(l => l.includes(`"'=HYPERLINK(""evil"")"`)), 'CSV der gefilterten Zeilen mit Formel-Schutz und Quoting');
+  const csvEn = O.placesCsv(O.sortPlaces(g.deploy, 'count'), { labelOf: (p) => p.op === 'Bolt' ? '=HYPERLINK("evil")' : 'Markt, Ecke', nearOf: near, lang: 'en' }).split('\n');
+  assert(csvEn[0].startsWith('type,operator,location,lat,lon,count,vehicles_total,vehicles_mean,first,last,vehicle_types,nearest_spot') && csvEn[1].startsWith('Deployment,Dott,"Markt, Ecke",') && csvEn.some(l => l.includes(`"'=HYPERLINK(""evil"")"`) || l.includes("'=HYPERLINK")), 'Orte-CSV englisch: Spalten, Komma-Quoting, Formel-Schutz');
   assert(/;2026-10-20 10:00;2026-11-02 09:00;scooter 15;1;\d+$/.test(csv[1]), `CSV: erstmals/zuletzt in Ortszeit, Arten, nächster Spot (${csv[1].split(';').slice(-5).join(';')})`);
   // groups.json (Rückfall, ein Dokument) geht genauso
   assert(O.groupPlaces({ fields: F, events: oct.events }, { ags: AGS }).deploy.length === 3, 'groups.json als einzelnes Dokument');

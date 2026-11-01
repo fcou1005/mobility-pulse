@@ -9,6 +9,7 @@ Sharing-Daten für Deutschland (E-Scooter, Bikesharing, Lastenräder) aus offene
   `cells/<Tag>/<Land>.json` (Start/Ziel/Präsenz je ≈250-m-Zelle), `idle.json`, `idle-long.json`, `stations-quota.json`,
   `reliability.json`, `pricing.json`, `zones/*.json` (GBFS-Betriebszonen, täglich), `pricing-log.json` (Tarifänderungen, 180 Tage), `history/daily.json` (verdichtete Tageswerte), `DATA-LICENSE.md` (Quellen und Lizenzen). Der Verfolgungszustand (Kennungen per HMAC mit privatem Salt) liegt seit 01.11.2026 im Actions-Cache (`TRACK_DIR`), nicht mehr auf `data`;
   `ops/<Land>.json` (Flotte je Bundesland mit Akku, Reichweite, Standzeit, Stationsfüllstand – Grundlage der Disposition).
+  `coverage.json` (Städte laut Anbieter gegen Feeds), `zone-watch.json` (Bestand je privat hinterlegter Zone, 30 Tage), `flows-est/<Tag>.json` (geschätzte Ströme für rotierende Kennungen).
 
 ## Quellen
 
@@ -49,7 +50,14 @@ Carsharing wird ausgeschlossen (`data/sources-manual.json`). Gemeindezuordnung �
 - **Fahrtrouten:** nur Quellen mit stabilen Kennungen; Start-Ziel-Ströme zwischen 250-m-Zellen ab 2 Fahrten je Tag, veröffentlicht nach Tagesende (`flows/<Tag>.json`), Route im Browser per Fahrrad-OSRM (`web/flows.js`).
 - **Vermutete Deploy-Spots:** ab 4 Fahrzeugen eines Anbieters ≤ 40 m in einem Lauf; dauerhaft in `groups/<JJJJ-MM>.json` (+ `groups/index.json`), `groups.json` (30 Tage) bleibt für das Briefing.
 - **Obergrenzen:** `caps-log.json` (Sammler prüft je Lauf gegen `data/reference.json` → `obergrenzen`).
+- **Zonen-Beobachtung:** Umrisse (GeoJSON) nur im Secret `ZONE_WATCH`, nie im Repo; Limits/Zahlen aus der Datei werden verworfen. Je Lauf Bestand je Zone × Anbieter × Art, Tageswerte Min/Max/Mittel 30 Tage (`zone-watch.json`), Ansicht „Bericht“. Feed-Ausfall eines Anbieters wird nicht als Nullbestand gezählt.
+- **Geschätzte Ströme:** für Anbieter mit rotierenden Kennungen (`lib/pulse-flowest.js`): Fahrtbeginne und -enden je ≈ 500-m-Zelle je Lauf per Sinkhorn/Gravitationsmodell gekoppelt, keine Verknüpfung einzelner Fahrzeuge; nur Zählungen privat im `TRACK_DIR`, Schätzung nach Tagesende, veröffentlicht ab 2 erwarteten Fahrten je Zellenpaar (`flows-est/`), Güte blind an stabilen Kennungen geprüft. Umschalter „Gemessen | Geschätzt“ in „Vermutete Fahrtrouten“. Test: `node test/flowest.test.mjs`.
+- **Abdeckung:** `data/operator-cities.json` (Städtelisten der Anbieter-Websites, Stand 01.11.2026; Bolt-Liste gilt für alle Dienste) gegen die Feeds je Lauf (`lib/pulse-coverage.js` → `coverage.json`): Feed mit Fahrzeugen, Feed ohne Aktivität, Feed nicht offen (z. B. MDD NRW), kein Feed, aktiv aber nicht gelistet, eingestellt; „zuletzt aktiv“ je Stadt. Ansicht „Quellen“. Test: `node test/coverage.test.mjs`.
 - **Umsatz:** Fahrten × Preis einer Ø Fahrt im Standardtarif aus `system_pricing_plans` (Abos/Pässe ausgeschlossen), netto ohne 19 % MwSt. und mit Realisierungsquote (Standard 85 %). RVD über 15 gilt als unplausibel und bleibt außerhalb der Summen. Test: `node test/econ.test.mjs`.
+
+## Sprache
+
+Oberfläche Deutsch (Standard) oder Englisch: Umschalter DE | EN in der Kopfleiste, `?lang=en|de` (wird von „Link kopieren“ mitgenommen), Wahl im Browser gespeichert; englische Browser bekommen einen Vorschlag. Wörterbuch, `t()`, Zahlen- und Datumsformat in `web/i18n.js` (Glossar der Fachbegriffe dort), statisches HTML über `data-i18n*`. Test: `node test/i18n.test.mjs`.
 
 ## Lokal
 
@@ -58,5 +66,5 @@ node scripts/build-catalog.mjs     # data/sources.json
 node scripts/prepare-boundaries.mjs # braucht gdal-bin, unzip
 node scripts/collect.mjs
 node test/run.mjs                   # Fixture-Test
-node test/track.test.mjs && node test/ops.test.mjs && node test/econ.test.mjs && node test/core.test.mjs && node test/report.test.mjs
+node test/track.test.mjs && node test/ops.test.mjs && node test/econ.test.mjs && node test/core.test.mjs && node test/report.test.mjs && node test/i18n.test.mjs
 ```

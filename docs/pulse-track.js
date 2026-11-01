@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvxyn4sh';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvy5cf5y';
 
 export const TRACK_VERSION = 2;
 export const GAP_MS = 45 * 60e3;  // größerer Abstand zum vorigen Lauf = Lücke: Zustand fortschreiben, keine Ereignisse zählen
@@ -91,6 +91,10 @@ function pairKind(gb, ab, d) {
  * (Start = alte Zelle, Dauer = Laufintervall), oder Rückkehr ≥ 150 m vom Ort des Verschwindens (Dauer = Zeit seit dem Verschwinden ≤ 2 h; nicht nach
  * Sperrung/Akku < 15 %, nicht aufgeladen, nicht im Sammeltransport, nicht schneller als 24 km/h). ags = Gemeinde des Starts, band = Tageszeit-Band
  * des Laufs (Ende), durSum in ms, distSum = Luftlinie in m. Rotierende Kennungen werden NICHT verknüpft (keine Re-Identifizierung über Reichweite o. Ä.).
+ * est: Zählungen je Zelle für die geschätzten Ströme (lib/pulse-flowest.js), { s, e, vs, ve: { 'Anbieter|Art': { 'Gemeinde|Zelle': n } }, vsLate }:
+ * s/e = Fahrtbeginne (verschwunden, verfügbar, keine Abholung) und Fahrtenden (neue Kennung bzw. Rückkehr) aller nicht stabilen Quellen, ohne
+ * Ausbringen/Einsammeln (Gruppen ≥ 4) und ohne Quellen mit Massenwechsel; vs/ve = Beginne/Enden der gemessenen Ströme stabiler Quellen
+ * (Validierung), vsLate = [['Anbieter|Art', 'Gemeinde|Zelle', Lauf des Verschwindens]] für stabile Rückkehrer. Nur Zählungen, keine Paare.
  *
  * Methode: Verschwundene und neu aufgetauchte Kennungen eines Anbieters und einer Fahrzeugart werden global gepaart (alle Kandidatenpaare
  * nach Kosten sortiert): gleicher Ladestand (± ENERGY_TOL) bis 100 m bzw. ohne Ladestand bis 40 m = Kennungswechsel, Ladestand springt am
@@ -112,11 +116,17 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   const CELL = (ags, cell) => { if (gap) return voidC; if (!cells.has(ags)) cells.set(ags, new Map()); const m = cells.get(ags); if (!m.has(cell)) m.set(cell, new Array(CELL_LEN).fill(0)); return m.get(cell); };
   const band = bandOf(hour);
   const flows = new Map(); // Start-Ziel-Ströme (nur stabile Kennungen), siehe oben
-  const FLOW = (ags, op, ty, from, to, dur, dist) => {
+  const est = { s: {}, e: {}, vs: {}, ve: {}, vsLate: [] }; // Zählungen je Zelle für die Schätzung (siehe oben), keine Paare
+  const EST = (o, k1, k2) => { const m = (o[k1] ??= {}); m[k2] = (m[k2] || 0) + 1; };
+  const FLOW = (ags, op, ty, from, to, dur, dist, toAgs, startAt) => {
     if (gap) return;
     const k = `${ags}|${op}|${ty}|${band}`; let m = flows.get(k); if (!m) flows.set(k, m = new Map());
     const p = `${from}>${to}`; const f = m.get(p) || { count: 0, durSum: 0, distSum: 0 }; f.count++; f.durSum += dur; f.distSum += dist; m.set(p, f);
+    // Validierung der Schätzung: Beginn im Lauf des Verschwindens (Versatz: dieser Lauf), Ende in diesem Lauf – getrennt gezählt
+    EST(est.ve, `${op}|${ty}`, `${toAgs}|${to}`);
+    if (startAt === now) EST(est.vs, `${op}|${ty}`, `${ags}|${from}`); else est.vsLate.push([`${op}|${ty}`, `${ags}|${from}`, startAt]);
   };
+  const estS = [], estE = []; // Kandidaten für s/e: Gruppen (Ausbringen/Einsammeln) und Massenwechsel werden am Ende herausgenommen
   const rets = []; // Rückkehrer stabiler Kennungen: Strom erst nach der Sammeltransport-Prüfung
   const dict = state.dict;
   const D = (name, v) => dictIdx(dict, name, v);
@@ -168,12 +178,13 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       // Rückkehr einer bekannten Kennung = Fahrtende mit bekanntem Start (stabile Kennungen); Dauer > 2 h fließt nicht in Ø Dauer/Distanz
       s.returned++;
       h.end[hour]++; c[1]++; c[16 + band]++;
+      if (!stable) estE.push([null, v.operator, ty, v.ags, cell, v.sourceId]);
       const dur = now - (missingSince || state.at || now);
       if (dist >= JITTER_M && dur <= TRIP_MAX_MS) { h.tripDistSum += dist; h.tripDistN++; h.tripDurSum += dur; h.tripDurN++; }
       if (stable && dist >= MOVE_M) landed.push({ op: v.operator, lat: v.lat, lon: v.lon });
       // Strom nur, wenn das Verschwinden als Fahrtbeginn galt (nicht gesperrt, Akku ≥ 15 %) und das Fahrzeug nicht aufgeladen zurückkommt
       if (stable && dist >= MOVE_M && dur <= TRIP_MAX_MS && !v.disabled && !(pflags & F_DISABLED) && !(pbat != null && pbat < PICKUP_BATTERY) && !(bat != null && pbat != null && bat > pbat + ENERGY_TOL))
-        rets.push({ op: v.operator, ty, ags: dict.ags[pags], from: cellOf(plat / 1e5, plon / 1e5), to: cell, lat: v.lat, lon: v.lon, dist, dur, noLoss: bat != null && pbat != null && bat >= pbat && dist >= NOLOSS_M });
+        rets.push({ op: v.operator, ty, ags: dict.ags[pags], toAgs: v.ags, from: cellOf(plat / 1e5, plon / 1e5), to: cell, lat: v.lat, lon: v.lon, dist, dur, noLoss: bat != null && pbat != null && bat >= pbat && dist >= NOLOSS_M });
     } else if (dist >= MOVE_M) {
       s.moved++;
       if (stable && !v.disabled && !(pflags & F_DISABLED)) {
@@ -228,12 +239,12 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       H(m.op, m.agsOld, m.ty).start[hour]++; const co = CELL(m.agsOld, m.cellOld); co[0]++; co[4 + band]++;
       h.end[hour]++; m.c[1]++; m.c[16 + band]++;
       h.tripDistSum += m.dist; h.tripDistN++; h.tripDurSum += dt; h.tripDurN++; // Dauer ≤ dt (Obergrenze)
-      FLOW(m.agsOld, m.op, m.ty, m.cellOld, cellOf(m.lat, m.lon), dt, m.dist);
+      FLOW(m.agsOld, m.op, m.ty, m.cellOld, cellOf(m.lat, m.lon), dt, m.dist, m.ags, now);
     }
     // Rückkehrer: Sammeltransport (≥ 3 Ankünfte ≤ 40 m), ≥ 2 km ohne Ladestandverlust oder selbst bei längster möglicher Dauer (seit Verschwinden + Laufintervall) > 24 km/h = kein Strom
     for (const r of rets) {
       if (nearOf(r) >= TRANSPORT_MIN || r.noLoss || (r.dist / 1000) / ((r.dur + dt) / 3600e3) > TRIP_MAX_KMH) continue;
-      FLOW(r.ags, r.op, r.ty, r.from, r.to, r.dur, r.dist);
+      FLOW(r.ags, r.op, r.ty, r.from, r.to, r.dur, r.dist, r.toAgs, now - r.dur);
     }
   }
   // --- Verschwundene Fahrzeuge ---
@@ -280,14 +291,19 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
         else { h.rot[hour]++; if (!ne[9] && lowSince) ne[9] = lowSince; if (!ne[10] && disSince && g.match.a.v.disabled) ne[10] = disSince; }
         delete state.v[key]; continue;
       }
-      const c = CELL(g.agsN, cellOf(g.lat, g.lon));
+      const gcell = cellOf(g.lat, g.lon), c = CELL(g.agsN, gcell);
+      const dep = { op: g.opN, ty, ags: g.agsN, lat: g.lat, lon: g.lon, src: g.srcN };
       if ((flags & F_DISABLED) || (bat != null && bat < PICKUP_BATTERY)) { h.pickup[hour]++; }
-      else { h.start[hour]++; c[0]++; c[4 + band]++; }
-      departures.push({ op: g.opN, ty, ags: g.agsN, lat: g.lat, lon: g.lon, src: g.srcN });
+      else { h.start[hour]++; c[0]++; c[4 + band]++; if (modeOf(g.srcN) !== 'stable') estS.push([dep, g.opN, ty, g.agsN, gcell, g.srcN]); }
+      departures.push(dep);
       state.v[key] = [lat, lon, bat, flags | F_MISSING | (gap ? F_SILENT : 0), ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now];
     }
     // übrige neue Kennungen = Fahrtende bzw. Neuaufstellung
-    for (const a of appeared) { if (a.used) continue; H(a.v.operator, a.v.ags, a.ty).end[hour]++; a.c[1]++; a.c[16 + band]++; arrivals.push({ op: a.v.operator, ty: a.ty, ags: a.v.ags, lat: a.v.lat, lon: a.v.lon, src: a.v.sourceId }); }
+    for (const a of appeared) {
+      if (a.used) continue; H(a.v.operator, a.v.ags, a.ty).end[hour]++; a.c[1]++; a.c[16 + band]++;
+      const arr = { op: a.v.operator, ty: a.ty, ags: a.v.ags, lat: a.v.lat, lon: a.v.lon, src: a.v.sourceId }; arrivals.push(arr);
+      if (modeOf(a.v.sourceId) !== 'stable') estE.push([arr, a.v.operator, a.ty, a.v.ags, cellOf(a.v.lat, a.v.lon), a.v.sourceId]);
+    }
   }
   // --- Quellenstatistik (rollierend, gedämpft; Lücken-Läufe verzerren den Kennungsmodus und zählen nicht) ---
   if (!gap) for (const [src, s] of Object.entries(srcRun)) {
@@ -329,7 +345,9 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   // bzw. verschwinden zusammen (Einsammeln). Quellen mit Massenwechsel (Ausfall, Neustart) zählen nicht.
   const glitch = new Set(Object.entries(srcRun).filter(([, r]) => (r.newc + r.gone) > 0.3 * Math.max(1, r.present + r.newc)).map(([k]) => k));
   const groups = first || gap ? [] : [...clusterGroups(arrivals.filter(a => !glitch.has(a.src)), 'deploy', now), ...clusterGroups(departures.filter(a => !glitch.has(a.src)), 'collect', now)];
-  return { state, first, dt, gap, hourly, cells, idle, idleLong, srcModes, day, hour, groups, flows };
+  // Zählungen für die Schätzung: ohne Gruppenmitglieder (Ausbringen/Einsammeln) und ohne Quellen mit Massenwechsel
+  if (!first && !gap) for (const [list, o] of [[estS, est.s], [estE, est.e]]) for (const [ref, op, ty, ags, cell, src] of list) if (!ref?.inGroup && !glitch.has(src)) EST(o, `${op}|${ty}`, `${ags}|${cell}`);
+  return { state, first, dt, gap, hourly, cells, idle, idleLong, srcModes, day, hour, groups, flows, est };
 }
 
 // Ab 4 Fahrzeugen (Nutzerwunsch 01.11.2026, bisher 5): kleinere Transporter-Ausbringungen werden sichtbar
@@ -343,7 +361,7 @@ function clusterGroups(points, kind, at) {
       if (used.has(p)) continue;
       const near = list.filter(q => !used.has(q) && haversineM(p.lat, p.lon, q.lat, q.lon) <= GROUP_M);
       if (near.length < GROUP_MIN) continue;
-      near.forEach(q => used.add(q));
+      near.forEach(q => { used.add(q); q.inGroup = true; }); // inGroup: zählt nicht als Fahrtbeginn/-ende der Schätzung
       const lat = near.reduce((a, q) => a + q.lat, 0) / near.length, lon = near.reduce((a, q) => a + q.lon, 0) / near.length;
       const types = {}; for (const q of near) types[q.ty] = (types[q.ty] || 0) + 1;
       out.push({ at, kind, op, ags: p.ags, lat: +lat.toFixed(5), lon: +lon.toFixed(5), n: near.length, types });

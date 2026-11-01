@@ -9,6 +9,8 @@ import * as T from '../lib/pulse-track.js';
 import * as OPS from '../lib/pulse-ops.js';
 import * as E from '../lib/pulse-econ.js';
 import * as R from '../lib/pulse-report.js';
+import * as FE from '../lib/pulse-flowest.js';
+import * as V from '../lib/pulse-coverage.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -480,6 +482,25 @@ try {
   }
 } catch (e) { log(`Obergrenzen-Protokoll: ${e.message}`); }
 
+// Zonen-Beobachtung: Umrisse privat aus dem Secret ZONE_WATCH (GeoJSON, nie veröffentlicht), Bestand je Zone × Anbieter × Art
+// → zone-watch.json (Läufe 2 Tage, Tageswerte 30 Tage; Format in lib/pulse-report.js zoneLogUpdate)
+if (process.env.ZONE_WATCH) {
+  try {
+    const zones = R.parseZoneWatch(process.env.ZONE_WATCH);
+    // Gemeinde der Zone (falls nicht angegeben): die häufigste Gemeinde der Fahrzeuge darin
+    for (const z of zones) if (!z.ags) { const n = new Map(); for (const v of dv.vehicles) if (v.ags && Number.isFinite(v.lat) && R.zoneContains(z, v.lon, v.lat)) n.set(v.ags, (n.get(v.ags) || 0) + 1); z.ags = [...n].sort((a, b) => b[1] - a[1])[0]?.[0] || null; }
+    if (zones.length) {
+      const f = path.join(DATA, 'zone-watch.json');
+      const prevZ = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null;
+      const counts = R.zoneCounts(zones, dv.vehicles);
+      const agsOf = new Map(zones.map(z => [z.id, z.ags]));
+      const doc = R.zoneLogUpdate(prevZ, zones, counts, { at: now, carryZero: (zone, op, ty) => (groupsOut[`${agsOf.get(zone)}|${op}|${ty}`]?.total || 0) > 0 });
+      await writeFile(f, JSON.stringify(doc));
+      log(`Zonen-Beobachtung: ${zones.map(z => `${z.name} ${[...counts].filter(([k]) => k.startsWith(`${z.id}|`)).reduce((s, [, c]) => s + c[0], 0)}`).join(', ')}`);
+    } else log('Zonen-Beobachtung: ZONE_WATCH ohne gültige Umrisse');
+  } catch (e) { log(`Zonen-Beobachtung: ${e.message}`); }
+}
+
 // Momentaufnahmen (nur Zugangs-Quellen)
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
@@ -549,6 +570,21 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   }
   await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series }));
 }
+
+// Abdeckung: Städte laut Anbieter-Website (data/operator-cities.json, liegt auf main im Checkout) gegen Feeds mit und ohne Fahrzeuge
+// (coverage.json, Format in lib/pulse-coverage.js); „zuletzt aktiv“ aus daily.json und dem vorigen coverage.json
+try {
+  const claimsFile = process.env.OPERATOR_CITIES_FILE || path.join(ROOT, 'data', 'operator-cities.json');
+  const claims = existsSync(claimsFile) ? JSON.parse(await readFile(claimsFile, 'utf8')) : null;
+  const covFile = path.join(DATA, 'coverage.json');
+  const prevCov = existsSync(covFile) ? JSON.parse(await readFile(covFile, 'utf8')) : null;
+  const dailyFile = path.join(DATA, 'history', 'daily.json');
+  const daily = existsSync(dailyFile) ? JSON.parse(await readFile(dailyFile, 'utf8')) : null;
+  const cov = V.coverage({ claims, latest, features: boundaries?.features || [], prev: prevCov?.version === V.COVERAGE_VERSION ? prevCov : null, daily, now });
+  await writeFile(covFile, JSON.stringify(cov));
+  const lost = cov.unresolved.filter(u => u.grund === 'unbekannt').map(u => `${u.op}: ${u.ort}`);
+  log(`Abdeckung: ${cov.rows.length} Zeilen, ${Object.entries(cov.totals).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(', ')}${lost.length ? `; ohne Gemeinde: ${lost.join(', ')}` : ''}`);
+} catch (e) { log(`Abdeckung: ${e.message}`); }
 
 // ---------- Fahrzeug-Verfolgung (Fahrten, Standzeiten, Tausch, Umsetzungen, Sperren, Zellen, Stationsquote, Zuverlässigkeit) ----------
 {
@@ -635,6 +671,29 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
     const flDays = (await readdir(flDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     for (const f of flDays.slice(0, -HISTORY_DAYS)) await rm(path.join(flDir, f));
     await writeFile(path.join(flDir, 'index.json'), JSON.stringify({ days: flDays.slice(-HISTORY_DAYS).map(f => f.slice(0, 10)), collecting: raw.day, min: T.FLOW_MIN, top: T.FLOW_TOP, fields: T.FLOW_FIELDS, updatedAt: now }));
+    // Geschätzte Ströme für rotierende Kennungen (lib/pulse-flowest.js): je Lauf nur Zählungen je Zelle, privat in TRACK_DIR
+    // (flows-est-raw.json.gz, keine Paare); Schätzung erst nach Tagesende → flows-est/<Tag>.json (estimated: true, ≥ 2 erwartete Fahrten,
+    // Top 300 je Gemeinde, 500-m-Zellen, Gütekennzahl aus der Validierung an stabilen Kennungen) + flows-est/index.json, 30 Tage
+    try {
+      const eDir = path.join(DATA, 'flows-est'), eRawFile = path.join(TRACK_DIR, 'flows-est-raw.json.gz'), eIdxFile = path.join(eDir, 'index.json');
+      await mkdir(eDir, { recursive: true });
+      const er0 = await readState(eRawFile);
+      const eIdx0 = existsSync(eIdxFile) ? JSON.parse(await readFile(eIdxFile, 'utf8')) : null;
+      let method = eIdx0?.method ?? null, quality = eIdx0?.quality ?? null;
+      if (er0?.day && er0.day < tr.day) try { // Fehler hier: Tag entfällt, die Zählung läuft weiter (kein Wiederholen in jedem Lauf)
+        const refFile = process.env.REFERENCE_FILE || path.join(ROOT, 'data', 'reference.json');
+        const reference = existsSync(refFile) ? JSON.parse(await readFile(refFile, 'utf8')) : null;
+        const { doc, learn } = FE.publishEstimate(er0, raw0?.day === er0.day ? raw0 : null, { at: now, reference, factor: +process.env.FLOWS_EST_FACTOR || undefined });
+        await writeFile(path.join(eDir, `${er0.day}.json`), JSON.stringify(doc)); er0.learn = learn; method = doc.method; quality = doc.quality;
+        const q = doc.quality;
+        log(`Ströme geschätzt ${er0.day}: ${doc.flows.length} Zeilen (${doc.total.shown} von ${doc.total.trips} erwarteten Fahrten), L ${JSON.stringify(doc.method.L_m)} m, ${(doc.runtimeMs.total / 1000).toFixed(1)} s (${doc.runtimeMs.perRun} ms je Lauf)${q ? ` · Validierung an stabilen Kennungen: CPC ${q.cpc} (ohne Distanzzerfall ${q.cpcBase}), r ${q.r}, Top-50 ${q.topShare}/${q.topOracle}, Ø ${q.meanKmEst}/${q.meanKmMeas} km` : ' · keine gemessenen Ströme zur Validierung'}`);
+      } catch (e) { log(`Ströme geschätzt ${er0.day}: ${e.message}`); }
+      const er = FE.mergeEstCounts(er0, tr.est, { day: tr.day, at: now, dt: tr.dt, gap: tr.gap, band: T.bandOf(tr.hour) });
+      await writeFile(eRawFile, gzipSync(JSON.stringify(er)));
+      const eDays = (await readdir(eDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+      for (const f of eDays.slice(0, -HISTORY_DAYS)) await rm(path.join(eDir, f));
+      await writeFile(eIdxFile, JSON.stringify(FE.estIndex(eDays.slice(-HISTORY_DAYS).map(f => f.slice(0, 10)), { collecting: er.day, at: now, method, quality })));
+    } catch (e) { log(`Ströme geschätzt: ${e.message}`); }
   }
   // Flotte für die Disposition (Ops): alle deduplizierten Fahrzeuge und Stationen je Bundesland, mit Standzeit
   {

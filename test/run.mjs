@@ -54,7 +54,10 @@ await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources
 await writeFile(path.join(tmp, 's4.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra] }));
 // Obergrenze für die Testgemeinde (Bolt-E-Scooter), damit der Sammler caps-log.json schreibt
 await writeFile(path.join(tmp, 'ref.json'), JSON.stringify({ obergrenzen: [{ ags: '08416041', ort: 'Tübingen (Test)', type: 'scooter', gesamt: 1, jeAnbieter: 5, quelle: 'Test', url: 'https://example.org' }] }));
-const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json') };
+// Städte laut Anbieter (Abdeckung): Bolt nennt Tübingen und Stuttgart, Dott „Tubingen“ (englische Umschrift)
+await writeFile(path.join(tmp, 'cities.json'), JSON.stringify({ erstellt: '2026-11-01', anbieter: [{ name: 'Bolt', quelle: 'https://example.org/bolt', staedte: [{ ort: 'Tübingen' }, { ort: 'Stuttgart' }] }, { name: 'Dott', quelle: 'https://example.org/dott', staedte: [{ ort: 'Tubingen' }] }] }));
+const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'),
+  ZONE_WATCH: JSON.stringify({ type: 'Feature', properties: { name: 'Testzone', limits: { scooter: { maximum: 777 } } }, geometry: { type: 'Polygon', coordinates: [[[8.9, 48.4], [9.3, 48.4], [9.3, 48.9], [8.9, 48.9], [8.9, 48.4]]] } }) };
 const t3 = Date.now();
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's3.json') });
 const l3 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
@@ -110,6 +113,20 @@ assert(!existsSync('test/out/track') && ev4.runs.slice(-1)[0][2] === 1 && runs4.
 const clog = JSON.parse(await readFile('test/out/caps-log.json', 'utf8'));
 const bolt4 = l4.groups['08416041|Bolt|scooter']?.total || 0;
 assert(clog.fields.join() === 'at,ags,operator,count,limit,dtMs' && clog.rules.length === 1 && clog.rules[0].limit === 1 && clog.checks.some(c => c[0] === l4.at && c[1] === '08416041' && c[2] === '*' && c[3] === bolt4 && c[4] === 1 && c[5] > 0) && !clog.checks.some(c => c[2] === 'Bolt') && clog.daily.some(d => d[1] === '08416041' && d[2] === 'Bolt' && d[3] === bolt4 && d[4] === 5), `caps-log.json: Überschreitung gesamt (${bolt4} > 1) je Lauf mit Fenster, Bolt unter 90 % nur als Tagesmaximum`);
+{
+  const cov = JSON.parse(await readFile('test/out/coverage.json', 'utf8'));
+  const row = (k, a) => cov.rows.find(r => r.opKey === k && r.ags === a);
+  const boltTue = l4.municipalities['08416041']?.operators?.Bolt?.total || 0, boltStr = l4.municipalities['08111000']?.operators?.Bolt?.total || 0, dottTue = l4.municipalities['08416041']?.operators?.Dott?.total || 0;
+  assert(cov.version === 1 && row('bolt', '08416041')?.cat === (boltTue ? 'abgedeckt' : 'feed-still') && row('bolt', '08111000')?.cat === (boltStr ? 'abgedeckt' : row('bolt', '08111000')?.src ? 'feed-still' : 'kein-feed')
+    && row('dott', '08416041')?.claimed === true && row('dott', '08416041').cat === (dottTue ? 'abgedeckt' : 'feed-still') && row('bolt', '08416041').lastActive != null === !!boltTue,
+    `coverage.json: Bolt Tübingen ${row('bolt', '08416041')?.cat}, Bolt Stuttgart ${row('bolt', '08111000')?.cat}, Dott „Tubingen“ ${row('dott', '08416041')?.cat}`);
+}
+{
+  const zw = JSON.parse(await readFile('test/out/zone-watch.json', 'utf8')), raw = JSON.stringify(zw);
+  const inZone = zw.runs.filter(r => r[0] === l4.at).reduce((s, r) => s + r[4], 0);
+  assert(zw.zones.length === 1 && zw.zones[0].id === 'testzone' && zw.zones[0].ags && inZone > 0 && zw.daily.length > 0 && !raw.includes('8.9') && !raw.includes('777') && !raw.includes('coordinates'),
+    `zone-watch.json: ${inZone} Fahrzeuge in der Testzone im letzten Lauf, Gemeinde ${zw.zones[0].ags}, keine Umrisse und keine Limits veröffentlicht`);
+}
 const plog = JSON.parse(await readFile('test/out/pricing-log.json', 'utf8'));
 assert(plog.fields.join() === 'at,sourceId,operator,planId,field,old,new' && plog.changes.some(c => c[1] === 'p_test' && c[3] === 'std' && c[4] === 'unlock' && c[5] === 1 && c[6] === 1.5), 'pricing-log.json: Entsperrpreis 1 → 1,5');
 assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.counts.byStatus.gone && l4.counts.retired === 1 && l4.counts.failing === 0 && runs4.slice(-1)[0][6] === 0, 'über 14 Tage weg → retired, kein Fehler (latest.counts.failing, runs.json)');
@@ -125,6 +142,13 @@ assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.co
   const yd = T.dayOf(Date.now() - 86400e3);
   await writeFile(path.join(TRACK_DIR, 'flows-raw.json.gz'), gzipSync(JSON.stringify({ version: 1, day: yd, runs: 3, stable: { '08416041': ['Bolt'] }, rows: {
     '08416041|Bolt|scooter|1': { '19408:2586>19412:2590': [3, 900e3, 3000], '19408:2586>19409:2587': [1, 300e3, 400] }, '08416041|Lime|scooter|1': { '19408:2586>19412:2590': [1, 200e3, 900] } } })));
+  // geschätzte Ströme: gestrige Zählungen (privat) – Voi rotierend (s/e), Bolt in Tübingen stabil (vs/ve = Validierung; s/e dort nicht geschätzt)
+  const eIdx0 = JSON.parse(await readFile('test/out/flows-est/index.json', 'utf8'));
+  assert(eIdx0.estimated === true && eIdx0.days.length === 0 && eIdx0.collecting === T.dayOf(Date.now()) && existsSync(path.join(TRACK_DIR, 'flows-est-raw.json.gz')) && !existsSync('test/out/flows-est-raw.json.gz'), 'flows-est: Zählungen des laufenden Tages nur privat (TRACK_DIR)');
+  const ydAt = Date.parse(`${yd}T09:00:00Z`), estRun = (at, dt, c) => ({ at, dt, band: 2, gap: 0, s: {}, e: {}, vs: {}, ve: {}, ...c });
+  await writeFile(path.join(TRACK_DIR, 'flows-est-raw.json.gz'), gzipSync(JSON.stringify({ version: 1, day: yd, tail: [], learn: {}, vSame: { scooter: 4 }, vLate: {}, lost: 0, runs: [estRun(ydAt - 20 * 60e3, null, { gap: 1 }),
+    estRun(ydAt, 20 * 60e3, { s: { 'Voi|scooter': { '08416041|19408:2586': 6 }, 'Bolt|scooter': { '08416041|19408:2586': 5 } }, e: { 'Voi|scooter': { '08416041|19412:2590': 5 }, 'Bolt|scooter': { '08416041|19412:2590': 5 } },
+      vs: { 'Bolt|scooter': { '08416041|19408:2586': 4 } }, ve: { 'Bolt|scooter': { '08416041|19412:2590': 3, '08416041|19409:2587': 1 } } })] })));
   await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
   const fl = JSON.parse(await readFile('test/out/flows/index.json', 'utf8')), pub = JSON.parse(await readFile(`test/out/flows/${yd}.json`, 'utf8'));
   const rawT = JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, 'flows-raw.json.gz'))).toString('utf8'));
@@ -133,6 +157,14 @@ assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.co
   assert(JSON.stringify(pub.flows) === JSON.stringify([['08416041', '19408:2586', '19412:2590', 'Bolt', 'scooter', 1, 3, 900, 3000]]) && pub.munis['08416041'].below === 2 && pub.total.trips === 5 && pub.stable['08416041'][0] === 'Bolt', 'flows/<gestern>.json: nur Zeilen ≥ 2 Fahrten, Einzelfahrten als Summe unter Mindestschwelle');
   const run4b = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs.slice(-1)[0];
   assert(rawT.day === T.dayOf(Date.now()) && tripsT >= 4 && tripsT === run4b[9] && Object.keys(rawT.rows).every(k => /^\d{8}\|.+\|.+\|[0-5]$/.test(k)) && !existsSync('test/out/flows-raw.json.gz') && !existsSync('test/out/track'), `Tagessumme heute privat: ${tripsT} Fahrten mit Start und Ziel = gezählte Fahrten des Laufs (gesperrtes a2 nicht), nichts davon im Datenzweig`);
+  const eIdx = JSON.parse(await readFile('test/out/flows-est/index.json', 'utf8')), est = JSON.parse(await readFile(`test/out/flows-est/${yd}.json`, 'utf8'));
+  assert(eIdx.days.join() === yd && eIdx.collecting === T.dayOf(Date.now()) && eIdx.method?.name === 'sinkhorn-gravity' && eIdx.quality?.measured > 0, 'flows-est/index.json: gestern veröffentlicht, Methode und Güte im Verzeichnis');
+  assert(est.estimated === true && est.flows.length === 1 && est.flows[0][3] === 'Voi' && est.flows[0][6] === 3.8 && est.flows[0][7] === null && est.flows.every(r => r[6] >= 2) && est.stableSkipped === 5 && est.cell[0] === 2 * T.CELL_LAT, `flows-est/<gestern>.json: Voi geschätzt (${est.flows[0]?.[6]} erwartete Fahrten = 6 Beginne × w0 0,64, 500-m-Zellen), Bolt (stabil in der Gemeinde) nicht doppelt`);
+  assert(est.quality.cpc > 0 && est.quality.measured === 5 && est.quality.grid.length === 2 && Number.isFinite(est.runtimeMs.total), `Validierung an stabilen Kennungen in der Datei (CPC ${est.quality.cpc}, ${est.quality.measured} gemessene Fahrten)`);
+  const eRaw = JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, 'flows-est-raw.json.gz'))).toString('utf8'));
+  const veT = Object.values(eRaw.runs.at(-1).ve).reduce((a, m) => a + Object.values(m).reduce((x, y) => x + y, 0), 0);
+  const keysOf = (o, out = []) => { if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) { out.push(k); keysOf(v, out); } return out; };
+  assert(eRaw.day === T.dayOf(Date.now()) && eRaw.tail.length === 2 && veT === tripsT && keysOf(eRaw).every(k => !k.includes('>')) && !existsSync('test/out/flows-est-raw.json.gz'), `Zählungen heute privat: ${veT} Validierungs-Enden = gemessene Fahrten, Vortag als tail, keine Zellenpaare`);
 }
 // Lauf 5: Lücke (Zustand 2 h alt) → Flag 0, gestörte Stunde im Tagesdokument, Verlauf-Flag 0
 {

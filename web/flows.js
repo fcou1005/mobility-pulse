@@ -1,8 +1,10 @@
 // Mobility Pulse — Vermutete Fahrtrouten (Nutzung): Start-Ziel-Ströme zwischen ≈ 250-m-Zellen aus flows/<Tag>.json (Sammler, lib/pulse-track.js publishFlows).
 // Linie je Strom = wahrscheinlichster Radweg zwischen den Zellmitten (FOSSGIS-OSRM, Fahrradprofil), nicht gemessen; Rückfall Luftlinie (gestrichelt).
-// Nur Anbieter mit stabilen Kennungen, nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
+// Gemessen: nur Anbieter mit stabilen Kennungen (flows/). Geschätzt: Anbieter mit rotierenden Kennungen, erwartete Fahrten je ≈ 500-m-Zellenpaar
+// (flows-est/, lib/pulse-flowest.js, keine Einzelverknüpfung). Nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
-import { VEHICLE_TYPE_LABEL as TYPE } from './pulse-core.js';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -10,7 +12,7 @@ const REQ_GAP_MS = 1050;    // höchstens eine Routing-Anfrage je Sekunde (alle 
 const REQ_TIMEOUT_MS = 15000;
 const LS_KEY = 'mp-fl-routes-v1', LS_MAX = 300, LS_VIEW = 'mp-fl-view';
 const CELL_FALLBACK = [0.0025, 0.0035]; // lib/pulse-track.js CELL_LAT/CELL_LON, falls die Datei kein Zellmaß nennt
-const BANDS_FALLBACK = [['Nacht', 0, 6], ['Morgen', 6, 9], ['Vormittag', 9, 12], ['Mittag', 12, 15], ['Nachmittag', 15, 19], ['Abend', 19, 24]].map(([label, from, to]) => ({ label, from, to }));
+const BANDS_FALLBACK_DEF = () => ([[t('flows.night'), 0, 6], [t('flows.morning'), 6, 9], [t('flows.lateMorning'), 9, 12], [t('flows.midday'), 12, 15], [t('flows.afternoon'), 15, 19], [t('flows.evening'), 19, 24]].map(([label, from, to]) => ({ label, from, to })));
 const NEUTRAL = '#3d4a5c';  // mehrere Anbieter: Schiefergrau außerhalb der Anbieterpalette, auf den hellen OSM-Kacheln ≥ 7:1
 const TILE_BG = '#f2efe9';  // Grundton der OSM-Kacheln: Legende zeigt die Linie wie auf der Karte
 const CELL_RE = /^-?\d{1,6}:-?\d{1,6}$/;
@@ -52,7 +54,7 @@ function injectStyle() {
 
 // ---------- Zustand je Panel ----------
 const STATES = new WeakMap(), ACTIVE = new Set();
-const st = (el) => { let s = STATES.get(el); if (!s) { s = { el, gen: 0, docs: new Map(), sel: null, queue: [], drawn: new Map(), fails: 0 }; STATES.set(el, s); } return s; };
+const st = (el) => { let s = STATES.get(el); if (!s) { s = { el, gen: 0, docs: new Map(), sel: null, queue: [], drawn: new Map(), fails: 0, src: 'measured' }; STATES.set(el, s); } return s; };
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const shown = (S) => S.el.isConnected && S.el.offsetParent !== null && document.visibilityState !== 'hidden';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -88,29 +90,41 @@ const setViewPref = (v) => { try { localStorage.setItem(LS_VIEW, v); } catch { /
 
 // ---------- Hilfen ----------
 function cellCenter(S, cell) { const [a, b] = cell.split(':').map(Number); return [a * S.cellDim[0], b * S.cellDim[1]]; }
-const dmy = (d) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '–');
-const dm = (d) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.` : '–');
-const typeLabel = (t) => (t == null ? 'mehrere Arten' : TYPE[t] || t);
-const bandLabel = (S, b) => { const x = S.bands[b]; return x ? `${x.label} (${x.from}–${x.to} Uhr)` : String(b); };
-function durText(ctx, sec) { if (sec == null || !Number.isFinite(sec)) return '—'; return sec < 3600 ? `${ctx.fmt(sec / 60)} Min.` : `${ctx.fmt(sec / 3600, 1)} Std.`; }
+// Datum 'JJJJ-MM-TT' im Format der Sprache (de 01.11.2026, en 01/11/2026); Fahrzeugart und Tageszeit-Band in der Sprache der Seite
+const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
+const ymd = (d) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), 12));
+const dmy = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(ymd(d)) : '–');
+const dm = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(ymd(d)) + (lang() === 'de' ? '.' : '') : '–');
+const typeLabel = (tq) => (tq == null ? t('flows.severalTypes') : TYPE[tq] || tq);
+const bandLabel = (S, b) => { const x = S.bands[b]; return x ? t('flows.bandRange', { label: t(`band.${b}`), from: x.from, to: x.to }) : String(b); };
+function durText(ctx, sec) { if (sec == null || !Number.isFinite(sec)) return '—'; return sec < 3600 ? t('flows.min', { v0: ctx.fmt(sec / 60) }) : t('flows.h', { v0: ctx.fmt(sec / 3600, 1) }); }
 const kmText = (ctx, m) => (m == null || !Number.isFinite(m) ? '—' : `${ctx.fmt(m / 1000, 1)} km`);
-const plural = (ctx, n, one, many) => `${ctx.fmt(n)} ${n === 1 ? one : many}`;
-/** CSV-Zelle (Semikolon): Zahlen mit Dezimalkomma; Text mit = + - @ Tab/CR am Anfang bekommt ' davor (Formel-Injection) */
+const plural = (ctx, n, one, many) => `${ctx.fmt(n, Number.isInteger(n) ? 0 : 1)} ${n === 1 ? one : many}`;
+const nf = (S, n) => S.ctx.fmt(n, S.est && !Number.isInteger(n) ? 1 : 0); // geschätzte Ströme: erwartete Fahrten mit einer Nachkommastelle
+const avgDur = (f) => (f.dur == null ? null : f.dur / f.n);
+/** Güte der Schätzung (blind an Quellen mit stabilen Kennungen geprüft, lib/pulse-flowest.js validateDay) */
+function qualityText(S, q) {
+  const n2 = (x) => S.ctx.fmt(x, 2);
+  if (!q || !Number.isFinite(q.cpc)) return t('flows.estQualityNone');
+  return t('flows.estQuality', { cpc: n2(q.cpc), base: Number.isFinite(q.cpcBase) ? n2(q.cpcBase) : '–', r: Number.isFinite(q.r) ? n2(q.r) : '–', top: Number.isFinite(q.topRatio) ? S.ctx.fmt(q.topRatio * 100) : '–' });
+}
+/** CSV-Zelle: Deutsch mit Semikolon und Dezimalkomma, Englisch mit Komma und Dezimalpunkt; Text mit = + - @ Tab/CR am Anfang bekommt ' davor (Formel-Injection) */
+const csvSep = () => (decimalSep() === ',' ? ';' : ',');
 function csvCell(v, digits = null) {
   if (v == null || (typeof v === 'number' && !Number.isFinite(v))) return '';
   let s;
-  if (typeof v === 'number') s = (digits == null ? String(+v.toFixed(5)) : v.toFixed(digits)).replace('.', ',');
+  if (typeof v === 'number') s = (digits == null ? String(+v.toFixed(5)) : v.toFixed(digits)).replace('.', decimalSep());
   else { s = String(v); if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; }
-  return /[";\r\n]/.test(s) || s !== s.trim() ? `"${s.replace(/"/g, '""')}"` : s;
+  return s.includes(csvSep()) || /["\r\n]/.test(s) || s !== s.trim() ? `"${s.replace(/"/g, '""')}"` : s;
 }
-const toCsv = (rows) => rows.map(r => r.map(c => (Array.isArray(c) ? csvCell(c[0], c[1]) : csvCell(c))).join(';')).join('\r\n');
+const toCsv = (rows) => rows.map(r => r.map(c => (Array.isArray(c) ? csvCell(c[0], c[1]) : csvCell(c))).join(csvSep())).join('\r\n');
 function download(name, text) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 // Zeilen der Datei prüfen (Datenzweig ist öffentlich beschreibbar nur durch den Sammler, trotzdem nichts ungeprüft zeichnen)
 function validRows(doc) {
-  return (Array.isArray(doc?.flows) ? doc.flows : []).filter(r => Array.isArray(r) && r.length >= 9 && typeof r[0] === 'string' && CELL_RE.test(r[1]) && CELL_RE.test(r[2]) && Number.isFinite(r[6]) && r[6] > 0 && Number.isFinite(r[7]) && Number.isFinite(r[8])
+  return (Array.isArray(doc?.flows) ? doc.flows : []).filter(r => Array.isArray(r) && r.length >= 9 && typeof r[0] === 'string' && CELL_RE.test(r[1]) && CELL_RE.test(r[2]) && Number.isFinite(r[6]) && r[6] > 0 && (Number.isFinite(r[7]) || (doc.estimated === true && r[7] === null)) && Number.isFinite(r[8])
     && (r[3] == null || typeof r[3] === 'string') && (r[4] == null || typeof r[4] === 'string') && (r[5] == null || (Number.isInteger(r[5]) && r[5] >= 0 && r[5] < 12)));
 }
 
@@ -118,25 +132,27 @@ function validRows(doc) {
 function skeleton(S) {
   const { el } = S;
   el.classList.add('fl-root');
-  el.innerHTML = `<div class="panel-head"><div><h2>Vermutete Fahrtrouten</h2><div class="sub" data-fl="sub">Start-Ziel-Ströme zwischen ≈ 250-m-Zellen</div></div>
+  el.innerHTML = `<div class="panel-head"><div><h2>${t('flows.presumedTripRoutes')}</h2><div class="sub" data-fl="sub">${t('flows.originDestinationFlows')}</div></div>
     <div class="inline-form fl-ctl">
-      <label data-fl="ags-l" hidden>Gemeinde <select data-fl="ags" title="Gemeinden mit veröffentlichten Strömen am gewählten Tag"></select></label>
-      <label>Tag <select data-fl="day"></select></label>
-      <label>Anbieter <select data-fl="op"></select></label>
-      <label>Fahrzeugart <select data-fl="type"></select></label>
-      <label>Tageszeit <select data-fl="band"></select></label>
+      <div class="fl-tog" role="group" aria-label="${t('flows.source')}" data-fl="srcbox"><button type="button" data-fl-src="measured" aria-pressed="true" title="${t('flows.measuredTip')}">${t('flows.measured')}</button><button type="button" data-fl-src="est" aria-pressed="false" title="${t('flows.estimatedTip')}">${t('flows.estimated')}</button></div>
+      <label data-fl="ags-l" hidden>${t('flows.municipality')} <select data-fl="ags" title="${t('flows.municipalitiesWithPublished')}"></select></label>
+      <label>${t('flows.day')} <select data-fl="day"></select></label>
+      <label>${t('flows.operator')} <select data-fl="op"></select></label>
+      <label>${t('flows.vehicleType')} <select data-fl="type"></select></label>
+      <label>${t('flows.timeOfDay')} <select data-fl="band"></select></label>
     </div></div>
   <div class="note fl-note" data-fl="note"></div>
   <div class="fl-sum" data-fl="sum" aria-live="polite"></div>
-  <div class="fl-bar" data-fl="bar"><div class="fl-tog" role="group" aria-label="Darstellung"><button type="button" data-fl-view="map" aria-pressed="true">Karte</button><button type="button" data-fl-view="table" aria-pressed="false">Tabelle</button></div>
-    <span class="fl-status" data-fl="status" aria-live="polite"></span><button type="button" data-fl="csv" title="Alle Ströme der Auswahl (nicht nur die Top ${SHOW}); Text mit = + - @ am Anfang wird entschärft">↓ CSV</button></div>
-  <div data-fl="mapbox"><div class="fl-map" data-fl="map" role="region" aria-label="Karte der vermuteten Fahrtrouten; dieselben Ströme stehen in der Tabelle"></div><div class="fl-legend" data-fl="legend"></div></div>
-  <div class="tbl" tabindex="0" role="region" aria-label="Top-Ströme als Tabelle" data-fl="tblbox" hidden><table><thead><tr><th class="n">#</th><th>Start (Zellmitte)</th><th>Ziel (Zellmitte)</th><th>Anbieter</th><th class="n">Fahrten</th><th class="n">Ø Dauer</th><th class="n">Ø Luftlinie</th><th class="n">Route Rad</th></tr></thead><tbody data-fl="tbody"></tbody></table></div>
+  <div class="fl-bar" data-fl="bar"><div class="fl-tog" role="group" aria-label="${t('flows.display')}"><button type="button" data-fl-view="map" aria-pressed="true">${t('flows.map')}</button><button type="button" data-fl-view="table" aria-pressed="false">${t('flows.table')}</button></div>
+    <span class="fl-status" data-fl="status" aria-live="polite"></span><button type="button" data-fl="csv" title="${t('flows.allFlowsOfSelectionNotOnly', { SHOW })}">↓ CSV</button></div>
+  <div data-fl="mapbox"><div class="fl-map" data-fl="map" role="region" aria-label="${t('flows.mapOfPresumedTripRoutesSame')}"></div><div class="fl-legend" data-fl="legend"></div></div>
+  <div class="tbl" tabindex="0" role="region" aria-label="${t('flows.topFlowsAsTable')}" data-fl="tblbox" hidden><table><thead><tr><th class="n">#</th><th>${t('flows.startCellCentre')}</th><th>${t('flows.destinationCellCentre')}</th><th>${t('flows.operator')}</th><th class="n">${t('flows.trips')}</th><th class="n">${t('flows.avgDuration')}</th><th class="n">${t('flows.avgStraightLine')}</th><th class="n">${t('flows.bikeRoute')}</th></tr></thead><tbody data-fl="tbody"></tbody></table></div>
   <div data-fl="empty" hidden></div>`;
   const q = (k) => el.querySelector(`[data-fl="${k}"]`);
   S.q = q;
   for (const k of ['ags', 'day', 'op', 'type', 'band']) q(k).addEventListener('change', () => { S.sel[k] = q(k).value; update(S).catch(e => console.error('Ströme', e)); });
   el.querySelectorAll('[data-fl-view]').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.flView; setViewPref(S.view); applyView(S); }));
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-fl-src]'); if (!b || b.dataset.flSrc === S.src) return; S.src = b.dataset.flSrc; S.sel.day = null; update(S).catch(err => console.error('Ströme', err)); });
   q('csv').addEventListener('click', () => exportCsv(S));
   S.view = viewPref();
   if (typeof IntersectionObserver === 'function') {
@@ -159,7 +175,7 @@ function ensureMap(S) {
   if (S.map || typeof L === 'undefined') { S.hasMap = !!S.map; return; }
   const still = reduced();
   S.map = L.map(S.q('map'), { zoomControl: true, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, inertia: !still }).setView([51.1, 10.4], 6);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende · Routen: <a href="https://routing.openstreetmap.de/">FOSSGIS-OSRM</a> (Fahrrad)' }).addTo(S.map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('flows.openstreetmapContributors') }).addTo(S.map);
   S.layer = L.layerGroup().addTo(S.map);
   S.hasMap = true;
 }
@@ -176,12 +192,19 @@ export async function renderFlows(el, ctx) {
 }
 /** Laufendes Routing anhalten (z. B. beim Verlassen der Ansicht); renderFlows bzw. Sichtbarkeit setzt es fort */
 export function abortFlows(el) { const S = STATES.get(el); if (S) stopRouting(S); }
+/** Sprachwechsel: Gerüst (Beschriftungen, Karte samt Namensnennung) beim nächsten renderFlows neu aufbauen; Auswahl, Dateien und Routen-Cache bleiben */
+export function relabelFlows() {
+  for (const S of [...ACTIVE]) { stopRouting(S); S.io?.disconnect(); S.io = null; S.map?.remove(); S.map = null; S.layer = null; S.hasMap = false; S.built = false; S.drawn.clear(); ACTIVE.delete(S); }
+}
 
 async function update(S) {
   const gen = ++S.gen; stopRouting(S);
   const { ctx, sel, q } = S;
   const esc = ctx.esc;
-  const idxR = await ctx.getJson(`${ctx.CFG.DATA}flows/index.json`, { timeout: 25000 });
+  S.est = S.src === 'est';
+  const dir = S.est ? 'flows-est/' : 'flows/';
+  S.el.querySelectorAll('[data-fl-src]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.flSrc === S.src)));
+  const idxR = await ctx.getJson(`${ctx.CFG.DATA}${dir}index.json`, { timeout: 25000 });
   if (gen !== S.gen) return;
   const idx = idxR?.ok ? idxR.json : null;
   const days = (Array.isArray(idx?.days) ? idx.days : []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
@@ -190,22 +213,24 @@ async function update(S) {
   q('day').innerHTML = days.length ? [...days].reverse().map(d => `<option value="${esc(d)}">${esc(dmy(d))}</option>`).join('') : '<option value="">–</option>';
   q('day').value = sel.day || '';
   const collecting = typeof idx?.collecting === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(idx.collecting) ? idx.collecting : null;
-  const howNote = `<b>Route = wahrscheinlichster Radweg zwischen den Zellmitten (OSRM), nicht gemessen</b>; nur Anbieter mit stabilen Kennungen; Ströme unter 2 Fahrten ausgeblendet.`;
-  const privacy = `Mobility Pulse verbindet Start und Ziel nur, wenn ein Anbieter Fahrzeuge dauerhaft unter derselben Kennung meldet. Bei rotierenden Kennungen (z. B. Voi, Bolt, Dott) bekommt ein Fahrzeug nach jeder Fahrt eine neue Kennung – solche Fahrten werden bewusst nicht verknüpft. Veröffentlicht werden nur Zellenpaare mit mindestens 2 Fahrten am Tag, ein Tag erst nach Tagesende.`;
+  const howNote = S.est ? `${t('flows.estHow')} ${qualityText(S, idx?.quality)}` : t('flows.routeMostLikelyCycleRoute');
+  const privacy = S.est ? t('flows.estPrivacy') : t('flows.mobilityPulseLinksStartAnd');
   if (!days.length) {
-    return empty(S, idxR?.status === 404 || !idx ? 'Noch keine Strom-Dateien im Datenstand.' : 'Noch kein abgeschlossener Tag mit Strömen.',
-      `${collecting ? `Der Sammler sammelt gerade den ${esc(dmy(collecting))}; Ströme eines Tages erscheinen nach Tagesende. ` : ''}${privacy}`, howNote);
+    if (S.est) return empty(S, idxR?.status === 404 || !idx ? t('flows.estNoFiles') : t('flows.estNoDay'), `${collecting ? `${t('flows.collectorIsCurrently', { dmy: esc(dmy(collecting)) })} ` : ''}${privacy}`, howNote);
+    return empty(S, idxR?.status === 404 || !idx ? t('flows.noFlowFilesInDataSnapshotYet') : t('flows.noCompletedDayWithFlowsYet'),
+      `${collecting ? `${t('flows.collectorIsCurrently', { dmy: esc(dmy(collecting)) })} ` : ''}${privacy}`, howNote);
   }
-  let doc = S.docs.get(sel.day);
+  const dk = `${S.src}|${sel.day}`;
+  let doc = S.docs.get(dk);
   if (doc === undefined) {
-    q('sum').textContent = 'Ströme werden geladen …';
-    const r = await ctx.getJson(`${ctx.CFG.DATA}flows/${sel.day}.json`, { timeout: 60000 });
+    q('sum').textContent = t('flows.loadingFlows');
+    const r = await ctx.getJson(`${ctx.CFG.DATA}${dir}${sel.day}.json`, { timeout: 60000 });
     if (gen !== S.gen) return;
-    doc = r?.ok && r.json && Array.isArray(r.json.flows) ? r.json : null; S.docs.set(sel.day, doc);
+    doc = r?.ok && r.json && Array.isArray(r.json.flows) ? r.json : null; S.docs.set(dk, doc);
   }
-  if (!doc) return empty(S, `Strom-Datei für den ${esc(dmy(sel.day))} nicht ladbar.`, 'Anderen Tag wählen oder später neu laden.', howNote);
+  if (!doc) return empty(S, t('flows.flowFileForNotLoadable', { dmy: esc(dmy(sel.day)) }), t('flows.chooseAnotherDayOrReload'), howNote);
   S.cellDim = Array.isArray(doc.cell) && doc.cell.length === 2 && doc.cell.every(x => Number.isFinite(x) && x > 0 && x < 0.1) ? doc.cell : CELL_FALLBACK;
-  S.bands = Array.isArray(doc.bands) && doc.bands.length === 6 && doc.bands.every(b => b && typeof b.label === 'string') ? doc.bands : BANDS_FALLBACK;
+  S.bands = Array.isArray(doc.bands) && doc.bands.length === 6 && doc.bands.every(b => b && typeof b.label === 'string') ? doc.bands : BANDS_FALLBACK_DEF();
   S.doc = doc; S.rows = validRows(doc);
   const munis = doc.munis && typeof doc.munis === 'object' ? doc.munis : {};
   const name = (a) => ctx.muniName(a);
@@ -214,22 +239,24 @@ async function update(S) {
   const de = ctx.state.scope === 'DE';
   if (de) { if (!sel.ags || !withFlows.some(([a]) => a === sel.ags)) sel.ags = withFlows[0]?.[0] || null; } else sel.ags = ctx.state.scope;
   q('ags-l').hidden = !de;
-  if (de) { q('ags').innerHTML = withFlows.map(([a, m]) => `<option value="${esc(a)}">${esc(name(a))} (${esc(ctx.fmt(m.shown))})</option>`).join('') || '<option value="">–</option>'; q('ags').value = sel.ags || ''; }
-  const others = withFlows.filter(([a]) => a !== sel.ags).slice(0, 6).map(([a, m]) => `${esc(name(a))} (${esc(ctx.fmt(m.shown))})`).join(', ');
+  if (de) { q('ags').innerHTML = withFlows.map(([a, m]) => `<option value="${esc(a)}">${esc(name(a))} (${esc(nf(S, m.shown))})</option>`).join('') || '<option value="">–</option>'; q('ags').value = sel.ags || ''; }
+  const others = withFlows.filter(([a]) => a !== sel.ags).slice(0, 6).map(([a, m]) => `${esc(name(a))} (${esc(nf(S, m.shown))})`).join(', ');
   const m = sel.ags ? munis[sel.ags] : null, stable = (sel.ags && Array.isArray(doc.stable?.[sel.ags]) ? doc.stable[sel.ags] : []).filter(x => typeof x === 'string');
-  q('sub').textContent = `Start-Ziel-Ströme zwischen ≈ 250-m-Zellen · ${sel.ags ? name(sel.ags) : 'Deutschland'} · ${dmy(sel.day)}`;
+  q('sub').textContent = t(S.est ? 'flows.originDestinationFlowsEst' : 'flows.originDestinationFlows2', { v0: sel.ags ? name(sel.ags) : t('flows.germany'), v1: dmy(sel.day) });
   if (!sel.ags || !(m?.shown > 0)) {
-    const place = sel.ags ? esc(name(sel.ags)) : 'Deutschland';
-    const head = !sel.ags ? `Am ${esc(dmy(sel.day))} keine veröffentlichten Ströme.` : !stable.length && !(m?.trips > 0) ? `In ${place} meldet am ${esc(dmy(sel.day))} kein Anbieter stabile Fahrzeugkennungen.` : `${place}: am ${esc(dmy(sel.day))} kein Zellenpaar mit mindestens 2 Fahrten.`;
-    const detail = sel.ags && (stable.length || m?.trips) ? `Anbieter mit stabilen Kennungen: ${esc(stable.join(', ') || Object.keys(m?.ops || {}).join(', '))}. ${m?.trips ? `${plural(ctx, m.trips, 'Fahrt', 'Fahrten')} mit Start und Ziel, alle unter der Mindestschwelle. ` : ''}` : '';
-    return empty(S, head, `${detail}${others ? `Ströme gibt es am Tag u. a. in: ${others}. ` : ''}${privacy}`, howNote);
+    const place = sel.ags ? esc(name(sel.ags)) : t('flows.germany');
+    if (S.est) return empty(S, !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : t('flows.estNoPair', { place: sel.ags ? esc(name(sel.ags)) : t('flows.germany'), dmy: esc(dmy(sel.day)) }),
+      `${others ? `${t('flows.onThisDayThereAreFlowsIn', { others })} ` : ''}${privacy}`, howNote);
+    const head = !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : !stable.length && !(m?.trips > 0) ? t('flows.inNoOperatorReportsStable', { place, dmy: esc(dmy(sel.day)) }) : t('flows.noCellPairWithAtLeast2Trips', { place, dmy: esc(dmy(sel.day)) });
+    const detail = sel.ags && (stable.length || m?.trips) ? t('flows.operatorsWithStableIds', { v0: esc(stable.join(', ') || Object.keys(m?.ops || {}).join(', ')), v1: m?.trips ? `${t('flows.withStartAndDestinationAll', { v0: plural(ctx, m.trips, t('flows.trip'), t('flows.trips2')) })} ` : '' }) : '';
+    return empty(S, head, `${detail}${others ? `${t('flows.onThisDayThereAreFlowsIn', { others })} ` : ''}${privacy}`, howNote);
   }
   // Auswahl Anbieter/Art/Tageszeit: Optionen aus den Zeilen der Gemeinde; Vorgabe aus dem Filter oben bleibt sichtbar, auch wenn leer
   const rowsA = S.rows.filter(r => r[0] === sel.ags);
   fillSelects(S, rowsA);
   // Hinweis: Methode, beitragende Anbieter
-  const contrib = Object.entries(m.ops || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${esc(o)} (${esc(ctx.fmt(n))})`).join(', ');
-  q('note').innerHTML = `${howNote} Beitragende Anbieter in ${esc(name(sel.ags))}: ${contrib || '–'}${stable.length ? ` · stabile Kennungen im Gebiet: ${esc(stable.join(', '))}` : ''}.`;
+  const contrib = Object.entries(m.ops || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${esc(o)} (${esc(nf(S, n))})`).join(', ');
+  q('note').innerHTML = t('flows.contributingOperatorsIn', { howNote: S.est ? `${t('flows.estHow')} ${qualityText(S, doc.quality)}` : howNote, name: esc(name(sel.ags)), v2: contrib || '–', v3: stable.length ? ` · ${t('flows.stableIdsInArea', { join: esc(stable.join(', ')) })}` : '' });
   // Filtern und je Zellenpaar zusammenfassen
   const band = sel.band === 'all' ? null : +sel.band;
   const rows = rowsA.filter(r => (sel.op === 'all' || r[3] === sel.op) && (sel.type === 'all' || r[4] === sel.type) && (band == null || r[5] === band));
@@ -237,21 +264,21 @@ async function update(S) {
   const by = new Map();
   for (const r of rows) {
     const k = `${r[1]}>${r[2]}`; let f = by.get(k);
-    if (!f) by.set(k, f = { key: k, from: r[1], to: r[2], n: 0, dur: 0, dist: 0, ops: new Map(), types: new Set(), bands: new Set() });
-    f.n += r[6]; f.dur += r[7]; f.dist += r[8]; f.ops.set(r[3], (f.ops.get(r[3]) || 0) + r[6]); f.types.add(r[4]); f.bands.add(r[5]);
+    if (!f) by.set(k, f = { key: (S.est ? 'e' : '') + k, from: r[1], to: r[2], n: 0, dur: 0, dist: 0, ops: new Map(), types: new Set(), bands: new Set() }); // Routen-Cache: 500-m-Zellen getrennt
+    f.n += r[6]; f.dur = r[7] == null || f.dur == null ? null : f.dur + r[7]; f.dist += r[8]; f.ops.set(r[3], (f.ops.get(r[3]) || 0) + r[6]); f.types.add(r[4]); f.bands.add(r[5]);
   }
   const flows = [...by.values()].sort((a, b) => b.n - a.n || b.dist - a.dist || a.key.localeCompare(b.key));
   S.flows = flows.slice(0, SHOW);
   const inSel = rows.reduce((s, r) => s + r[6], 0);
   const merged = sel.op !== 'all' || sel.type !== 'all' || band != null ? rowsA.filter(r => (sel.op !== 'all' && r[3] == null) || (sel.type !== 'all' && r[4] == null) || (band != null && r[5] == null)).reduce((s, r) => s + r[6], 0) : 0;
-  q('sum').innerHTML = [`<span><b>${esc(ctx.fmt(flows.length))}</b> ${flows.length === 1 ? 'Strom' : 'Ströme'} · <b>${esc(ctx.fmt(inSel))}</b> Fahrten in der Auswahl${flows.length > SHOW ? ` · Karte und Tabelle: Top ${SHOW}` : ''}</span>`,
-    `<span>Tag gesamt: <b>${esc(ctx.fmt(m.trips))}</b> Fahrten mit Start und Ziel · ${esc(ctx.fmt(m.shown))} in Strömen · ${esc(ctx.fmt(m.below || 0))} unter Mindestschwelle${m.cut ? ` · ${esc(ctx.fmt(m.cut))} außerhalb Top ${esc(ctx.fmt(doc.top || 300))}` : ''}</span>`,
-    merged ? `<span>${esc(ctx.fmt(merged))} Fahrten in zusammengefassten Strömen (mehrere Anbieter, Arten oder Tageszeiten) nur unter „Alle“ bzw. „Ganzer Tag“</span>` : ''].filter(Boolean).join('');
+  q('sum').innerHTML = [`<span>${t('flows.tripsInSelection', { fmt: esc(ctx.fmt(flows.length)), v1: flows.length === 1 ? t('flows.flow') : t('flows.flows'), fmt2: esc(nf(S, inSel)), v3: flows.length > SHOW ? ` · ${t('flows.mapAndTableTop', { SHOW })}` : '' })}</span>`,
+    `<span>${t('flows.wholeDayTripsWithStartAnd', { fmt: esc(nf(S, m.trips)), fmt2: esc(nf(S, m.shown)), fmt3: esc(nf(S, m.below || 0)), v3: m.cut ? ` · ${t('flows.outsideTop', { fmt: esc(nf(S, m.cut)), fmt2: esc(ctx.fmt(doc.top || 300)) })}` : '' })}</span>`,
+    merged ? `<span>${t('flows.tripsInMergedFlowsSeveral', { fmt: esc(nf(S, merged)) })}</span>` : ''].filter(Boolean).join('');
   q('empty').hidden = true; q('bar').hidden = false;
   if (!flows.length) {
-    const noStable = sel.op !== 'all' && !stable.includes(sel.op) && !(m.ops || {})[sel.op];
-    q('empty').hidden = false; q('empty').innerHTML = noStable ? `<div class="empty"><b>${esc(sel.op)} meldet in ${esc(name(sel.ags))} keine stabilen Fahrzeugkennungen.</b>Start und Ziel einer Fahrt lassen sich dann nicht verbinden (und werden bewusst nicht verknüpft). Anbieter „Alle“ zeigt die Ströme der übrigen Anbieter.</div>`
-      : `<div class="empty"><b>Keine Ströme für diese Auswahl.</b>Anbieter, Fahrzeugart oder Tageszeit auf „Alle“ bzw. „Ganzer Tag“ stellen.</div>`;
+    const noStable = !S.est && sel.op !== 'all' && !stable.includes(sel.op) && !(m.ops || {})[sel.op];
+    q('empty').hidden = false; q('empty').innerHTML = noStable ? `<div class="empty">${t('flows.reportsNoStableVehicleIdsIn', { op: esc(sel.op), name: esc(name(sel.ags)) })}</div>`
+      : `<div class="empty">${t('flows.noFlowsForThisSelectionSet')}</div>`;
     if (S.layer) S.layer.clearLayers(); S.flows = []; q('tbody').innerHTML = ''; q('legend').innerHTML = ''; q('status').textContent = '';
     q('mapbox').hidden = true; q('tblbox').hidden = true; q('bar').hidden = true; S.queue = []; return;
   }
@@ -269,10 +296,10 @@ function fillSelects(S, rowsA) {
   const types = [...new Set(rowsA.map(r => r[4]).filter(x => x != null))];
   if (sel.op !== 'all' && !ops.includes(sel.op)) ops.push(sel.op);
   if (sel.type !== 'all' && !types.includes(sel.type)) types.push(sel.type);
-  const order = Object.keys(TYPE), rank = (t) => (order.includes(t) ? order.indexOf(t) : 99);
-  q('op').innerHTML = '<option value="all">Alle</option>' + ops.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
-  q('type').innerHTML = '<option value="all">Alle</option>' + types.sort((a, b) => rank(a) - rank(b)).map(t => `<option value="${esc(t)}">${esc(typeLabel(t))}</option>`).join('');
-  q('band').innerHTML = '<option value="all">Ganzer Tag</option>' + (S.bands || BANDS_FALLBACK).map((b, i) => `<option value="${i}">${esc(bandLabel({ bands: S.bands || BANDS_FALLBACK }, i))}</option>`).join('');
+  const order = Object.keys(TYPE), rank = (tq) => (order.includes(tq) ? order.indexOf(tq) : 99);
+  q('op').innerHTML = `<option value="all">${t('flows.all')}</option>` + ops.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  q('type').innerHTML = `<option value="all">${t('flows.all')}</option>` + types.sort((a, b) => rank(a) - rank(b)).map(tq => `<option value="${esc(tq)}">${esc(typeLabel(tq))}</option>`).join('');
+  q('band').innerHTML = `<option value="all">${t('flows.wholeDay')}</option>` + (S.bands || BANDS_FALLBACK_DEF()).map((b, i) => `<option value="${i}">${esc(bandLabel({ bands: S.bands || BANDS_FALLBACK_DEF() }, i))}</option>`).join('');
   q('op').value = sel.op; q('type').value = sel.type; q('band').value = String(sel.band);
 }
 function empty(S, head, text, note) {
@@ -292,15 +319,15 @@ const colorOf = (S, f) => { const ops = [...f.ops.keys()]; return ops.length ===
 const widthOf = (S, n) => 2 + 6 * Math.sqrt(n / Math.max(1, S.maxN));
 function opsText(S, f) {
   const e = [...f.ops].sort((a, b) => b[1] - a[1]);
-  if (e.length === 1) return e[0][0] == null ? 'mehrere Anbieter' : e[0][0];
-  return `mehrere Anbieter: ${e.map(([o, n]) => `${o == null ? 'zusammengefasst' : o} ${S.ctx.fmt(n)}`).join(' · ')}`;
+  if (e.length === 1) return e[0][0] == null ? t('flows.severalOperatorsLc') : e[0][0];
+  return t('flows.severalOperators', { v0: e.map(([o, n]) => `${o == null ? t('flows.merged') : o} ${nf(S, n)}`).join(' · ') });
 }
 function tipHtml(S, f) {
   const { ctx } = S, esc = ctx.esc, r = cacheGet(f.key);
-  const ty = f.types.size === 1 ? typeLabel([...f.types][0]) : 'mehrere Arten';
-  const bd = f.bands.size === 1 ? ([...f.bands][0] == null ? 'Tageszeiten zusammengefasst' : bandLabel(S, [...f.bands][0])) : 'mehrere Tageszeiten';
-  const route = f.from === f.to ? 'Start und Ziel in derselben Zelle' : r && !r.fail ? `Route ${kmText(ctx, r.d)} (Radweg, OSRM)` : r?.fail || S.offline ? 'Luftlinie – keine Route gefunden' : 'Route wird berechnet …';
-  return `<b>${esc(plural(ctx, f.n, 'Fahrt', 'Fahrten'))}</b><div>${esc(opsText(S, f))} · ${esc(ty)} · ${esc(bd)}</div><div>Ø ${esc(durText(ctx, f.dur / f.n))} · Ø ${esc(kmText(ctx, f.dist / f.n))} Luftlinie</div><div>${esc(route)}</div>`;
+  const ty = f.types.size === 1 ? typeLabel([...f.types][0]) : t('flows.severalTypes');
+  const bd = f.bands.size === 1 ? ([...f.bands][0] == null ? t('flows.timesOfDayMerged') : bandLabel(S, [...f.bands][0])) : t('flows.severalTimesOfDay');
+  const route = f.from === f.to ? t('flows.startAndDestinationInSame') : r && !r.fail ? t('flows.routeCycleRouteOsrm', { v0: kmText(ctx, r.d) }) : r?.fail || S.offline ? t('flows.straightLineNoRouteFound') : t('flows.calculatingRoute');
+  return `<b>${esc(plural(ctx, f.n, t('flows.trip'), t('flows.trips2')))}</b><div>${esc(opsText(S, f))} · ${esc(ty)} · ${esc(bd)}</div><div>${t('flows.avgAvgStraightLine', { durText: esc(durText(ctx, avgDur(f))), kmText: esc(kmText(ctx, f.dist / f.n)) })}</div><div>${esc(route)}</div>`;
 }
 function draw(S, refit = false) {
   if (!S.map) return;
@@ -346,11 +373,11 @@ function legend(S) {
   const { ctx } = S, esc = ctx.esc, list = S.flows || [];
   const byOp = new Map(); let multi = 0;
   for (const f of list) { const ops = [...f.ops.keys()]; if (ops.length === 1 && ops[0] != null) byOp.set(ops[0], (byOp.get(ops[0]) || 0) + f.n); else multi += f.n; }
-  const items = [...byOp].sort((a, b) => b[1] - a[1]).map(([o, n]) => `<span><i class="fl-sw" style="--fl-c:${esc(ctx.opColor(o))}"></i>${esc(o)} <span class="mono">${esc(ctx.fmt(n))}</span></span>`);
-  if (multi) items.push(`<span><i class="fl-sw" style="--fl-c:${NEUTRAL}"></i>mehrere Anbieter <span class="mono">${esc(ctx.fmt(multi))}</span></span>`);
+  const items = [...byOp].sort((a, b) => b[1] - a[1]).map(([o, n]) => `<span><i class="fl-sw" style="--fl-c:${esc(ctx.opColor(o))}"></i>${esc(o)} <span class="mono">${esc(nf(S, n))}</span></span>`);
+  if (multi) items.push(`<span><i class="fl-sw" style="--fl-c:${NEUTRAL}"></i>${t('flows.severalOperators2', { fmt: esc(nf(S, multi)) })}</span>`);
   const lo = Math.min(...list.map(f => f.n)), hi = S.maxN;
-  items.push(`<span><i class="fl-sw" style="--fl-c:${NEUTRAL};--fl-w:2px"></i><i class="fl-sw" style="--fl-c:${NEUTRAL};--fl-w:7px"></i>Linienstärke = Fahrten (${esc(ctx.fmt(lo))}–${esc(ctx.fmt(hi))})</span>`,
-    '<span><i class="fl-pt" aria-hidden="true"></i>Start · <i class="fl-pt end" aria-hidden="true"></i>Ziel</span>', `<span><i class="fl-sw dash" style="--fl-c:${NEUTRAL}"></i>Luftlinie (Route fehlt oder wird berechnet)</span>`);
+  items.push(`<span><i class="fl-sw" style="--fl-c:${NEUTRAL};--fl-w:2px"></i><i class="fl-sw" style="--fl-c:${NEUTRAL};--fl-w:7px"></i>${t('flows.lineWidthTrips', { fmt: esc(nf(S, lo)), fmt2: esc(nf(S, hi)) })}</span>`,
+    `<span><i class="fl-pt" aria-hidden="true"></i>${t('flows.start')} · <i class="fl-pt end" aria-hidden="true"></i>${t('flows.destination')}</span>`, `<span><i class="fl-sw dash" style="--fl-c:${NEUTRAL}"></i>${t('flows.straightLineRouteMissingOr')}</span>`);
   S.q('legend').innerHTML = items.join('');
 }
 function status(S) {
@@ -358,7 +385,7 @@ function status(S) {
   const list = (S.flows || []).filter(f => f.from !== f.to); if (!list.length) { el.textContent = ''; return; }
   const ok = list.filter(f => { const r = cacheGet(f.key); return r && !r.fail; }).length, bad = list.filter(f => cacheGet(f.key)?.fail).length;
   const left = list.length - ok - bad;
-  el.textContent = S.offline ? `Routing nicht erreichbar – ${ok} von ${list.length} Routen, Rest als Luftlinie` : left ? `Routen: ${ok} von ${list.length} berechnet (1 je Sekunde)${S.pumpTok ? '' : ' · pausiert'}` : `Routen: ${ok} von ${list.length}${bad ? ` · ${bad} als Luftlinie` : ''}`;
+  el.textContent = S.offline ? t('flows.routingNotReachableOfRoutes', { ok, length: list.length }) : left ? t('flows.routesOfCalculated1PerSecond', { ok, length: list.length, v2: S.pumpTok ? '' : ` · ${t('flows.paused')}` }) : t('flows.routesOf', { ok, length: list.length, v2: bad ? ` · ${t('flows.asStraightLines', { bad })}` : '' });
 }
 
 // ---------- Routing (FOSSGIS-OSRM, Fahrradprofil) ----------
@@ -407,21 +434,21 @@ if (typeof document !== 'undefined') {
 
 // ---------- Tabelle und CSV ----------
 const coordText = (S, cell) => { const [a, b] = cellCenter(S, cell); return `${S.ctx.fmt(a, 4)}, ${S.ctx.fmt(b, 4)}`; };
-function routeCell(S, f) { if (f.from === f.to) return 'gleiche Zelle'; const r = cacheGet(f.key); return r && !r.fail ? kmText(S.ctx, r.d) : r?.fail || S.offline ? 'Luftlinie' : '…'; }
+function routeCell(S, f) { if (f.from === f.to) return t('flows.sameCell'); const r = cacheGet(f.key); return r && !r.fail ? kmText(S.ctx, r.d) : r?.fail || S.offline ? t('flows.straightLine') : '…'; }
 function table(S) {
   const { ctx } = S, esc = ctx.esc;
   S.q('tbody').innerHTML = (S.flows || []).map((f, i) => {
     const ops = [...f.ops.keys()], one = ops.length === 1 && ops[0] != null;
-    const opCell = one ? `<span class="op"><i style="background:${esc(ctx.opColor(ops[0]))}"></i>${esc(ops[0])}</span>` : `<span class="op"><i style="background:${NEUTRAL}"></i>mehrere</span><div class="sub-line">${esc(opsText(S, f).replace(/^mehrere Anbieter: ?/, ''))}</div>`;
-    return `<tr><td class="n">${i + 1}</td><td><span class="fl-cell" title="Zelle ${esc(f.from)}">${esc(coordText(S, f.from))}</span></td><td><span class="fl-cell" title="Zelle ${esc(f.to)}">${esc(coordText(S, f.to))}</span></td><td>${opCell}</td><td class="n">${esc(ctx.fmt(f.n))}</td><td class="n">${esc(durText(ctx, f.dur / f.n))}</td><td class="n">${esc(kmText(ctx, f.dist / f.n))}</td><td class="n" data-fl-route="${esc(f.key)}">${esc(routeCell(S, f))}</td></tr>`;
+    const opCell = one ? `<span class="op"><i style="background:${esc(ctx.opColor(ops[0]))}"></i>${esc(ops[0])}</span>` : `<span class="op"><i style="background:${NEUTRAL}"></i>${t('flows.several')}</span><div class="sub-line">${esc(opsText(S, f).replace(new RegExp(`^${t('flows.severalOperators', { v0: '' }).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim()} ?`), ''))}</div>`;
+    return `<tr><td class="n">${i + 1}</td><td><span class="fl-cell" title="${t('flows.cell', { from: esc(f.from) })}">${esc(coordText(S, f.from))}</span></td><td><span class="fl-cell" title="${t('flows.cell2', { to: esc(f.to) })}">${esc(coordText(S, f.to))}</span></td><td>${opCell}</td><td class="n">${esc(nf(S, f.n))}</td><td class="n">${esc(durText(ctx, avgDur(f)))}</td><td class="n">${esc(kmText(ctx, f.dist / f.n))}</td><td class="n" data-fl-route="${esc(f.key)}">${esc(routeCell(S, f))}</td></tr>`;
   }).join('');
 }
 function exportCsv(S) {
   const { ctx, sel } = S; if (!S.filtered?.length) return;
-  const head = ['Tag', 'Gemeindeschlüssel', 'Gemeinde', 'Start-Zelle', 'Start Breite', 'Start Länge', 'Ziel-Zelle', 'Ziel Breite', 'Ziel Länge', 'Anbieter', 'Fahrzeugart', 'Tageszeit', 'Fahrten', 'Ø Dauer (Min.)', 'Ø Luftlinie (km)', 'Route Rad (km, OSRM, nicht gemessen)'];
+  const head = [t('flows.day'), t('flows.municipalityKey'), t('flows.municipality'), t('flows.startCell'), t('flows.startLatitude'), t('flows.startLongitude'), t('flows.destinationCell'), t('flows.destinationLatitude'), t('flows.destinationLongitude'), t('flows.operator'), t('flows.vehicleType'), t('flows.timeOfDay'), t('flows.trips'), t('flows.avgDurationMin'), t('flows.avgStraightLineKm'), t('flows.bikeRouteKmOsrmNotMeasured')];
   const rows = [...S.filtered].sort((a, b) => b[6] - a[6]).map(r => {
-    const [a1, o1] = cellCenter(S, r[1]), [a2, o2] = cellCenter(S, r[2]), rt = r[1] !== r[2] ? cacheGet(`${r[1]}>${r[2]}`) : null;
-    return [S.doc.day || sel.day, r[0], ctx.muniName(r[0]), r[1], [a1, 5], [o1, 5], r[2], [a2, 5], [o2, 5], r[3] ?? 'zusammengefasst', r[4] == null ? 'zusammengefasst' : typeLabel(r[4]), r[5] == null ? 'zusammengefasst' : bandLabel(S, r[5]), r[6], [r[7] / r[6] / 60, 1], [r[8] / r[6] / 1000, 2], rt && !rt.fail ? [rt.d / 1000, 2] : null];
+    const [a1, o1] = cellCenter(S, r[1]), [a2, o2] = cellCenter(S, r[2]), rt = r[1] !== r[2] ? cacheGet(`${S.est ? 'e' : ''}${r[1]}>${r[2]}`) : null;
+    return [S.doc.day || sel.day, r[0], ctx.muniName(r[0]), r[1], [a1, 5], [o1, 5], r[2], [a2, 5], [o2, 5], r[3] ?? t('flows.merged'), r[4] == null ? t('flows.merged') : typeLabel(r[4]), r[5] == null ? t('flows.merged') : bandLabel(S, r[5]), r[6], r[7] == null ? null : [r[7] / r[6] / 60, 1], [r[8] / r[6] / 1000, 2], rt && !rt.fail ? [rt.d / 1000, 2] : null];
   });
-  download(`stroeme_${String(sel.ags).replace(/[^\w-]/g, '')}_${String(S.doc.day || sel.day).replace(/[^\d-]/g, '')}.csv`, toCsv([head, ...rows]));
+  download(`${t('file.flows')}_${String(sel.ags).replace(/[^\w-]/g, '')}_${String(S.doc.day || sel.day).replace(/[^\d-]/g, '')}.csv`, toCsv([head, ...rows]));
 }

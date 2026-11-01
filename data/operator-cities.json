@@ -1,0 +1,1834 @@
+{
+ "erstellt": "2026-11-01",
+ "_hinweis": "Nur Aussagen der Anbieter selbst (Städteseite, Pressemitteilung, Factsheet der eigenen Datenlieferung); Fremdquellen sind als solche markiert. AGS nur für 14 Großstädte mit eindeutigem Namen gesetzt, sonst Namenszuordnung durch die Hauptsitzung. Gesperrt/nicht abrufbar: www.voi.com/locations, www.li.me/*, zeusscooters.com, bolt.eu/de/cities/, bolt.eu/de-de/scooters/, bolt.eu/cities/{berlin,hamburg,munich,bernburg}/, www.ryde-technology.com/Locations, www.nextbike.de/de/page-sitemap.xml, Voi-Q3-PDF auf storage.mfn.se.",
+ "anbieter": [
+  {
+   "name": "Voi",
+   "arten": [
+    "scooter",
+    "ebike"
+   ],
+   "staedte": [
+    {
+     "ort": "Aachen",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Augsburg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Berlin",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bochum",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bonn",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Braunschweig",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Cologne",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Darmstadt",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dortmund",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dresden",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Duisburg/Oberhausen",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dusseldorf",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Essen",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Flensburg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Frankfurt",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hamburg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hanover",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Heidelberg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Karlsruhe",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kiel",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Leipzig",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Lübeck",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Magdeburg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mainz/Wiesbaden",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mannheim",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mönchengladbach",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Muenster",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Munich",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Nuremberg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Osnabrück",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Paderborn",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Pforzheim",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Potsdam",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Regensburg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Reutlingen",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rostock",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schwerin",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Stuttgart",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Tübingen",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wuppertal",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wurzburg",
+     "quelle": "https://www.voi.com/city",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://www.voi.com/city",
+   "hinweis": "Standortliste der Voi-Website (Germany), im Browser abgerufen 01.11.2026; englische Schreibweisen"
+  },
+  {
+   "name": "Bolt",
+   "arten": [
+    "scooter",
+    "ebike"
+   ],
+   "staedte": [
+    {
+     "ort": "Aachen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Augsburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bayreuth",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Berlin",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bernburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bielefeld",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bochum",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bonn",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bottrop",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Braunschweig",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bremen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Brühl",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Celle",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Darmstadt",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dortmund",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Duisburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Düsseldorf",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Erfurt",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Erlangen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Essen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Frankfurt am Main",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Fürth",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Gelsenkirchen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Gifhorn",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Göttingen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Halle",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hamburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hannover",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Heidelberg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Herford",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hilden",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hildesheim",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Karlsruhe",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kassel",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kiel",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Köln",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Laatzen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Leipzig",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Lübeck",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ludwigshafen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mainz",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mannheim",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Merseburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mönchengladbach",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mühlheim a.M.",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "München",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Münster",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Neuss",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Nürnberg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Oldenburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Paderborn",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Peine",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Potsdam",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Reutlingen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Salzgitter",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schwabach",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Solingen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Staßfurt",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Stein",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Stuttgart",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Tübingen",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wiesbaden",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wolfsburg",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wuppertal",
+     "quelle": "https://bolt.eu/de-de/cities/",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://bolt.eu/de-de/cities/",
+   "hinweis": "Städteliste der Bolt-Website (Deutschland) für ALLE Bolt-Dienste (Fahrdienst, Scooter, E-Bikes) – Scooter-Angebot je Stadt nicht unterscheidbar",
+   "geschlossen": [
+    {
+     "land": "NW",
+     "plattform": "MDD NRW",
+     "hinweis": "Bolt, 7 NRW-Zonen (Datenlieferant 318). Liefert an die Multimodale Datendrehscheibe NRW (go.Rheinland); Abruf nur mit Registrierung und Schlüssel (mdd-nrw@gorheinland.com), laut MDD-Katalog vom 01.11.2026"
+    }
+   ]
+  },
+  {
+   "name": "Lime",
+   "arten": [
+    "scooter",
+    "ebike"
+   ],
+   "staedte": [
+    {
+     "ort": "Augsburg",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Berlin",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bonn",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bremen",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Cologne",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Darmstadt",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dortmund",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dresden",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Duisburg",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Düsseldorf",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Essen",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Frankfurt",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Göttingen",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hagen",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hamburg",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hannover",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Heidelberg",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Konstanz",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Langenfeld",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Lubeck",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mainz",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Munich",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Nuremberg",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Regensburg",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ruhrpott",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Stuttgart",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wuppertal",
+     "quelle": "https://www.li.me/locations",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://www.li.me/locations",
+   "hinweis": "Standortliste der Lime-Website (Germany), im Browser abgerufen 01.11.2026; „Ruhrpott“ ist eine Region"
+  },
+  {
+   "name": "Dott (inkl. ehemals TIER)",
+   "arten": [
+    "scooter",
+    "ebike"
+   ],
+   "staedte": [
+    {
+     "ort": "Aachen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Baunatal",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Berlin",
+     "ags": "11000000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bielefeld",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Böblingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bochum",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bonn",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Braunschweig",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Brühl",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Celle",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Chemnitz",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Cottbus",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Darmstadt",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Detmold",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dortmund",
+     "ags": "05913000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Duisburg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Düsseldorf",
+     "ags": "05111000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Elmshorn",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ellwagen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Erfurt",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Erlangen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Essen",
+     "ags": "05113000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Flensburg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Frankfurt",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Friedrichshafen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Fürth",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Gera",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Gifhorn",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Gladbeck",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Greifswald",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hamburg",
+     "ags": "02000000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hamm",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hannover",
+     "ags": "03241001",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Heidelberg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Heilbronn",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hennef",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Herford",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Herne",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Herten",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hilden",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hildesheim",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ingolstadt",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Jena",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kaiserslautern",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Karlsruhe",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kassel",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kiel",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Köln",
+     "ags": "05315000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Langenfeld",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Leipzig",
+     "ags": "14713000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Lindau",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Lübeck",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ludwigsburg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ludwigshafen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mainz",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mannheim",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Markdorf",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Meerbusch",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Minden",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mönchengladbach",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Monheim",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Mühlheim an der Ruhr",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "München",
+     "ags": "09162000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Münster",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Neckarsulm",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Neu-Ulm",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Neumünster",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Neuss",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Nürnberg",
+     "ags": "09564000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Oberhausen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Osnabrück",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Paderborn",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Peine",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Pfullingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Pinneberg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Potsdam",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Recklinghausen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Regensburg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Reutlingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rheda-Wiedenbrück",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rheine",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rostock",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rüsselsheim",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Saarbrücken",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Salzgitter",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schwäbisch Gmünd",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Siegburg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Sindelfingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Solingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "St. Augustin",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Stuttgart",
+     "ags": "08111000",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Troisdorf",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Tübingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Überlingen",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ulm",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Untereisesheim",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Weinsberg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wiesbaden",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wolfsburg",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wuppertal",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Zwickau",
+     "quelle": "https://ridedott.com/locations/",
+     "stand": "2026-11-01"
+    }
+   ],
+   "zahl_laut_anbieter": {
+    "wert": 101,
+    "quelle": "https://ridedott.com/locations/",
+    "stand": "2026-11-01"
+   },
+   "quelle": "https://ridedott.com/locations/",
+   "hinweis": "Überschrift „Germany“, 101 Einträge, keine Fahrzeugarten, kein „coming soon“. Schreibweisen der Quelle übernommen: „Ellwagen“ (= Ellwangen?), „Mühlheim an der Ruhr“ (= Mülheim an der Ruhr), „Monheim“ (= Monheim am Rhein), „St. Augustin“ (= Sankt Augustin), „Frankfurt“ (vermutlich Frankfurt am Main; AGS bewusst offen). Deckt sich mit MDD-Factsheet 381 (32 NRW-Zonen). nextbike gehört zur Dott-Gruppe (Marke „Dott“ auch auf nextbike-media.com/standorte).",
+   "geschlossen": [
+    {
+     "land": "NW",
+     "plattform": "MDD NRW",
+     "hinweis": "Dott, 32 NRW-Zonen (Datenlieferant 381). Liefert an die Multimodale Datendrehscheibe NRW (go.Rheinland); Abruf nur mit Registrierung und Schlüssel (mdd-nrw@gorheinland.com), laut MDD-Katalog vom 01.11.2026"
+    }
+   ]
+  },
+  {
+   "name": "Bird",
+   "arten": [
+    "scooter"
+   ],
+   "staedte": [
+    {
+     "ort": "München",
+     "ags": "09162000",
+     "quelle": "https://www.globenewswire.com/news-release/2025/06/24/3103962/0/de/Bird-kehrt-nach-Deutschland-zur%C3%BCck-Start-in-M%C3%BCnchen-W%C3%BCrzburg-und-Reutlingen.html",
+     "stand": "2025-06-24",
+     "art_der_aussage": "eigene Pressemitteilung (Bird via GlobeNewswire)"
+    },
+    {
+     "ort": "Würzburg",
+     "quelle": "https://www.globenewswire.com/news-release/2025/06/24/3103962/0/de/Bird-kehrt-nach-Deutschland-zur%C3%BCck-Start-in-M%C3%BCnchen-W%C3%BCrzburg-und-Reutlingen.html",
+     "stand": "2025-06-24",
+     "art_der_aussage": "eigene Pressemitteilung (Bird via GlobeNewswire)"
+    },
+    {
+     "ort": "Reutlingen",
+     "quelle": "https://www.globenewswire.com/news-release/2025/06/24/3103962/0/de/Bird-kehrt-nach-Deutschland-zur%C3%BCck-Start-in-M%C3%BCnchen-W%C3%BCrzburg-und-Reutlingen.html",
+     "stand": "2025-06-24",
+     "art_der_aussage": "eigene Pressemitteilung (Bird via GlobeNewswire)"
+    }
+   ],
+   "quelle": "https://www.globenewswire.com/news-release/2025/06/24/3103962/0/de/Bird-kehrt-nach-Deutschland-zur%C3%BCck-Start-in-M%C3%BCnchen-W%C3%BCrzburg-und-Reutlingen.html",
+   "hinweis": "Flotten laut Mitteilung: München ca. 3.000, Würzburg 200, Reutlingen 150 Fahrzeuge; Buchung auch über FreeNow (electrive, 26.08.2025). Keine spätere eigene Aussage gefunden; Bird-Blogseite nicht abrufbar. Katalog: bird-munich „empty“ (GBFS antwortet, 0 Fahrzeuge) – Würzburg/Reutlingen fehlen im Katalog."
+  },
+  {
+   "name": "Hopp",
+   "arten": [
+    "scooter"
+   ],
+   "staedte": [
+    {
+     "ort": "Augsburg",
+     "quelle": "https://hopp.bike/locations",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://hopp.bike/locations",
+   "hinweis": "Abschnitt „Germany“ nennt nur Augsburg (Link hopp.bike/in/augsburg). Konstanz steht dort NICHT, obwohl hopp_konstanz bei MobiData BW live ist (110 Fz.) – Augsburg fehlt im Katalog."
+  },
+  {
+   "name": "Zeus",
+   "arten": [
+    "scooter"
+   ],
+   "staedte": [
+    {
+     "ort": "Ludwigsburg",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rüsselsheim",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Heidelberg",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Göppingen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Villingen-Schwenningen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Konstanz",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Pforzheim",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Würzburg",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Bamberg",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Regensburg",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schweinfurt",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Straubing",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Neustadt",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schwäbisch Gmünd",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Renningen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Haßloch",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Iserlohn",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Tuttlingen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Freiburg im Breisgau",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Falkensee",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Dessau-Roßlau",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Korntal-Münchingen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Eisenach",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Hemmingen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Gotha",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Jülich",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Wangen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schwieberdingen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kempten",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Sonthofen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Soest",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Singen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Rottweil",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Donaueschingen",
+     "quelle": "https://zeusscooters.com/cities/",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://zeusscooters.com/cities/",
+   "hinweis": "Städteseite der Zeus-Website (Copyright 2024, Aktualität unklar), im Browser abgerufen 01.11.2026; Schreibweisen korrigiert (Russelsheim, Hasloch, Eisneach, Julich, Schwieberdingden)"
+  },
+  {
+   "name": "Yoio",
+   "arten": [
+    "scooter"
+   ],
+   "staedte": [],
+   "quelle": "https://apps.apple.com/app/id1500759294",
+   "hinweis": "App-Text nennt keine Städte (nur Kooperation mit Stadtwerken Göttingen); keine Website mit Städteliste gefunden. Eigene Feeds: yoio.rideatom.com/gbfs/{9,71,159} (Vorrecherche: 159 = Erfurt)."
+  },
+  {
+   "name": "Ryde",
+   "arten": [
+    "scooter"
+   ],
+   "staedte": [
+    {
+     "ort": "Köln",
+     "ags": "05315000",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Dortmund",
+     "ags": "05913000",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Bochum",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Essen",
+     "ags": "05113000",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Duisburg",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Wuppertal",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Bonn",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Aachen",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Oberhausen",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Herne",
+     "quelle": "https://download.gorheinland.com/mdd/Factsheet_465.pdf",
+     "stand": "2026-10-31",
+     "art_der_aussage": "Zonen, die Ryde an die MDD NRW liefert (Datenlieferant 465)"
+    },
+    {
+     "ort": "Frankfurt am Main",
+     "ags": "06412000",
+     "quelle": "https://zagdaily.com/micromobility/ryde-rolls-into-germany-with-2500-scooters/",
+     "stand": "2026-03-02",
+     "art_der_aussage": "Fachpresse mit Zitat des Ryde-CEO; 2.000 Fz. Frankfurt, 500 Aachen"
+    },
+    {
+     "ort": "Hannover",
+     "ags": "03241001",
+     "quelle": "https://ryde-technology.com/blog/ryde-launch-jan-25",
+     "stand": "2026-11-01",
+     "art_der_aussage": "Teaser im eigenen Blog („Best E-Scooter in Hannover“), undatiert"
+    }
+   ],
+   "quelle": "https://www.ryde-technology.com/Locations (gesperrt)",
+   "hinweis": "Eigene Standortseite war gesperrt (Freigabe nicht erteilt). Frankfurt: traffiQ (Stadt) nannte Start „voraussichtlich Februar 2026“.",
+   "geschlossen": [
+    {
+     "land": "NW",
+     "plattform": "MDD NRW",
+     "hinweis": "Ryde, 10 NRW-Zonen (Datenlieferant 465). Liefert an die Multimodale Datendrehscheibe NRW (go.Rheinland); Abruf nur mit Registrierung und Schlüssel (mdd-nrw@gorheinland.com), laut MDD-Katalog vom 01.11.2026"
+    }
+   ]
+  },
+  {
+   "name": "RideMovi",
+   "arten": [
+    "bike",
+    "ebike",
+    "scooter"
+   ],
+   "staedte": [
+    {
+     "ort": "Frankfurt am Main",
+     "ags": "06412000",
+     "quelle": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2025/traffiQ_2025-122_SNE_E-Scooter_ab_Oktober.pdf",
+     "stand": "2025",
+     "art_der_aussage": "FREMDQUELLE (traffiQ Frankfurt): Start ab 04.10.2025"
+    }
+   ],
+   "quelle": "https://www.ridemovi.com/cities/",
+   "hinweis": "Eigene Städteseite führt „Germany“ nur als Länderlabel, keine deutsche Stadt. Einziger Beleg ist die städtische Mitteilung."
+  },
+  {
+   "name": "Donkey Republic",
+   "arten": [
+    "bike",
+    "ebike"
+   ],
+   "staedte": [
+    {
+     "ort": "Hannover",
+     "ort_laut_quelle": "Hanover",
+     "ags": "03241001",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Düsseldorf",
+     "ags": "05111000",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Ruhrgebiet",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Kiel Region",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Schlei Region",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Regensburg",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Cham",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Landshut",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Straubing",
+     "quelle": "https://www.donkey.bike/cities",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Freiburg",
+     "quelle": "https://www.donkey.bike/germany",
+     "stand": "2026-11-01",
+     "art_der_aussage": "nur als Beispiele genannt („cities like“, „towns like“)"
+    },
+    {
+     "ort": "Ochtrup",
+     "quelle": "https://www.donkey.bike/germany",
+     "stand": "2026-11-01",
+     "art_der_aussage": "nur als Beispiele genannt („cities like“, „towns like“)"
+    }
+   ],
+   "quelle": "https://www.donkey.bike/cities",
+   "hinweis": "„Ruhrgebiet“, „Kiel Region“, „Schlei Region“ sind Regionen (keine Gemeinde) – Zuordnung über Feeds (metropolrad-ruhr, donkey_kiel/kielsmile, donkey_schleswig). Hilfeartikel (https://help.donkey.bike/hc/en-us/articles/25239533787933) nennt Hannover, Kiel, Regensburg und sagt, die Liste sei unvollständig. Eine eigene Seite „Bike rental in Prignitz“ existiert laut Suchergebnis (donkey.bike/?p=52472, nicht gelesen); Feed Donkey-Prignitz ist „empty“."
+  },
+  {
+   "name": "nextbike",
+   "arten": [
+    "bike",
+    "ebike",
+    "cargo"
+   ],
+   "staedte": [],
+   "systeme_laut_anbieter": [
+    {
+     "name": "KVB Rad",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "Frelo",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "eBikes KVV",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "nextbike",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "meinSiggi",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "MOBIbike",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "nextbike Nibelungen-Bike",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "SWB nextbike",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "VRN nextbike",
+     "quelle": "https://www.nextbike-media.com/standorte/",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "nextbike Berlin",
+     "quelle": "https://nextbike.de/en",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "VRNnextbike",
+     "quelle": "https://nextbike.de/en",
+     "stand": "2026-11-01"
+    },
+    {
+     "name": "KVB-Rad",
+     "quelle": "https://nextbike.de/en",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://www.nextbike-media.com/standorte/",
+   "hinweis": "Standortkarte dort ist ein Datawrapper-Platzhalter, Liste nur als Markennamen; Sitemap https://www.nextbike.de/de/page-sitemap.xml gesperrt, Live-API laut Vorrecherche per robots.txt gesperrt. Vollständigste eigene Darstellung bleiben die nextbike-GBFS-Systeme im Katalog (gbfs.nextbike.net/maps/gbfs/v2/nextbike_xx)."
+  },
+  {
+   "name": "Call a Bike (DB)",
+   "arten": [
+    "bike"
+   ],
+   "staedte": [
+    {
+     "ort": "Berlin",
+     "ags": "11000000",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "München",
+     "ort_laut_quelle": "Munich",
+     "ags": "09162000",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Köln",
+     "ort_laut_quelle": "Cologne",
+     "ags": "05315000",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Frankfurt",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Offenbach",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01"
+    },
+    {
+     "ort": "Darmstadt",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01"
+    }
+   ],
+   "quelle": "https://www.callabike.de/en/home",
+   "hinweis": "Menü „Find a bike“ (auch auf https://www.callabike.de/en/pricelist). Hamburg und Lüneburg verlinken dort auf StadtRAD (siehe unten). RegioRad Stuttgart wird auf callabike.de nicht genannt. „Frankfurt“ = Frankfurt am Main (Stadtseite cities-frankfurt).",
+   "geschlossen": [
+    {
+     "land": "NW",
+     "plattform": "MDD NRW",
+     "hinweis": "Call a Bike NRW (Datenlieferant 376). Liefert an die Multimodale Datendrehscheibe NRW (go.Rheinland); Abruf nur mit Registrierung und Schlüssel (mdd-nrw@gorheinland.com), laut MDD-Katalog vom 01.11.2026"
+    }
+   ]
+  },
+  {
+   "name": "StadtRAD",
+   "arten": [
+    "bike",
+    "ebike"
+   ],
+   "staedte": [
+    {
+     "ort": "Hamburg",
+     "ags": "02000000",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01",
+     "system": "https://stadtrad.hamburg.de/en/home"
+    },
+    {
+     "ort": "Lüneburg",
+     "quelle": "https://www.callabike.de/en/home",
+     "stand": "2026-11-01",
+     "system": "https://stadtradlueneburg.de/en/home"
+    }
+   ],
+   "quelle": "https://www.callabike.de/en/home",
+   "hinweis": "Partnersysteme der DB laut Call-a-Bike-Seite; eigene StadtRAD-Seiten nicht abgerufen."
+  },
+  {
+   "name": "sigo",
+   "arten": [
+    "cargo"
+   ],
+   "staedte": [],
+   "quelle": "https://apps.apple.com/app/id1492307478",
+   "hinweis": "App-Text: „in many cities – check the app“; keine eigene Städteliste gefunden (Website nicht in Suchtreffern). Indirekt: MOBIDROM-Feeds (Bocholt, Bochum, Düsseldorf, Gelsenkirchen, Köln, Krefeld, Meerbusch, Moers, Neuss) und MDD-Factsheet 443 (9 Zonen, Vorrecherche)."
+  },
+  {
+   "name": "Swapfiets",
+   "arten": [],
+   "staedte": [],
+   "quelle": null,
+   "hinweis": "Ausgeschlossen (Abo-Verleih, kein Sharing)."
+  }
+ ],
+ "_felder": {
+  "staedte[].ort": "Ortsname wie auf der Anbieterseite (englische Schreibweisen werden zugeordnet)",
+  "staedte[].ags": "Gemeindeschlüssel, wenn eindeutig",
+  "staedte[].land": "Länderkürzel bei mehrdeutigen Namen",
+  "geschlossen": "Feeds nur über nicht offene Plattformen: gelistete Städte dieses Landes ohne offenen Feed gelten als „Feed nicht offen“",
+  "hinweis": "Einschränkungen der Quelle (z. B. Bolt: Liste gilt für alle Dienste)"
+ }
+}

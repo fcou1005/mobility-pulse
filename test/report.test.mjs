@@ -207,10 +207,16 @@ const docSun = { day: '2026-11-08', runs: [...fullHourRuns('2026-11-08', 15).map
 assert(R.csvCell('=1+1') === "'=1+1" && R.csvCell('+49 711') === "'+49 711" && R.csvCell('-x') === "'-x" && R.csvCell('@SUM(A1)') === "'@SUM(A1)" && R.csvCell('\tx') === "'\tx",'Formel-Injection: = + - @ und Tab am Anfang bekommen ein Apostroph');
 assert(R.csvCell(-3) === '-3' && R.csvCell(1.5) === '1,5' && R.csvCell(2.345, 1) === '2,3' && R.csvCell(null) === '' && R.csvCell(NaN) === '', 'Zahlen bleiben Zahlen (Dezimalkomma), leere Werte leer');
 assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hallo"""' && R.csvCell('Zeile\n2') === '"Zeile\n2"', 'Trennzeichen, Anführungszeichen und Umbrüche werden gequotet');
+// Englisch (lang 'en'): Komma als Trennzeichen, Dezimalpunkt; Formel-Schutz gleich
+assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.3' && R.csvCell('a,b', null, 'en') === '"a,b"' && R.csvCell('a;b', null, 'en') === 'a;b' && R.csvCell('=1', null, 'en') === "'=1" && R.toCsv([['x', [1.25, 2]], ['y,z', 3]], 'en') === 'x,1.25\r\n"y,z",3',
+  'CSV englisch: Komma-Trennung, Dezimalpunkt, Quoting und Formel-Schutz');
 {
   const rep = R.municipalReport({ docs: [docA], ags: '08111000', pop: 1000 });
   const rows = R.reportCsvRows(rep, { name: '=Stuttgart' });
   assert(rows.length > 2 && rows.every(r => r.length === rows[0].length) && rows[1][0] === '=Stuttgart' && R.toCsv(rows).split('\r\n')[1].startsWith("'=Stuttgart;"), 'Bericht-CSV: gleiche Spaltenzahl je Zeile, Gemeindename abgesichert');
+  const en = R.reportCsvRows(rep, { name: 'Stuttgart', lang: 'en' });
+  assert(en[0].length === rows[0].length && en[0].slice(0, 7).join() === 'Municipality,AGS,Period_from,Period_to,Day,Operator,Vehicle_type' && en[0].includes('Trips_per_vehicle_day') && en.slice(-1)[0][4] === 'Period' && en.slice(-1)[0][5] === 'All'
+    && en.slice(-1)[0].slice(-3)[0] === 'Days' && R.toCsv(en, 'en').split('\r\n')[0].startsWith('Municipality,AGS,'), 'Bericht-CSV englisch: Spaltenköpfe, Zeitraum-Zeile, Zeitraum-Art; Spaltenzahl wie deutsch');
 }
 
 // ---------- Preis-Log ----------
@@ -324,6 +330,8 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
   assert(sorted.map(r => r.name).join('') === 'cba' && R.sortRows(sorted, 'avail', 'desc').map(r => r.name).join('') === 'bca' && R.sortRows(sorted, 'name', 'asc')[0].name === 'a', 'Sortieren: leere Werte immer am Ende, Text nach deutscher Ordnung');
   const csv = R.availabilityCsvRows([{ ...a, name: '=Astadt', ready: 0.5, readyKnown: 4, dayMean: null, dayMin: null }]);
   assert(R.toCsv(csv).split('\r\n')[1].startsWith("A;'=Astadt;BW;alle;alle;190;170;0,8947"), 'Verfügbarkeits-CSV mit Dezimalkomma und Formel-Schutz');
+  const csvEn = R.availabilityCsvRows([{ ...a, name: '=Astadt', ready: 0.5, readyKnown: 4, dayMean: null, dayMin: null }], { lang: 'en' });
+  assert(csvEn[0][1] === 'City' && csvEn[0][7] === 'Availability' && R.toCsv(csvEn, 'en').split('\r\n')[1].startsWith("A,'=Astadt,BW,all,all,190,170,0.8947"), 'Verfügbarkeits-CSV englisch: Köpfe, „all“, Dezimalpunkt, Formel-Schutz');
 }
 
 // ---------- Datenschutz-Schwelle ----------
@@ -332,6 +340,7 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
   const cs = R.cellStats({ d: { '1:1': [5, 1, 3, 0], '1:2': [1, 0, 4, 0] } }, { d: 2 });
   const rows = R.cellsCsvRows(cs, { name: 'X' });
   assert(rows[1][7] === 5 && rows[1][8] === '<2' && rows[2][7] === '<2', 'Orte-CSV: Zählungen unter 2 als „<2“');
+  assert(R.cellsCsvRows(cs, { name: 'X', lang: 'en' })[0].join() === 'Municipality,AGS,Period_from,Period_to,Cell,Latitude,Longitude,Trip_starts,Trip_ends,Available_per_run,Rebalancing', 'Orte-CSV englisch: Spaltenköpfe');
   const hm = R.weekHeatmap([{ day: '2026-11-02', runs: fullHourRuns('2026-11-02', 10), groups: { 'A|x|scooter': { start: h24({ 10: 1 }) } } }]);
   assert(hm.cells[0][10].raw === 1 && R.suppressed(hm.cells[0][10].raw), 'Heatmap führt die Rohzahl je Zelle für die Schwelle mit');
 }
@@ -433,6 +442,8 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
 // ---------- Zeiträume Monat/Quartal und Archiv ----------
 {
   assert(R.periodRange('q:2026-Q4').from === '2026-10-01' && R.periodRange('q:2026-Q4').to === '2026-12-31' && R.periodRange('m:2028-02').to === '2028-02-29' && R.periodRange('x') === null, 'Zeitraum Quartal/Monat: Beginn und Ende (Schaltjahr)');
+  assert(R.periodRange('m:2026-03').label === 'März 2026' && R.periodRange('m:2026-03', 'en').label === 'March 2026' && R.periodRange('m:2026-03', 'en').kind === 'Monat' && R.monthsOf(['2026-10-31', '2026-11-01'], 'en').map(m => m.label).join() === 'October 2026,November 2026',
+    'Monatsnamen je Sprache; kind bleibt Kennung');
   const span = (a, b) => { const out = []; for (let t = Date.parse(`${a}T12:00:00Z`); t <= Date.parse(`${b}T12:00:00Z`); t += 86400e3) out.push(new Date(t).toISOString().slice(0, 10)); return out; };
   const d1 = span('2026-10-31', '2026-11-01');
   assert(R.completeQuarters(d1).length === 0 && R.monthsOf(d1).length === 2 && R.monthsOf(d1).every(m => !m.complete && m.days === 1), 'zwei Tage: kein vollständiges Quartal, zwei angefangene Monate');
@@ -478,4 +489,42 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
   const c = R2.capsCheck(ref, groups, { ags: '14612000' })[0];
   if (!c || c.operators.some(o => o.op === 'nextbike')) throw new Error('ausgenommener Anbieter gezählt');
   console.log('ok: ausgenommener Anbieter (Bestandsschutz) zählt nicht gegen die Obergrenze');
+}
+
+// ---------- Zonen-Beobachtung ----------
+{
+  const sq = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+  const inner = { type: 'Feature', properties: { id: 'geheim123', name: 'Kernstadt', enabled: true, limits: { scooter: { type: 'absolute', maximum: 130, minimum: 80 } } }, geometry: { type: 'Polygon', coordinates: [sq(9.17, 48.77, 9.19, 48.79)] } };
+  const outer = { type: 'Feature', properties: { name: 'Innenstadt', ags: '08111000', limits: { scooter: { maximum: 900 } } }, geometry: { type: 'Polygon', coordinates: [sq(9.10, 48.74, 9.25, 48.82), sq(9.20, 48.80, 9.21, 48.81)] } };
+  const zones = R.parseZoneWatch(JSON.stringify({ type: 'FeatureCollection', features: [outer, inner, { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [9, 48] } }] }));
+  assert(zones.length === 2 && zones[0].id === 'innenstadt' && zones[0].ags === '08111000' && zones[1].id === 'kernstadt' && zones[1].ags === null && !JSON.stringify(zones).includes('130') && !JSON.stringify(zones).includes('limits') && !JSON.stringify(zones).includes('geheim'),
+    'ZONE_WATCH: Umrisse mit Name/AGS, Limits und fremde Kennungen verworfen, Punkt übersprungen');
+  assert(R.parseZoneWatch(Buffer.from(JSON.stringify(inner)).toString('base64')).length === 1 && R.parseZoneWatch('kein json').length === 0 && R.parseZoneWatch('').length === 0, 'ZONE_WATCH auch base64; Unlesbares → keine Zonen');
+  assert(R.zoneContains(zones[0], 9.18, 48.78) && !R.zoneContains(zones[0], 9.205, 48.805) && !R.zoneContains(zones[0], 9.30, 48.78) && R.zoneContains(zones[1], 9.18, 48.78), 'Punkt in Zone, Loch ausgenommen, außerhalb nein');
+  const veh = [
+    { lat: 48.78, lon: 9.18, operator: 'Bolt', type: 'scooter' }, { lat: 48.78, lon: 9.181, operator: 'Bolt', type: 'scooter', disabled: true },
+    { lat: 48.75, lon: 9.12, operator: 'Bolt', type: 'scooter' }, { lat: 48.75, lon: 9.12, operator: 'Voi', type: 'scooter' }, { lat: 48.805, lon: 9.205, operator: 'Voi', type: 'scooter' },
+    { lat: 48.70, lon: 9.00, operator: 'Dott', type: 'scooter' }, { lat: null, lon: null, operator: 'Dott', type: 'scooter' },
+  ];
+  const c1 = R.zoneCounts(zones, veh);
+  assert(c1.get('innenstadt|Bolt|scooter')?.join() === '3,2' && c1.get('kernstadt|Bolt|scooter')?.join() === '2,1' && c1.get('innenstadt|Voi|scooter')?.join() === '1,1' && !c1.has('innenstadt|Dott|scooter'),
+    'Bestand je Zone/Anbieter/Art [gesamt, verfügbar]; verschachtelte Zonen zählen beide; Loch und ohne Position nicht');
+  const t1 = T('2026-11-02T10:00:00'), t2 = T('2026-11-02T10:20:00'), t3 = T('2026-11-02T10:40:00');
+  let log = R.zoneLogUpdate(null, zones, c1, { at: t1 });
+  log = R.zoneLogUpdate(log, zones, new Map([['innenstadt|Bolt|scooter', [5, 5]], ['kernstadt|Bolt|scooter', [1, 1]]]), { at: t2 });
+  log = R.zoneLogUpdate(log, zones, new Map([['innenstadt|Bolt|scooter', [9, 9]]]), { at: t3, flag: 0 });
+  const d = (z, op) => log.daily.find(r => r[1] === z && r[2] === op);
+  assert(log.zones.length === 2 && !JSON.stringify(log).includes('9.17') && d('innenstadt', 'Bolt').slice(4).join() === '3,5,4,2' && d('innenstadt', 'Voi').slice(4).join() === '0,1,0.5,2' && d('kernstadt', 'Bolt').slice(4).join() === '1,2,1.5,2',
+    'Tageswerte Min/Max/Mittel/Läufe; Anbieter ohne Fahrzeuge im Folgelauf mit 0; Lauf mit Flag 0 zählt nicht; keine Koordinaten im Protokoll');
+  const later = R.zoneLogUpdate(log, zones, new Map([['innenstadt|Bolt|scooter', [7, 6]]]), { at: T('2026-12-05T10:00:00') });
+  assert(later.daily.every(r => r[0] >= '2026-11-06') && later.runs.every(r => r[0] >= T('2026-12-03T10:00:00')), 'Tageswerte 30 Tage, Läufe 2 Tage');
+  const sum = R.zoneSummary(log, { asOf: t3 });
+  const inn = sum.find(z => z.id === 'innenstadt'), bolt = inn.rows.find(r => r.op === 'Bolt'), star = inn.rows.find(r => r.op === '*');
+  assert(bolt.now === 5 && bolt.avail === 5 && bolt.todayMin === 3 && bolt.todayMax === 5 && bolt.mean7 === 4 && bolt.max30 === 5 && bolt.series.length === 1 && star.now === 5 && star.todayMax === 5 && star.todayMin === 4 && inn.rows[inn.rows.length - 1].op === '*',
+    'Übersicht: jetzt, heute Min–Max, Ø 7 Tage, Max 30 Tage; Summenzeile aus gleichzeitigem Bestand der Läufe, zuletzt');
+  {
+    const out = R.zoneLogUpdate(R.zoneLogUpdate(null, zones, c1, { at: t1 }), zones, new Map([['innenstadt|Bolt|scooter', [4, 4]]]), { at: t2, carryZero: (z, op) => op !== 'Voi' });
+    assert(out.daily.find(r => r[1] === 'innenstadt' && r[2] === 'Voi')[7] === 1 && !out.runs.some(r => r[0] === t2 && r[2] === 'Voi'), 'Feed-Ausfall (carryZero nein): kein Nullbestand im Protokoll');
+  }
+  assert(R.zoneSummary(log, { operator: 'Voi', asOf: t3 }).find(z => z.id === 'innenstadt').rows.every(r => r.op === 'Voi' || r.op === '*'), 'Filter Anbieter wie oben im Dashboard');
 }

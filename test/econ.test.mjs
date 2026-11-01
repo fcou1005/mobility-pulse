@@ -147,6 +147,18 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
   assert(two.k.applied && near(two.k.k, all.k.k, 1e-9) && two.k.measured.excluded[0].op === 'Lime' && two.k.single && two.k.source.startsWith('aus Dott Berlin'), 'unplausibler Berliner Anbieter (Lime) geht nicht in k ein und wird als ausgeschlossen geführt');
   const none = K.calibration(ref, { berlinReport: bRep([lime]), groups: {} });
   assert(!none.k.applied && /keine plausible Berliner/.test(none.k.reason) && /Lime/.test(none.k.reason), 'nur unplausible Berliner Messung: keine Kalibrierung, Grund nennt den Anbieter');
+  // Englische Oberfläche (lang 'en'): Texte übersetzt, Zahlen mit Dezimalpunkt, Kennungen (kind, Flags) sprachunabhängig, Werte gleich
+  const allEn = K.calibration(ref, { berlinReport: bRep([dott]), groups: {}, lang: 'en' });
+  assert(allEn.lang === 'en' && allEn.k.source === 'from Dott Berlin, 681 trips, 4.6 measured hours' && /^k comes from only one operator \(Dott\)/.test(allEn.k.single) && near(allEn.k.k, all.k.k, 1e-12) && allEn.k.rule === 'same quarter of the previous year',
+    'EN: Herkunft „from Dott Berlin, 681 trips, 4.6 measured hours“, Hinweis auf einen Anbieter, Referenzregel; k unverändert');
+  assert(allEn.k.prelimWhy.join(' | ') === 'only 2 of 7 measurement days | 10 % instead of 50 % of the hours of the day observed' && allEn.assume.ebike.label === 'assumption (no official evidence)' && allEn.coverage[0].label === 'licensed fleet' && allEn.coverage[0].shareLabel.startsWith('Share of the licensed fleet'),
+    'EN: Vorbehalte, Annahme und Abdeckung übersetzt');
+  const ffEn = allEn.checks.find(x => x.key === 'fahrten:06412000');
+  assert(ffEn.kind === 'Untergrenze' && ffEn.label === 'Frankfurt am Main: trips per vehicle per day' && ffEn.how === '10490000 trips 2025 ÷ 365 days ÷ fleet cap 12000' && allEn.checks.some(x => x.scope === 'Voi in open feeds (Germany)'), 'EN: Prüfwerte beschriftet, kind bleibt Kennung');
+  const noneEn = K.calibration(ref, { berlinReport: bRep([lime]), groups: {}, lang: 'en' });
+  assert(noneEn.k.reason === 'no plausible Berlin e-scooter measurement (Lime excluded: overcount likely)' && K.methodFactor({}, meas, { lang: 'en' }).reason === 'no official Berlin quarterly values in reference.json', 'EN: Gründe ohne Kalibrierung');
+  const outEn = K.methodFactor(ref, { ...meas, rvd: 0.1 }, { lang: 'en' }), outDe = K.methodFactor(ref, { ...meas, rvd: 0.1 });
+  assert(!outEn.applied && outEn.reason === 'Factor 17.20 outside 0.2–5: check the measurement, not applied' && outDe.reason === 'Faktor 17,20 außerhalb 0,2–5: Messung prüfen, nicht angewandt', 'Faktor außerhalb der Spanne: Dezimalzeichen je Sprache');
   const kv = E.kpis({ g: { ...g, start: g.start.map(x => x * 1.5) }, obsMin: full, plan: bolt, type: 'scooter' }); // RVD 4,5 > 3,47
   const ck = K.checkMeasured(kv, 'scooter', all.limits), cok = K.checkMeasured(kc, 'scooter', all.limits);
   assert(ck.suspended && !ck.kpi.plausible && ck.kpi.flags[0] === K.SUSPENDED && !cok.suspended && cok.kpi === kc && !K.checkMeasured(kv, 'ebike', all.limits).suspended, 'Messung über der Grenze: Kalibrierung ausgesetzt, nicht plausibel (aus Summen); E-Bikes ohne Grenze');
