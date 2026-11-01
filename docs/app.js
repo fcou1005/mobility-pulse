@@ -1,12 +1,13 @@
-import * as C from './pulse-core.js?v=mvy5cf5y';
-import * as Ops from './ops.js?v=mvy5cf5y';
-import * as E from './pulse-econ.js?v=mvy5cf5y';
-import * as K from './pulse-calib.js?v=mvy5cf5y';
-import * as Rp from './report.js?v=mvy5cf5y';
-import * as R from './pulse-report.js?v=mvy5cf5y';
-import * as Fl from './flows.js?v=mvy5cf5y';
-import * as Cov from './coverage.js?v=mvy5cf5y';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvy5cf5y';
+import * as C from './pulse-core.js?v=mvy5o09d';
+import * as Ops from './ops.js?v=mvy5o09d';
+import * as E from './pulse-econ.js?v=mvy5o09d';
+import * as K from './pulse-calib.js?v=mvy5o09d';
+import * as Rp from './report.js?v=mvy5o09d';
+import * as R from './pulse-report.js?v=mvy5o09d';
+import * as Fl from './flows.js?v=mvy5o09d';
+import * as Cov from './coverage.js?v=mvy5o09d';
+import * as Cmp from './compare.js?v=mvy5o09d';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvy5o09d';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -439,13 +440,13 @@ function snapshotToSystem(snap, rec) {
 
 // ---------- Rendering ----------
 // Drei Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
-const VIEWS = ['live', 'lab', 'usage', 'ops', 'signals', 'coverage', 'bericht', 'sources'];
+const VIEWS = ['live', 'lab', 'usage', 'ops', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
 const GROUPS_DEF = () => [
-  { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['usage', t('app.usage')], ['coverage', t('app.operators')], ['bericht', t('app.report')]] },
+  { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['usage', t('app.usage')], ['coverage', t('app.operators')], ['vergleich', t('app.compare')], ['bericht', t('app.report')]] },
   { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')]] },
   { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')]] },
 ];
-const VIEW_ALIAS = { report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', vertrauen: 'sources', datenvertrauen: 'sources' };
+const VIEW_ALIAS = { compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', vertrauen: 'sources', datenvertrauen: 'sources' };
 const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 let currentView = 'live', urlReady = false;
 const resolveView = (h) => { let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
@@ -574,7 +575,7 @@ function onLanguage() {
   renderLangSwitch(); clearNotice('lang'); refreshNotices();
   if (state.map && state.tiles) { const prev = state.tiles.options.attribution, next = t('app.openstreetmapContributors'); if (prev !== next) { state.tiles.options.attribution = next; state.map.attributionControl?.removeAttribution(prev).addAttribution(next); } }
   if (state.latest) { populateScope(); populateOperators(); }
-  safe(() => Ops.relabelOps?.()); safe(() => Fl.relabelFlows?.()); // Disposition behält den Plan, Fahrtrouten bauen ihr Gerüst neu
+  safe(() => Ops.relabelOps?.()); safe(() => Fl.relabelFlows?.()); safe(() => Cmp.relabelCompare?.(document.getElementById('cmp-panel'))); // Disposition behält den Plan, Fahrtrouten bauen ihr Gerüst neu
   if (dataReady) { safe(renderHeader); for (const v of VIEWS) dirty.add(v); }
   setView(currentView); // Kopf, Seitentitel, Segmente; zeichnet die aktive Ansicht neu
 }
@@ -586,6 +587,7 @@ const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) r
 VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
 VIEW_RENDER.lab.push(rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter'));
 VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
+VIEW_RENDER.vergleich = [rp(Cmp.renderCompare, 'cmp-panel')];
 VIEW_RENDER.sources.push(rp(Cov.renderCoverage, 'cov-panel'), rp(Rp.renderFeedChecks, 'rp-feedchecks'), rp(Rp.renderPriceLog, 'rp-pricelog'), () => renderCalibPanel());
 function renderAll() {
   dataReady = true;
@@ -2100,7 +2102,7 @@ async function init() {
     state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = REQ.get('boundaries-active.json'); resetCache(); if (keepB && state.bIndex) REQ.set('boundaries-active.json', keepB); // Grenzen ändern sich nicht je Lauf
-    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.();
+    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.(); Cmp.resetCompareCache?.();
     const hi = await cached('history/index.json', 25000); if (hi.ok) state.histIndex = hi.json;
     populateScope(); populateOperators(); clearNotice('stale'); renderAll();
   }, 2 * 60e3);

@@ -9,8 +9,8 @@
 //     „vorläufig“ unter 7 Messtagen oder unter 50 % beobachteter Tagesstunden; keine Kalibrierung ohne Berliner Messung.
 //  3. Abdeckung = eigene E-Scooter ÷ amtliche Flotte (Stand und Art der Zahl laut Quelle).
 //  4. Plausibilität ohne Faktor: Frankfurt (Jahresfahrten ÷ Tage ÷ Obergrenze = Untergrenze), Europa, Voi Konzern.
-import { DEFAULT_RIDE } from './pulse-econ.js?v=mvy5cf5y';
-import { capLimit, SUSPENDED } from './pulse-report.js?v=mvy5cf5y';
+import { DEFAULT_RIDE } from './pulse-econ.js?v=mvy5o09d';
+import { capLimit, SUSPENDED } from './pulse-report.js?v=mvy5o09d';
 export { SUSPENDED };
 
 export const BERLIN = '11000000';

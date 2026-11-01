@@ -2,10 +2,10 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvy5cf5y';
-import * as K from './pulse-calib.js?v=mvy5cf5y';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy5cf5y';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy5cf5y';
+import * as R from './pulse-report.js?v=mvy5o09d';
+import * as K from './pulse-calib.js?v=mvy5o09d';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy5o09d';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy5o09d';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
