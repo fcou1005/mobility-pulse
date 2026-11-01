@@ -1,7 +1,7 @@
-import * as C from './pulse-core.js?v=mvxtwqwd';
-import * as Ops from './ops.js?v=mvxtwqwd';
-import * as E from './pulse-econ.js?v=mvxtwqwd';
-import * as Rp from './report.js?v=mvxtwqwd';
+import * as C from './pulse-core.js?v=mvxu6wlt';
+import * as Ops from './ops.js?v=mvxu6wlt';
+import * as E from './pulse-econ.js?v=mvxu6wlt';
+import * as Rp from './report.js?v=mvxu6wlt';
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
 const QS = new URLSearchParams(location.search);

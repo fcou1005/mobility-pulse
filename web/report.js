@@ -453,7 +453,7 @@ function weekLabel(ctx, hm, wd, h) {
   return { value: 'nicht gemessen', lines: [when, why] };
 }
 function weekGrid(ctx, hm) {
-  let first = true; const hdr = Array.from({ length: 24 }, (_, h) => `<div role="columnheader" class="hl" aria-label="${h} Uhr">${h % 3 === 0 ? h : ''}</div>`).join('');
+  let first = true; const hdr = Array.from({ length: 24 }, (_, h) => `<div role="columnheader" class="hl" aria-label="${h} Uhr">${h % 3 === 0 ? h : `<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">${h}</span>`}</div>`).join('');
   const rows = R.WEEKDAYS.map((w, wd) => {
     const cells = Array.from({ length: 24 }, (_, h) => {
       const c = hm.cells[wd][h]; const lb = weekLabel(ctx, hm, wd, h);
@@ -463,7 +463,7 @@ function weekGrid(ctx, hm) {
     }).join('');
     return `<div role="row" class="rp-row"><div role="rowheader" class="rl"><span>${w}</span><small title="beobachtete Tage">${hm.days[wd]} T.</small></div>${cells}</div>`;
   }).join('');
-  const html = `<div class="rp-week" role="grid" aria-label="Fahrtbeginne je Stunde und Wochentag" data-rp="week"><div role="row" class="rp-row"><div role="columnheader" class="hl"></div>${hdr}</div>${rows}</div>`;
+  const html = `<div class="rp-week" role="grid" aria-label="Fahrtbeginne je Stunde und Wochentag" data-rp="week"><div role="row" class="rp-row"><div role="columnheader" class="hl"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">Wochentag</span></div>${hdr}</div>${rows}</div>`;
   return first ? html.replace('tabindex="-1"', 'tabindex="0"') : html; // nichts gemessen: erste Zelle trotzdem erreichbar
 }
 function weekTable(ctx, hm) {
