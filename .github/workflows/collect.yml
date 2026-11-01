@@ -21,7 +21,7 @@ permissions:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -50,13 +50,18 @@ jobs:
         with:
           path: cache/boundaries.json
           key: vg250-${{ steps.month.outputs.m }}-v2
+          restore-keys: |
+            vg250-
 
       - name: Gemeindegrenzen aufbereiten (BKG VG250)
         if: ${{ steps.bcache.outputs.cache-hit != 'true' }}
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin unzip >/dev/null
           mkdir -p cache
-          BOUNDARIES_OUT=cache/boundaries.json node scripts/prepare-boundaries.mjs
+          # Neuer Monat: frische Grenzen laden; ist BKG nicht erreichbar, bleiben die Grenzen aus dem Vormonat
+          if BOUNDARIES_OUT=cache/boundaries.new.json node scripts/prepare-boundaries.mjs; then mv cache/boundaries.new.json cache/boundaries.json
+          elif [ -s cache/boundaries.json ]; then echo "BKG nicht erreichbar, nutze Grenzen aus dem Cache"
+          else exit 2; fi
 
       - name: Quellenkatalog aktualisieren
         env:
@@ -89,13 +94,13 @@ jobs:
           git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Daten $(date -u +%FT%TZ)"
           git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" data:data
           echo "veröffentlicht: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/latest.json"
-      - name: Nächsten Lauf anstoßen (Ersatz, solange der Zeitplan nicht anspringt)
-        if: always() && github.event_name != 'schedule'
+      - name: Nächsten Lauf anstoßen (hält genau eine Kette am Leben, egal ob der Zeitplan anspringt)
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Läuft der GitHub-Zeitplan inzwischen (Lauf in den letzten 90 Min.), endet die Kette hier
-          last=$(gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -e schedule -L 1 --json createdAt -q '.[0].createdAt' || true)
-          if [ -n "$last" ] && [ $(( $(date +%s) - $(date -d "$last" +%s) )) -lt 5400 ]; then echo "Zeitplan aktiv, keine Kette"; exit 0; fi
+          andere() { gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId != $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
+          if [ "$(andere)" -gt 0 ]; then echo "Ein anderer Lauf ist aktiv oder wartet, keine zweite Kette"; exit 0; fi
           sleep 900
+          if [ "$(andere)" -gt 0 ]; then echo "Inzwischen läuft ein anderer Lauf, keine zweite Kette"; exit 0; fi
           gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main
