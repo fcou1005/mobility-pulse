@@ -1,0 +1,257 @@
+{
+ "type": "FeatureCollection",
+ "_hinweis": "Vermutete Abgrenzungen für die Zonen-Beobachtung – keine amtlichen Daten, keine Betreiberdaten. Umrisse aus der Beschreibung der Stadt abgeleitet und grob vereinfacht; Abweichung bis zur angegebenen Genauigkeit. Grenzwerte stehen nur in data/reference.json (amtliche Quelle).",
+ "stand": "2026-11-01",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "Innenstadtbezirke",
+    "ags": "08111000",
+    "vermutet": true,
+    "beschreibung": "Vermutet: die fünf Innenstadtbezirke Mitte, Nord, Ost, Süd und West (Stadt Stuttgart: höchstens 800 E-Scooter je Anbieter in den Innenstadtbezirken). Grob vereinfachter Umriss, angelehnt an eine bekannte Betreiberzone – nicht die amtliche Abgrenzung.",
+    "genauigkeit_m": 600
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       9.0752,
+       48.7885
+      ],
+      [
+       9.0782,
+       48.7947
+      ],
+      [
+       9.0886,
+       48.7998
+      ],
+      [
+       9.1129,
+       48.7973
+      ],
+      [
+       9.1068,
+       48.7882
+      ],
+      [
+       9.1112,
+       48.783
+      ],
+      [
+       9.1167,
+       48.783
+      ],
+      [
+       9.1157,
+       48.778
+      ],
+      [
+       9.1268,
+       48.7713
+      ],
+      [
+       9.1339,
+       48.7739
+      ],
+      [
+       9.1399,
+       48.7885
+      ],
+      [
+       9.1654,
+       48.8023
+      ],
+      [
+       9.1696,
+       48.8089
+      ],
+      [
+       9.1821,
+       48.8103
+      ],
+      [
+       9.1943,
+       48.8022
+      ],
+      [
+       9.2106,
+       48.7994
+      ],
+      [
+       9.2338,
+       48.7836
+      ],
+      [
+       9.23,
+       48.779
+      ],
+      [
+       9.2233,
+       48.7778
+      ],
+      [
+       9.225,
+       48.7713
+      ],
+      [
+       9.2122,
+       48.7656
+      ],
+      [
+       9.2254,
+       48.7603
+      ],
+      [
+       9.2147,
+       48.7594
+      ],
+      [
+       9.2052,
+       48.7548
+      ],
+      [
+       9.1902,
+       48.757
+      ],
+      [
+       9.178,
+       48.7524
+      ],
+      [
+       9.1695,
+       48.7574
+      ],
+      [
+       9.1585,
+       48.7519
+      ],
+      [
+       9.1402,
+       48.754
+      ],
+      [
+       9.136,
+       48.7459
+      ],
+      [
+       9.1401,
+       48.7395
+      ],
+      [
+       9.1219,
+       48.7339
+      ],
+      [
+       9.1207,
+       48.7374
+      ],
+      [
+       9.1112,
+       48.7415
+      ],
+      [
+       9.1256,
+       48.7483
+      ],
+      [
+       9.1271,
+       48.7521
+      ],
+      [
+       9.123,
+       48.7567
+      ],
+      [
+       9.0772,
+       48.7556
+      ],
+      [
+       9.0759,
+       48.7672
+      ],
+      [
+       9.0821,
+       48.7686
+      ],
+      [
+       9.0863,
+       48.7793
+      ],
+      [
+       9.0852,
+       48.783
+      ],
+      [
+       9.0752,
+       48.7885
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "zentrale Innenstadt",
+    "ags": "08111000",
+    "vermutet": true,
+    "beschreibung": "Vermutet: City-Bereich innerhalb des Cityrings (Stadt Stuttgart: höchstens 100 E-Scooter je Anbieter in der zentralen Innenstadt). Grob vereinfachter Umriss, angelehnt an eine bekannte Betreiberzone – nicht die amtliche Abgrenzung.",
+    "genauigkeit_m": 150
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       9.1677,
+       48.7747
+      ],
+      [
+       9.175,
+       48.7794
+      ],
+      [
+       9.1798,
+       48.7851
+      ],
+      [
+       9.1813,
+       48.7924
+      ],
+      [
+       9.1844,
+       48.7919
+      ],
+      [
+       9.1871,
+       48.7901
+      ],
+      [
+       9.1817,
+       48.7844
+      ],
+      [
+       9.1889,
+       48.7815
+      ],
+      [
+       9.1842,
+       48.7749
+      ],
+      [
+       9.1744,
+       48.7693
+      ],
+      [
+       9.1677,
+       48.7747
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

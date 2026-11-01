@@ -347,11 +347,13 @@
       "zonen": [
         {
           "name": "Innenstadtbezirke",
-          "jeAnbieter": 800
+          "jeAnbieter": 800,
+          "beobachtung": "innenstadtbezirke"
         },
         {
           "name": "zentrale Innenstadt",
-          "jeAnbieter": 100
+          "jeAnbieter": 100,
+          "beobachtung": "zentrale-innenstadt"
         }
       ],
       "anbieterZahl": null,
@@ -369,7 +371,8 @@
       "url2": "https://www.stuttgarter-zeitung.de/lokales/stuttgart/e-roller-in-stuttgart-neue-lizenzen-zum-scooterfahren-79030240.html",
       "status": "amtlich",
       "innenstadtbezirke": 800,
-      "zentraleInnenstadt": 100
+      "zentraleInnenstadt": 100,
+      "zonenHinweis": "Teilgebiete werden gegen vermutete Abgrenzungen geprüft (data/zonen-vermutet.json, aus der Beschreibung abgeleitet, nicht amtlich)."
     },
     {
       "ags": "05111000",

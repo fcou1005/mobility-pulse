@@ -1,13 +1,13 @@
-import * as C from './pulse-core.js?v=mvy5o09d';
-import * as Ops from './ops.js?v=mvy5o09d';
-import * as E from './pulse-econ.js?v=mvy5o09d';
-import * as K from './pulse-calib.js?v=mvy5o09d';
-import * as Rp from './report.js?v=mvy5o09d';
-import * as R from './pulse-report.js?v=mvy5o09d';
-import * as Fl from './flows.js?v=mvy5o09d';
-import * as Cov from './coverage.js?v=mvy5o09d';
-import * as Cmp from './compare.js?v=mvy5o09d';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvy5o09d';
+import * as C from './pulse-core.js?v=mvy5xgdj';
+import * as Ops from './ops.js?v=mvy5xgdj';
+import * as E from './pulse-econ.js?v=mvy5xgdj';
+import * as K from './pulse-calib.js?v=mvy5xgdj';
+import * as Rp from './report.js?v=mvy5xgdj';
+import * as R from './pulse-report.js?v=mvy5xgdj';
+import * as Fl from './flows.js?v=mvy5xgdj';
+import * as Cov from './coverage.js?v=mvy5xgdj';
+import * as Cmp from './compare.js?v=mvy5xgdj';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvy5xgdj';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 

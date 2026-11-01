@@ -528,3 +528,25 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
   }
   assert(R.zoneSummary(log, { operator: 'Voi', asOf: t3 }).find(z => z.id === 'innenstadt').rows.every(r => r.op === 'Voi' || r.op === '*'), 'Filter Anbieter wie oben im Dashboard');
 }
+// ---------- Teilgebiete gegen vermutete Abgrenzung ----------
+{
+  const pub = R.parseZoneWatch(readFileSync(new URL('../data/zonen-vermutet.json', import.meta.url), 'utf8'));
+  const ref = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url), 'utf8'));
+  const stg = ref.obergrenzen.find(e => e.ags === '08111000'), watch = stg.zonen.map(z => z.beobachtung).filter(Boolean);
+  assert(pub.length === 2 && pub.every(z => z.assumed && z.ags === '08111000' && z.description?.includes('Vermutet') && z.accuracyM > 0 && z.polys[0][0].length < 60) && watch.every(w => pub.some(z => z.id === w)) && watch.length === 2,
+    'data/zonen-vermutet.json: zwei vermutete, grob vereinfachte Stuttgarter Teilgebiete; reference.json ordnet beide zu');
+  assert(pub.find(z => z.id === 'zentrale-innenstadt') && R.zoneContains(pub.find(z => z.id === 'zentrale-innenstadt'), 9.1793, 48.7784) && R.zoneContains(pub.find(z => z.id === 'innenstadtbezirke'), 9.1793, 48.7784) && !R.zoneContains(pub.find(z => z.id === 'innenstadtbezirke'), 9.12, 48.70),
+    'Schlossplatz liegt in beiden Teilgebieten, Vaihingen in keinem');
+  const sq = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+  const zs = R.parseZoneWatch(JSON.stringify({ type: 'Feature', properties: { name: 'zentrale Innenstadt', vermutet: true, genauigkeit_m: 150 }, geometry: { type: 'Polygon', coordinates: [sq(9.17, 48.77, 9.19, 48.79)] } }));
+  const t1 = T('2026-11-02T10:00:00'), t2 = T('2026-11-02T10:20:00');
+  let log = R.zoneLogUpdate(null, zs, new Map([['zentrale-innenstadt|Dott|scooter', [120, 118]], ['zentrale-innenstadt|Voi|scooter', [60, 60]], ['zentrale-innenstadt|RegioRad|bike', [40, 40]]]), { at: t1 });
+  log = R.zoneLogUpdate(log, zs, new Map([['zentrale-innenstadt|Dott|scooter', [95, 95]], ['zentrale-innenstadt|Voi|scooter', [92, 92]]]), { at: t2 });
+  const caps = R.capsCheck({ obergrenzen: [{ ags: '08111000', ort: 'Stuttgart', type: 'scooter', gesamt: 6000, jeAnbieter: 1500, anbieter: ['Dott', 'Voi', 'Bolt', 'Lime'], zonen: [{ name: 'zentrale Innenstadt', jeAnbieter: 100, beobachtung: 'zentrale-innenstadt' }, { name: 'ohne Umriss', jeAnbieter: 5 }], status: 'amtlich' }] },
+    { '08111000|Dott|scooter': { total: 1300, available: 1290 } }, { asOf: t2, zoneWatch: log });
+  const [d1, d2] = caps[0].districts, dott = d1.check.operators.find(o => o.op === 'Dott'), voi = d1.check.operators.find(o => o.op === 'Voi');
+  assert(d1.check && d1.check.assumed && d1.check.accuracyM === 150 && dott.now === 95 && dott.limit === 100 && dott.status === 'near' && dott.max30 === 120 && dott.daysOver === 1 && voi.now === 92 && voi.status === 'near'
+    && !d1.check.operators.some(o => o.op === 'RegioRad') && d1.status === 'near' && d2.status === 'unchecked' && !d2.check,
+    'Teilgebiet mit Zuordnung: je Anbieter jetzt gegen 100 (nahe), Tagesmaximum 120 → 1 Tag über Grenze, nur Arten der Obergrenze; ohne Zuordnung weiter nicht prüfbar');
+  assert(R.capsCheck({ obergrenzen: [{ ags: '08111000', ort: 'S', type: 'scooter', jeAnbieter: 10, zonen: [{ name: 'x', jeAnbieter: 1, beobachtung: 'fehlt' }], status: 'amtlich' }] }, {}, { zoneWatch: log })[0].districts[0].status === 'unchecked', 'Zuordnung auf unbekannte Zone: nicht prüfbar');
+}

@@ -56,7 +56,7 @@ await writeFile(path.join(tmp, 's4.json'), JSON.stringify({ ...cat, auth_sources
 await writeFile(path.join(tmp, 'ref.json'), JSON.stringify({ obergrenzen: [{ ags: '08416041', ort: 'Tübingen (Test)', type: 'scooter', gesamt: 1, jeAnbieter: 5, quelle: 'Test', url: 'https://example.org' }] }));
 // Städte laut Anbieter (Abdeckung): Bolt nennt Tübingen und Stuttgart, Dott „Tubingen“ (englische Umschrift)
 await writeFile(path.join(tmp, 'cities.json'), JSON.stringify({ erstellt: '2026-11-01', anbieter: [{ name: 'Bolt', quelle: 'https://example.org/bolt', staedte: [{ ort: 'Tübingen' }, { ort: 'Stuttgart' }] }, { name: 'Dott', quelle: 'https://example.org/dott', staedte: [{ ort: 'Tubingen' }] }] }));
-const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'),
+const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'), ZONES_FILE: '',
   ZONE_WATCH: JSON.stringify({ type: 'Feature', properties: { name: 'Testzone', limits: { scooter: { maximum: 777 } } }, geometry: { type: 'Polygon', coordinates: [[[8.9, 48.4], [9.3, 48.4], [9.3, 48.9], [8.9, 48.9], [8.9, 48.4]]] } }) };
 const t3 = Date.now();
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's3.json') });

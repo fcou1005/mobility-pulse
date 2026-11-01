@@ -482,11 +482,13 @@ try {
   }
 } catch (e) { log(`Obergrenzen-Protokoll: ${e.message}`); }
 
-// Zonen-Beobachtung: Umrisse privat aus dem Secret ZONE_WATCH (GeoJSON, nie veröffentlicht), Bestand je Zone × Anbieter × Art
-// → zone-watch.json (Läufe 2 Tage, Tageswerte 30 Tage; Format in lib/pulse-report.js zoneLogUpdate)
-if (process.env.ZONE_WATCH) {
+// Zonen-Beobachtung: vermutete Umrisse aus data/zonen-vermutet.json (ZONES_FILE, leer = keine) und optional privat aus ZONE_WATCH;
+// Bestand je Zone × Anbieter × Art → zone-watch.json (Läufe 2 Tage, Tageswerte 30 Tage; Format in lib/pulse-report.js zoneLogUpdate)
+const zonesFile = process.env.ZONES_FILE ?? path.join(ROOT, 'data', 'zonen-vermutet.json');
+if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
   try {
-    const zones = R.parseZoneWatch(process.env.ZONE_WATCH);
+    const seen = new Set();
+    const zones = [...(zonesFile && existsSync(zonesFile) ? R.parseZoneWatch(await readFile(zonesFile, 'utf8')) : []), ...R.parseZoneWatch(process.env.ZONE_WATCH || '')].filter(z => !seen.has(z.id) && seen.add(z.id));
     // Gemeinde der Zone (falls nicht angegeben): die häufigste Gemeinde der Fahrzeuge darin
     for (const z of zones) if (!z.ags) { const n = new Map(); for (const v of dv.vehicles) if (v.ags && Number.isFinite(v.lat) && R.zoneContains(z, v.lon, v.lat)) n.set(v.ags, (n.get(v.ags) || 0) + 1); z.ags = [...n].sort((a, b) => b[1] - a[1])[0]?.[0] || null; }
     if (zones.length) {
@@ -497,7 +499,7 @@ if (process.env.ZONE_WATCH) {
       const doc = R.zoneLogUpdate(prevZ, zones, counts, { at: now, carryZero: (zone, op, ty) => (groupsOut[`${agsOf.get(zone)}|${op}|${ty}`]?.total || 0) > 0 });
       await writeFile(f, JSON.stringify(doc));
       log(`Zonen-Beobachtung: ${zones.map(z => `${z.name} ${[...counts].filter(([k]) => k.startsWith(`${z.id}|`)).reduce((s, [, c]) => s + c[0], 0)}`).join(', ')}`);
-    } else log('Zonen-Beobachtung: ZONE_WATCH ohne gültige Umrisse');
+    } else log('Zonen-Beobachtung: keine gültigen Umrisse');
   } catch (e) { log(`Zonen-Beobachtung: ${e.message}`); }
 }
 

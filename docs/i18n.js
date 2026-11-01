@@ -2403,7 +2403,7 @@ const DE = {
   "flows.estQualityNone": "Güte für diesen Tag nicht prüfbar (keine Vergleichsfahrten mit stabilen Kennungen).",
   // Zonen-Beobachtung (web/report.js)
   "rep.zwTitle": "Zonen-Beobachtung",
-  "rep.zwSub": "Bestand je Anbieter in privat hinterlegten Zonen · Stand {at}",
+  "rep.zwSub": "Bestand je Anbieter in Teilgebieten mit vermuteter Abgrenzung · Stand {at}",
   "rep.zwAll": "Alle Anbieter",
   "rep.zwNow": "Jetzt",
   "rep.zwToday": "Heute Min–Max",
@@ -2413,7 +2413,7 @@ const DE = {
   "rep.zwAvail": "{v} verfügbar",
   "rep.zwNone": "Keine Fahrzeuge in dieser Zone (Filter oben beachten).",
   "rep.zwSpark": "Tagesmaximum an {n} Tagen: {lo} bis {hi}, zuletzt {last}",
-  "rep.zwNote": "Umrisse sind privat hinterlegt und werden nicht veröffentlicht. Bestand = Fahrzeuge mit Position in der Zone nach Dubletten-Bereinigung, je Sammler-Lauf; Tageswerte (Min., Max., Mittel) {days} Tage. Fällt der Feed eines Anbieters aus, wird kein Nullbestand eingetragen. Ohne Limits: Grenzwerte sind nicht hinterlegt.",
+  "rep.zwNote": "Die Umrisse sind eine Vermutung: aus der Beschreibung der Stadt abgeleitet und grob vereinfacht, keine amtlichen Daten (data/zonen-vermutet.json). Fahrzeuge nahe der Grenze können falsch zugeordnet sein. Bestand = Fahrzeuge mit Position in der Zone nach Dubletten-Bereinigung, je Sammler-Lauf; Tageswerte (Min., Max., Mittel) {days} Tage. Fällt der Feed eines Anbieters aus, wird kein Nullbestand eingetragen. Grenzwerte und Status stehen im Obergrenzen-Wächter.",
   // Anbieter-Vergleich (web/compare.js)
   "app.compare": "Vergleich",
   "html.compareHero": "Anbieter im <em>Vergleich</em>.",
@@ -2502,6 +2502,15 @@ const DE = {
   "cmp.lon": "Länge",
   "cmp.more": "{n} weitere zeigen (noch {m})",
   "cmp.file": "anbieter-vergleich",
+  // Teilgebiete mit vermuteter Abgrenzung (web/report.js)
+  "rep.zwAssumed": "vermutete Abgrenzung · ± {m} m · nicht amtlich",
+  "rep.capZoneChecked": "geprüft gegen die vermutete Abgrenzung (± {m} m, aus der Beschreibung abgeleitet, nicht amtlich) · Stand {at}",
+  "rep.capZoneNow": "Jetzt",
+  "rep.capZoneTodayMax": "Max. heute",
+  "rep.capZoneMax30": "Max. 30 Tage",
+  "rep.capZoneDaysOver": "Tage über Grenze",
+  "rep.capZoneDaysOf": "von {n}",
+  "rep.capZoneTotal": "Alle Anbieter",
 };
 const EN = {
   // index.html
@@ -4776,7 +4785,7 @@ const EN = {
   "flows.estQualityNone": "Quality cannot be checked for this day (no comparison trips with stable IDs).",
   // Zonen-Beobachtung (web/report.js)
   "rep.zwTitle": "Zone watch",
-  "rep.zwSub": "Fleet per operator in privately stored zones · as of {at}",
+  "rep.zwSub": "Fleet per operator in sub-areas with an assumed boundary · as of {at}",
   "rep.zwAll": "All operators",
   "rep.zwNow": "Now",
   "rep.zwToday": "Today min–max",
@@ -4786,7 +4795,7 @@ const EN = {
   "rep.zwAvail": "{v} available",
   "rep.zwNone": "No vehicles in this zone (check the filters above).",
   "rep.zwSpark": "Daily maximum on {n} days: {lo} to {hi}, latest {last}",
-  "rep.zwNote": "Outlines are stored privately and are not published. Fleet = vehicles with a position inside the zone after de-duplication, per collector run; daily values (min, max, mean) for {days} days. If an operator’s feed fails, no zero fleet is recorded. No limits: thresholds are not stored.",
+  "rep.zwNote": "The outlines are an assumption: derived from the city’s description and roughly simplified, not official data (data/zonen-vermutet.json). Vehicles near the boundary may be assigned wrongly. Fleet = vehicles with a position inside the zone after de-duplication, per collector run; daily values (min, max, mean) for {days} days. If an operator’s feed fails, no zero fleet is recorded. Thresholds and status are shown in the fleet cap monitor.",
   // Anbieter-Vergleich (web/compare.js)
   "app.compare": "Compare",
   "html.compareHero": "Operators <em>compared</em>.",
@@ -4875,5 +4884,14 @@ const EN = {
   "cmp.lon": "Longitude",
   "cmp.more": "show {n} more ({m} left)",
   "cmp.file": "operator-comparison",
+  // Teilgebiete mit vermuteter Abgrenzung (web/report.js)
+  "rep.zwAssumed": "assumed boundary · ± {m} m · not official",
+  "rep.capZoneChecked": "checked against the assumed boundary (± {m} m, derived from the description, not official) · as of {at}",
+  "rep.capZoneNow": "Now",
+  "rep.capZoneTodayMax": "Max today",
+  "rep.capZoneMax30": "Max 30 days",
+  "rep.capZoneDaysOver": "Days over cap",
+  "rep.capZoneDaysOf": "of {n}",
+  "rep.capZoneTotal": "All operators",
 };
 export const DICT = { de: DE, en: EN };

@@ -2,10 +2,10 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvy5o09d';
-import * as K from './pulse-calib.js?v=mvy5o09d';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy5o09d';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy5o09d';
+import * as R from './pulse-report.js?v=mvy5xgdj';
+import * as K from './pulse-calib.js?v=mvy5xgdj';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy5xgdj';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy5xgdj';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -713,6 +713,14 @@ function violationsBlock(ctx, c, v, s) {
   const hist = !v.daily.length ? '' : tbl ? `<div class="tbl" tabindex="0" role="region" aria-label="${t('rep.dailyMaximum', { ort: esc(v.ort) })}"><table><thead><tr><th>${t('rep.day')}</th><th class="n">${t('rep.highestFleet')}</th><th class="n">${t('rep.cap')}</th><th>Status</th></tr></thead><tbody>${v.daily.slice().reverse().map(d => `<tr><td>${dd(d.day)}</td><td class="n">${fmt(d.max)}</td><td class="n">${d.limit != null ? fmt(d.limit) : '—'}</td><td>${badge(R.capStatus(d.max, d.limit).status)}</td></tr>`).join('')}</tbody></table></div>` : capChart(ctx, v, c);
   return h + `<div class="sub small muted" style="margin-bottom:var(--s1)">${t('rep.durationSumOfFetchIntervals', { v0: plural(days, t('rep.day'), t('rep.days')), btn })}</div>` + table + hist;
 }
+// Teilgebiet mit vermuteter Abgrenzung (zone-watch.json): Statuszeile und je Anbieter Bestand gegen die Grenze
+function zoneCheckRows(ctx, d) {
+  const { fmt, esc, opColor } = ctx, k = d.check;
+  const zoneNum = [d.limit != null ? t('rep.total3', { limit: fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(' · ') || '—';
+  const rows = k.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.now)}</td><td class="n">${o.limit != null ? fmt(o.limit) : '—'}</td><td style="min-width:120px">${o.limit != null ? meter(ctx, o.now, o.limit, o.status === 'hint' ? 'near' : o.status) : '<span class="muted small">—</span>'}</td><td class="n">${o.todayMax != null ? fmt(o.todayMax) : '–'}</td><td class="n">${o.max30 != null ? fmt(o.max30) : '–'}</td><td class="n">${o.daysOver != null ? `${fmt(o.daysOver)} <span class="muted small">${t('rep.capZoneDaysOf', { n: fmt(o.daysLogged) })}</span>` : '–'}</td><td>${badge(o.status)}</td></tr>`).join('');
+  const sub = `<div class="tbl" style="margin-top:var(--s1)"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.capZoneNow')}</th><th class="n">${t('rep.cap')}</th><th>${t('rep.utilisation')}</th><th class="n">${t('rep.capZoneTodayMax')}</th><th class="n">${t('rep.capZoneMax30')}</th><th class="n">${t('rep.capZoneDaysOver')}</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum}</td><td>${badge(d.status)}</td><td class="small muted">${t('rep.capZoneChecked', { m: fmt(k.accuracyM || 0), at: stamp(k.at) })}${d.hinweis ? ` · ${srcTxt(esc, d.hinweis)}` : ''}</td></tr><tr class="rp-zonesub"><td colspan="4">${sub}</td></tr>`;
+}
 function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const { fmt, esc, opColor } = ctx;
   const hasTotal = c.limit != null;
@@ -727,7 +735,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>`);
   const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${fmt(o.available)}</td><td class="n">${limCell(o)}</td><td style="min-width:120px">${meterCell(o)}</td><td class="n">${rateCell(ctx, rate(o, 'share'), false, derivedOf(o))}${shareNote(o)}</td><td class="n">${rateCell(ctx, rate(o, 'availShare'), false, derivedOf(o))}${shareNote(o)}</td><td>${badge(o.licensed === false ? 'unlicensed' : own(o) ? o.status : 'unknown')}</td></tr>`).join('');
   const zoneNum = (d) => [d.limit != null ? t('rep.total3', { limit: fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(' · ') || '—';
-  const districts = c.districts.map(d => `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)} · ` : '' })}</td></tr>`).join('');
+  const districts = c.districts.map(d => d.check ? zoneCheckRows(ctx, d) : `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)} · ` : '' })}</td></tr>`).join('');
   const per1000 = pop ? (c.total / pop) * 1000 : null;
   const pre = rep?.quality.prelim ? ` · ${t('rep.preliminary')}` : '';
   const links = [safeLink(ctx, c.url, c.quelle || t('rep.source')), ...(c.links || []).map((l, i) => safeLink(ctx, l.url, l.quelle || t('rep.source2', { v0: i + 2 })))].join(' · ');
@@ -776,8 +784,8 @@ export async function renderCaps(el, ctx) {
   try {
     const ref = await reference(ctx); if (tok !== s.tok) return;
     if (!ref) { el.innerHTML = title + emptyBox(t('rep.referenceValuesNotLoadable'), t('rep.referenceJsonIsMissingOr')); return; }
-    const caps = R.capsCheck(ref, state.latest.groups, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() });
-    const [{ docs }, log] = await Promise.all([allDocs(ctx), fetchJson(ctx, 'caps-log.json', true)]); if (tok !== s.tok) return;
+    const [{ docs }, log, zw] = await Promise.all([allDocs(ctx), fetchJson(ctx, 'caps-log.json', true), fetchJson(ctx, 'zone-watch.json', true)]); if (tok !== s.tok) return;
+    const caps = R.capsCheck(ref, state.latest.groups, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now(), zoneWatch: zw });
     s.viol = log ? R.capsViolations(log, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() }) : null;
     const violFor = (c) => (log ? s.viol.find(v => v.ags === R.capLogKey(c)) || null : undefined); // je Gemeinde und Art
     const repFor = (ags, ty) => (docs.length ? R.municipalReport({ docs, ags, pop: state.latest.municipalities?.[ags]?.pop || null, type: ty, latestGroups: state.latest.groups }) : null);
@@ -858,7 +866,7 @@ export async function renderZoneWatch(el, ctx) {
     const rows = z.rows.map(r => `<tr${r.op === '*' ? ' class="rp-sum"' : ''}><td>${opCell(r.op)}</td><td class="n">${num(r.now)}${r.avail != null && r.avail !== r.now ? `<div class="sub-line">${t('rep.zwAvail', { v: esc(fmt(r.avail)) })}</div>` : ''}</td>
       <td class="n">${r.todayMin == null ? '<span class="muted">–</span>' : `${esc(fmt(r.todayMin))}–${esc(fmt(r.todayMax))}`}</td><td class="n">${num(r.mean7)}</td><td class="n">${num(r.max30)}</td><td>${sparkline(ctx, r.series)}</td></tr>`).join('');
     const city = z.ags ? (ctx.muniName?.(z.ags) || z.ags) : '';
-    return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th><th>${t('rep.zwTrend')}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
+    return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th><th>${t('rep.zwTrend')}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
   }).join('');
   el.innerHTML = head(t('rep.zwTitle'), t('rep.zwSub', { at: stamp(zones[0].at || log.updatedAt) })) + blocks + `<p class="note small" style="margin:var(--s3) 0 0">${t('rep.zwNote', { days: log.days || R.ZONE_LOG_DAYS })}</p>`;
 }
@@ -1036,7 +1044,7 @@ svg.rp-line circle.end{stroke:var(--panel);stroke-width:2}svg.rp-line circle.sel
 .rp-captable td.n .sub-line{font-family:var(--sans);white-space:normal;min-width:7em}
 .rp-captable tr.rp-sum td{font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
 .rp-h3{font-size:14px;font-weight:600;margin:var(--s4) 0 var(--s2)}.rp-h3:first-of-type{margin-top:var(--s2)}
-.rp-root tr.rp-sum td{font-weight:600}.rp-spark{display:block;overflow:visible}
+.rp-root tr.rp-sum td{font-weight:600}.rp-root tr.rp-zonesub>td{padding-top:0;border-top:0}.rp-spark{display:block;overflow:visible}
 .rp-captable tbody.rp-selg>tr>*{background:color-mix(in srgb,var(--accent) 11%,transparent)}.rp-captable tbody.rp-selg th{box-shadow:inset 3px 0 0 var(--accent)}.rp-captable tbody.rp-selg .muted,.rp-captable tbody.rp-selg .sub-line{color:var(--fg-2)}
 .rp-over{font-size:11.5px;margin-left:4px;vertical-align:1px}.rp-over i{width:14px;height:14px;font-size:9px}
 .rp-prof{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
