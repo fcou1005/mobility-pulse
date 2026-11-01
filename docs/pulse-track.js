@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvxu6wlt';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvxwjvvw';
 
 export const TRACK_VERSION = 2;
 export const GAP_MS = 45 * 60e3;  // größerer Abstand zum vorigen Lauf = Lücke: Zustand fortschreiben, keine Ereignisse zählen
@@ -84,8 +84,13 @@ function pairKind(gb, ab, d) {
  * stations: deduplizierte Stationen {operator, id, name, lat, lon, ags, bookable, docksAvailable, renting, installed, returning, isVirtual}
  * sourceRecs: Quellen-Datensätze des Laufs {id, status, latencyMs}
  * hmac: optionale Schlüsselfunktion (gesalzen, siehe vehicleKey); noEvents: Lauf zählt nichts (z. B. Umzug auf neue Schlüssel)
- * Rückgabe: { state, first, dt, gap, hourly: Map(key→emptyHourly), cells: Map(ags→Map(cell→[start,end,present,reloc])), idle: {...}, idleLong: [...], stationQuota, reliability, srcModes }
- * gap = Lauf nach Lücke (dt > GAP_MS) oder noEvents: Zustand wird fortgeschrieben, hourly/cells bleiben leer, keine Gruppen.
+ * Rückgabe: { state, first, dt, gap, hourly: Map(key→emptyHourly), cells: Map(ags→Map(cell→[start,end,present,reloc])), idle: {...}, idleLong: [...], stationQuota, reliability, srcModes,
+ *   flows: Map('ags|op|type|band' → Map('vonZelle>nachZelle' → {count, durSum, distSum})) }
+ * gap = Lauf nach Lücke (dt > GAP_MS) oder noEvents: Zustand wird fortgeschrieben, hourly/cells/flows bleiben leer, keine Gruppen.
+ * flows: Fahrten mit bekanntem Start und Ziel, nur Quellen mit stabilen Kennungen (modeOf 'stable'): Versatz ≥ 150 m, als Fahrt gewertet
+ * (Start = alte Zelle, Dauer = Laufintervall), oder Rückkehr ≥ 150 m vom Ort des Verschwindens (Dauer = Zeit seit dem Verschwinden ≤ 2 h; nicht nach
+ * Sperrung/Akku < 15 %, nicht aufgeladen, nicht im Sammeltransport, nicht schneller als 24 km/h). ags = Gemeinde des Starts, band = Tageszeit-Band
+ * des Laufs (Ende), durSum in ms, distSum = Luftlinie in m. Rotierende Kennungen werden NICHT verknüpft (keine Re-Identifizierung über Reichweite o. Ä.).
  *
  * Methode: Verschwundene und neu aufgetauchte Kennungen eines Anbieters und einer Fahrzeugart werden global gepaart (alle Kandidatenpaare
  * nach Kosten sortiert): gleicher Ladestand (± ENERGY_TOL) bis 100 m bzw. ohne Ladestand bis 40 m = Kennungswechsel, Ladestand springt am
@@ -106,6 +111,13 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   const cells = new Map();
   const CELL = (ags, cell) => { if (gap) return voidC; if (!cells.has(ags)) cells.set(ags, new Map()); const m = cells.get(ags); if (!m.has(cell)) m.set(cell, new Array(CELL_LEN).fill(0)); return m.get(cell); };
   const band = bandOf(hour);
+  const flows = new Map(); // Start-Ziel-Ströme (nur stabile Kennungen), siehe oben
+  const FLOW = (ags, op, ty, from, to, dur, dist) => {
+    if (gap) return;
+    const k = `${ags}|${op}|${ty}|${band}`; let m = flows.get(k); if (!m) flows.set(k, m = new Map());
+    const p = `${from}>${to}`; const f = m.get(p) || { count: 0, durSum: 0, distSum: 0 }; f.count++; f.durSum += dur; f.distSum += dist; m.set(p, f);
+  };
+  const rets = []; // Rückkehrer stabiler Kennungen: Strom erst nach der Sammeltransport-Prüfung
   const dict = state.dict;
   const D = (name, v) => dictIdx(dict, name, v);
   const seen = new Set();
@@ -159,6 +171,9 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       const dur = now - (missingSince || state.at || now);
       if (dist >= JITTER_M && dur <= TRIP_MAX_MS) { h.tripDistSum += dist; h.tripDistN++; h.tripDurSum += dur; h.tripDurN++; }
       if (stable && dist >= MOVE_M) landed.push({ op: v.operator, lat: v.lat, lon: v.lon });
+      // Strom nur, wenn das Verschwinden als Fahrtbeginn galt (nicht gesperrt, Akku ≥ 15 %) und das Fahrzeug nicht aufgeladen zurückkommt
+      if (stable && dist >= MOVE_M && dur <= TRIP_MAX_MS && !v.disabled && !(pflags & F_DISABLED) && !(pbat != null && pbat < PICKUP_BATTERY) && !(bat != null && pbat != null && bat > pbat + ENERGY_TOL))
+        rets.push({ op: v.operator, ty, ags: dict.ags[pags], from: cellOf(plat / 1e5, plon / 1e5), to: cell, lat: v.lat, lon: v.lon, dist, dur, noLoss: bat != null && pbat != null && bat >= pbat && dist >= NOLOSS_M });
     } else if (dist >= MOVE_M) {
       s.moved++;
       if (stable && !v.disabled && !(pflags & F_DISABLED)) {
@@ -197,13 +212,13 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     }
   }
   // --- Versatz bei stabilen Kennungen: Sammeltransport / ohne Energieverlust = Umsetzung, sonst Fahrt (3,5–24 km/h) bzw. slow/fast ---
-  if (moves.length) {
+  if (moves.length || rets.length) {
     const TGA = 0.0004, TGO = 0.0007; const tk = (op, la, lo) => `${op}|${Math.floor(la / TGA)}:${Math.floor(lo / TGO)}`; // Zelle ≥ 40 m
     const tgrid = new Map(); for (const p of landed) { const k = tk(p.op, p.lat, p.lon); if (!tgrid.has(k)) tgrid.set(k, []); tgrid.get(k).push(p); }
     const kmh = (m) => (m.dist / 1000) / (dt / 3600e3);
+    const nearOf = (m) => { const gi = Math.floor(m.lat / TGA), gj = Math.floor(m.lon / TGO); let near = 0; for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const o of tgrid.get(`${m.op}|${gi + di}:${gj + dj}`) || []) if (haversineM(m.lat, m.lon, o.lat, o.lon) <= TRANSPORT_M) near++; return near; };
     for (const m of moves) {
-      const gi = Math.floor(m.lat / TGA), gj = Math.floor(m.lon / TGO); let near = 0; // zählt m selbst mit
-      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const o of tgrid.get(`${m.op}|${gi + di}:${gj + dj}`) || []) if (haversineM(m.lat, m.lon, o.lat, o.lon) <= TRANSPORT_M) near++;
+      const near = nearOf(m); // zählt m selbst mit
       const noLoss = m.pbat != null && m.bat != null && m.bat >= m.pbat && m.dist >= NOLOSS_M;
       const h = H(m.op, m.ags, m.ty);
       if (near >= TRANSPORT_MIN || noLoss) { h.reloc[hour]++; m.c[3]++; arrivals.push({ op: m.op, ty: m.ty, ags: m.ags, lat: m.lat, lon: m.lon, src: m.src }); continue; }
@@ -213,6 +228,12 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       H(m.op, m.agsOld, m.ty).start[hour]++; const co = CELL(m.agsOld, m.cellOld); co[0]++; co[4 + band]++;
       h.end[hour]++; m.c[1]++; m.c[16 + band]++;
       h.tripDistSum += m.dist; h.tripDistN++; h.tripDurSum += dt; h.tripDurN++; // Dauer ≤ dt (Obergrenze)
+      FLOW(m.agsOld, m.op, m.ty, m.cellOld, cellOf(m.lat, m.lon), dt, m.dist);
+    }
+    // Rückkehrer: Sammeltransport (≥ 3 Ankünfte ≤ 40 m), ≥ 2 km ohne Ladestandverlust oder selbst bei längster möglicher Dauer (seit Verschwinden + Laufintervall) > 24 km/h = kein Strom
+    for (const r of rets) {
+      if (nearOf(r) >= TRANSPORT_MIN || r.noLoss || (r.dist / 1000) / ((r.dur + dt) / 3600e3) > TRIP_MAX_KMH) continue;
+      FLOW(r.ags, r.op, r.ty, r.from, r.to, r.dur, r.dist);
     }
   }
   // --- Verschwundene Fahrzeuge ---
@@ -308,7 +329,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   // bzw. verschwinden zusammen (Einsammeln). Quellen mit Massenwechsel (Ausfall, Neustart) zählen nicht.
   const glitch = new Set(Object.entries(srcRun).filter(([, r]) => (r.newc + r.gone) > 0.3 * Math.max(1, r.present + r.newc)).map(([k]) => k));
   const groups = first || gap ? [] : [...clusterGroups(arrivals.filter(a => !glitch.has(a.src)), 'deploy', now), ...clusterGroups(departures.filter(a => !glitch.has(a.src)), 'collect', now)];
-  return { state, first, dt, gap, hourly, cells, idle, idleLong, srcModes, day, hour, groups };
+  return { state, first, dt, gap, hourly, cells, idle, idleLong, srcModes, day, hour, groups, flows };
 }
 
 export const GROUP_MIN = 5, GROUP_M = 40;
@@ -362,6 +383,77 @@ export function mergeCells(doc, cells, munis, day, { dt = null, hour = null, gap
     for (const [cell, v] of m) { const c = a[cell] || (a[cell] = new Array(CELL_LEN).fill(0)); while (c.length < CELL_LEN) c.push(0); for (let i = 0; i < CELL_LEN; i++) c[i] += v[i] || 0; }
   }
   return out;
+}
+// ---------- Start-Ziel-Ströme: Tagessumme (privat) und veröffentlichte Tagesdatei ----------
+// Rohsummen liegen nur neben dem Verfolgungszustand (TRACK_DIR, nicht im Datenzweig). Veröffentlicht wird ein Tag erst, wenn er vorbei ist:
+// eine je Lauf fortgeschriebene Datei würde im Vergleich zweier Stände einzelne Fahrten (Zellenpaar, 20-Min.-Fenster) zeigen.
+export const FLOW_VERSION = 1;
+export const FLOW_MIN = 2;   // je Tag und Zellenpaar mindestens 2 Fahrten in jeder veröffentlichten Zeile
+export const FLOW_TOP = 300; // je Gemeinde höchstens so viele Zeilen (nach Anzahl), Rest als „außerhalb Top“
+export const FLOW_FIELDS = ['gemeinde', 'von', 'nach', 'anbieter', 'art', 'band', 'anzahl', 'dauer_s', 'luftlinie_m'];
+/** Gemeinde → Anbieter mit stabilen Kennungen (aus srcModes und den Quellen-Datensätzen {id, operator, municipalities}) */
+export function stableOps(srcModes, sources) {
+  const out = {};
+  for (const r of sources || []) { if (srcModes?.[r.id] !== 'stable') continue; for (const ags of r.municipalities || []) { const a = (out[ags] ??= []); if (!a.includes(r.operator)) a.push(r.operator); } }
+  for (const a of Object.values(out)) a.sort();
+  return out;
+}
+/** Tagessumme fortschreiben: { version, day, runs, rows: { 'ags|op|type|band': { 'von>nach': [anzahl, dauerMs, luftlinieM] } }, stable: { ags: [op] } }; neuer Tag = neue Summe */
+export function mergeFlows(raw, flows, { day, gap = false, stable = null } = {}) {
+  const doc = raw && raw.day === day && raw.version === FLOW_VERSION ? raw : { version: FLOW_VERSION, day, runs: 0, rows: {}, stable: {} };
+  if (!gap) doc.runs++;
+  for (const [k, m] of flows || []) { const r = (doc.rows[k] ??= {}); for (const [p, f] of m) { const a = (r[p] ??= [0, 0, 0]); a[0] += f.count; a[1] += f.durSum; a[2] += f.distSum; } }
+  for (const [ags, ops] of Object.entries(stable || {})) { const a = (doc.stable[ags] ??= []); for (const op of ops) if (!a.includes(op)) a.push(op); a.sort(); }
+  return doc;
+}
+// Zusammenfassung je Zellenpaar, von fein nach grob: [Anbieter, Art, Band] behalten (1) oder zusammenfassen (0).
+// Jede Stufe nimmt nur, was die feinere übrig ließ; Zeilen sind überschneidungsfrei, jede mit ≥ min Fahrten. Was auch grob unter min bleibt: „unter Mindestschwelle“.
+const FLOW_LEVELS = [[1, 1, 1], [1, 1, 0], [0, 1, 1], [0, 1, 0], [0, 0, 0]];
+/**
+ * Veröffentlichte Tagesdatei aus der Tagessumme. flows-Zeilen nach FLOW_FIELDS: [ags(Start), von, nach (Zellen wie cellOf), anbieter|null, art|null, band|null,
+ * anzahl, dauer_s (Summe), luftlinie_m (Summe)]; null = über mehrere zusammengefasst (einzeln unter der Mindestschwelle).
+ * munis[ags] = { trips, shown, below, cut, ops: {Anbieter: Fahrten} }: trips = shown + below + cut.
+ */
+export function publishFlows(raw, { min = FLOW_MIN, top = FLOW_TOP, at = null } = {}) {
+  const pairs = new Map(), munis = {};
+  const M = (ags) => (munis[ags] ??= { trips: 0, shown: 0, below: 0, cut: 0, ops: {} });
+  for (const [k, r] of Object.entries(raw?.rows || {})) {
+    const [ags, op, ty, b] = k.split('|');
+    for (const [p, a] of Object.entries(r)) {
+      if (!(a[0] > 0)) continue;
+      const pk = `${ags}|${p}`; if (!pairs.has(pk)) pairs.set(pk, []);
+      pairs.get(pk).push({ op, ty, band: +b, n: a[0], dur: a[1], dist: a[2] });
+      const m = M(ags); m.trips += a[0]; m.ops[op] = (m.ops[op] || 0) + a[0];
+    }
+  }
+  const byAgs = new Map();
+  for (const [pk, units] of pairs) {
+    const i = pk.indexOf('|'), ags = pk.slice(0, i), [from, to] = pk.slice(i + 1).split('>');
+    let rest = units;
+    for (const [kOp, kTy, kBand] of FLOW_LEVELS) {
+      if (!rest.length) break;
+      const g = new Map();
+      for (const u of rest) { const gk = `${kOp ? u.op : ''}\u0000${kTy ? u.ty : ''}\u0000${kBand ? u.band : ''}`; if (!g.has(gk)) g.set(gk, []); g.get(gk).push(u); }
+      rest = [];
+      for (const list of g.values()) {
+        const n = list.reduce((s, u) => s + u.n, 0);
+        if (n < min) { rest.push(...list); continue; }
+        const u0 = list[0];
+        const row = [ags, from, to, kOp ? u0.op : null, kTy ? u0.ty : null, kBand ? u0.band : null, n, Math.round(list.reduce((s, u) => s + u.dur, 0) / 1000), Math.round(list.reduce((s, u) => s + u.dist, 0))];
+        if (!byAgs.has(ags)) byAgs.set(ags, []); byAgs.get(ags).push(row);
+      }
+    }
+    M(ags).below += rest.reduce((s, u) => s + u.n, 0);
+  }
+  const flows = [];
+  for (const [ags, rows] of [...byAgs].sort((a, b) => a[0].localeCompare(b[0]))) {
+    rows.sort((a, b) => b[6] - a[6] || b[8] - a[8] || `${a[1]}>${a[2]}`.localeCompare(`${b[1]}>${b[2]}`) || String(a[3]).localeCompare(String(b[3])) || String(a[4]).localeCompare(String(b[4])) || (a[5] ?? 9) - (b[5] ?? 9));
+    const keep = rows.slice(0, top); flows.push(...keep);
+    M(ags).shown = keep.reduce((s, r) => s + r[6], 0); M(ags).cut = rows.slice(top).reduce((s, r) => s + r[6], 0);
+  }
+  const total = { trips: 0, shown: 0, below: 0, cut: 0 };
+  for (const m of Object.values(munis)) for (const f of Object.keys(total)) total[f] += m[f];
+  return { version: FLOW_VERSION, day: raw?.day ?? null, at, runs: raw?.runs ?? 0, min, top, cell: [CELL_LAT, CELL_LON], bands: BANDS.map(({ label, from, to }) => ({ label, from, to })), fields: FLOW_FIELDS, flows, munis, stable: raw?.stable || {}, total };
 }
 export function stationQuota(state) {
   const out = [];

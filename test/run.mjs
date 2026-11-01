@@ -52,7 +52,9 @@ const slow = [{ id: 'slow_test', name: 'Langsam', operator: 'Zeus', api: 'gbfs',
 const auth_sources = { t: { host: new URL(ex.base).host, headers: { 'x-api-key': 'MP_TEST_KEY' }, env: ['MP_TEST_KEY'] } };
 await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, ...slow] }));
 await writeFile(path.join(tmp, 's4.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra] }));
-const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000' };
+// Obergrenze für die Testgemeinde (Bolt-E-Scooter), damit der Sammler caps-log.json schreibt
+await writeFile(path.join(tmp, 'ref.json'), JSON.stringify({ obergrenzen: [{ ags: '08416041', ort: 'Tübingen (Test)', type: 'scooter', gesamt: 1, jeAnbieter: 5, quelle: 'Test', url: 'https://example.org' }] }));
+const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json') };
 const t3 = Date.now();
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's3.json') });
 const l3 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
@@ -105,10 +107,33 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const ev4 = JSON.parse(await readFile(`test/out/events/${JSON.parse(await readFile('test/out/events/index.json', 'utf8')).days.slice(-1)[0]}.json`, 'utf8'));
 const runs4 = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs;
 assert(!existsSync('test/out/track') && ev4.runs.slice(-1)[0][2] === 1 && runs4.slice(-1)[0][9] === 0 && runs4.slice(-1)[0][10] === 0 && runs4.slice(-1)[0][11] === 0, 'Lauf mit gesalzenem Zustand: Flag 1, keine Scheinereignisse');
+const clog = JSON.parse(await readFile('test/out/caps-log.json', 'utf8'));
+const bolt4 = l4.groups['08416041|Bolt|scooter']?.total || 0;
+assert(clog.fields.join() === 'at,ags,operator,count,limit,dtMs' && clog.rules.length === 1 && clog.rules[0].limit === 1 && clog.checks.some(c => c[0] === l4.at && c[1] === '08416041' && c[2] === '*' && c[3] === bolt4 && c[4] === 1 && c[5] > 0) && !clog.checks.some(c => c[2] === 'Bolt') && clog.daily.some(d => d[1] === '08416041' && d[2] === 'Bolt' && d[3] === bolt4 && d[4] === 5), `caps-log.json: Überschreitung gesamt (${bolt4} > 1) je Lauf mit Fenster, Bolt unter 90 % nur als Tagesmaximum`);
 const plog = JSON.parse(await readFile('test/out/pricing-log.json', 'utf8'));
 assert(plog.fields.join() === 'at,sourceId,operator,planId,field,old,new' && plog.changes.some(c => c[1] === 'p_test' && c[3] === 'std' && c[4] === 'unlock' && c[5] === 1 && c[6] === 1.5), 'pricing-log.json: Entsperrpreis 1 → 1,5');
 assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.counts.byStatus.gone && l4.counts.retired === 1 && l4.counts.failing === 0 && runs4.slice(-1)[0][6] === 0, 'über 14 Tage weg → retired, kein Fehler (latest.counts.failing, runs.json)');
 
+// Lauf 4b: Start-Ziel-Ströme. Zustand: alle Quellen stabil, Positionen 1,45 km südlich, 20 Min. alt → Versätze = Fahrten (Tagessumme privat).
+// Tagessumme von gestern untergeschoben → dieser Lauf veröffentlicht gestern mit Mindestschwelle; heute bleibt bis Tagesende privat.
+{
+  const fl0 = JSON.parse(await readFile('test/out/flows/index.json', 'utf8'));
+  assert(fl0.days.length === 0 && fl0.collecting === T.dayOf(Date.now()) && !existsSync(`test/out/flows/${fl0.collecting}.json`) && existsSync(path.join(TRACK_DIR, 'flows-raw.json.gz')), 'flows: laufender Tag nur privat (TRACK_DIR), nicht veröffentlicht');
+  const f = path.join(TRACK_DIR, 'state.json.gz'); const s = JSON.parse(gunzipSync(await readFile(f)).toString('utf8'));
+  s.at -= 20 * 60e3; for (const id of Object.keys(s.srcStats)) s.srcStats[id] = { runs: 10, present: 500, gone: 20, moved: 40, newc: 30, returned: 30 };
+  for (const e of Object.values(s.v)) e[0] -= 1300; await writeFile(f, gzipSync(JSON.stringify(s)));
+  const yd = T.dayOf(Date.now() - 86400e3);
+  await writeFile(path.join(TRACK_DIR, 'flows-raw.json.gz'), gzipSync(JSON.stringify({ version: 1, day: yd, runs: 3, stable: { '08416041': ['Bolt'] }, rows: {
+    '08416041|Bolt|scooter|1': { '19408:2586>19412:2590': [3, 900e3, 3000], '19408:2586>19409:2587': [1, 300e3, 400] }, '08416041|Lime|scooter|1': { '19408:2586>19412:2590': [1, 200e3, 900] } } })));
+  await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
+  const fl = JSON.parse(await readFile('test/out/flows/index.json', 'utf8')), pub = JSON.parse(await readFile(`test/out/flows/${yd}.json`, 'utf8'));
+  const rawT = JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, 'flows-raw.json.gz'))).toString('utf8'));
+  const tripsT = Object.values(rawT.rows).reduce((a, r) => a + Object.values(r).reduce((x, v) => x + v[0], 0), 0);
+  assert(fl.days.join() === yd && fl.collecting === T.dayOf(Date.now()) && fl.min === 2 && fl.fields.join() === T.FLOW_FIELDS.join(), 'flows/index.json: abgeschlossener Tag gelistet, heute in Sammlung');
+  assert(JSON.stringify(pub.flows) === JSON.stringify([['08416041', '19408:2586', '19412:2590', 'Bolt', 'scooter', 1, 3, 900, 3000]]) && pub.munis['08416041'].below === 2 && pub.total.trips === 5 && pub.stable['08416041'][0] === 'Bolt', 'flows/<gestern>.json: nur Zeilen ≥ 2 Fahrten, Einzelfahrten als Summe unter Mindestschwelle');
+  const run4b = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs.slice(-1)[0];
+  assert(rawT.day === T.dayOf(Date.now()) && tripsT >= 4 && tripsT === run4b[9] && Object.keys(rawT.rows).every(k => /^\d{8}\|.+\|.+\|[0-5]$/.test(k)) && !existsSync('test/out/flows-raw.json.gz') && !existsSync('test/out/track'), `Tagessumme heute privat: ${tripsT} Fahrten mit Start und Ziel = gezählte Fahrten des Laufs (gesperrtes a2 nicht), nichts davon im Datenzweig`);
+}
 // Lauf 5: Lücke (Zustand 2 h alt) → Flag 0, gestörte Stunde im Tagesdokument, Verlauf-Flag 0
 {
   const f = path.join(TRACK_DIR, 'state.json.gz'); const s5 = JSON.parse(gunzipSync(await readFile(f)).toString('utf8'));

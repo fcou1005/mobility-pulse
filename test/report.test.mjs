@@ -277,3 +277,73 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
   const rep = R.municipalReport({ docs: [d2], hists: { '2026-11-02': h }, ags: '08111000' });
   assert(h && R.histFromDaily(daily, '2026-11-03') === null && rep.groups[0].fleet === 120 && near(rep.groups[0].disabledShare, 0.1), 'history/daily.json als Ersatz: Ø Flotte und Sperrquote aus den Tagesmitteln');
 }
+
+// ---------- Heatmap Start/Ziel ----------
+{
+  const d = { day: '2026-11-02', runs: fullHourRuns('2026-11-02', 10), groups: { 'A|x|scooter': { start: h24({ 10: 3 }), end: h24({ 10: 7 }) } } };
+  const s = R.weekHeatmap([d]), e = R.weekHeatmap([d], () => true, { field: 'end' });
+  assert(s.cells[0][10].mean === 3 && e.cells[0][10].mean === 7 && e.field === 'end' && s.field === 'start', 'Heatmap: Umschalter Fahrtbeginne / Fahrtenden');
+}
+
+// ---------- Obergrenzen-Protokoll (caps-log.json) ----------
+{
+  const ref = { obergrenzen: [{ ags: 'S', ort: 'Stuttgart', type: 'scooter', gesamt: 100, jeAnbieter: 40, quelle: 'Stadt', url: 'https://example.org' }] };
+  const t0 = Date.parse('2026-11-02T08:00:00Z');
+  const caps = (voi, bolt) => R.capsCheck(ref, { 'S|Voi|scooter': { total: voi }, 'S|Bolt|scooter': { total: bolt } }, { ags: 'DE', asOf: t0 });
+  let log = R.capsLogUpdate(null, caps(30, 20), { at: t0, dt: 20 * 60e3 });
+  assert(log.checks.length === 0 && log.daily.length === 3 && log.rules[0].limit === 100 && log.rules[0].perOperator === 40 && log.fields.join() === 'at,ags,operator,count,limit,dtMs', 'unter 90 %: keine Prüfung, aber Tagesmaximum je Gemeinde × Anbieter (gesamt, Voi, Bolt)');
+  log = R.capsLogUpdate(log, caps(45, 50), { at: t0 + 20 * 60e3, dt: 20 * 60e3 });
+  log = R.capsLogUpdate(log, caps(44, 52), { at: t0 + 40 * 60e3, dt: 20 * 60e3 });
+  log = R.capsLogUpdate(log, caps(38, 30), { at: t0 + 60 * 60e3, dt: 120 * 60e3 }); // Voi 95 % (nahe), langes Fenster gekappt auf 45 Min.
+  const voiChecks = log.checks.filter(c => c[2] === 'Voi');
+  assert(log.checks.filter(c => c[2] === '*').length === 2 && voiChecks.length === 3 && voiChecks[2][5] === 45 * 60e3 && log.daily.find(d => d[2] === 'Voi')[3] === 45, 'Prüfungen ab 90 % der Grenze (gesamt 95 und 96 von 100, Voi 45/44/38 von 40), Fenster höchstens 45 Min., Tagesmaximum steigt');
+  const v = R.capsViolations(log, { asOf: t0 + 2 * 3600e3 });
+  const S = v[0], voi = S.ops.find(o => o.op === 'Voi'), bolt = S.ops.find(o => o.op === 'Bolt'), tot = S.ops.find(o => o.op === '*');
+  assert(v.length === 1 && voi.overMs === 40 * 60e3 && voi.overRuns === 2 && voi.nearMs === 45 * 60e3 && voi.peak === 45 && bolt.overMs === 40 * 60e3 && bolt.peak === 52 && tot.op === '*' && tot.overMs === 0 && tot.nearRuns === 2, 'Verstöße: Dauer über der Grenze je Anbieter, Spitzenwert, nahe-Dauer; gesamt 95/96 nur nahe');
+  assert(S.daily.length === 1 && S.daily[0].max === 96 && S.daily[0].limit === 100, 'Verlauf: Tagesmaximum gesamt');
+  const old = R.capsLogUpdate(log, caps(10, 10), { at: t0 + 31 * 86400e3, dt: 20 * 60e3 });
+  assert(old.checks.length === 0 && old.daily.every(d => d[0] === R.berlinDay(t0 + 31 * 86400e3)), 'nach 30 Tagen fallen Prüfungen und Tagesmaxima heraus');
+  assert(R.capsViolations(null).length === 0 && R.capsViolations({ checks: [], rules: ref.obergrenzen }, { ags: 'S' })[0].ops.length === 0, 'ohne Datei leer; Gemeinde mit Regel, aber ohne Verstoß');
+  const many = R.capsLogUpdate({ checks: Array.from({ length: 7000 }, (_, i) => [t0 - i * 1000, 'S', '*', 99, 100, 1000]) }, [], { at: t0 + 1 });
+  assert(many.checks.length === 6000 && many.checks[0][0] > t0 - 7000 * 1000, 'Größe begrenzt: höchstens 6.000 Prüfungen, älteste fallen zuerst');
+}
+
+// ---------- Zeiträume Monat/Quartal und Archiv ----------
+{
+  assert(R.periodRange('q:2026-Q4').from === '2026-10-01' && R.periodRange('q:2026-Q4').to === '2026-12-31' && R.periodRange('m:2028-02').to === '2028-02-29' && R.periodRange('x') === null, 'Zeitraum Quartal/Monat: Beginn und Ende (Schaltjahr)');
+  const span = (a, b) => { const out = []; for (let t = Date.parse(`${a}T12:00:00Z`); t <= Date.parse(`${b}T12:00:00Z`); t += 86400e3) out.push(new Date(t).toISOString().slice(0, 10)); return out; };
+  const d1 = span('2026-10-31', '2026-11-01');
+  assert(R.completeQuarters(d1).length === 0 && R.monthsOf(d1).length === 2 && R.monthsOf(d1).every(m => !m.complete && m.days === 1), 'zwei Tage: kein vollständiges Quartal, zwei angefangene Monate');
+  const d2 = span('2026-12-20', '2027-07-02');
+  assert(R.completeQuarters(d2).join() === '2027-Q1,2027-Q2' && R.monthsOf(d2).find(m => m.key === '2027-01').complete && R.daysIn('q:2027-Q1', d2).length === 90, 'Quartal erst, wenn die Daten ganz darüber reichen; Q1/2027 = 90 Tage');
+  const rq = R.rankingQuarters(d2);
+  assert(rq && rq.cur === '2027-Q2' && rq.prev === '2027-Q1' && rq.curDays.length === 91 && R.rankingQuarters(span('2027-01-01', '2027-04-02')) === null, 'Vorquartal: zwei aufeinanderfolgende vollständige Quartale');
+  const arch = { '2027-01-01': { 'S|Voi|scooter': [100, 120, 118, 5, 2, 1, 0, 3, 720], 'S|nb|bike': [50, 20, 20, 0, 0, 0, 0, 0, 720], 'B|Voi|scooter': [10, 999, 0, 0, 0, 0, 0, 0, 720] },
+    '2027-01-02': { 'S|Voi|scooter': [110, 330, 320, 5, 2, 1, 0, 3, 1440] } };
+  const ar = R.archiveReport({ archive: arch, ags: 'S', pop: 10000 });
+  const voi = ar.groups.find(g => g.op === 'Voi');
+  assert(ar.quality.source === 'archiv' && ar.days.length === 2 && near(voi.fleet, 105) && voi.rides === 450 && near(voi.ridesDay, 450 / 1.5) && near(voi.rvd, 300 / 105) && ar.quality.fullDays === 1 && ar.daily[0].coverage === 0.5, 'Archiv-Bericht: Ø Flotte, Fahrten linear über die beobachtete Zeit hochgerechnet (720 Min. = halber Tag)');
+  assert(near(ar.totals.per1000Rides, (300 + 40) / 10) && ar.cells.n === 0 && ar.groups.every(g => g.avgMin == null), 'Archiv-Bericht: je 1.000 EW, ohne Orte und Dauer');
+  const rows = R.reportCsvRows(ar, { name: 'S', period: { kind: 'Quartal', label: 'Q1/2027' } });
+  assert(rows.every(r => r.length === rows[0].length) && rows[0].slice(-3).join() === 'Zeitraum_Art,Zeitraum_Name,Quartal' && rows[1].slice(-3).join() === 'Quartal,Q1/2027,2027-Q1', 'Bericht-CSV mit Zeitraum-Art und Quartal je Zeile');
+  const crk = R.cityRankingArchive(arch, { municipalities: { S: { name: 'Stadt' } } }, { type: 'scooter' });
+  const rs = crk.rows.find(r => r.ags === 'S'), rb = crk.rows.find(r => r.ags === 'B');
+  assert(rs.name === 'Stadt' && near(rs.rvd, 300 / 105) && rb.rvd === null && rb.fleet === 10, 'Rangliste aus dem Archiv: unplausible Quote (> 15) zählt nur bei der Flotte');
+}
+
+// ---------- Plausibilitätsgrenze aus der Kalibrierung (Überzählung) ----------
+{
+  const fullDay = (day) => Array.from({ length: 24 }, (_, h) => fullHourRuns(day, h)).flat();
+  const doc = { day: '2026-11-02', runs: fullDay('2026-11-02'), groups: {
+    'F|Lime|scooter': { start: h24(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, 40]))), vminTot: new Array(24).fill(100 * 60) },   // 960 Fahrten / 100 Fzg. = 9,6
+    'F|Dott|scooter': { start: h24(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, 8]))), vminTot: new Array(24).fill(100 * 60) },    // 192 / 100 = 1,92
+    'F|nb|bike': { start: h24(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, 20]))), vminTot: new Array(24).fill(100 * 60) } } };     // 4,8 (keine Grenze)
+  const lim = { scooter: 3.465 };
+  const a = R.municipalReport({ docs: [doc], ags: 'F' }), b = R.municipalReport({ docs: [doc], ags: 'F', rvdLimit: lim });
+  const lb = b.groups.find(g => g.op === 'Lime');
+  assert(a.groups.every(g => g.plausible) && !lb.plausible && lb.flags[0] === R.SUSPENDED && b.groups.find(g => g.op === 'nb').plausible && near(b.totals.ridesDay, 192 + 480, 1e-6) && b.totals.excluded.join() === 'Lime|scooter', 'Bericht: E-Scooter über der Grenze (9,6 > 3,47) als Überzählung markiert und aus Summen genommen; Räder ohne Grenze');
+  const latest = { municipalities: { F: { name: 'Fstadt' } } };
+  const rk = R.cityRanking([doc], {}, latest, { type: 'scooter', minFleet: 0, rvdLimit: lim }).rows[0];
+  assert(rk.excluded.join() === 'Lime' && near(rk.rvd, 1.92, 1e-6) && rk.fleet === 200, 'Rangliste: überzählender Anbieter nur bei der Flotte');
+  assert(R.overLimit(3.5, 'scooter', lim) && !R.overLimit(3.4, 'scooter', lim) && !R.overLimit(9, 'bike', lim) && !R.overLimit(9, 'scooter', null), 'Grenze nur für Arten mit Referenz');
+}

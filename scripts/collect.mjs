@@ -8,6 +8,7 @@ import * as C from '../lib/pulse-core.js';
 import * as T from '../lib/pulse-track.js';
 import * as OPS from '../lib/pulse-ops.js';
 import * as E from '../lib/pulse-econ.js';
+import * as R from '../lib/pulse-report.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -463,6 +464,22 @@ await mkdir(path.join(DATA, 'snapshot'), { recursive: true });
 await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(latest));
 await writeFile(path.join(DATA, 'status.json'), JSON.stringify({ at: now, generatedAt: latest.generatedAt, runMs: latest.runMs, counts: latest.counts, byStatus: statusCounts }));
 
+// Obergrenzen je Lauf prüfen (Gemeinden mit Eintrag in reference.json → obergrenzen, liegt auf main im Checkout): Läufe ab 90 % der Grenze
+// gesamt und je Anbieter, dazu je Tag das Maximum; 30 Tage (caps-log.json, Format in lib/pulse-report.js capsLogUpdate)
+try {
+  const refFile = process.env.REFERENCE_FILE || path.join(ROOT, 'data', 'reference.json');
+  const ref = existsSync(refFile) ? JSON.parse(await readFile(refFile, 'utf8')) : null;
+  if (ref?.obergrenzen?.length) {
+    const f = path.join(DATA, 'caps-log.json');
+    const prevLog = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null;
+    const caps = R.capsCheck(ref, groupsOut, { ags: 'DE', asOf: now });
+    const doc = R.capsLogUpdate(prevLog, caps, { at: now, dt: prev?.at ? now - prev.at : null, days: 30 });
+    await writeFile(f, JSON.stringify(doc));
+    const over = caps.flatMap(c => [c, ...c.operators].filter(x => x.status === 'over').map(x => `${c.ort}${x.op ? ` ${x.op}` : ''} ${x.total}/${x.limit}`));
+    if (over.length) log(`Obergrenzen überschritten: ${over.join(', ')}`);
+  }
+} catch (e) { log(`Obergrenzen-Protokoll: ${e.message}`); }
+
 // Momentaufnahmen (nur Zugangs-Quellen)
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
@@ -587,6 +604,19 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   // je Bundesland aufgeteilt (kleinere Downloads)
   await mkdir(path.join(cellsDir, tr.day), { recursive: true });
   for (const [st, doc] of Object.entries(cellDoc.states)) await writeFile(path.join(cellsDir, tr.day, `${st}.json`), JSON.stringify({ day: tr.day, state: st, bandMin: cellDoc.bandMin, bandRuns: cellDoc.bandRuns, fields: 'start,end,present,reloc,start×6,present×6,end×6', munis: doc }));
+  // Start-Ziel-Ströme (nur stabile Kennungen; lib/pulse-track.js publishFlows): Tagessumme privat in TRACK_DIR, veröffentlicht wird ein Tag
+  // erst nach Tagesende (flows/<Tag>.json, ≥ 2 Fahrten je Zeile, Top 300 je Gemeinde, 30 Tage) – ohne privates Verzeichnis keine Ströme
+  if (TRACK_DIR) {
+    const flDir = path.join(DATA, 'flows'), rawFile = path.join(TRACK_DIR, 'flows-raw.json.gz');
+    await mkdir(flDir, { recursive: true });
+    const raw0 = await readState(rawFile);
+    if (raw0?.day && raw0.day < tr.day) { const pub = T.publishFlows(raw0, { at: now }); await writeFile(path.join(flDir, `${raw0.day}.json`), JSON.stringify(pub)); log(`Ströme ${raw0.day}: ${pub.flows.length} Zeilen (${pub.total.shown} Fahrten), ${pub.total.below} unter Mindestschwelle, ${pub.total.cut} außerhalb Top ${pub.top}`); }
+    const raw = T.mergeFlows(raw0, tr.flows, { day: tr.day, gap: tr.gap, stable: T.stableOps(tr.srcModes, sourceOut) });
+    await writeFile(rawFile, gzipSync(JSON.stringify(raw)));
+    const flDays = (await readdir(flDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    for (const f of flDays.slice(0, -HISTORY_DAYS)) await rm(path.join(flDir, f));
+    await writeFile(path.join(flDir, 'index.json'), JSON.stringify({ days: flDays.slice(-HISTORY_DAYS).map(f => f.slice(0, 10)), collecting: raw.day, min: T.FLOW_MIN, top: T.FLOW_TOP, fields: T.FLOW_FIELDS, updatedAt: now }));
+  }
   // Flotte für die Disposition (Ops): alle deduplizierten Fahrzeuge und Stationen je Bundesland, mit Standzeit
   {
     await mkdir(path.join(DATA, 'ops'), { recursive: true });

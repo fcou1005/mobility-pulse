@@ -11,7 +11,7 @@ const html = (await readFile(path.join(ROOT, 'web', 'index.html'), 'utf8')).repl
 await writeFile(path.join(out, 'index.html'), html);
 // Alle Module mit Versionsanhang importieren, damit kein Browser-Cache alte Teile mischt
 const bust = (src) => src.replace(/from '\.\/([\w-]+\.js)'/g, `from './$1?v=${v}'`);
-for (const [dir, f] of [['web', 'app.js'], ['web', 'ops.js'], ['lib', 'pulse-core.js'], ['lib', 'pulse-track.js'], ['lib', 'pulse-ops.js'], ['lib', 'pulse-econ.js'], ['web', 'report.js'], ['lib', 'pulse-report.js']]) {
+for (const [dir, f] of [['web', 'app.js'], ['web', 'ops.js'], ['lib', 'pulse-core.js'], ['lib', 'pulse-track.js'], ['lib', 'pulse-ops.js'], ['lib', 'pulse-econ.js'], ['lib', 'pulse-calib.js'], ['web', 'report.js'], ['lib', 'pulse-report.js'], ['web', 'flows.js']]) {
   await writeFile(path.join(out, f), bust(await readFile(path.join(ROOT, dir, f), 'utf8')));
 }
 await writeFile(path.join(out, '.nojekyll'), '');

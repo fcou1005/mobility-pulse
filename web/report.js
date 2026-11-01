@@ -3,6 +3,7 @@
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
 import * as R from './pulse-report.js';
+import * as K from './pulse-calib.js';
 import { VEHICLE_TYPE_LABEL as TYPE } from './pulse-core.js';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
@@ -46,6 +47,39 @@ const dailyDoc = (ctx) => fetchJson(ctx, 'history/daily.json', true);
 // Tageswerte für Flotte/Sperrquote: history/daily.json (verdichtet), sonst history/<Tag>.json
 const histFor = (ctx, hidx, daily, day) => { const h = R.histFromDaily(daily, day); return h ? Promise.resolve(h) : histDoc(ctx, hidx, day); };
 async function allDocs(ctx, days) { const idx = await usageIndex(ctx); const list = days || idx.days || []; return { idx, docs: (await Promise.all(list.map(d => eventsDoc(ctx, idx, d)))).filter(Boolean) }; }
+
+// ---------- Kalibrierung (lib/pulse-calib.js): einmal je Datenstand, geteilt mit app.js ----------
+// Berliner Messung = Kommunal-Bericht Berlin, E-Scooter, über die letzten CALIB_DAYS Tagesdateien; Vergleichswerte (Deutschland, Voi,
+// Frankfurt) aus der Städte-Rangliste derselben Tage. Ohne reference.json: Annahmen wie bisher, keine Kalibrierung.
+export const CALIB_DAYS = 14;
+const CALIB_CACHE = new Map();
+const isClient = () => typeof document !== 'undefined' && document.body?.classList.contains('mode-client');
+const natRvd = (rows) => { let rd = 0, fl = 0; for (const r of rows) if (r.rvd > 0 && r.ridesDay != null) { rd += r.ridesDay; fl += r.ridesDay / r.rvd; } return fl > 0 ? { rvd: rd / fl, ridesDay: rd, fleet: fl } : null; };
+export function loadCalibration(ctx) {
+  const key = `${ctx.state?.latest?.at || ''}`;
+  if (!CALIB_CACHE.has(key)) CALIB_CACHE.set(key, (async () => {
+    const ref = await reference(ctx);
+    const idx = await usageIndex(ctx); const days = (idx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(-CALIB_DAYS);
+    const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
+    const [docs, hs] = await Promise.all([Promise.all(days.map(d => eventsDoc(ctx, idx, d))), Promise.all(days.map(d => histFor(ctx, hidx, daily, d)))]);
+    const ok = docs.map((d, i) => [d, days[i], hs[i]]).filter(([d]) => d);
+    const D = ok.map(x => x[0]), H = Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]]));
+    const latest = ctx.state?.latest || null; const limits = K.rvdLimits(ref);
+    // k nur aus plausiblen Berliner Anbietern; Vergleichswerte Deutschland/Voi ohne Überzählungen; Gemeinden (Frankfurt) roh, damit die Prüfung sie zeigt
+    const berlinReport = D.length ? R.municipalReport({ docs: D, hists: H, ags: K.BERLIN, type: 'scooter', latestGroups: null, rvdLimit: limits }) : null;
+    const all = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0, rvdLimit: limits }) : { rows: [] };
+    const raw = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0 }) : { rows: [] };
+    const voi = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', operator: 'Voi', minFleet: 0, rvdLimit: limits }) : { rows: [] };
+    const byAgs = Object.fromEntries(raw.rows.map(r => [r.ags, { rvd: r.rvd, fleet: r.fleet, ridesDay: r.ridesDay }]));
+    const own = { national: natRvd(all.rows), voi: natRvd(voi.rows), byAgs };
+    const c = K.calibration(ref, { berlinReport: berlinReport && berlinReport.groups.length ? berlinReport : null, groups: latest?.groups, own });
+    return { ...c, ref, own, days: ok.map(x => x[1]), berlinReport };
+  })().catch(e => { console.error('Kalibrierung', e); return { assume: K.rideAssumptions(null), limits: {}, k: { applied: false, reason: 'Kalibrierung nicht berechenbar' }, coverage: [], checks: [], ref: null, own: {}, days: [], hasReference: false }; }));
+  return CALIB_CACHE.get(key);
+}
+// Kurzbeschreibung des Faktors für Notizen und CSV, z. B. „Berlin Q4/2025 · vorläufig“
+export const SUSPENDED_TXT = R.SUSPENDED;
+export const calibLabel = (k) => (k?.applied ? `Berlin ${k.quarter}${k.prelim ? ' · vorläufig' : ''}` : '');
 
 // ---------- Stil (einmal in den head; nur Variablen aus index.html) ----------
 const CSS = `
@@ -169,80 +203,133 @@ function download(name, text, type = 'text/csv;charset=utf-8') {
 // ======================================================================
 // 1. Kommunal-Bericht
 // ======================================================================
-function periodOptions(days) {
+// Zeitraum: alle Tage, letzte 7/14, Quartal (nur wenn die Daten ganz darüber reichen), Monat, einzelner Tag
+function periodOptions(days, archDays = []) {
   const opts = [['all', `Alle verfügbaren Tage (${days.length})`]];
   if (days.length > 7) opts.push(['last7', 'Letzte 7 Tage']);
   if (days.length > 14) opts.push(['last14', 'Letzte 14 Tage']);
+  const known = [...new Set([...archDays, ...days])].sort();
+  for (const q of R.completeQuarters(known).reverse()) opts.push([`q:${q}`, `Quartal ${R.periodRange(`q:${q}`).label}`]);
+  for (const m of R.monthsOf(known).reverse()) opts.push([m.period, `${m.label}${m.complete ? '' : ` (${plural(m.days, 'Tag', 'Tage')} mit Daten)`}`]);
   for (const d of [...days].reverse()) opts.push([`day:${d}`, `${R.WEEKDAYS[R.weekdayOf(d)]}, ${dd(d)}`]);
   return opts;
 }
-function pickDays(days, period) {
+function pickDays(days, period, archDays = []) {
   if (period === 'last7') return days.slice(-7);
   if (period === 'last14') return days.slice(-14);
   if (period?.startsWith('day:')) { const d = period.slice(4); return days.includes(d) ? [d] : days; }
+  if (/^[mq]:/.test(period || '')) { const r = R.daysIn(period, [...new Set([...archDays, ...days])]); return r.length ? r : days; }
   return days;
+}
+const periodInfo = (period) => { const r = R.periodRange(period); if (r) return { kind: r.kind, label: r.label, key: r.key }; if (period?.startsWith('day:')) return { kind: 'Tag', label: dd(period.slice(4)) }; return { kind: 'Tage', label: period === 'last7' ? 'letzte 7 Tage' : period === 'last14' ? 'letzte 14 Tage' : 'alle Tage mit Tagesdateien' }; };
+// Langzeit-Archiv (archive/<Monat>.json, nie gekürzt): Tagesliste ohne alle Monate zu laden, wenn der Index firstDay kennt
+const archIndex = (ctx) => fetchJson(ctx, 'archive/index.json', true);
+async function archiveDayList(ctx) {
+  const ai = await archIndex(ctx); const months = (ai?.months || []).filter(m => /^\d{4}-\d{2}$/.test(m)).sort(); if (!months.length) return [];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ai.firstDay || '')) {
+    const last = ctx.state?.latest?.at ? R.berlinDay(ctx.state.latest.at) : `${lastOf(months)}-28`; const out = [];
+    for (let t = Date.parse(`${ai.firstDay}T12:00:00Z`), end = Date.parse(`${last}T12:00:00Z`); t <= end && out.length < 4000; t += 86400e3) out.push(new Date(t).toISOString().slice(0, 10));
+    return out;
+  }
+  const docs = await Promise.all(months.map(m => fetchJson(ctx, `archive/${m}.json`, m === lastOf(months))));
+  return docs.flatMap(d => Object.keys(d?.days || {})).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+}
+async function archiveFor(ctx, days) {
+  const ai = await archIndex(ctx); const months = [...new Set(days.map(d => d.slice(0, 7)))].filter(m => (ai?.months || []).includes(m));
+  const docs = await Promise.all(months.map(m => fetchJson(ctx, `archive/${m}.json`, m === lastOf((ai.months || []).slice().sort()))));
+  const archive = {}; let fields = null; for (const d of docs) { if (!d?.days) continue; fields ??= d.fields; for (const [day, rows] of Object.entries(d.days)) if (days.includes(day)) archive[day] = rows; }
+  return { archive, fields: fields || ai?.fields || R.ARCHIVE_FIELDS };
 }
 function filterText(ctx) {
   const { state } = ctx;
   return [state.operator !== 'all' ? `Anbieter ${ctx.esc(state.operator)}` : 'alle Anbieter', state.type !== 'all' ? ctx.esc(typeName(state.type)) : 'alle Fahrzeugarten'].join(', ');
 }
-// eigene E-Scooter-Werte zum Vergleich mit öffentlichen Referenzen
-function scooterAgg(rep) {
+// eigene E-Scooter-Werte zum Vergleich mit öffentlichen Referenzen (kalibriert: E-Scooter × k)
+function scooterAgg(rep, cal = null) {
   const g = rep.groups.filter(x => x.ty === 'scooter'); if (!g.length) return null;
   const good = g.filter(x => x.plausible);
   const fleet = sum(g.map(x => x.fleet)), fleetG = sum(good.map(x => x.fleet)), rd = good.some(x => x.ridesDay != null) ? sum(good.map(x => x.ridesDay)) : null;
+  const rdC = cal?.applied && rd != null ? sum(good.map(x => cal.groups.get(x.key)?.ridesDay || 0)) : null;
   const w = (f, n) => { const s = g.filter(x => x[f] != null); const N = sum(s.map(x => x[n])); return N ? sum(s.map(x => x[f] * x[n])) / N : null; };
-  return { fleet, rvd: rd != null && fleetG ? rd / fleetG : null, avgMin: w('avgMin', 'durN'), avgKm: w('avgKm', 'distN') };
+  return { fleet, rvd: rd != null && fleetG ? rd / fleetG : null, rvdCal: rdC != null && fleetG ? rdC / fleetG : null, avgMin: w('avgMin', 'durN'), avgKm: w('avgKm', 'distN') };
 }
-function referenceRows(ctx, ref, rep) {
+// Fahrt-Referenz als Text: Spanne, Median, Mittel je km und Minuten
+const fd = (ctx, x) => num(ctx, x, Math.abs(x * 10 - Math.round(x * 10)) > 1e-9 ? 2 : 1);
+function tripTxt(ctx, r) {
+  const one = (unit, mean, med, lo, hi) => [lo != null && hi != null ? `${fd(ctx, lo)}–${fd(ctx, hi)} ${unit}` : null, med != null ? `Median ${fd(ctx, med)} ${unit}` : null, mean != null ? `Ø ${fd(ctx, mean)} ${unit}` : null].filter(Boolean).join(', ');
+  return [one('km', r.kmMittel, r.kmMedian, r.kmMin, r.kmMax), one('Min.', r.minMittel, r.minMedian, r.minMin, r.minMax)].filter(Boolean).join(' · ');
+}
+// Flotte laut Quelle: Berlin genehmigt (Abgeordnetenhaus), München aktiv (Stadtrat: keine Genehmigungspflicht)
+const fleetLabel = (r) => (r?.art === 'genehmigt' ? 'Genehmigte Flotte' : r?.art === 'aktiv' ? 'Aktive Flotte' : 'Flotte');
+function referenceRows(ctx, ref, rep, cal = null) {
   if (!ref || !rep.ags) return '';
-  const own = scooterAgg(rep); const rows = [];
+  const own = scooterAgg(rep, cal); const rows = []; const client = isClient();
   const src = (r) => safeLink(ctx, r.url, r.quelle || 'Quelle');
-  for (const r of (ref.rvd || []).filter(x => x.ags === rep.ags)) rows.push([`Fahrten je Fahrzeug und Tag · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), r.type === 'scooter' && own?.rvd != null ? num(ctx, own.rvd, 2) : '—']);
-  for (const r of (ref.fahrt || []).filter(x => x.ags === rep.ags)) {
-    const km = r.kmMin != null ? `${num(ctx, r.kmMin, 1)}–${num(ctx, r.kmMax, 1)} km` : r.kmMedian != null ? `Median ${num(ctx, r.kmMedian, 2)} km` : null;
-    const mi = r.minMin != null ? `${num(ctx, r.minMin, 1)}–${num(ctx, r.minMax, 1)} Min.` : r.minMedian != null ? `Median ${num(ctx, r.minMedian, 1)} Min.` : null;
-    rows.push([`Fahrt · ${ctx.esc(typeName(r.type))}`, [km, mi].filter(Boolean).join(' · '), ctx.esc(r.zeitraum || ''), src(r), [kmTxt(ctx, own?.avgKm), minTxt(ctx, own?.avgMin)].filter(Boolean).join(' · ') || 'nicht messbar']);
-  }
-  for (const r of (ref.flotte || []).filter(x => x.ags === rep.ags)) rows.push([`Flotte · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert), r.stand ? dd(r.stand) : '', src(r), own ? `${num(ctx, own.fleet)} in offenen Feeds` : '—']);
+  const ownRvd = (r) => { if (r.type !== 'scooter' || own?.rvd == null) return '—'; if (client) return num(ctx, own.rvdCal ?? own.rvd, 2); return `${num(ctx, own.rvd, 2)}${own.rvdCal != null ? `<div class="sub-line">kalibriert ${num(ctx, own.rvdCal, 2)}</div>` : ''}`; };
+  for (const r of (ref.rvd || []).filter(x => x.ags === rep.ags)) rows.push([`Fahrten je Fahrzeug und Tag · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), ownRvd(r)]);
+  for (const r of (ref.fahrt || []).filter(x => x.ags === rep.ags)) rows.push([`Fahrt · ${ctx.esc(typeName(r.type))}`, tripTxt(ctx, r), ctx.esc(r.zeitraum || ''), src(r), [kmTxt(ctx, own?.avgKm), minTxt(ctx, own?.avgMin)].filter(Boolean).join(' · ') || 'nicht messbar']);
+  for (const r of (ref.flotte || []).filter(x => x.ags === rep.ags)) rows.push([`${fleetLabel(r)} · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert), r.stand ? dd(r.stand) : '', src(r), own ? `${num(ctx, own.fleet)} in offenen Feeds<div class="sub-line">${pctTxt(ctx, own.fleet / r.wert, 1)} ${r.art === 'genehmigt' ? 'der genehmigten Flotte (Untergrenze der Feed-Abdeckung)' : r.art === 'aktiv' ? 'der aktiven Flotte' : 'der Flotte laut Quelle'}</div>` : '—']);
   for (const r of (ref.fahrten || []).filter(x => x.ags === rep.ags)) rows.push([`Fahrten im Jahr · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert), ctx.esc(r.zeitraum || ''), src(r), '—']);
   if (!rows.length) return '';
-  return `<section class="rp-sec"><h3>Einordnung: öffentliche Referenzwerte</h3><div class="sub">Werte aus amtlichen oder veröffentlichten Quellen (reference.json) neben der eigenen Messung im gewählten Zeitraum</div>
-    <div class="tbl"><table><thead><tr><th>Kennzahl</th><th class="n">Referenz</th><th>Zeitraum</th><th>Quelle</th><th class="n">eigene Messung</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td>${r[2]}</td><td class="small">${r[3]}</td><td class="n">${r[4]}</td></tr>`).join('')}</tbody></table></div></section>`;
+  return `<section class="rp-sec"><h3>Einordnung: öffentliche Referenzwerte</h3><div class="sub">Werte aus amtlichen oder veröffentlichten Quellen neben ${client ? 'unserem Wert' : 'der eigenen Messung'} im gewählten Zeitraum</div>
+    <div class="tbl"><table><thead><tr><th>Kennzahl</th><th class="n">Referenz</th><th>Zeitraum</th><th>Quelle</th><th class="n">${client ? 'unser Wert' : 'eigene Messung'}</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td>${r[2]}</td><td class="small">${r[3]}</td><td class="n">${r[4]}</td></tr>`).join('')}</tbody></table></div></section>`;
+}
+const meta_lim = (calib) => calib?.limits?.scooter ?? null;
+// Kalibrierung in einem Satz (Kundenansicht ohne Methodikbegriffe)
+function calibText(ctx, calib) {
+  const k = calib?.k; const { fmt } = ctx;
+  if (isClient()) return k?.applied ? `E-Scooter-Fahrten kalibriert an amtlichen Berliner Zahlen (${safeLink(ctx, k.ref.url, k.ref.quelle || 'Quelle')}); angegeben mit Spanne` : 'nicht kalibriert';
+  if (!k?.applied) return `nicht kalibriert: ${ctx.esc(k?.reason || 'keine Referenz')}`;
+  const m = k.measured;
+  return `E-Scooter-Fahrten × <b>${fmt(k.k, 2)}</b> (Spanne ${fmt(k.kLow, 2)}–${fmt(k.kHigh, 2)}) = amtlich Berlin ${ctx.esc(k.quarter)} ${fmt(k.ref.wert, 2)} ÷ gemessen Berlin ${fmt(m.rvd, 2)} Fahrten je Fahrzeug und Tag (${ctx.esc(k.source)}; ${plural(m.days, 'Tag', 'Tage')}, ${pctTxt(ctx, k.obsShare, 0)} beobachtet, ${dd(m.from)}–${dd(m.to)}) · ${ctx.esc(k.rule)}${k.prelim ? ` · <b>vorläufig</b> <span class="muted">(${ctx.esc(k.prelimWhy.join(', '))})</span>` : ''}${k.single ? ` · <span class="muted">Einschränkung: ${ctx.esc(k.single)}</span>` : ''}${m.excluded?.length ? ` · <span class="muted">ausgeschlossen (Überzählung): ${ctx.esc(m.excluded.map(x => x.op).join(', '))}</span>` : ''} · Zeilen über ${fmt(meta_lim(calib), 2)} Fahrten je Fahrzeug und Tag werden nicht kalibriert · ${safeLink(ctx, k.ref.url, k.ref.quelle || 'Quelle')}`;
 }
 function qualityBlock(ctx, rep, extra) {
-  const q = rep.quality, { fmt, esc } = ctx;
+  const q = rep.quality, { fmt, esc } = ctx; const arch = q.source === 'archiv';
   const obsH = q.obsMin / 60, possH = q.possibleMin / 60;
   const gaps = q.gaps.slice(0, 4).map(g => `${dd(g.day).slice(0, 6)} ${g.from != null ? `${hhmm(g.from)}–` : 'bis '}${hhmm(g.at)}${g.ms ? ` (${fmt(g.ms / 3600e3, 1)} h)` : ''}`).join(' · ');
   const items = [
-    ['Beobachtung', `${fmt(obsH, 1)} h von ${fmt(possH)} h (${pctTxt(ctx, possH ? obsH / possH : null, 0)}) · ${plural(q.runs, 'Sammler-Lauf', 'Sammler-Läufe')}`],
-    ['Volle Messtage', `${q.fullDays} von ${q.days} <span class="muted">(≥ ${R.FULL_DAY_HOURS} Stunden mit ≥ ${R.FULL_HOUR_MIN} Min. Beobachtung)</span>${q.prelim ? ` · <b>vorläufig</b> <span class="muted">unter ${R.MIN_FULL_DAYS} vollen Tagen</span>` : ''}`],
-    ['Lücken', q.gapRuns ? `${plural(q.gapRuns, 'Lücken-Lauf', 'Lücken-Läufe')}, längste ${fmt(q.longestGapMs / 3600e3, 1)} h · ${plural(q.excludedHours, 'Stunde', 'Stunden')} ohne Wertung<div class="muted small">${gaps}${q.gaps.length > 4 ? ' …' : ''}</div>` : 'keine (Abstand zwischen Läufen nie über 45 Min.)'],
-    ['Hochrechnung auf den Tag', `Tagesgang ${esc(q.profileSource)} · Fahrten ÷ beobachteter Anteil des Tagesgangs`],
-    ['Flotte', q.fleetFromHistory.length ? `Fahrzeugminuten ÷ beobachtete Minuten; ${q.fleetFromHistory.map(d => dd(d).slice(0, 6)).join(', ')} aus dem Ø Bestand je Lauf` : 'Fahrzeugminuten ÷ beobachtete Minuten (inkl. gesperrter Fahrzeuge)'],
-    ['Dauer und Distanz', `nur bei stabilen Fahrzeugkennungen und ab ${R.MIN_TRIPS_MEASURED} Messungen; Dauer im 20-Min.-Raster (Obergrenze), Distanz Luftlinie (Untergrenze)${q.taintedDays.length ? `; ${q.taintedDays.map(d => dd(d).slice(0, 6)).join(', ')} ausgelassen (Lücke mitgezählt)` : ''}`],
+    ['Beobachtung', `${fmt(obsH, 1)} h von ${fmt(possH)} h (${pctTxt(ctx, possH ? obsH / possH : null, 0)}) · ${arch ? 'Tageswerte aus dem Langzeit-Archiv' : plural(q.runs, 'Sammler-Lauf', 'Sammler-Läufe')}`],
+    ['Volle Messtage', `${q.fullDays} von ${q.days} <span class="muted">(≥ ${R.FULL_DAY_HOURS} Stunden mit ≥ ${R.FULL_HOUR_MIN} Min. Beobachtung${arch ? ', im Archiv: ≥ 1.000 beobachtete Minuten' : ''})</span>${q.prelim ? ` · <b>vorläufig</b> <span class="muted">unter ${R.MIN_FULL_DAYS} vollen Tagen</span>` : ''}`],
+    ['Lücken', arch ? 'im Archiv nicht je Lauf ausgewiesen; gestörte Stunden sind dort schon herausgerechnet' : q.gapRuns ? `${plural(q.gapRuns, 'Lücken-Lauf', 'Lücken-Läufe')}, längste ${fmt(q.longestGapMs / 3600e3, 1)} h · ${plural(q.excludedHours, 'Stunde', 'Stunden')} ohne Wertung<div class="muted small">${gaps}${q.gaps.length > 4 ? ' …' : ''}</div>` : 'keine (Abstand zwischen Läufen nie über 45 Min.)'],
+    ['Hochrechnung auf den Tag', arch ? `${esc(q.profileSource)} · Fahrten ÷ beobachteter Anteil des Tages` : `Tagesgang ${esc(q.profileSource)} · Fahrten ÷ beobachteter Anteil des Tagesgangs`],
+    ['Flotte', arch ? 'Ø Fahrzeuge je Tag laut Archiv (Fahrzeugminuten bzw. Ø Bestand je Lauf, inkl. gesperrter)' : q.fleetFromHistory.length ? `Fahrzeugminuten ÷ beobachtete Minuten; ${q.fleetFromHistory.map(d => dd(d).slice(0, 6)).join(', ')} aus dem Ø Bestand je Lauf` : 'Fahrzeugminuten ÷ beobachtete Minuten (inkl. gesperrter Fahrzeuge)'],
+    ['Dauer und Distanz', arch ? 'im Archiv nicht enthalten' : `nur bei stabilen Fahrzeugkennungen und ab ${R.MIN_TRIPS_MEASURED} Messungen; Dauer im 20-Min.-Raster (Obergrenze), Distanz Luftlinie (Untergrenze)${q.taintedDays.length ? `; ${q.taintedDays.map(d => dd(d).slice(0, 6)).join(', ')} ausgelassen (Lücke mitgezählt)` : ''}`],
     ...extra,
   ];
   return `<dl class="rp-qual${q.prelim ? ' prelim' : ''}">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
 }
-function groupTable(ctx, rep) {
-  const { fmt, esc, opColor } = ctx; const t = rep.totals;
+// Wert mit Spanne darunter (kalibriert)
+const withSpan = (ctx, v, lo, hi, d = 0, bold = false) => `${bold ? '<b>' : ''}${num(ctx, v, d)}${bold ? '</b>' : ''}${lo != null && hi != null && Math.abs(hi - lo) > 1e-9 ? `<div class="sub-line">${num(ctx, lo, d)}–${num(ctx, hi, d)}</div>` : ''}`;
+function groupTable(ctx, rep, cal = null) {
+  const { esc, opColor } = ctx; const t = rep.totals; const client = isClient(); const C = cal?.applied ? cal : null;
   const notMeasurable = '<span class="muted" title="Kennungen wechseln je Fahrt oder weniger als 20 Messungen">nicht messbar</span>';
+  const cOf = (g) => { const c = C?.groups.get(g.key); return c?.calibrated ? c : null; };
+  // Kundenansicht: E-Scooter nur kalibriert (mit Spanne); intern: gemessen + Spalte „kalibriert“
+  const rdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.ridesDay, c.lo, c.hi) : num(ctx, g.ridesDay); };
+  const rvdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : `<b>${num(ctx, g.rvd, 2)}</b>`; };
+  const calCol = C && !client;
+  const calCell = (g) => { const c = cOf(g); return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : '<span class="muted" title="nur E-Scooter werden kalibriert">—</span>'; };
   const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? ' · nur aktueller Bestand' : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(g.flags[0])}</div>` : ''}</td>
-    <td class="n">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td><td class="n">${num(ctx, g.rides)}</td><td class="n">${num(ctx, g.ridesDay)}</td><td class="n"><b>${num(ctx, g.rvd, 2)}</b></td>
+    <td class="n">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, g.rides)}</td>`}<td class="n">${rdCell(g)}</td><td class="n">${rvdCell(g)}</td>${calCol ? `<td class="n">${calCell(g)}</td>` : ''}
     <td class="n">${minTxt(ctx, g.avgMin) || notMeasurable}</td><td class="n">${kmTxt(ctx, g.avgKm) || notMeasurable}</td><td class="n">${pctTxt(ctx, g.disabledShare)}${g.disabledSource === 'aktuell' ? '<div class="sub-line">aktuell</div>' : ''}</td><td class="n">${num(ctx, g.per1000Fleet, 2)}</td></tr>`).join('');
-  return `<div class="tbl"><table><thead><tr><th>Anbieter · Art</th><th class="n">Ø Flotte</th><th class="n">Fahrten gemessen</th><th class="n">Fahrten / Tag</th><th class="n">je Fzg. und Tag</th><th class="n">Ø Dauer</th><th class="n">Ø Distanz</th><th class="n">Sperrquote</th><th class="n">Fzg. je 1.000 EW</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="9" class="empty"><b>Keine Fahrzeuge im Filter.</b>Anbieter oder Fahrzeugart oben auf „Alle“ stellen.</td></tr>'}</tbody>
-    ${rep.groups.length > 1 ? `<tfoot><tr><td>Summe${t.excluded.length ? `<div class="sub-line">Fahrten ohne ${esc(t.excluded.map(k => k.replace('|', ' ')).join(', '))} (unplausibel)</div>` : ''}</td><td class="n">${num(ctx, t.fleet)}</td><td class="n">${num(ctx, t.rides)}</td><td class="n">${num(ctx, t.ridesDay)}</td><td class="n">${num(ctx, t.rvd, 2)}</td><td></td><td></td><td class="n">${pctTxt(ctx, t.disabledShare)}</td><td class="n">${num(ctx, t.per1000Fleet, 2)}</td></tr></tfoot>` : ''}</table></div>`;
+  const ct = C?.totals; const cols = 9 + (calCol ? 1 : 0) - (client ? 1 : 0);
+  const footRd = client && ct ? withSpan(ctx, ct.ridesDay, ct.lo, ct.hi) : num(ctx, t.ridesDay), footRvd = client && ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : num(ctx, t.rvd, 2);
+  return `<div class="tbl"><table><thead><tr><th>Anbieter · Art</th><th class="n">Ø Flotte</th>${client ? '' : '<th class="n">Fahrten gemessen</th>'}<th class="n">Fahrten / Tag${client && C ? ' <span class="muted">(E-Scooter kalibriert)</span>' : ''}</th><th class="n">je Fzg. und Tag</th>${calCol ? '<th class="n" title="E-Scooter × Kalibrierfaktor, Spanne aus den Berliner Quartalswerten">kalibriert je Fzg. und Tag</th>' : ''}<th class="n">Ø Dauer</th><th class="n">Ø Distanz</th><th class="n">Sperrquote</th><th class="n">Fzg. je 1.000 EW</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="${cols}" class="empty"><b>Keine Fahrzeuge im Filter.</b>Anbieter oder Fahrzeugart oben auf „Alle“ stellen.</td></tr>`}</tbody>
+    ${rep.groups.length > 1 ? `<tfoot><tr><td>Summe${t.excluded.length ? `<div class="sub-line">Fahrten ohne ${esc(t.excluded.map(k => k.replace('|', ' ')).join(', '))} (unplausibel)</div>` : ''}</td><td class="n">${num(ctx, t.fleet)}</td>${client ? '' : `<td class="n">${num(ctx, t.rides)}</td>`}<td class="n">${footRd}</td><td class="n">${footRvd}</td>${calCol ? `<td class="n">${ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : '—'}</td>` : ''}<td></td><td></td><td class="n">${pctTxt(ctx, t.disabledShare)}</td><td class="n">${num(ctx, t.per1000Fleet, 2)}</td></tr></tfoot>` : ''}</table></div>`;
 }
-function dailyTable(ctx, rep) {
-  const { esc } = ctx;
+function dailyTable(ctx, rep, k = null) {
+  const { esc } = ctx; const client = isClient();
+  // kalibriert je Tag: E-Scooter-Fahrten × k, andere Arten gemessen, ÷ beobachteter Anteil
+  const calDay = (d) => { if (!k?.applied || !(d.coverage > 0)) return null; let r = 0, any = false; for (const [key, v] of Object.entries(d.byGroup)) { const sc = key.split('|')[1] === 'scooter'; if (sc && v.rides) any = true; r += (v.rides || 0) * (sc ? k.k : 1); } return any ? r / d.coverage : null; };
   const rows = rep.daily.map(d => {
-    const byOp = new Map(); for (const [k, v] of Object.entries(d.byGroup)) { const op = k.split('|')[0]; byOp.set(op, (byOp.get(op) || 0) + (v.fleet || 0)); }
+    const byOp = new Map(); for (const [key, v] of Object.entries(d.byGroup)) { const op = key.split('|')[0]; byOp.set(op, (byOp.get(op) || 0) + (v.fleet || 0)); }
     const ops = [...byOp].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([o, v]) => `${esc(o)} ${num(ctx, v)}`).join(' · ');
-    return `<tr><td>${R.WEEKDAYS[d.weekday]}, ${dd(d.day)}${d.full ? '' : '<div class="sub-line">kein voller Messtag</div>'}</td><td class="n">${num(ctx, d.obsHours, 1)} h</td><td class="n">${d.runs}</td><td class="n">${d.gapRuns || '–'}</td><td class="n">${num(ctx, d.fleet)}${ops ? `<div class="sub-line">${ops}</div>` : ''}</td><td class="n">${num(ctx, d.rides)}</td><td class="n">${num(ctx, d.ridesDay)}<div class="sub-line">${pctTxt(ctx, d.coverage, 0)} beobachtet</div></td></tr>`;
+    const c = calDay(d);
+    const rd = client && c != null ? `${num(ctx, c)}<div class="sub-line">E-Scooter kalibriert</div>` : `${num(ctx, d.ridesDay)}<div class="sub-line">${pctTxt(ctx, d.coverage, 0)} beobachtet${c != null ? ` · kalibriert ${num(ctx, c)}` : ''}</div>`;
+    return `<tr><td>${R.WEEKDAYS[d.weekday]}, ${dd(d.day)}${d.full ? '' : '<div class="sub-line">kein voller Messtag</div>'}</td><td class="n">${num(ctx, d.obsHours, 1)} h</td><td class="n">${d.runs ?? '–'}</td><td class="n">${d.gapRuns || '–'}</td><td class="n">${num(ctx, d.fleet)}${ops ? `<div class="sub-line">${ops}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, d.rides)}</td>`}<td class="n">${rd}</td></tr>`;
   }).join('');
-  return `<div class="tbl"><table><thead><tr><th>Tag</th><th class="n">Beobachtet</th><th class="n">Läufe</th><th class="n">Lücken-Läufe</th><th class="n">Ø Flotte · je Anbieter</th><th class="n">Fahrten gemessen</th><th class="n">Fahrten / Tag hochgerechnet</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="tbl"><table><thead><tr><th>Tag</th><th class="n">Beobachtet</th><th class="n">Läufe</th><th class="n">Lücken-Läufe</th><th class="n">Ø Flotte · je Anbieter</th>${client ? '' : '<th class="n">Fahrten gemessen</th>'}<th class="n">Fahrten / Tag hochgerechnet</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 const cellLink = (c) => `<a href="#live" class="pick-cell" data-lat="${c.lat.toFixed(5)}" data-lon="${c.lon.toFixed(5)}">${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</a>`;
 function cellMap(ctx, cs, key, title) {
@@ -274,45 +361,56 @@ function cellsSection(ctx, rep, s) {
     </div></section>`;
 }
 function reportHtml(ctx, rep, meta, ref) {
-  const { esc, fmt } = ctx; const t = rep.totals, q = rep.quality;
+  const { esc, fmt } = ctx; const t = rep.totals, q = rep.quality; const client = isClient();
+  const k = meta.calib?.k, C = meta.cal?.applied ? meta.cal.totals : null;
   const pre = q.prelim ? ' · vorläufig' : '';
   const sources = (ctx.state.latest?.sources || []).filter(r => (r.municipalities || []).includes(rep.ags) && !['duplicate', 'retired'].includes(r.status));
   const srcTxt = sources.length ? `${sources.filter(r => r.status === 'live').length} aktuell, ${sources.filter(r => r.status === 'delayed').length} verzögert, ${sources.filter(r => !['live', 'delayed'].includes(r.status)).length} sonstige` : 'keine';
   const gaps = (ctx.state.latest?.gaps || []).filter(g => g.city === meta.name);
   const extra = [['Quellen in der Gemeinde', `${srcTxt} · Stand ${stamp(ctx.state.latest?.at)}`]];
   if (gaps.length) extra.push(['Anbieter ohne offenen Feed', gaps.map(g => `${esc(g.operator)}${g.since ? ` (seit ${dd(g.since)})` : ''}`).join(', ') + ' <span class="muted">– fehlen in allen Zahlen</span>']);
-  if (meta.missing.length) extra.push(['Tagesdateien fehlen', meta.missing.map(dd).join(', ')]);
+  if (meta.missing.length) extra.push([q.source === 'archiv' ? 'Tage ohne Archivwerte' : 'Tagesdateien fehlen', meta.missing.length > 8 ? `${plural(meta.missing.length, 'Tag', 'Tage')} (${meta.missing.slice(0, 4).map(dd).join(', ')} …)` : meta.missing.map(dd).join(', ')]);
+  if (q.source === 'archiv') extra.push(['Zeitraum', `${esc(meta.period.kind)} ${esc(meta.period.label)} reicht über die 30 Tage der Tagesdateien hinaus: Tageswerte aus dem Langzeit-Archiv, ohne Orte, Dauer, Distanz und Sperrquote`]);
+  if (meta.calib && rep.groups.some(g => g.ty === 'scooter')) extra.push(['Kalibrierung', calibText(ctx, meta.calib)]);
+  // Kennzahlen mit Fahrten: kalibriert (E-Scooter × k) mit Spanne, gemessen daneben; Kundenansicht nur kalibriert
+  const calTile = (label, v, lo, hi, d, measured, sub) => (C && v != null
+    ? tile(label, num(ctx, v, d), `${client ? '' : `gemessen ${num(ctx, measured, d)} · `}Spanne ${num(ctx, lo, d)}–${num(ctx, hi, d)} · ${client ? 'kalibriert an amtlichen Berliner Zahlen' : `E-Scooter kalibriert (${esc(calibLabel(k))})`}${client ? '' : pre}`)
+    : tile(label, num(ctx, measured, d), sub));
   const tiles = [
     tile('Ø Flotte', num(ctx, t.fleet), `Fahrzeuge im Feed inkl. gesperrter · ${plural(rep.groups.length, 'Anbieter/Art', 'Anbieter/Arten')}`),
-    tile('Fahrten gemessen', num(ctx, t.rides), `in ${fmt(q.obsMin / 60, 1)} h Beobachtung (ohne Lücken-Stunden)`),
-    tile('Fahrten je Tag', num(ctx, t.ridesDay), `hochgerechnet über den Tagesgang${pre}`),
-    tile('Fahrten je Fahrzeug und Tag', num(ctx, t.rvd, 2), `Fahrten/Tag ÷ Ø Flotte${pre}`),
-    tile('Sperrquote', pctTxt(ctx, t.disabledShare), 'gesperrte Fahrzeuge am Bestand, Mittel der Läufe'),
+    client ? '' : tile('Fahrten gemessen', num(ctx, t.rides), `in ${fmt(q.obsMin / 60, 1)} h Beobachtung${q.source === 'archiv' ? '' : ' (ohne Lücken-Stunden)'}`),
+    calTile('Fahrten je Tag', C?.ridesDay, C?.lo, C?.hi, 0, t.ridesDay, `hochgerechnet über den ${q.source === 'archiv' ? 'beobachteten Anteil des Tages' : 'Tagesgang'}${pre}`),
+    calTile('Fahrten je Fahrzeug und Tag', C?.rvd, C?.rvdLo, C?.rvdHi, 2, t.rvd, `Fahrten/Tag ÷ Ø Flotte${pre}`),
+    q.source === 'archiv' ? '' : tile('Sperrquote', pctTxt(ctx, t.disabledShare), 'gesperrte Fahrzeuge am Bestand, Mittel der Läufe'),
     tile('Fahrzeuge je 1.000 EW', num(ctx, t.per1000Fleet, 1), rep.pop ? `${fmt(rep.pop)} Einwohner` : 'Einwohnerzahl fehlt'),
-    tile('Fahrten je 1.000 EW und Tag', num(ctx, t.per1000Rides, 1), rep.pop ? `hochgerechnet${pre}` : 'Einwohnerzahl fehlt'),
+    calTile('Fahrten je 1.000 EW und Tag', C?.per1000Rides, C?.per1000Lo, C?.per1000Hi, 1, t.per1000Rides, rep.pop ? `hochgerechnet${pre}` : 'Einwohnerzahl fehlt'),
   ].join('');
+  const per = meta.period && ['Quartal', 'Monat'].includes(meta.period.kind) ? `${esc(meta.period.kind)} ${esc(meta.period.label)} · ` : '';
+  const calMethod = client ? (C ? ' E-Scooter-Fahrten sind an amtlichen Berliner Zahlen kalibriert und mit Spanne angegeben.' : '')
+    : (C ? ` Kalibrierung: Gemessene E-Scooter-Fahrten unterschätzen die echten Fahrten (Fahrten zwischen zwei Abrufen, Kennungswechsel). Der Faktor ist das Verhältnis der amtlichen Berliner Fahrten je Fahrzeug und Tag zur eigenen Berliner Messung; er gilt für E-Scooter überall, die Spanne folgt aus dem kleinsten und größten Berliner Quartalswert. Räder und E-Bikes bleiben gemessen.` : '');
   return `<article class="rp-report" aria-label="Kommunal-Bericht ${esc(meta.name)}">
     <header class="rp-head"><div><div class="rp-kicker">Kommunal-Bericht · Sharing-Mobilität</div><h2>${esc(meta.name)}<small>AGS ${esc(rep.ags)}${rep.pop ? ` · ${fmt(rep.pop)} Einwohner` : ''}</small></h2>
-      <p class="sub">Zeitraum ${dd(rep.from)}${rep.to !== rep.from ? `–${dd(rep.to)}` : ''} (${plural(rep.days.length, 'Tag', 'Tage')}) · ${filterText(ctx)} · Datenstand ${stamp(ctx.state.latest?.at)} · erstellt ${stamp(Date.now())}</p></div>
+      <p class="sub">${per}Zeitraum ${dd(rep.from)}${rep.to !== rep.from ? `–${dd(rep.to)}` : ''} (${plural(rep.days.length, 'Tag', 'Tage')}) · ${filterText(ctx)} · Datenstand ${stamp(ctx.state.latest?.at)} · erstellt ${stamp(Date.now())}</p></div>
       ${q.prelim ? `<span class="pill prelim" title="Erst ${q.fullDays} volle Messtage; ab ${R.MIN_FULL_DAYS} gilt der Bericht als belastbar">vorläufig</span>` : '<span class="pill plain">belastbar</span>'}</header>
     <section class="rp-sec"><h3>Datenqualität</h3>${qualityBlock(ctx, rep, extra)}</section>
-    <section class="rp-sec"><h3>Kennzahlen</h3><div class="sub">Gliederung nach der Kennzahlenliste für Kommunen (MobiData BW); Fahrt = gemessener Fahrtbeginn</div><div class="tiles">${tiles}</div></section>
-    <section class="rp-sec"><h3>Je Anbieter und Fahrzeugart</h3><div class="sub">Mittel über den Zeitraum; Flotte mit Spanne der Tageswerte</div>${groupTable(ctx, rep)}</section>
-    <section class="rp-sec"><h3>Tageswerte</h3><div class="sub">Flotte täglich, Beobachtung und Lücken je Tag</div>${dailyTable(ctx, rep)}</section>
-    ${cellsSection(ctx, rep, meta.s)}
-    ${referenceRows(ctx, ref, rep)}
-    <footer class="rp-sec small muted"><h3>Methode</h3><p style="margin:0 0 var(--s1)">Grundlage sind die offenen Live-Feeds (GBFS) der Anbieter, abgerufen etwa alle 20 Minuten. Eine Fahrt beginnt, wenn ein verfügbares Fahrzeug aus dem Feed verschwindet (wechselnde Kennungen) oder bei gleicher Kennung über 150 m versetzt auftaucht. Kennungswechsel am selben Ort (≤ 40 m), Umsetzungen durch den Betreiber und Abholungen gesperrter oder fast leerer Fahrzeuge zählen nicht als Fahrt. Läufe mit mehr als 45 Minuten Abstand zum vorigen (Lücken) und ihre Stunden gehen nicht in die Fahrten ein.</p><p style="margin:0">Fahrten je Tag sind gemessene Fahrten geteilt durch den beobachteten Anteil des typischen Tagesgangs. Anbieter ohne offenen Feed fehlen. Mobility Pulse · ${esc(ctx.CFG.REPO || '')}</p></footer>
+    <section class="rp-sec"><h3>Kennzahlen</h3><div class="sub">Gliederung nach der Kennzahlenliste für Kommunen (MobiData BW); Fahrt = gemessener Fahrtbeginn${C ? (client ? '; E-Scooter-Fahrten kalibriert an amtlichen Berliner Zahlen' : '; Fahrten-Kennzahlen kalibriert, gemessener Wert darunter') : ''}</div><div class="tiles">${tiles}</div></section>
+    <section class="rp-sec"><h3>Je Anbieter und Fahrzeugart</h3><div class="sub">Mittel über den Zeitraum; Flotte mit Spanne der Tageswerte</div>${groupTable(ctx, rep, meta.cal)}</section>
+    <section class="rp-sec"><h3>Tageswerte</h3><div class="sub">Flotte täglich, Beobachtung und Lücken je Tag</div>${dailyTable(ctx, rep, k)}</section>
+    ${q.source === 'archiv' ? '' : cellsSection(ctx, rep, meta.s)}
+    ${referenceRows(ctx, ref, rep, meta.cal)}
+    <footer class="rp-sec small muted"><h3>Methode</h3><p style="margin:0 0 var(--s1)">Grundlage sind die offenen Live-Feeds (GBFS) der Anbieter, abgerufen etwa alle 20 Minuten. Eine Fahrt beginnt, wenn ein verfügbares Fahrzeug aus dem Feed verschwindet (wechselnde Kennungen) oder bei gleicher Kennung über 150 m versetzt auftaucht. Kennungswechsel am selben Ort (≤ 40 m), Umsetzungen durch den Betreiber und Abholungen gesperrter oder fast leerer Fahrzeuge zählen nicht als Fahrt. Läufe mit mehr als 45 Minuten Abstand zum vorigen (Lücken) und ihre Stunden gehen nicht in die Fahrten ein.</p><p style="margin:0">Fahrten je Tag sind gemessene Fahrten geteilt durch den beobachteten Anteil des typischen Tagesgangs.${calMethod} Anbieter ohne offenen Feed fehlen. Mobility Pulse · ${esc(ctx.CFG.REPO || '')}</p></footer>
   </article>`;
 }
-function reportControls(ctx, s, days) {
-  const opts = periodOptions(days);
+function reportControls(ctx, s, days, archDays = []) {
+  const opts = periodOptions(days, archDays);
   if (!opts.some(([v]) => v === s.period)) s.period = 'all';
   return `<div class="rp-ctl rp-noprint"><label>Zeitraum <select data-rp="period">${opts.map(([v, l]) => `<option value="${ctx.esc(v)}"${v === s.period ? ' selected' : ''}>${ctx.esc(l)}</option>`).join('')}</select></label>
-    <button type="button" data-rp="print" title="Nur den Bericht drucken oder als PDF sichern">Drucken / PDF</button><button type="button" data-rp="csv" title="Tageswerte und Zeitraumwerte je Anbieter und Fahrzeugart">↓ CSV</button></div>`;
+    <button type="button" data-rp="print" title="Nur den Bericht drucken oder als PDF sichern">Drucken / PDF</button><button type="button" data-rp="csv" title="Tageswerte und Zeitraumwerte je Anbieter und Fahrzeugart, gemessen und kalibriert">↓ CSV</button></div>`;
 }
 /**
  * Kommunal-Bericht der gewählten Gemeinde (state.scope) in el. Filter Anbieter/Fahrzeugart wirken.
- * Daten: events/index.json, events/<Tag>.json, history/index.json + history/<Tag>.json, cells/<Tag>/<Land>.json, latest.json, reference.json (CFG.MAIN).
+ * Daten: events/index.json, events/<Tag>.json, history/index.json + history/<Tag>.json, cells/<Tag>/<Land>.json, latest.json, reference.json (CFG.MAIN);
+ * Monat/Quartal über die 30 Tage hinaus: archive/index.json + archive/<Monat>.json. Kalibrierung: loadCalibration.
  */
 export async function renderReport(el, ctx) {
   if (!el) return;
@@ -336,20 +434,35 @@ export async function renderReport(el, ctx) {
   try {
     const ags = state.scope, m = state.latest.municipalities?.[ags] || {};
     const name = m.name || ctx.muniName?.(ags) || ags;
-    const idx = await usageIndex(ctx); const all = (idx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const [idx, archDays] = await Promise.all([usageIndex(ctx), archiveDayList(ctx).catch(() => [])]); const all = (idx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
     if (tok !== s.tok) return;
     if (!all.length) { el.innerHTML = title + emptyBox('Noch keine Tagesdateien.', 'Der Bericht braucht gemessene Bewegungen; sie entstehen ab dem zweiten Sammler-Lauf.'); return; }
-    const days = pickDays(all, s.period);
-    const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
-    const [docs, hists, cdocs, ref] = await Promise.all([
-      Promise.all(days.map(d => eventsDoc(ctx, idx, d))), Promise.all(days.map(d => histFor(ctx, hidx, daily, d))), Promise.all(days.map(d => cellsDoc(ctx, idx, d, m.state))), reference(ctx)]);
-    if (tok !== s.tok) return;
-    const cells = {}, cellRuns = {};
-    days.forEach((d, i) => { const c = cdocs[i]; if (c?.munis) { cells[d] = c.munis[ags] || {}; cellRuns[d] = sum(c.bandRuns) || (docs[i]?.runs || []).length; } });
-    const rep = R.municipalReport({ docs: docs.filter(Boolean), hists: Object.fromEntries(days.map((d, i) => [d, hists[i]]).filter(x => x[1])), cells, cellRuns, ags, pop: m.pop || null, operator: state.operator, type: state.type, latestGroups: state.latest.groups });
-    const meta = { name, missing: days.filter((d, i) => !docs[i]), s };
+    if (!periodOptions(all, archDays).some(([v]) => v === s.period)) s.period = 'all';
+    const days = pickDays(all, s.period, archDays);
+    const useArchive = days.some(d => !all.includes(d));
+    let rep, missing, ref;
+    const calibP = loadCalibration(ctx); const limits = (await calibP).limits || null; if (tok !== s.tok) return;
+    if (useArchive) {
+      const [{ archive, fields }, r] = await Promise.all([archiveFor(ctx, days), reference(ctx)]); ref = r;
+      if (tok !== s.tok) return;
+      rep = R.archiveReport({ archive, fields, ags, pop: m.pop || null, operator: state.operator, type: state.type, days, rvdLimit: limits });
+      missing = days.filter(d => !archive[d]);
+    } else {
+      const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
+      const [docs, hists, cdocs, r] = await Promise.all([
+        Promise.all(days.map(d => eventsDoc(ctx, idx, d))), Promise.all(days.map(d => histFor(ctx, hidx, daily, d))), Promise.all(days.map(d => cellsDoc(ctx, idx, d, m.state))), reference(ctx)]);
+      ref = r;
+      if (tok !== s.tok) return;
+      const cells = {}, cellRuns = {};
+      days.forEach((d, i) => { const c = cdocs[i]; if (c?.munis) { cells[d] = c.munis[ags] || {}; cellRuns[d] = sum(c.bandRuns) || (docs[i]?.runs || []).length; } });
+      rep = R.municipalReport({ docs: docs.filter(Boolean), hists: Object.fromEntries(days.map((d, i) => [d, hists[i]]).filter(x => x[1])), cells, cellRuns, ags, pop: m.pop || null, operator: state.operator, type: state.type, latestGroups: state.latest.groups, rvdLimit: limits });
+      missing = days.filter((d, i) => !docs[i]);
+    }
+    const calib = await calibP; if (tok !== s.tok) return;
+    const cal = K.calibrateReport(rep, calib.k);
+    const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive };
     s.rep = rep; s.meta = meta;
-    el.innerHTML = head('Kommunal-Bericht', `Druckbarer Bericht je Gemeinde · ${esc(name)}`, reportControls(ctx, s, all)) + reportHtml(ctx, rep, meta, ref);
+    el.innerHTML = head('Kommunal-Bericht', `Druckbarer Bericht je Gemeinde · ${esc(name)}`, reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref);
   } catch (e) {
     console.error('Bericht', e);
     if (tok === s.tok) el.innerHTML = title + emptyBox('Bericht nicht erstellbar.', 'Daten nicht ladbar – Seite später neu laden.');
@@ -370,8 +483,9 @@ function bindCellTips(el) {
 }
 function reportCsv(el) {
   const s = st(el); if (!s.rep) return;
-  const rows = R.reportCsvRows(s.rep, { name: s.meta.name, typeLabel: typeName });
-  download(`kommunal-bericht_${s.rep.ags}_${s.rep.from}_${s.rep.to}.csv`, R.toCsv(rows));
+  const rows = R.reportCsvRows(s.rep, { name: s.meta.name, typeLabel: typeName, cal: s.meta.cal, calLabel: calibLabel(s.meta.calib?.k), period: s.meta.period });
+  const per = s.meta.period?.key ? `${s.meta.period.key}_` : '';
+  download(`kommunal-bericht_${s.rep.ags}_${per}${s.rep.from}_${s.rep.to}.csv`, R.toCsv(rows));
 }
 /** Nur den Bericht drucken: Kopie als oberstes Element, alles andere per @media print ausgeblendet; nach dem Druck aufräumen */
 export function printReport(el) {
@@ -396,7 +510,43 @@ function meter(ctx, value, limit, status) {
   const dom = Math.max(limit || 0, value || 0) || 1; const w = Math.min(100, ((value || 0) / dom) * 100);
   return `<div class="rp-meter ${status}" role="img" aria-label="${ctx.fmt(value)} von ${ctx.fmt(limit)}"><i style="width:${w.toFixed(1)}%"></i>${value > limit ? `<b style="left:${((limit / dom) * 100).toFixed(1)}%" title="Obergrenze"></b>` : ''}</div>`;
 }
-function capBlock(ctx, c, rep, pop) {
+// Dauer als Text: „40 Min.“, „3,3 Std.“, „1,5 Tage“
+const durTxt = (ctx, ms) => (!ms ? '–' : ms < 3600e3 ? `${ctx.fmt(ms / 60e3)} Min.` : ms < 48 * 3600e3 ? `${ctx.fmt(ms / 3600e3, 1)} Std.` : `${ctx.fmt(ms / 86400e3, 1)} Tage`);
+// Verlauf: Tagesmaximum gesamt als schmale Balken, Obergrenze als gestrichelte Linie; Tooltip je Tag, Tabelle als Alternative
+function capChart(ctx, v, c) {
+  const pts = v.daily.filter(d => d.max != null); if (!pts.length) return '';
+  const limit = c.limit || Math.max(...pts.map(d => d.limit || 0)) || null;
+  const W = 900, H = 150, P = { l: 52, r: 12, t: 12, b: 26 };
+  const first = Date.parse(`${pts[0].day}T12:00:00Z`), last = Date.parse(`${pts[pts.length - 1].day}T12:00:00Z`); const n = Math.max(30, Math.round((last - first) / 86400e3) + 1);
+  const slot = (W - P.l - P.r) / n, bw = Math.max(3, Math.min(16, slot * 0.62));
+  const ymax = Math.max(limit || 0, ...pts.map(d => d.max)) * 1.08 || 1;
+  const Y = (x) => P.t + (1 - x / ymax) * (H - P.t - P.b);
+  const xi = (d) => Math.round((Date.parse(`${d}T12:00:00Z`) - (last - (n - 1) * 86400e3)) / 86400e3);
+  const bars = pts.map((d, i) => { const x = P.l + xi(d.day) * slot + (slot - bw) / 2, y = Y(d.max), y0 = Y(0), r = Math.min(4, bw / 2, y0 - y);
+    const path = y0 - y < 0.5 ? '' : `<path class="bar" d="M${x.toFixed(1)},${y0.toFixed(1)}V${(y + r).toFixed(1)}Q${x.toFixed(1)},${y.toFixed(1)} ${(x + r).toFixed(1)},${y.toFixed(1)}H${(x + bw - r).toFixed(1)}Q${(x + bw).toFixed(1)},${y.toFixed(1)} ${(x + bw).toFixed(1)},${(y + r).toFixed(1)}V${y0.toFixed(1)}Z"/>`;
+    return `<g data-i="${i}"><rect class="hit" x="${(P.l + xi(d.day) * slot).toFixed(1)}" y="${P.t}" width="${slot.toFixed(1)}" height="${H - P.t - P.b}"/>${path}</g>`; }).join('');
+  const lim = limit ? `<line class="lim" x1="${P.l}" x2="${W - P.r}" y1="${Y(limit).toFixed(1)}" y2="${Y(limit).toFixed(1)}"/><text x="${P.l - 6}" y="${(Y(limit) + 3.5).toFixed(1)}" text-anchor="end">${ctx.fmt(limit)}</text>` : '';
+  const ax = `<line class="base" x1="${P.l}" x2="${W - P.r}" y1="${Y(0)}" y2="${Y(0)}"/><text x="${P.l - 6}" y="${Y(0) + 3.5}" text-anchor="end">0</text><text x="${P.l}" y="${H - 6}">${dd(new Date(last - (n - 1) * 86400e3).toISOString().slice(0, 10)).slice(0, 6)}</text><text x="${W - P.r}" y="${H - 6}" text-anchor="end">${dd(pts[pts.length - 1].day).slice(0, 6)}</text>`;
+  return `<div class="rp-chart" data-rp="capchart" data-ags="${ctx.esc(v.ags)}"><svg class="rp-line rp-bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="Tagesmaximum des Bestands an ${pts.length} Tagen gegen die Obergrenze ${limit ? ctx.fmt(limit) : ''}; Werte auch als Tabelle">${ax}${lim}<g>${bars}</g></svg></div>
+    <div class="rp-legend"><span><i class="rp-sw" style="--rp-f:var(--accent)"></i>höchster Bestand je Tag (alle Anbieter)</span>${limit ? `<span><i class="rp-key" style="--c:var(--fg-2)"></i>Obergrenze gesamt ${ctx.fmt(limit)}</span>` : ''}</div>`;
+}
+function violationsBlock(ctx, c, v, s) {
+  const { esc, fmt, opColor } = ctx;
+  const h = `<h3 style="font-size:13px;margin:var(--s2) 0 var(--s1)">Verstöße der letzten 30 Tage</h3>`;
+  if (v === undefined) return h + `<div class="muted small">Noch kein Protokoll: caps-log.json entsteht mit dem nächsten Sammler-Lauf. Danach prüft der Sammler die Grenzen bei jedem Lauf und hält Läufe ab ${R.NEAR_CAP * 100} % der Grenze fest.</div>`;
+  if (!v) return h + '<div class="muted small">Für diese Gemeinde enthält das Protokoll noch keine Prüfung.</div>';
+  const ops = v.ops.filter(o => o.overRuns || o.nearRuns);
+  const name = (op) => (op === '*' ? '<b>gesamt</b>' : `<span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>`);
+  const rows = ops.map(o => `<tr><td>${name(o.op)}</td><td class="n">${o.overRuns ? `${badge('over')} ${durTxt(ctx, o.overMs)}<div class="sub-line">${plural(o.overRuns, 'Lauf', 'Läufe')}</div>` : '<span class="muted">–</span>'}</td><td class="n">${o.nearRuns ? `${durTxt(ctx, o.nearMs)}<div class="sub-line">${plural(o.nearRuns, 'Lauf', 'Läufe')}</div>` : '<span class="muted">–</span>'}</td><td class="n"><b>${fmt(o.peak)}</b><div class="sub-line">${stamp(o.peakAt)}</div></td><td class="n">${fmt(o.limit)}</td><td class="n">${o.lastOverAt ? stamp(o.lastOverAt) : '–'}</td></tr>`).join('');
+  const days = v.daily.length;
+  const table = ops.length ? `<div class="tbl" tabindex="0" role="region" aria-label="Verstöße ${esc(v.ort)}"><table><thead><tr><th>Anbieter</th><th class="n">über der Grenze</th><th class="n">nahe (≥ ${R.NEAR_CAP * 100} %)</th><th class="n">Spitzenwert</th><th class="n">Grenze</th><th class="n">zuletzt über</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : `<div class="muted small">Keine Überschreitung und kein Lauf ab ${R.NEAR_CAP * 100} % der Grenze in ${plural(days || 0, 'protokolliertem Tag', 'protokollierten Tagen')}.</div>`;
+  const tbl = s.show[`cap:${v.ags}`];
+  const btn = v.daily.length ? `<button type="button" class="rp-noprint" data-rp="captable" data-ags="${esc(v.ags)}" aria-expanded="${tbl ? 'true' : 'false'}">${tbl ? 'Als Diagramm' : 'Verlauf als Tabelle'}</button>` : '';
+  const hist = !v.daily.length ? '' : tbl ? `<div class="tbl" tabindex="0" role="region" aria-label="Tagesmaximum ${esc(v.ort)}"><table><thead><tr><th>Tag</th><th class="n">höchster Bestand</th><th class="n">Grenze</th><th>Status</th></tr></thead><tbody>${v.daily.slice().reverse().map(d => `<tr><td>${dd(d.day)}</td><td class="n">${fmt(d.max)}</td><td class="n">${d.limit != null ? fmt(d.limit) : '—'}</td><td>${badge(R.capStatus(d.max, d.limit).status)}</td></tr>`).join('')}</tbody></table></div>` : capChart(ctx, v, c);
+  return h + `<div class="sub small muted" style="margin-bottom:var(--s1)">Dauer = Summe der Abrufabstände, in denen der Bestand über der Grenze lag (je Lauf höchstens 45 Min.) · ${plural(days, 'Tag', 'Tage')} im Verlauf ${btn}</div>` + table + hist;
+}
+function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const { fmt, esc, opColor } = ctx;
   const limTxt = c.limit != null ? fmt(c.limit) : '—';
   const hist = c.previous != null ? `bis ${dd(new Date(Date.parse(`${c.since}T00:00:00Z`) - 86400e3).toISOString().slice(0, 10))}: ${fmt(c.previous)}` : c.next ? `ab ${dd(c.next.from)}: ${fmt(c.next.limit)}` : '';
@@ -409,7 +559,8 @@ function capBlock(ctx, c, rep, pop) {
     <div class="small muted">Obergrenze gesamt ${limTxt}${c.perOperator != null ? ` · je Anbieter ${fmt(c.perOperator)}` : ''}${hist ? ` · ${hist}` : ''}${c.since && !c.previous ? ` · gilt seit ${esc(/^\d{4}-\d{2}$/.test(c.since) ? `${c.since.slice(5)}/${c.since.slice(0, 4)}` : c.since)}` : ''} · Quelle: ${safeLink(ctx, c.url, c.quelle || 'Quelle')}</div>
     ${ops ? `<div class="tbl"><table><thead><tr><th>Anbieter</th><th class="n">Bestand</th><th class="n">davon gesperrt</th><th class="n">Grenze</th><th>Auslastung</th><th class="n">Anteil</th><th>Status</th></tr></thead><tbody>${ops}</tbody></table></div>` : emptyBox('Keine E-Scooter im Feed.', 'Kein offener Feed meldet hier gerade Fahrzeuge dieser Art.')}
     ${districts ? `<div class="tbl"><table><thead><tr><th>Bezirks-Obergrenze</th><th class="n">Grenze</th><th>Status</th><th>Hinweis</th></tr></thead><tbody>${districts}</tbody></table></div>` : ''}
-    <div class="tiles">${tile(`${esc(typeName(c.type))} je 1.000 EW`, num(ctx, per1000, 1), pop ? `${fmt(c.total)} Fahrzeuge · ${fmt(pop)} Einwohner` : 'Einwohnerzahl fehlt')}${tile('Fahrten je 1.000 EW und Tag', num(ctx, rep?.totals.per1000Rides, 1), rep ? `${esc(typeName(c.type))}, ${plural(rep.days.length, 'Tag', 'Tage')} hochgerechnet${pre}` : 'noch keine Tagesdateien')}</div></div>`;
+    ${violationsBlock(ctx, c, viol, s)}
+    <div class="tiles">${tile(`${esc(typeName(c.type))} je 1.000 EW`, num(ctx, per1000, 1), pop ? `${fmt(c.total)} Fahrzeuge · ${fmt(pop)} Einwohner` : 'Einwohnerzahl fehlt')}${tile('Fahrten je 1.000 EW und Tag', num(ctx, rep?.totals.per1000Rides, 1), rep ? `${esc(typeName(c.type))}, ${plural(rep.days.length, 'Tag', 'Tage')} hochgerechnet, gemessen${pre}` : 'noch keine Tagesdateien')}</div></div>`;
 }
 /**
  * Obergrenzen-Wächter: Gemeinden mit Eintrag in reference.json → obergrenzen (bei 'DE' alle), Bestand aus latest.json groups.
@@ -417,7 +568,18 @@ function capBlock(ctx, c, rep, pop) {
  */
 export async function renderCaps(el, ctx) {
   if (!el) return;
-  const s = prep(el, ctx); const { state, esc } = ctx; const tok = ++s.tok;
+  const s = prep2(el, ctx); const { state, esc } = ctx; const tok = ++s.tok;
+  bindOnce(el, 'caps', () => {
+    el.addEventListener('click', (e) => { const b = e.target.closest('button[data-rp="captable"]'); if (!b) return; const k = `cap:${b.dataset.ags}`; s.show[k] = !s.show[k]; renderCaps(el, s.ctx); });
+    const hide = () => { el.querySelectorAll('.rp-chart[data-rp="capchart"]').forEach(hideTip); el.querySelectorAll('svg.rp-bars g.on').forEach(x => x.classList.remove('on')); };
+    el.addEventListener('pointermove', (e) => {
+      const g = e.target.closest?.('svg.rp-bars g[data-i]'); const box = e.target.closest?.('.rp-chart[data-rp="capchart"]'); if (!g || !box) { hide(); return; }
+      const v = s.viol?.find(x => x.ags === box.dataset.ags); const d = v?.daily.filter(x => x.max != null)[+g.dataset.i]; if (!d) return;
+      el.querySelectorAll('svg.rp-bars g.on').forEach(x => { if (x !== g) x.classList.remove('on'); }); g.classList.add('on');
+      const st = R.capStatus(d.max, d.limit); showTip(box, g.querySelector('.bar') || g, `${s.ctx.fmt(d.max)} Fahrzeuge`, [`${R.WEEKDAYS_LONG[R.weekdayOf(d.day)]}, ${dd(d.day)} · höchster Bestand`, d.limit ? `Grenze ${s.ctx.fmt(d.limit)} · ${STATUS[st.status][0]} ${STATUS[st.status][1]} (${pctTxt(s.ctx, st.share, 0)})` : 'ohne Grenze']);
+    });
+    el.addEventListener('pointerleave', hide);
+  });
   const title = head('Obergrenzen-Wächter', `Aktueller E-Scooter-Bestand gegen kommunale Obergrenzen · Sammler-Stand ${stamp(state.latest?.at)}`);
   if (!state.latest) { el.innerHTML = title + emptyBox('Noch kein Datenstand.', 'Die Prüfung erscheint, sobald der Sammler-Stand geladen ist.'); return; }
   el.classList.add('rp-busy');
@@ -425,11 +587,13 @@ export async function renderCaps(el, ctx) {
     const ref = await reference(ctx); if (tok !== s.tok) return;
     if (!ref) { el.innerHTML = title + emptyBox('Referenzwerte nicht ladbar.', 'reference.json fehlt oder ist gerade nicht erreichbar.'); return; }
     const caps = R.capsCheck(ref, state.latest.groups, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() });
-    const { docs } = await allDocs(ctx); if (tok !== s.tok) return;
+    const [{ docs }, log] = await Promise.all([allDocs(ctx), fetchJson(ctx, 'caps-log.json', true)]); if (tok !== s.tok) return;
+    s.viol = log ? R.capsViolations(log, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() }) : null;
+    const violFor = (ags) => (log ? s.viol.find(v => v.ags === ags) || null : undefined);
     const repFor = (ags, ty) => (docs.length ? R.municipalReport({ docs, ags, pop: state.latest.municipalities?.[ags]?.pop || null, type: ty, latestGroups: state.latest.groups }) : null);
     const defn = `<p class="note small" style="margin:var(--s3) 0 0">Bestand = alle E-Scooter, die die offenen Feeds in der Gemeinde melden: verfügbar, reserviert <b>und gesperrt</b>, nach Abgleich doppelter Quellen. Anbieter ohne offenen Feed fehlen, die Prüfung ist deshalb eine Untergrenze. Status: ok unter ${R.NEAR_CAP * 100} %, nahe ab ${R.NEAR_CAP * 100} %, über bei mehr als 100 % der Grenze.</p>`;
     let body = '';
-    if (caps.length) body = caps.map(c => capBlock(ctx, c, repFor(c.ags, c.type), state.latest.municipalities?.[c.ags]?.pop || null)).join('');
+    if (caps.length) body = caps.map(c => capBlock(ctx, c, repFor(c.ags, c.type), state.latest.municipalities?.[c.ags]?.pop || null, violFor(c.ags), s)).join('');
     else {
       const ags = state.scope, m = state.latest.municipalities?.[ags] || {};
       const total = Object.entries(state.latest.groups || {}).filter(([k]) => k.startsWith(`${ags}|`) && k.endsWith('|scooter')).reduce((a, [, g]) => a + (g.total || 0), 0);
@@ -445,10 +609,11 @@ export async function renderCaps(el, ctx) {
 // ======================================================================
 // 3. Heatmap Stunde × Wochentag
 // ======================================================================
+const fieldName = (hm) => (hm?.field === 'end' ? 'Fahrtenden' : 'Fahrtbeginne');
 function weekLabel(ctx, hm, wd, h) {
-  const c = hm.cells[wd][h]; const when = `${R.WEEKDAYS_LONG[wd]}, ${h}–${h + 1} Uhr`;
-  if (c.mean != null && R.suppressed(c.raw)) return { value: `< ${R.MIN_COUNT} Fahrtbeginne`, lines: [when, `unterdrückt (Datenschutz-Schwelle) · ${plural(c.n, 'Tag', 'Tage')}`] };
-  if (c.mean != null) return { value: `${ctx.fmt(c.mean, c.mean < 10 ? 1 : 0)} Fahrtbeginne/h`, lines: [when, `Mittel aus ${plural(c.n, 'Tag', 'Tagen')} (${c.dates.map(d => dd(d).slice(0, 6)).join(', ')})${c.gapDays ? ` · ${plural(c.gapDays, 'Tag', 'Tage')} mit Lücke ausgelassen` : ''}`] };
+  const c = hm.cells[wd][h]; const when = `${R.WEEKDAYS_LONG[wd]}, ${h}–${h + 1} Uhr`; const F = fieldName(hm);
+  if (c.mean != null && R.suppressed(c.raw)) return { value: `< ${R.MIN_COUNT} ${F}`, lines: [when, `unterdrückt (Datenschutz-Schwelle) · ${plural(c.n, 'Tag', 'Tage')}`] };
+  if (c.mean != null) return { value: `${ctx.fmt(c.mean, c.mean < 10 ? 1 : 0)} ${F}/h`, lines: [when, `Mittel aus ${plural(c.n, 'Tag', 'Tagen')} (${c.dates.map(d => dd(d).slice(0, 6)).join(', ')})${c.gapDays ? ` · ${plural(c.gapDays, 'Tag', 'Tage')} mit Lücke ausgelassen` : ''}`] };
   const why = !hm.days[wd] ? 'kein beobachteter Tag' : c.gapDays ? `Lücken-Lauf (${plural(c.gapDays, 'Tag', 'Tage')})` : c.thinDays ? `unter ${R.HEAT_MIN_OBS} Min. beobachtet` : 'nicht beobachtet';
   return { value: 'nicht gemessen', lines: [when, why] };
 }
@@ -463,7 +628,7 @@ function weekGrid(ctx, hm) {
     }).join('');
     return `<div role="row" class="rp-row"><div role="rowheader" class="rl"><span>${w}</span><small title="beobachtete Tage">${hm.days[wd]} T.</small></div>${cells}</div>`;
   }).join('');
-  const html = `<div class="rp-week" role="grid" aria-label="Fahrtbeginne je Stunde und Wochentag" data-rp="week"><div role="row" class="rp-row"><div role="columnheader" class="hl"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">Wochentag</span></div>${hdr}</div>${rows}</div>`;
+  const html = `<div class="rp-weekwrap" tabindex="0" role="region" aria-label="Heatmap, waagrecht scrollbar" style="overflow-x:auto;max-width:100%;position:relative"><div class="rp-week" role="grid" aria-label="${fieldName(hm)} je Stunde und Wochentag" data-rp="week"><div role="row" class="rp-row"><div role="columnheader" class="hl"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">Wochentag</span></div>${hdr}</div>${rows}</div></div>`;
   return first ? html.replace('tabindex="-1"', 'tabindex="0"') : html; // nichts gemessen: erste Zelle trotzdem erreichbar
 }
 function weekTable(ctx, hm) {
@@ -477,9 +642,11 @@ function weekTable(ctx, hm) {
  */
 export async function renderWeekHeatmap(el, ctx) {
   if (!el) return;
-  const s = prep(el, ctx); const { state, esc } = ctx; const tok = ++s.tok;
+  const s = prep2(el, ctx); const { state, esc } = ctx; const tok = ++s.tok;
   bindOnce(el, 'week', () => {
-    el.addEventListener('click', (e) => { const b = e.target.closest('button[data-rp="toggle"]'); if (!b) return; s.show.week = !s.show.week; renderWeek(el); });
+    el.addEventListener('click', (e) => {
+      const f = e.target.closest('button[data-rp="field"]'); if (f && s.docs) { s.field = f.dataset.f; s.hm = R.weekHeatmap(s.docs, s.keep, { field: s.field }); renderWeek(el); el.querySelector(`button[data-rp="field"][data-f="${s.field}"]`)?.focus(); return; }
+      const b = e.target.closest('button[data-rp="toggle"]'); if (!b) return; s.show.week = !s.show.week; renderWeek(el); });
     const cellOf = (t) => t.closest?.('.rp-week .c');
     const show = (c) => { if (!c || !s.hm) return; const box = c.closest('.rp-chart'); el.querySelectorAll('.rp-week .c.on').forEach(x => x.classList.remove('on')); c.classList.add('on'); const lb = weekLabel(s.ctx, s.hm, +c.dataset.wd, +c.dataset.h); showTip(box, c, lb.value, lb.lines); };
     const hide = () => { el.querySelectorAll('.rp-chart').forEach(hideTip); el.querySelectorAll('.rp-week .c.on').forEach(x => x.classList.remove('on')); };
@@ -497,21 +664,24 @@ export async function renderWeekHeatmap(el, ctx) {
     });
   });
   const scopeName = state.scope === 'DE' ? 'Deutschlandweit' : esc(ctx.muniName?.(state.scope) || state.scope);
-  s.title = (btn) => head('Fahrtbeginne nach Stunde und Wochentag', `Mittel je Stunde über die beobachteten Tage · ${scopeName} · ${filterText(ctx)}`, btn);
+  s.field ??= 'start';
+  s.title = (btn) => head('Fahrten nach Stunde und Wochentag', `${s.field === 'end' ? 'Fahrtenden (Ziel)' : 'Fahrtbeginne (Start)'}: Mittel je Stunde über die beobachteten Tage · ${scopeName} · ${filterText(ctx)}`, btn);
   el.classList.add('rp-busy');
   try {
     const { docs } = await allDocs(ctx); if (tok !== s.tok) return;
     if (!docs.length) { el.innerHTML = s.title('') + emptyBox('Noch keine Tagesdateien.', 'Fahrtbeginne entstehen ab dem zweiten Sammler-Lauf.'); s.hm = null; return; }
-    s.hm = R.weekHeatmap(docs, R.keyFilter({ ags: state.scope || 'DE', operator: state.operator, type: state.type }));
+    s.docs = docs; s.keep = R.keyFilter({ ags: state.scope || 'DE', operator: state.operator, type: state.type });
+    s.hm = R.weekHeatmap(docs, s.keep, { field: s.field });
     s.ndocs = docs.length; renderWeek(el);
   } catch (e) { console.error('Heatmap', e); if (tok === s.tok) el.innerHTML = s.title('') + emptyBox('Heatmap nicht erstellbar.', 'Tagesdateien nicht ladbar.'); }
   finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
 }
 function renderWeek(el) {
   const s = st(el); const ctx = s.ctx, hm = s.hm; if (!hm) return;
-  const btn = `<button type="button" data-rp="toggle" aria-expanded="${s.show.week ? 'true' : 'false'}">${s.show.week ? 'Als Heatmap' : 'Als Tabelle'}</button>`;
+  const seg = `<div class="rp-seg" role="group" aria-label="Start oder Ziel">${[['start', 'Start'], ['end', 'Ziel']].map(([f, l]) => `<button type="button" data-rp="field" data-f="${f}" aria-pressed="${s.field === f}">${l}</button>`).join('')}</div>`;
+  const btn = `<div class="rp-ctl rp-noprint">${seg}<button type="button" data-rp="toggle" aria-expanded="${s.show.week ? 'true' : 'false'}">${s.show.week ? 'Als Heatmap' : 'Als Tabelle'}</button></div>`;
   const mid = hm.max / 2;
-  const legend = `<div class="rp-legend"><span>Fahrtbeginne je Stunde</span><span class="rp-ramp"><em>0</em>${rampSpans()}<em>${ctx.fmt(hm.max, hm.max < 10 ? 1 : 0)}</em></span><span class="muted">Mitte ≈ ${ctx.fmt(mid, mid < 10 ? 1 : 0)}</span><span><i class="rp-sw na"></i>nicht gemessen (kein Tag, unter ${R.HEAT_MIN_OBS} Min. beobachtet oder Lücken-Lauf)</span><span><i class="rp-sw rp-s0"></i>weniger als ${R.MIN_COUNT} Fahrtbeginne (Datenschutz)</span></div>`;
+  const legend = `<div class="rp-legend"><span>${fieldName(hm)} je Stunde</span><span class="rp-ramp"><em>0</em>${rampSpans()}<em>${ctx.fmt(hm.max, hm.max < 10 ? 1 : 0)}</em></span><span class="muted">Mitte ≈ ${ctx.fmt(mid, mid < 10 ? 1 : 0)}</span><span><i class="rp-sw na"></i>nicht gemessen (kein Tag, unter ${R.HEAT_MIN_OBS} Min. beobachtet oder Lücken-Lauf)</span><span><i class="rp-sw rp-s0"></i>weniger als ${R.MIN_COUNT} ${fieldName(hm)} (Datenschutz)</span></div>`;
   const note = `<div class="muted small" style="margin-top:var(--s2)">${hm.measured} von 168 Stunden gemessen · ${plural(s.ndocs, 'Tagesdatei', 'Tagesdateien')} · Stunden in Ortszeit; Werte auf 60 Min. Beobachtung bezogen. ${hm.measured < 168 ? 'Graue Felder sind Lücken in der Messung, keine Nullwerte.' : ''}</div>`;
   el.innerHTML = s.title(btn) + (s.show.week ? weekTable(ctx, hm) : `<div class="rp-chart"><div class="rp-scroll">${weekGrid(ctx, hm)}</div></div>${legend}`) + note;
 }
@@ -624,7 +794,7 @@ const EXTRA_CSS = `
 .rp-sort span{font-size:9px;min-width:8px}
 .rp-city{all:unset;cursor:pointer;font-weight:500;color:var(--fg);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:2px}
 a.rp-city{text-decoration:underline}.rp-city:hover{text-decoration-color:var(--accent)}.rp-city:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
-tr.rp-sel td{background:color-mix(in srgb,var(--accent) 11%,transparent)}tr.rp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+tr.rp-sel td{background:color-mix(in srgb,var(--accent) 11%,transparent)}tr.rp-sel .muted{color:var(--fg)}tr.rp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .rp-mini{display:inline-block;width:44px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));vertical-align:middle;margin-left:6px;overflow:hidden}.rp-mini>i{display:block;height:100%;background:var(--accent)}
 .rp-defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s2) var(--s4);margin:0 0 var(--s3)}
 .rp-defs div{font-size:12.5px;color:var(--fg-2)}.rp-defs b{color:var(--fg);font-weight:600}
@@ -794,12 +964,14 @@ async function rankingInputs(ctx) {
   const idx = await usageIndex(ctx); const days = (idx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)); const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
   const [docs, hs] = await Promise.all([Promise.all(days.map(d => eventsDoc(ctx, idx, d))), Promise.all(days.map(d => histFor(ctx, hidx, daily, d)))]);
   const ok = docs.map((d, i) => [d, days[i], hs[i]]).filter(([d]) => d);
-  return { docs: ok.map(x => x[0]), hists: Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]])) };
+  const limits = (await loadCalibration(ctx)).limits || null;
+  return { docs: ok.map(x => x[0]), hists: Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]])), limits };
 }
 function rankingFor(ctx, inp, type, operator = 'all') {
-  const k = `${ctx.state.latest?.at}|${inp.docs.map(d => d.day).join(',')}|${type}|${operator}`;
-  if (!RANK_CACHE.has(k)) { const cur = R.cityRanking(inp.docs, inp.hists, ctx.state.latest, { type, operator, minFleet: 0 }); const per = R.rankingPeriods(inp.docs); let prev = null;
-    if (!per.reason) { const a = R.cityRanking(per.cur, inp.hists, ctx.state.latest, { type, operator, minFleet: 0 }), b = R.cityRanking(per.prev, inp.hists, ctx.state.latest, { type, operator, minFleet: 0 }); prev = { n: per.n, cur: new Map(a.rows.map(r => [r.key, r])), prev: new Map(b.rows.map(r => [r.key, r])), from: per.prev[0].day, to: lastOf(per.prev).day, curFrom: per.cur[0].day, curTo: lastOf(per.cur).day }; }
+  const rvdLimit = inp.limits || null; // Überzählung (über der Kalibrier-Grenze) zählt wie bisher nur bei der Flotte
+  const k = `${ctx.state.latest?.at}|${inp.docs.map(d => d.day).join(',')}|${type}|${operator}|${JSON.stringify(rvdLimit)}`;
+  if (!RANK_CACHE.has(k)) { const cur = R.cityRanking(inp.docs, inp.hists, ctx.state.latest, { type, operator, minFleet: 0, rvdLimit }); const per = R.rankingPeriods(inp.docs); let prev = null;
+    if (!per.reason) { const a = R.cityRanking(per.cur, inp.hists, ctx.state.latest, { type, operator, minFleet: 0, rvdLimit }), b = R.cityRanking(per.prev, inp.hists, ctx.state.latest, { type, operator, minFleet: 0, rvdLimit }); prev = { n: per.n, cur: new Map(a.rows.map(r => [r.key, r])), prev: new Map(b.rows.map(r => [r.key, r])), from: per.prev[0].day, to: lastOf(per.prev).day, curFrom: per.cur[0].day, curTo: lastOf(per.cur).day }; }
     RANK_CACHE.set(k, { ...cur, prev, reason: per.reason || null }); }
   return RANK_CACHE.get(k);
 }
@@ -818,32 +990,48 @@ export async function renderCityRanking(el, ctx) {
   const title = head('Städte-Rangliste', 'Fahrten je Fahrzeug und Tag je Stadt und Fahrzeugart');
   if (!state.latest) { el.innerHTML = title + emptyBox('Noch kein Datenstand.', ''); return; }
   const tok = ++s.tok; el.classList.add('rp-busy'); if (!s.inp) el.innerHTML = title + '<div class="muted small">Tagesdateien werden geladen …</div>';
-  try { const inp = await rankingInputs(ctx); if (tok !== s.tok) return; s.inp = inp; draw(); }
+  try {
+    const [inp, archDays] = await Promise.all([rankingInputs(ctx), archiveDayList(ctx).catch(() => [])]); if (tok !== s.tok) return; s.inp = inp;
+    // Vorquartal aus dem Langzeit-Archiv, sobald zwei aufeinanderfolgende Quartale vollständig vorliegen
+    const rq = R.rankingQuarters(archDays);
+    if (rq && s.rq?.cur !== rq.cur) { const { archive, fields } = await archiveFor(ctx, [...rq.prevDays, ...rq.curDays]); if (tok !== s.tok) return; s.rq = { ...rq, archive, fields }; }
+    else if (!rq) s.rq = null;
+    draw();
+  }
   catch (e) { console.error('Rangliste', e); if (tok === s.tok) el.innerHTML = title + emptyBox('Rangliste nicht erstellbar.', 'Tagesdateien nicht ladbar.'); }
   finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
 }
 function drawRanking(el) {
   const s = st(el); const ctx = s.ctx; const { esc, fmt, state } = ctx; if (!s.inp) return;
-  const title = (right = '') => head('Städte-Rangliste', `Fahrten je Fahrzeug und Tag je Stadt und Fahrzeugart · ${plural(s.inp.docs.length, 'Tag', 'Tage')} · Anbieter mit unplausibler Quote (> 15) zählen nur bei der Flotte`, right);
+  const title = (right = '') => head('Städte-Rangliste', `Fahrten je Fahrzeug und Tag je Stadt und Fahrzeugart · ${plural(s.inp.docs.length, 'Tag', 'Tage')} · Anbieter mit unplausibler Quote (über 15 bzw. bei E-Scooter über ${s.inp.limits?.scooter ? ctx.fmt(s.inp.limits.scooter, 2) : '15'}: Überzählung) zählen nur bei der Flotte`, right);
   if (!s.inp.docs.length) { el.innerHTML = title() + emptyBox('Noch keine Tagesdateien.', 'Fahrten entstehen ab dem zweiten Sammler-Lauf.'); return; }
   const rk = rankingFor(ctx, s.inp, s.type, s.op);
   const scope = state.scope && state.scope !== 'DE' ? state.scope : null;
   let rows = rk.rows.filter(r => r.fleet >= s.min || r.ags === scope);
   if (rk.prev) for (const r of rows) { const a = rk.prev.cur.get(r.key), b = rk.prev.prev.get(r.key); r.delta = a?.rvd != null && b?.rvd != null ? a.rvd - b.rvd : null; }
+  // Quartalsvergleich (Archiv) vor dem Wochenvergleich
+  let qcmp = null;
+  if (s.rq) {
+    const A = (ds) => new Map(R.cityRankingArchive(s.rq.archive, state.latest, { fields: s.rq.fields, type: s.type, operator: s.op, days: ds, rvdLimit: s.inp.limits }).rows.map(r => [r.key, r]));
+    const ck = `${s.rq.cur}|${s.type}|${s.op}`; if (s.qcmpKey !== ck) { s.qcmp = { cur: A(s.rq.curDays), prev: A(s.rq.prevDays) }; s.qcmpKey = ck; } qcmp = s.qcmp;
+    for (const r of rows) { const a = qcmp.cur.get(r.key), b = qcmp.prev.get(r.key); r.delta = a?.rvd != null && b?.rvd != null ? a.rvd - b.rvd : null; }
+  }
   rows = R.sortRows(rows, s.sort.key, s.sort.dir); s.rows = rows; s.rk = rk;
-  const cols = rk.prev ? [...RK_COLS, ['delta', `Δ zur Vorperiode`, true, 'desc', `je Fzg. und Tag: ${dd(rk.prev.curFrom)}–${dd(rk.prev.curTo)} gegen ${dd(rk.prev.from)}–${dd(rk.prev.to)}`]] : RK_COLS;
+  const qLab = (q) => R.periodRange(`q:${q}`).label;
+  const cols = qcmp ? [...RK_COLS, ['delta', 'Δ zum Vorquartal', true, 'desc', `je Fzg. und Tag: ${qLab(s.rq.cur)} gegen ${qLab(s.rq.prev)} (Archiv, linear hochgerechnet)`]] : rk.prev ? [...RK_COLS, ['delta', `Δ zur Vorperiode`, true, 'desc', `je Fzg. und Tag: ${dd(rk.prev.curFrom)}–${dd(rk.prev.curTo)} gegen ${dd(rk.prev.from)}–${dd(rk.prev.to)}`]] : RK_COLS;
   const show = rows.slice(0, s.limit);
   const body = show.map((r, i) => `<tr${r.ags === scope ? ' class="rp-sel" aria-current="true"' : ''}><td>${cityCell(ctx, r.ags, r.name, r.state)}${r.excluded.length ? `<div class="sub-line">Fahrten ohne ${esc(r.excluded.join(', '))} (unplausibel)</div>` : ''}</td><td>${esc(typeName(r.ty))}</td>
     <td class="n">${fmt(r.fleet)}</td><td class="n">${r.ridesDay == null ? '—' : fmt(r.ridesDay)}</td><td class="n"><b>${r.rvd == null ? '—' : fmt(r.rvd, 2)}</b></td><td class="n">${r.per1000Fleet == null ? '—' : fmt(r.per1000Fleet, 1)}</td><td class="n">${r.per1000Rides == null ? '—' : fmt(r.per1000Rides, 1)}</td><td class="n">${r.opCount}</td>
-    ${rk.prev ? `<td class="n">${r.delta == null ? '—' : `${r.delta > 0 ? '+' : ''}${fmt(r.delta, 2)}`}</td>` : ''}</tr>`).join('');
-  const note = `<div class="note small" style="margin-bottom:var(--s3)">${rk.prelim ? `<b>Vorläufig:</b> erst ${rk.fullDays} volle Messtage; Fahrten/Tag über den Tagesgang (${esc(rk.profileSource)}) hochgerechnet. ` : ''}${rk.reason ? esc(rk.reason) + ' – Spalte ausgeblendet.' : `Vorperiode: je ${rk.prev.n} Tage.`} Art der Rangliste wie Fluctuo-Index: gleiche Kennzahl für alle Städte, aus offenen Feeds gemessen; Anbieter ohne offenen Feed fehlen.</div>`;
+    ${qcmp || rk.prev ? `<td class="n">${r.delta == null ? '—' : `${r.delta > 0 ? '+' : ''}${fmt(r.delta, 2)}`}</td>` : ''}</tr>`).join('');
+  const note = `<div class="note small" style="margin-bottom:var(--s3)">${rk.prelim ? `<b>Vorläufig:</b> erst ${rk.fullDays} volle Messtage; Fahrten/Tag über den Tagesgang (${esc(rk.profileSource)}) hochgerechnet. ` : ''}${qcmp ? `Vorperiode: ${esc(qLab(s.rq.cur))} gegen ${esc(qLab(s.rq.prev))} aus dem Langzeit-Archiv (Tageswerte, linear über die beobachtete Zeit hochgerechnet).` : rk.reason ? `${esc(rk.reason)} – Spalte ausgeblendet. Der Quartalsvergleich erscheint, sobald zwei aufeinanderfolgende Quartale vollständig vorliegen.` : `Vorperiode: je ${rk.prev.n} Tage; Quartalsvergleich, sobald zwei aufeinanderfolgende Quartale vollständig vorliegen.`} Art der Rangliste wie Fluctuo-Index: gleiche Kennzahl für alle Städte, aus offenen Feeds gemessen; Anbieter ohne offenen Feed fehlen.</div>`;
   el.innerHTML = title(`<div class="rp-ctl rp-noprint"><button type="button" data-rp="rkcsv">↓ CSV</button></div>`) + filterCtl(ctx, s, { minLabel: 'Mindestflotte' }) + note
     + `<div class="tbl"><table>${sortHead(cols, s.sort)}<tbody>${body || `<tr><td colspan="${cols.length}" class="empty"><b>Keine Stadt im Filter.</b>Mindestflotte senken oder Art wechseln.</td></tr>`}</tbody></table></div>${moreBtn(show.length, rows.length)}`;
 }
 function rankingCsv(el) {
   const s = st(el); if (!s.rows) return;
-  const rows = [['Rang', 'AGS', 'Stadt', 'Land', 'Fahrzeugart', 'Flotte_Mittel', 'Fahrten_je_Tag', 'Fahrten_je_Fahrzeug_Tag', 'Fahrzeuge_je_1000_EW', 'Fahrten_je_1000_EW_Tag', 'Anbieter', 'Delta_Vorperiode', 'Tage', 'vorlaeufig', 'Hinweis'],
-    ...s.rows.map((r, i) => [i + 1, r.ags, r.name, r.state || '', typeName(r.ty), [r.fleet, 1], [r.ridesDay, 1], [r.rvd, 2], [r.per1000Fleet, 2], [r.per1000Rides, 2], r.opCount, [r.delta, 2], s.rk.days.length, s.rk.prelim ? 'ja' : 'nein', r.excluded.length ? `ohne ${r.excluded.join(', ')}` : ''])];
+  const vp = s.rq ? `${s.rq.cur} gegen ${s.rq.prev}` : s.rk.prev ? `${s.rk.prev.curFrom}–${s.rk.prev.curTo} gegen ${s.rk.prev.from}–${s.rk.prev.to}` : '';
+  const rows = [['Rang', 'AGS', 'Stadt', 'Land', 'Fahrzeugart', 'Flotte_Mittel', 'Fahrten_je_Tag', 'Fahrten_je_Fahrzeug_Tag', 'Fahrzeuge_je_1000_EW', 'Fahrten_je_1000_EW_Tag', 'Anbieter', 'Delta_Vorperiode', 'Tage', 'vorlaeufig', 'Hinweis', 'Vorperiode'],
+    ...s.rows.map((r, i) => [i + 1, r.ags, r.name, r.state || '', typeName(r.ty), [r.fleet, 1], [r.ridesDay, 1], [r.rvd, 2], [r.per1000Fleet, 2], [r.per1000Rides, 2], r.opCount, [r.delta, 2], s.rk.days.length, s.rk.prelim ? 'ja' : 'nein', r.excluded.length ? `ohne ${r.excluded.join(', ')}` : '', vp])];
   download(`staedte-rangliste_${s.type}_${lastOf(s.rk.days)}.csv`, R.toCsv(rows));
 }
 /**
@@ -908,6 +1096,9 @@ function drawScatter(el) {
   el.innerHTML = title(btn) + filterCtl(ctx, s, { minLabel: 'Mindestflotte' }) + `<div class="rp-chart"><svg class="rp-line rp-scatter" viewBox="0 0 ${W} ${H}" role="img" tabindex="0" aria-label="Streudiagramm mit ${P2.length} Gemeinden; Pfeiltasten wählen eine Gemeinde, Werte auch in der Tabellenansicht">${g}<g class="pts">${dots}</g>${labels}</svg></div>` + note;
 }
 const EXTRA_CSS_2 = `
+svg.rp-bars .bar{fill:var(--accent)}svg.rp-bars .hit{fill:transparent}svg.rp-bars g.on .bar{fill:color-mix(in oklab,var(--accent) 72%,var(--fg))}
+svg.rp-bars .lim{stroke:var(--fg-2);stroke-width:1.5;stroke-dasharray:5 4}
+.rp-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r-sm);overflow:hidden}.rp-seg button{border:0;border-radius:0;background:transparent}.rp-seg button[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 16%,var(--panel));color:var(--fg);font-weight:600}
 svg.rp-scatter .pts circle{fill:color-mix(in srgb,var(--accent) 78%,transparent);stroke:var(--panel);stroke-width:2}
 svg.rp-scatter .pts circle.sel-pt{fill:var(--accent);stroke:var(--fg);stroke-width:2}
 svg.rp-scatter .pts circle.on{stroke:var(--fg);stroke-width:2.5}
@@ -977,10 +1168,10 @@ export async function renderRegulationProfile(el, ctx) {
     const caps = p.caps.map(c => `${fmt(c.limit)} ${esc(typeName(c.type))} gesamt${c.perOperator != null ? `, ${fmt(c.perOperator)} je Anbieter` : ''}${c.districts.length ? `; ${c.districts.map(d => `${esc(d.label)} ${fmt(d.limit)}`).join(', ')}` : ''}${c.previous != null ? ` <span class="muted">(ab ${dd(c.since)}; davor ${fmt(c.previous)})</span>` : ''} · ${badge(c.status)} ${fmt(c.total)} gezählt · ${src(c)}`).join('<br>') || '<span class="muted">nicht hinterlegt</span>';
     const fees = p.fees.map(f => `${esc([].concat(f.satz).join('–'))} ${esc(f.einheit || '')} · ${esc([].concat(f.type || []).map(typeName).join(', '))}${f.gebiet ? ` · ${esc(f.gebiet)}` : ''} · ${src(f)}`).join('<br>') || '<span class="muted">kein Satz mit Quelle hinterlegt</span>';
     const ops = Object.entries(p.operators).sort((a, b) => TYPE_ORDER.indexOf(a[0]) - TYPE_ORDER.indexOf(b[0])).map(([ty, l]) => `${esc(typeName(ty))}: ${l.length} <span class="muted">(${l.map(esc).join(', ')})</span>`).join('<br>') || '<span class="muted">keine Fahrzeuge in offenen Feeds</span>';
-    const refs = p.refs.map(r => { const v = r.kind === 'fahrt' ? [r.kmMin != null ? `${fmt(r.kmMin, 1)}–${fmt(r.kmMax, 1)} km` : r.kmMedian != null ? `Median ${fmt(r.kmMedian, 2)} km` : '', r.minMin != null ? `${fmt(r.minMin, 1)}–${fmt(r.minMax, 1)} Min.` : r.minMedian != null ? `Median ${fmt(r.minMedian, 1)} Min.` : ''].filter(Boolean).join(', ') : fmt(r.wert, r.kind === 'rvd' ? 2 : 0);
-      return `${({ rvd: 'Fahrten je Fzg. und Tag', flotte: 'Flotte', fahrt: 'Fahrt', fahrten: 'Fahrten' })[r.kind]} ${esc(typeName(r.type))}: ${v} <span class="muted">(${esc(r.zeitraum || r.stand || '')})</span> · ${src(r)}`; }).join('<br>') || '<span class="muted">keine</span>';
+    const refs = p.refs.map(r => { const v = r.kind === 'fahrt' ? tripTxt(ctx, r) : fmt(r.wert, r.kind === 'rvd' ? 2 : 0);
+      return `${({ rvd: 'Fahrten je Fzg. und Tag', flotte: fleetLabel(r), fahrt: 'Fahrt', fahrten: 'Fahrten' })[r.kind]} ${esc(typeName(r.type))}: ${v} <span class="muted">(${esc(r.zeitraum || r.stand || '')})</span> · ${src(r)}`; }).join('<br>') || '<span class="muted">keine</span>';
     return `<div class="card"><b>${esc(p.name)}${p.state ? ` <span class="muted">(${esc(p.state)})</span>` : ''}</b><div class="foot">AGS ${esc(p.ags)}${p.pop ? ` · ${fmt(p.pop)} Einwohner` : ''}</div>
-      <dl><dt>Obergrenzen</dt><dd>${caps}</dd><dt>Gebühren</dt><dd>${fees}</dd><dt>Anbieter laut Daten</dt><dd>${ops}</dd><dt>Referenzwerte</dt><dd>${refs}</dd></dl></div>`;
+      <dl><dt>Obergrenzen</dt><dd>${caps}</dd><dt>Gebühren</dt><dd>${fees}</dd><dt>Anbieter laut Daten</dt><dd>${ops}</dd><dt>Referenzwerte</dt><dd>${refs}</dd><dt>Unfälle</dt><dd><span class="muted">keine Karte: der <a href="https://unfallatlas.statistikportal.de/" target="_blank" rel="noopener">Unfallatlas</a> führt E-Scooter nicht als eigene Kategorie (Merkmale nur Rad, Pkw, Fuß, Kraftrad, Güterkraftfahrzeug, Sonstige; <a href="https://www.opengeodata.nrw.de/produkte/transport_verkehr/unfallatlas/DSB_Unfallatlas_EN.pdf" target="_blank" rel="noopener">Datensatzbeschreibung</a>)</span></dd></dl></div>`;
   };
   el.innerHTML = title + (profs.length ? `<div class="rp-prof">${profs.map(card).join('')}</div>` : emptyBox('Keine Regulierungsangaben hinterlegt.', 'reference.json enthält für dieses Gebiet keinen Eintrag.'))
     + `<div class="muted small" style="margin-top:var(--s2)">Nur Angaben, die in der verlinkten Quelle stehen. „Anbieter laut Daten“ zählt Anbieter mit Fahrzeugen in offenen Feeds; Anbieter ohne Feed fehlen.</div>`;

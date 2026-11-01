@@ -228,6 +228,57 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   const sq = T.stationQuota(q.state);
   assert(sq.find(x => x[2] === 'Zone z1')[8] === 1 && sq.find(x => x[2] === 'Zone d1')[8] === 0, 'Stationsquote: virtuell 1, Dock 0');
 }
+// Start-Ziel-Ströme: nur stabile Kennungen mit bekanntem Start und Ziel; rotierende Quelle, Lücke, Abholung, Aufladen, Sammeltransport ohne Strom
+{
+  const L = (id, lat, lon, extra = {}) => V(id, lat, lon, { operator: 'Lime', sourceId: 'lime', ...extra });
+  const recsL = [{ id: 'lime', status: 'live', latencyMs: 50 }, { id: 'bolt', status: 'live', latencyMs: 50 }];
+  const u0 = Date.parse('2026-11-10T07:00:00Z'), t = u0 + 40 * 60e3, b = T.bandOf(T.hourOf(t));
+  const fleet = [L('a', 48.50, 9.00), L('b', 48.50, 9.02), L('c', 48.50, 9.04, { batteryPct: 10 }), L('d', 48.50, 9.06, { disabled: true }), L('e', 48.50, 9.08), L('f', 48.50, 9.10), L('g1', 48.50, 9.12), L('g2', 48.50, 9.14), L('g3', 48.50, 9.16), L('h', 48.50, 9.18), V('r', 48.50, 9.20)];
+  let q = T.trackRun(null, { vehicles: fleet, stations: [], sourceRecs: recsL, now: u0 });
+  // b, c (Akku 10), d (gesperrt), e, f, g1–g3, h verschwinden; a bleibt
+  q = T.trackRun(q.state, { vehicles: [fleet[0], fleet[10]], stations: [], sourceRecs: recsL, now: u0 + 20 * 60e3 });
+  assert(q.flows instanceof Map && q.flows.size === 0, 'flows: Map, ohne Bewegung leer');
+  q.state.srcStats.lime = { runs: 10, present: 500, gone: 20, moved: 40, newc: 30, returned: 30 };
+  q.state.srcStats.bolt = { runs: 10, present: 500, gone: 200, moved: 2, newc: 190, returned: 0 };
+  // a: 2,2 km Versatz (Fahrt); b: kehrt 1,1 km weiter zurück, Akku 50 → 44 (Strom); c: Rückkehr nach Abholung (Akku 10); d: gesperrt verschwunden;
+  // e: kommt aufgeladen zurück (50 → 90); f: nur 100 m weiter; g1–g3: kehren gemeinsam an einen Punkt zurück (Sammeltransport); h: 30 km weiter (zu schnell);
+  // r (Bolt, rotierend): 2 km versetzt = Umsetzung, kein Strom
+  const after = [L('a', 48.52, 9.00, { batteryPct: 46 }), L('b', 48.51, 9.02, { batteryPct: 44 }), L('c', 48.51, 9.04, { batteryPct: 9 }), L('d', 48.51, 9.06, { batteryPct: 40 }), L('e', 48.51, 9.08, { batteryPct: 90 }), L('f', 48.5009, 9.10, { batteryPct: 45 }),
+    L('g1', 48.60, 9.30, { batteryPct: 45 }), L('g2', 48.60005, 9.30, { batteryPct: 45 }), L('g3', 48.6001, 9.30005, { batteryPct: 45 }), L('h', 48.77, 9.18, { batteryPct: 30 }), V('r', 48.518, 9.20)];
+  q = T.trackRun(q.state, { vehicles: after, stations: [], sourceRecs: recsL, now: t });
+  const fl = q.flows.get(`08416041|Lime|scooter|${b}`);
+  const fa = fl?.get(`${T.cellOf(48.50, 9.00)}>${T.cellOf(48.52, 9.00)}`), fb = fl?.get(`${T.cellOf(48.50, 9.02)}>${T.cellOf(48.51, 9.02)}`);
+  assert(fl && fl.size === 2 && fa?.count === 1 && fa.durSum === 20 * 60e3 && Math.abs(fa.distSum - 2224) < 5, 'Versatz a: Strom alte Zelle → neue Zelle, Dauer = Laufintervall, Luftlinie ≈ 2,2 km');
+  assert(fb?.count === 1 && fb.durSum === 20 * 60e3 && Math.abs(fb.distSum - 1112) < 5, 'Rückkehr b: Strom vom Ort des Verschwindens, Dauer seit dem Verschwinden');
+  assert(![...q.flows.keys()].some(k => k.includes('|Bolt|')), 'rotierende Quelle (Bolt): kein Strom');
+  assert([...q.flows.values()].reduce((s, m) => s + [...m.values()].reduce((x, f) => x + f.count, 0), 0) === 2, 'keine Ströme für Abholung (c), Sperrung (d), Aufladen (e), < 150 m (f), Sammeltransport (g1–g3), > 24 km/h (h)');
+  // Lücken-Lauf: keine Ströme, auch bei Versatz
+  const g = T.trackRun(q.state, { vehicles: after.map(v => v.rawId === 'a' ? L('a', 48.54, 9.00, { batteryPct: 40 }) : v), stations: [], sourceRecs: recsL, now: t + 3 * 3600e3 });
+  assert(g.gap && g.flows.size === 0, 'Lücken-Lauf: keine Ströme');
+}
+// Ströme: Tagessumme, Mindestschwelle 2 je Zellenpaar mit Zusammenfassung (Anbieter → Band → Art), Top-N je Gemeinde, stabile Anbieter je Gemeinde
+{
+  const F = (entries) => new Map(entries.map(([k, pairs]) => [k, new Map(pairs.map(([p, n, dur, dist]) => [p, { count: n, durSum: dur, distSum: dist }]))]));
+  let raw = T.mergeFlows(null, F([['A1|Lime|scooter|1', [['1:1>2:2', 2, 600e3, 2000], ['5:5>6:6', 1, 300e3, 900]]]]), { day: '2026-11-10', stable: { A1: ['Lime'] } });
+  raw = T.mergeFlows(raw, F([['A1|Lime|scooter|3', [['3:3>4:4', 1, 300e3, 1000]]], ['A1|Lime|scooter|1', [['3:3>4:4', 1, 300e3, 1200]]], ['A1|Voi|scooter|2', [['1:1>2:2', 1, 120e3, 800]]],
+    ['A1|Bolt|scooter|2', [['1:1>2:2', 1, 180e3, 700]]], ['A1|Lime|bike|4', [['7:7>8:8', 1, 240e3, 600]]], ['A1|Bolt|scooter|5', [['7:7>8:8', 1, 360e3, 1500]]]]), { day: '2026-11-10', stable: { A1: ['Bolt'], A2: ['DB Connect'] } });
+  assert(raw.runs === 2 && raw.rows['A1|Lime|scooter|1']['1:1>2:2'][0] === 2 && raw.stable.A1.join() === 'Bolt,Lime' && raw.stable.A2[0] === 'DB Connect', 'mergeFlows: Läufe, Zählung und stabile Anbieter summiert');
+  assert(T.mergeFlows(raw, new Map(), { day: '2026-11-11' }).runs === 1 && T.mergeFlows(raw, new Map(), { day: '2026-11-11' }).day === '2026-11-11' && !Object.keys(T.mergeFlows(raw, new Map(), { day: '2026-11-11' }).rows).length, 'mergeFlows: neuer Tag beginnt neue Summe');
+  const pub = T.publishFlows(raw, { at: 1 });
+  const R = (from, to) => pub.flows.filter(r => r[1] === from && r[2] === to);
+  assert(pub.fields.join() === T.FLOW_FIELDS.join() && pub.cell[0] === T.CELL_LAT && pub.day === '2026-11-10' && pub.min === 2, 'publishFlows: Felder, Zellmaß, Tag, Mindestschwelle');
+  assert(pub.flows.every(r => r[6] >= 2), 'keine veröffentlichte Zeile unter 2 Fahrten');
+  assert(JSON.stringify(R('1:1', '2:2').map(r => r.slice(3, 7))) === JSON.stringify([['Lime', 'scooter', 1, 2], [null, 'scooter', 2, 2]]), 'Zellenpaar 1: Lime einzeln (2), Voi + Bolt (je 1, gleiches Band) als „mehrere Anbieter“');
+  assert(JSON.stringify(R('3:3', '4:4').map(r => r.slice(3, 9))) === JSON.stringify([['Lime', 'scooter', null, 2, 600, 2200]]), 'Zellenpaar 3: Lime in zwei Bändern → Band zusammengefasst, Dauer/Luftlinie summiert');
+  assert(JSON.stringify(R('7:7', '8:8').map(r => r.slice(3, 7))) === JSON.stringify([[null, null, null, 2]]), 'Zellenpaar 7: verschiedene Anbieter, Arten und Bänder → ganz zusammengefasst');
+  assert(!R('5:5', '6:6').length && pub.munis.A1.below === 1 && pub.munis.A1.trips === 9 && pub.munis.A1.shown === 8 && pub.total.trips === pub.total.shown + pub.total.below + pub.total.cut, 'Einzelfahrt unter Mindestschwelle nur als Summe; trips = shown + below + cut');
+  assert(pub.munis.A1.ops.Lime === 6 && pub.munis.A1.ops.Bolt === 2 && pub.munis.A1.ops.Voi === 1 && pub.stable.A2[0] === 'DB Connect', 'Fahrten je Anbieter und stabile Anbieter je Gemeinde');
+  const top = T.publishFlows(raw, { top: 2 });
+  assert(top.flows.length === 2 && top.munis.A1.cut === 4 && top.munis.A1.shown === 4 && top.munis.A1.below === 1 && top.flows[0][6] >= top.flows[1][6], 'Top-N je Gemeinde: Rest als „außerhalb Top“');
+  const st = T.stableOps({ s1: 'stable', s2: 'rotating', s3: 'stable' }, [{ id: 's1', operator: 'Lime', municipalities: ['A1', 'A2'] }, { id: 's2', operator: 'Voi', municipalities: ['A1'] }, { id: 's3', operator: 'DB Connect', municipalities: ['A1'] }]);
+  assert(JSON.stringify(st) === JSON.stringify({ A1: ['DB Connect', 'Lime'], A2: ['Lime'] }), 'stableOps: nur stabile Quellen je Gemeinde');
+  assert(T.publishFlows(null).flows.length === 0 && T.publishFlows(null).total.trips === 0, 'publishFlows ohne Tagessumme: leer');
+}
 // Zeitumstellung: Tagesdatei trägt Minuten je Ortsstunde
 {
   const doc = T.mergeHourly(null, new Map(), { day: '2026-10-25', at: Date.parse('2026-10-25T01:30:00Z'), dt: 20 * 60e3, srcModes: {} });

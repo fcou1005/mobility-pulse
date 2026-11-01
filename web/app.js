@@ -1,7 +1,9 @@
 import * as C from './pulse-core.js';
 import * as Ops from './ops.js';
 import * as E from './pulse-econ.js';
+import * as K from './pulse-calib.js';
 import * as Rp from './report.js';
+import * as Fl from './flows.js';
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
 const QS = new URLSearchParams(location.search);
@@ -74,7 +76,7 @@ const GLOSS = {
   reloc: 'Gleiche Kennung, nie verschwunden, aber über 150 m versetzt: vom Betreiber transportiert',
   pickup: 'Gesperrte oder fast leere Fahrzeuge, die aus dem Feed verschwinden (Werkstatt, Laden)',
   cell: 'Raster von etwa 250 × 250 m; Starts, Ziele und Bestand werden je Zelle gezählt',
-  calib: 'Faktor auf die gemessenen Fahrten dieses Anbieters, z. B. aus bekannten Betreiberzahlen. Wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz. Nur in diesem Browser gespeichert.',
+  calib: 'Eigener Faktor auf die gemessenen Fahrten dieses Anbieters, z. B. aus bekannten Betreiberzahlen; ersetzt den Kalibrierfaktor. Wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz. Nur in diesem Browser gespeichert, 1 = keine eigene Korrektur.',
   empty: 'Leer = kein buchbares Fahrzeug und keins desselben Anbieters im Umkreis von 50 m',
   score: 'Gleich gewichtetes Mittel der vorhandenen Teilwerte (je 0–100): Verfügbar-Anteil, 100 − Sperrquote, 100 − Anteil Energie niedrig, 100 − Anteil leerer Stationen, Quellenqualität. Fehlt ein Teilwert, zählt er nicht mit.',
   fresh: 'Datenalter jetzt = Feedalter bei der Messung + Zeit seit der Messung. Aktuell bis 30 Min. (Sammler-Takt 20 Min. + 10), verzögert bis 60 Min., darüber veraltet.',
@@ -442,6 +444,7 @@ let currentView = 'live', urlReady = false;
 const resolveView = (h) => { let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 function setView(name) {
   name = resolveView(name);
+  if (name !== 'usage') { const fl = document.getElementById('fl-panel'); if (fl) Fl.abortFlows?.(fl); }
   const group = GROUPS.find(g => g.segs.some(([v]) => v === name));
   currentView = name;
   $$('section.view').forEach(s => s.classList.toggle('active', s.id === `view-${name}`));
@@ -538,7 +541,8 @@ const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, opColor, mu
 const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) return fn(el, rpCtx()); };
 VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
 VIEW_RENDER.lab.push(rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter'));
-VIEW_RENDER.sources.push(rp(Rp.renderFeedChecks, 'rp-feedchecks'), rp(Rp.renderPriceLog, 'rp-pricelog'));
+VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
+VIEW_RENDER.sources.push(rp(Rp.renderFeedChecks, 'rp-feedchecks'), rp(Rp.renderPriceLog, 'rp-pricelog'), () => renderCalibPanel());
 function renderAll() {
   dataReady = true;
   safe(renderHeader);
@@ -1307,7 +1311,7 @@ async function renderUsage() {
   $('#tbl-usage tbody').innerHTML = list.map(([name, a]) => `<tr>${opCell(name)}<td class="n">${fmt(sum(a.start))}</td><td class="n">${fmt(sum(a.end))}</td><td class="n">${fmt(sum(a.reloc))}</td><td class="n">${fmt(sum(a.swap))}</td><td class="n">${fmt(sum(a.pickup))}</td></tr>`).join('') || '<tr><td colspan="6" class="empty"><b>Keine Ereignisse im Filter.</b>Anbieter oder Fahrzeugart auf „Alle“ stellen oder anderen Tag wählen.</td></tr>';
   $('#tbl-usage-more tbody').innerHTML = list.map(([name, a]) => { const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mode = modes.includes('stable') ? 'stabil' : modes.includes('rotating') ? 'rotierend' : 'offen';
     return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mode === 'stabil' ? 'Dauer/Distanz messbar' : mode === 'rotierend' ? 'nur Start/Ziel-Zählung' : 'noch zu wenige Läufe'}</div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Keine Ereignisse im Filter.</td></tr>';
-  renderCellsTable(day); renderQuota(); if (!isClient()) renderEcon(day, doc).catch(e => console.error('Umsatz', e));
+  renderCellsTable(day); renderQuota(); if (!isClient()) { renderEcon(day, doc).catch(e => console.error('Umsatz', e)); renderCalibPanel().catch(e => console.error('Kalibrierung', e)); }
 }
 // Tagesgang-Filter: Anbieter und Arten mit Ereignissen im Gebiet am Tag; eigene Wahl bleibt, bis sich oben Gebiet, Anbieter oder Art ändern
 const inArea = (ags) => ags !== 'DE' && (state.scope === 'DE' || ags === state.scope);
@@ -1357,9 +1361,11 @@ async function econProfile() {
   state.usage.profile = E.hourProfile(await Promise.all(days.map(loadEvents)));
   return state.usage.profile;
 }
-// Kennzahlen je Gruppe (Gemeinde|Anbieter|Art) eines Tages; Ergebnis je Schlüssel
+// Kennzahlen je Gruppe (Gemeinde|Anbieter|Art) eines Tages; Ergebnis je Schlüssel.
+// Je Gruppe: m = gemessen (Ø Fahrt aus der Kalibrierung: E-Scooter Berliner Quartalswerte, sonst Annahme), cal = × Faktor (pulse-calib factorFor:
+// eigene Korrektur übersteuert, sonst k für E-Scooter), lo/hi = Spanne des Faktors; die Gruppe selbst trägt die Werte des gewählten Modus.
 async function econGroups(day, keep) {
-  const [doc, pricing, hist, prof] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile()]);
+  const [doc, pricing, hist, prof, calib] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile(), getCalib()]);
   if (!doc) return null;
   // Fahrzeugminuten nur nutzen, wenn alle Läufe des Tages sie gezählt haben (Umstellungstag: Ø Bestand aus dem Verlauf)
   // Stunden ohne Messung oder mit Lücken-Lauf (> 45 Min. Pause, Flag 0) fallen aus Beobachtungszeit, Fahrten und Fahrzeugminuten: keine Hochrechnung aus Lücken
@@ -1368,33 +1374,51 @@ async function econGroups(day, keep) {
   const vminOk = runs.every(r => r[1] == null || r[2] === 1 || r[2] === 0 || isGapRun(r));
   const obsMin = E.observedMinutes(runs).map((m, h) => mask.ok[h] ? m : 0), obsMinV = vminOk ? obsMin : new Array(24).fill(0); const o = econOpts();
   const maskG = (g) => { const out = { ...g }; for (const f of ['start', 'end', 'rot', 'vmin', 'vminTot']) if (Array.isArray(g[f])) out[f] = g[f].map((v, h) => mask.ok[h] ? (v || 0) : 0); return out; };
+  const assume = calib?.assume || null, mode = calibMode();
   const planCache = new Map(); const out = new Map();
   for (const [k, g] of Object.entries(doc.groups || {})) {
     if (!keep(k)) continue;
     const [ags, op, ty] = k.split('|');
-    const pk = `${op}|${ags}|${ty}`; if (!planCache.has(pk)) planCache.set(pk, E.planFor(pricing, op, ags, ty));
+    const pk = `${op}|${ags}|${ty}`; if (!planCache.has(pk)) planCache.set(pk, E.planFor(pricing, op, ags, ty, assume?.[ty] || undefined));
     const pl = planCache.get(pk);
     const series = hist?.series?.[k]?.total?.filter(x => x != null) || [];
     const fleetFallback = series.length ? series.reduce((a, b) => a + b, 0) / series.length : (state.latest?.groups?.[k]?.total ?? null);
-    const fac = calibFor(op); const gm = maskG(g); const gc = fac === 1 ? gm : { ...gm, start: (gm.start || []).map(v => (v || 0) * fac) }; // Korrektur × je Anbieter
-    out.set(k, { ...E.kpis({ g: gc, obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, realization: o.realization, net: o.net, hourMin: doc.hourMin || null }), plan: pl, op, ty, ags });
+    // Messung über der Plausibilitätsgrenze (Überzählung): nicht kalibrieren, nicht in Summen
+    const chk = K.checkMeasured(E.kpis({ g: maskG(g), obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, assume, realization: o.realization, net: o.net, hourMin: doc.hourMin || null }), ty, calib?.limits);
+    const m = chk.kpi;
+    const fac = K.factorFor(ty, { manual: calibFor(op), k: calib?.k, mode: 'kal', suspended: chk.suspended });
+    const cal = K.applyFactor(m, fac.f);
+    out.set(k, { ...(mode === 'kal' ? cal : m), m, cal, lo: K.applyFactor(m, fac.lo), hi: K.applyFactor(m, fac.hi), fac, plan: pl, op, ty, ags });
   }
-  return { out, doc, obsMin, profile: prof, gapH: mask.gap.filter(Boolean).length };
+  return { out, doc, obsMin, profile: prof, gapH: mask.gap.filter(Boolean).length, calib };
 }
-// für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter Tag)
+// für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter Tag, Werte des gewählten Modus)
 async function econFor(ags, op, type) {
   const idx = await loadUsageIndex(); const day = (idx.days || []).slice(-1)[0]; if (!day) return null;
   const r = await econGroups(day, (k) => { const [a, o, t] = k.split('|'); return a === ags && o === op && (type === 'all' || t === type); });
   return r ? E.combine([...r.out.values()]) : null;
 }
+// Kalibrierung: geteilt mit dem Bericht (report.js loadCalibration), Modus „kalibriert“ / „gemessen“ je Browser gemerkt
+const getCalib = () => Rp.loadCalibration(rpCtx());
+const MODE_KEY = 'mp-calib-mode';
+function calibMode() { try { return localStorage.getItem(MODE_KEY) === 'mess' ? 'mess' : 'kal'; } catch { return 'kal'; } }
+function setCalibMode(m) { try { localStorage.setItem(MODE_KEY, m === 'mess' ? 'mess' : 'kal'); } catch { /* privates Fenster: Standard „kalibriert“ */ } }
+function syncCalibToggle() { const m = calibMode(); $$('#econ-mode button[data-cmode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cmode === m))); }
 async function renderEcon(day) {
   const r = await econGroups(day, groupInScope);
+  syncCalibToggle();
   if (!r) { $('#econ-tiles').innerHTML = ''; $('#econ-excl').innerHTML = ''; $('#econ-calib').innerHTML = ''; $('#econ-badge').textContent = 'Schätzung'; $('#tbl-econ tbody').innerHTML = emptyRow(6, 'Keine Ereignisdaten für diesen Tag.', 'Anderen Tag wählen.'); $('#tbl-econ-more tbody').innerHTML = emptyRow(7, 'Keine Ereignisdaten für diesen Tag.', 'Anderen Tag wählen.'); return; }
+  const kal = calibMode() === 'kal', k = r.calib?.k, sc = r.calib?.assume?.scooter;
   const byName = new Map();
   for (const x of r.out.values()) { const name = `${x.op}|${x.ty}`; if (!byName.has(name)) byName.set(name, []); byName.get(name).push(x); }
-  const rows = [...byName].map(([name, list]) => { const [op, ty] = name.split('|'); const c = E.combine(list); const plans = [...new Set(list.map(x => x.plan?.plan ? E.planLabel(x.plan.plan) : null).filter(Boolean))]; return { op, ty, c, list, plans, planScope: list.find(x => x.plan)?.plan?.scope }; }).filter(x => x.c && x.c.fleet > 0).sort((a, b) => (b.c.revDay || 0) - (a.c.revDay || 0) || b.c.rides - a.c.rides);
+  // je Anbieter × Art: Gemeinden mit unplausibler Messung (Überzählung, > 15) fallen aus der Zeile; sind alle unplausibel, ist die Zeile es
+  const rows = [...byName].map(([name, list0]) => { const [op, ty] = name.split('|'); const okL = list0.filter(x => x.m.plausible); const list = okL.length ? okL : list0; const dropped = okL.length ? list0.filter(x => !x.m.plausible) : [];
+    const c = E.combine(list); const plans = [...new Set(list.map(x => x.plan?.plan ? E.planLabel(x.plan.plan) : null).filter(Boolean))];
+    return { op, ty, c, cm: E.combine(list.map(x => x.m)), cc: E.combine(list.map(x => x.cal)), lo: E.combine(list.map(x => x.lo)), hi: E.combine(list.map(x => x.hi)), fac: list[0].fac, dur: [...new Set(list.map(x => x.m.durationSource))], list, dropped, plans, planScope: list.find(x => x.plan)?.plan?.scope }; })
+    .filter(x => x.c && x.c.fleet > 0).sort((a, b) => (b.c.revDay || 0) - (a.c.revDay || 0) || b.c.rides - a.c.rides);
   const good = rows.filter(x => x.c.plausible);
-  const tot = E.combine(good.map(x => x.c));
+  const T = { cm: E.combine(good.map(x => x.cm)), cc: E.combine(good.map(x => x.cc)), lo: E.combine(good.map(x => x.lo)), hi: E.combine(good.map(x => x.hi)) };
+  const tot = kal ? T.cc : T.cm;
   const cov = Math.max(0, ...rows.map(x => x.c.coverage || 0));
   const o = econOpts(); const euro = (v, d = 0) => v == null ? '—' : `${fmt(v, d)} €`;
   // Reifegrad: Läufe und Messbeginn am Panel; unter 3 vollen Messtagen Hochrechnungen nur als Spanne
@@ -1402,77 +1426,109 @@ async function renderEcon(day) {
   const dd = (d) => d ? `${d.slice(8)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '–';
   $('#econ-badge').textContent = first && first !== day ? `Schätzung · ${fmt(runsN)} Läufe am ${dd(day)} · Daten seit ${dd(first)}` : `Schätzung · ${fmt(runsN)} Läufe seit ${dd(first || day)}`;
   const prelim = r.profile.source === 'Standardkurve' || (r.profile.days ?? 0) < 3;
-  const pb = $('#econ-prelim'); pb.hidden = !prelim; pb.title = `Erst ${fmt(r.profile.days ?? 0)} volle Messtage; ab 3 wird der Tagesgang gemessen statt angenommen. Bis dahin Hochrechnungen als Spanne (× 0,7 bis × 1,3).`;
+  const pb = $('#econ-prelim'); pb.hidden = !prelim; pb.title = `Erst ${fmt(r.profile.days ?? 0)} volle Messtage; ab 3 wird der Tagesgang gemessen statt angenommen. Bis dahin gemessene Hochrechnungen als Spanne (× 0,7 bis × 1,3), kalibrierte mit der Spanne der Berliner Quartalswerte.`;
   const rng = (v, d = 0, unit = '') => { if (v == null || !Number.isFinite(v)) return '—'; if (!prelim || v === 0) return `${fmt(v, d)}${unit}`; const f = (x) => x >= 100 ? fmt(sig2(x)) : fmt(x, d); return `${f(v * 0.7)}–${f(v * 1.3)}${unit}`; };
+  const fu = (v, d = 0, unit = '') => (v == null || !Number.isFinite(v) ? '—' : `${v >= 1000 && d === 0 ? fmt(sig2(v)) : fmt(v, d)}${unit}`);
+  // gemessen und kalibriert nebeneinander: Hauptwert nach Modus, der andere darunter; ohne Faktor wie bisher
+  const pair = (x, key, { d = 0, unit = '', scale = 1 } = {}) => {
+    const g = (o2) => (o2?.[key] == null ? null : o2[key] * scale);
+    const m = g(x.cm), c = g(x.cc), lo = g(x.lo), hi = g(x.hi);
+    if (m == null || c == null || Math.abs(c - m) <= 1e-9 * Math.max(1, Math.abs(m))) return { main: rng(m, d, unit), sub: '' };
+    const span = lo != null && hi != null && Math.abs(hi - lo) > 1e-9 ? `${fu(lo, d)}–${fu(hi, d, unit)}` : null;
+    return kal ? { main: fu(c, d, unit), sub: `${span ? `Spanne ${span} · ` : ''}gemessen ${rng(m, d, unit)}`, lines: [span ? `Spanne ${span}` : null, `gemessen ${rng(m, d, unit)}`].filter(Boolean) } : { main: rng(m, d, unit), sub: `kalibriert ${fu(c, d, unit)}`, lines: [`kalibriert ${fu(c, d, unit)}`] };
+  };
+  // Tabellenzelle: Hauptwert, darunter Spanne und Vergleichswert je eine Zeile (schmale Spalten)
+  const cell = (p, bold = false) => `${bold ? '<b>' : ''}${p.main}${bold ? '</b>' : ''}${(p.lines || []).map(l => `<div class="sub-line">${l}</div>`).join('')}`;
+  const tsub = (p, base) => [p.sub, base].filter(Boolean).join(' · ');
   $('#econ-tiles').classList.toggle('prelim', prelim);
+  const pR = pair(T, 'ridesDay'), pV = pair(T, 'rvd', { d: 2 }), pU = pair(T, 'utilization', { d: 1, unit: ' %', scale: 100 }), pD = pair(T, 'revDay', { unit: ' €' }), pF = pair(T, 'revPerVehicleDay', { d: 2, unit: ' €' });
   $('#econ-tiles').innerHTML = tot ? [
-    tile('Fahrten / Tag', rng(tot.ridesDay), `hochgerechnet aus ${fmt(tot.rides)} gemessenen · ${fmt(cov * 100)} % des Tagesgangs beobachtet`),
-    tile(abbr('Rides / Fzg. / Tag', 'rvd'), fmt(tot.rvd, 2), `bezogen auf Ø ${fmt(tot.fleet)} Fahrzeuge auf der Straße`),
-    tile(abbr('Auslastung', 'util'), tot.utilization == null ? '—' : `${fmt(tot.utilization * 100, 1)} %`, `Zeit in Fahrt · Ø ${fmt(tot.avgMin, 1)} Min. je Fahrt`),
-    tile(`Umsatz / Tag ${o.net ? 'netto' : 'brutto'}`, rng(tot.revDay, 0, ' €'), `${abbr('Realisierung', 'real')} ${fmt(o.realization * 100)} % · Listenpreise der Feeds`),
-    tile('Umsatz / Fzg. / Tag', rng(tot.revPerVehicleDay, 2, ' €'), `${euro(tot.perRide, 2)} je Fahrt`),
+    tile('Fahrten / Tag', pR.main, tsub(pR, `aus ${fmt(T.cm.rides)} gemessenen · ${fmt(cov * 100)} % des Tagesgangs beobachtet`)),
+    tile(abbr('Rides / Fzg. / Tag', 'rvd'), pV.main, tsub(pV, `Ø ${fmt(tot.fleet)} Fahrzeuge auf der Straße`)),
+    tile(abbr('Auslastung', 'util'), pU.main, tsub(pU, `Zeit in Fahrt · Ø ${fmt(tot.avgMin, 1)} Min. je Fahrt`)),
+    tile(`Umsatz / Tag ${o.net ? 'netto' : 'brutto'}`, pD.main, tsub(pD, `${abbr('Realisierung', 'real')} ${fmt(o.realization * 100)} % · Listenpreise der Feeds`)),
+    tile('Umsatz / Fzg. / Tag', pF.main, tsub(pF, `${euro(tot.perRide, 2)} je Fahrt`)),
   ].join('') : '<div class="empty" style="grid-column:1/-1"><b>Keine belastbare Zeile im Filter.</b>Alle Zeilen sind unplausibel oder ohne Flotte; anderen Tag oder Anbieter wählen.</div>';
   // Unplausible Zeilen sind aus den Summen raus – sichtbar machen
-  const bad = rows.filter(x => !x.c.plausible); const names = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}`);
+  const bad = [...rows.filter(x => !x.c.plausible), ...rows.flatMap(x => (x.dropped || []).map(d => ({ ...x, c: d.m, where: muniName(d.ags) })))]; const names = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}${x.where ? ` ${x.where}` : ''}`);
   const ex = $('#econ-excl'); ex.innerHTML = bad.length ? `Summen ohne ${esc(names.slice(0, 4).join(', '))}${names.length > 4 ? ` und ${names.length - 4} weitere` : ''} <span class="muted">(nicht belastbar)</span>` : '';
   ex.title = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}: ${x.c.flags[0] || 'unplausibel'}`).join('\n');
   const cal = calibAll();
+  const facTxt = (x) => (x.fac.source === 'Korrektur' ? `Korrektur × ${fmt(x.fac.f, 2)}` : x.fac.source === 'kalibriert' ? `kalibriert × ${fmt(x.fac.f, 2)}` : '');
+  const DUR = { kalibriert: 'Berliner Mittel', gemessen: 'gemessen', Annahme: 'Annahme', Vorgabe: 'Vorgabe' };
   // Sechs Standardspalten; Korrektur, Auslastung, Dauer, Tarif und Einzelpreise unter „Weitere Spalten“. Nicht belastbare Zeilen: Kennzeichnung statt Ausgrauen.
-  const nameCell = (x) => { const c = x.c; return `<td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${esc(TYPE[x.ty] || x.ty)}${state.scope === 'DE' ? ` · ${x.list.length} Gemeinde${x.list.length === 1 ? '' : 'n'}` : ''}</div>${!c.plausible ? '<span class="pill excl-tag">nicht in Summe</span>' : ''}${c.flags.length ? `<div class="sub-line warn-text flag-line">${esc(c.flags[0])}</div>` : ''}</td>`; };
-  $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.c; const fac = calibFor(x.op);
-    return `<tr${!c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
-      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${fac !== 1 ? `gemessen ${fmt(c.rides / fac)} × ${fmt(fac, 2)}` : c.rot ? `${fmt(c.rot)} ${abbr('Kennungswechsel', 'rot')}` : ''}</div></td>
-      <td class="n">${rng(c.ridesDay)}</td><td class="n"><b>${fmt(c.rvd, 2)}</b></td><td class="n"><b>${rng(c.revDay, 0, ' €')}</b></td></tr>`; }).join('') || emptyRow(6, 'Keine Fahrten im Filter.', 'Anbieter oder Fahrzeugart auf „Alle“ stellen.');
-  $('#tbl-econ-more tbody').innerHTML = rows.map(x => { const c = x.c; const fac = calibFor(x.op);
-    return `<tr${!c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
-      <td class="n"><input type="number" class="calib" data-op="${esc(x.op)}" value="${fac}" min="0.1" max="5" step="0.05" style="width:4.8em${fac !== 1 ? ';border-color:var(--accent)' : ''}" aria-label="Korrekturfaktor Fahrten ${esc(x.op)}" title="${esc(GLOSS.calib)}">${fac !== 1 ? '<div class="sub-line">angewendet</div>' : ''}</td>
-      <td class="n">${c.utilization == null ? '—' : `${fmt(c.utilization * 100, 1)} %`}</td><td class="n">${fmt(c.avgMin, 1)} min</td>
+  const nameCell = (x) => { const c = x.c; const dr = x.dropped || []; return `<td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${esc(TYPE[x.ty] || x.ty)}${state.scope === 'DE' ? ` · ${x.list.length} Gemeinde${x.list.length === 1 ? '' : 'n'}` : ''}</div>${!c.plausible ? '<span class="pill excl-tag">nicht in Summe</span>' : ''}${c.flags.length ? `<div class="sub-line warn-text flag-line">${esc(c.flags[0])}</div>` : ''}${dr.length ? `<div class="sub-line warn-text flag-line">ohne ${esc(dr.slice(0, 3).map(d => muniName(d.ags)).join(', '))}${dr.length > 3 ? ` +${dr.length - 3}` : ''}: ${esc(dr[0].m.flags[0] || 'unplausibel')}</div>` : ''}</td>`; };
+  $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.cm;
+    return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
+      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${kal && x.fac.source === 'ausgesetzt' ? 'nicht kalibriert' : kal && facTxt(x) ? esc(facTxt(x)) : c.rot ? `${fmt(c.rot)} ${abbr('Kennungswechsel', 'rot')}` : ''}</div></td>
+      <td class="n">${cell(pair(x, 'ridesDay'))}</td><td class="n">${cell(pair(x, 'rvd', { d: 2 }), true)}</td><td class="n">${cell(pair(x, 'revDay', { unit: ' €' }), true)}</td></tr>`; }).join('') || emptyRow(6, 'Keine Fahrten im Filter.', 'Anbieter oder Fahrzeugart auf „Alle“ stellen.');
+  $('#tbl-econ-more tbody').innerHTML = rows.map(x => { const c = x.cm; const fac = calibFor(x.op);
+    return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
+      <td class="n"><input type="number" class="calib" data-op="${esc(x.op)}" value="${fac}" min="0.1" max="5" step="0.05" style="width:4.8em${fac !== 1 ? ';border-color:var(--accent)' : ''}" aria-label="Korrekturfaktor Fahrten ${esc(x.op)}" title="${esc(GLOSS.calib)}">${fac !== 1 ? '<div class="sub-line">übersteuert</div>' : x.fac.source === 'kalibriert' ? `<div class="sub-line">kalibriert ${fmt(x.fac.f, 2)}</div>` : x.fac.source === 'ausgesetzt' ? '<div class="sub-line">ausgesetzt</div>' : ''}</td>
+      <td class="n">${cell(pair(x, 'utilization', { d: 1, unit: ' %', scale: 100 }))}</td><td class="n">${fmt(c.avgMin, 1)} min<div class="sub-line">${esc(x.dur.map(d => DUR[d] || d).join(', '))}</div></td>
       <td class="small">${x.plans.slice(0, 2).map(esc).join('<br>') || '<span class="muted">kein Tarif im Feed</span>'}${x.planScope === 'Anbieter' ? '<div class="sub-line">Tarif anderer Stadt</div>' : ''}</td>
-      <td class="n">${euro(c.perRide, 2)}</td><td class="n">${rng(c.revPerVehicleDay, 2, ' €')}</td></tr>`; }).join('') || emptyRow(7, 'Keine Fahrten im Filter.', 'Anbieter oder Fahrzeugart auf „Alle“ stellen.');
-  renderCalibration(rows);
-  const excludedN = rows.length - good.length; const calOps = Object.keys(cal);
-  $('#econ-note').innerHTML = `Fahrten = verschwundene verfügbare Fahrzeuge (${abbr('Kennungswechsel', 'rot')} ≤ 40 m am selben Ort zählen nicht). Hochrechnung auf 24 h über den Tagesgang (${esc(r.profile.source)}${prelim ? '; unter 3 vollen Messtagen als Spanne × 0,7 bis × 1,3' : ''}). Flotte = Ø Fahrzeuge auf der Straße inkl. gesperrter. Ø Fahrtdauer: ${o.rideMin ? `Vorgabe ${fmt(o.rideMin)} Min.` : 'gemessen, wo Kennungen stabil sind (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40)'}. Umsatz zu Listenpreisen des Standardtarifs, ${o.net ? 'ohne 19 % MwSt., ' : ''}mal ${abbr('Realisierungsquote', 'real')}. Betreiber-Umsetzungen, die das Fahrzeug aus dem Feed nehmen, zählen als Fahrt.${r.gapH ? ` ${r.gapH} Stunde${r.gapH === 1 ? '' : 'n'} nach einer Messlücke (über 45 Min. ohne Lauf) zählen weder als Beobachtung noch mit ihren Fahrten.` : ''}${excludedN ? ` ${excludedN} Zeile${excludedN === 1 ? '' : 'n'} mit unplausibler Fahrtenzahl sind mit „nicht in Summe“ markiert.` : ''} <b>Korrektur ×</b> multipliziert die gemessenen Fahrten eines Anbieters (wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz); die Faktoren gelten nur in diesem Browser${calOps.length ? ` – aktiv für ${esc(calOps.join(', '))}` : ''}.`;
+      <td class="n">${euro(c.perRide, 2)}</td><td class="n">${cell(pair(x, 'revPerVehicleDay', { d: 2, unit: ' €' }))}</td></tr>`; }).join('') || emptyRow(7, 'Keine Fahrten im Filter.', 'Anbieter oder Fahrzeugart auf „Alle“ stellen.');
+  // Kalibrierung in zwei Zeilen; Einzelheiten im Panel „Kalibrierung“
+  const calOps = Object.keys(cal);
+  const kTxt = k?.applied ? `E-Scooter-Fahrten × <b class="mono">${fmt(k.k, 2)}</b> <span class="muted">(Spanne ${fmt(k.kLow, 2)}–${fmt(k.kHigh, 2)})</span> = amtlich Berlin ${esc(k.quarter)} <b class="mono">${fmt(k.ref.wert, 2)}</b> ÷ gemessen Berlin <b class="mono">${fmt(k.measured.rvd, 2)}</b> ${abbr('Rides/Fzg./Tag', 'rvd')} <span class="muted">(${esc(k.source)})</span>${k.prelim ? ' <span class="pill prelim badge" title="' + esc(k.prelimWhy.join(', ')) + '">vorläufig</span>' : ''}${k.single ? ` <span class="muted">· nur ein Anbieter</span>` : ''}` : `Fahrten nicht kalibriert: ${esc(k?.reason || 'Referenzwerte nicht ladbar')}`;
+  const aTxt = sc?.calibrated ? `Ø Fahrt E-Scooter <b class="mono">${fmt(sc.min, 1)} Min.</b> statt ${fmt(sc.previous.min)} (Mittel Berlin ${esc(sc.from)}–${esc(sc.to)})` : `Ø Fahrt E-Scooter ${fmt(sc?.min ?? 12)} Min. (Annahme, Referenz fehlt)`;
+  $('#econ-calib').innerHTML = `<div><b>${kal ? 'Kalibriert' : 'Gemessen'}</b> · ${kTxt}</div><div>${aTxt} · Räder, E-Bikes, Lastenräder: bisherige Annahmen, nicht kalibriert${r.calib?.limits?.scooter ? ` · über ${fmt(r.calib.limits.scooter, 2)} Rides/Fzg./Tag: Kalibrierung ausgesetzt (Überzählung)` : ''}${calOps.length ? ` · <b>Korrektur ×</b> übersteuert für ${esc(calOps.join(', '))}` : ''} · <span class="muted">Herleitung im Panel „Kalibrierung“</span></div>`;
+  const excludedN = rows.length - good.length;
+  $('#econ-note').innerHTML = `Fahrten = verschwundene verfügbare Fahrzeuge (${abbr('Kennungswechsel', 'rot')} ≤ 40 m am selben Ort zählen nicht). Hochrechnung auf 24 h über den Tagesgang (${esc(r.profile.source)}${prelim ? '; gemessen unter 3 vollen Messtagen als Spanne × 0,7 bis × 1,3' : ''}). <b>Kalibriert</b> = gemessene E-Scooter-Fahrten × Methodenfaktor aus amtlichen Berliner Zahlen (Spanne aus den Quartalswerten); Räder und E-Bikes bleiben gemessen. Flotte = Ø Fahrzeuge auf der Straße inkl. gesperrter. Ø Fahrtdauer: ${o.rideMin ? `Vorgabe ${fmt(o.rideMin)} Min.` : `gemessen, wo Kennungen stabil sind (≥ 20 Fahrten; 20-Min.-Raster = Obergrenze), sonst Annahme: E-Scooter ${sc?.calibrated ? `${fmt(sc.min, 1)} Min. aus den Berliner Quartalswerten (bisher 12)` : '12 Min.'}, E-Bike 16, Rad 18, Lastenrad 40 (ohne Belege)`}. Umsatz zu Listenpreisen des Standardtarifs, ${o.net ? 'ohne 19 % MwSt., ' : ''}mal ${abbr('Realisierungsquote', 'real')}. Betreiber-Umsetzungen, die das Fahrzeug aus dem Feed nehmen, zählen als Fahrt.${r.gapH ? ` ${r.gapH} Stunde${r.gapH === 1 ? '' : 'n'} nach einer Messlücke (über 45 Min. ohne Lauf) zählen weder als Beobachtung noch mit ihren Fahrten.` : ''}${excludedN ? ` ${excludedN} Zeile${excludedN === 1 ? '' : 'n'} mit unplausibler Fahrtenzahl sind mit „nicht in Summe“ markiert.` : ''} <b>Korrektur ×</b> ersetzt für einen Anbieter den Kalibrierfaktor (wirkt auf Rides/Fzg./Tag, Auslastung und Umsatz); die Faktoren gelten nur in diesem Browser${calOps.length ? ` – aktiv für ${esc(calOps.join(', '))}` : ''}.`;
 }
-// ---------- Kalibrierung: gemessene Rides/Fzg./Tag gegen öffentliche Referenzwerte (data/reference.json im Repo, Branch main) ----------
-let refReq = null;
-const loadReference = () => refReq ??= getJson(CFG.MAIN + 'reference.json', { timeout: 20000 }).then(r => r.ok ? r.json : null);
-const quarterOf = (day) => `Q${Math.floor((+day.slice(5, 7) - 1) / 3) + 1}`;
-async function renderCalibration(rows) {
-  const box = $('#econ-calib'); if (!box) return;
-  const ref = await loadReference();
-  if (!ref?.rvd?.length) { box.innerHTML = ''; return; }
-  // Art: gewählte Fahrzeugart, sonst die Art mit der größten belastbaren Flotte im Gebiet
-  const byType = new Map(); for (const x of rows) { if (!x.c.plausible) continue; if (!byType.has(x.ty)) byType.set(x.ty, []); byType.get(x.ty).push(x); }
-  // bevorzugt eine Art mit Referenz für genau dieses Gebiet (Berlin: E-Scooter), sonst die größte Flotte
-  const here = (e) => e.ags === state.scope && (e.type === ty);
-  const hasLocal = (t) => [...(ref.rvd || []), ...(ref.fahrten || []), ...(ref.flotte || [])].some(e => e.type === t && e.ags === state.scope);
-  const ty = state.type !== 'all' ? state.type : [...byType].sort((a, b) => hasLocal(b[0]) - hasLocal(a[0]) || sum(b[1].map(x => x.c.fleet || 0)) - sum(a[1].map(x => x.c.fleet || 0)))[0]?.[0];
-  const list = byType.get(ty) || []; const m = list.length ? E.combine(list.map(x => x.c)) : null;
-  const refs = ref.rvd.filter(e => e.type === ty && (e.ags === state.scope || e.ags == null) && Number.isFinite(e.wert));
-  const day = state.usage.day || '';
-  // Frankfurt u. a.: nur Jahresfahrten und Flotten-Obergrenze bekannt → abgeleitete Fahrten/Fzg./Tag = Fahrten ÷ 365 ÷ Obergrenze.
-  // Das ist eine Schätzung über die Obergrenze (die echte Flotte ist kleiner oder gleich), kein gemessener Wert – daher kein Faktor-Vorschlag.
-  const capOf = (o) => o ? (o.ab && day >= o.ab && Number.isFinite(o.gesamtAb) ? o.gesamtAb : o.gesamt) : null;
-  const cap = (ref.obergrenzen || []).find(here), trips = (ref.fahrten || []).filter(here).pop(), fleetRef = (ref.flotte || []).filter(here).pop();
-  const derived = trips && capOf(cap) ? { wert: trips.wert / 365 / capOf(cap), zeitraum: trips.zeitraum, quelle: trips.quelle, url: trips.url } : null;
-  if ((!refs.length && !derived && !cap && !fleetRef) || !m?.rvd) { box.innerHTML = ''; return; }
-  const local = refs.filter(e => e.ags === state.scope), general = refs.filter(e => e.ags == null);
-  // Vergleichswert: gleiches Quartal des Vorjahrs (Saison), sonst der jüngste Wert
-  const sameQ = local.filter(e => String(e.zeitraum).startsWith(quarterOf(day))).pop(), pick = sameQ || local[local.length - 1] || null;
-  const refLink = (e) => link(e.url, `${esc(e.quelle)} ↗`);
-  const lines = [...local.map(e => `<span${e === pick ? ' class="pick"' : ''}>${esc(e.zeitraum)} <b class="mono">${fmt(e.wert, 2)}</b></span>`)].join(' · ');
-  let html = `<div><b>Einordnung ${esc(TYPE[ty] || ty)}</b> · gemessen <b class="mono">${fmt(m.rvd, 2)}</b> ${abbr('Rides/Fzg./Tag', 'rvd')} bei Ø ${fmt(m.fleet)} Fahrzeugen (${esc(state.scope === 'DE' ? 'Deutschland' : muniName(state.scope))}, ${esc(day.split('-').reverse().join('.'))}${list.some(x => calibFor(x.op) !== 1) ? ', mit Korrektur' : ''})</div>`;
-  if (local.length) html += `<div>${esc(local[0].ort)}: ${lines} <span class="muted">· ${refLink(local[0])}</span></div>`;
-  if (derived) html += `<div>${esc(trips.ort)}: ${fmt(trips.wert / 1e6, 2)} Mio. Fahrten ${esc(trips.zeitraum)} ÷ 365 ÷ Obergrenze ${fmt(capOf(cap))} Fahrzeuge ≈ <b class="mono">${fmt(derived.wert, 2)}</b> <span class="pill plain badge">nur Obergrenzen-Schätzung</span> <span class="muted">· ${refLink(trips)}${cap.url !== trips.url ? ` · ${refLink(cap)}` : ''}</span></div>`;
-  else if (cap) html += `<div>${esc(cap.ort)}: Flotten-Obergrenze ${fmt(capOf(cap))}${cap.jeAnbieter ? ` (je Anbieter ${fmt(cap.jeAnbieter)})` : ''} · erfasst Ø ${fmt(m.fleet)} <span class="muted">· ${refLink(cap)}</span></div>`;
-  if (fleetRef) html += `<div>${esc(fleetRef.ort)}: Flotte laut Stadt ${fmt(fleetRef.wert)} (Stand ${esc(String(fleetRef.stand).split('-').reverse().join('.'))}) · erfasst Ø ${fmt(m.fleet)} = ${pctf(m.fleet, fleetRef.wert)} <span class="muted">· ${refLink(fleetRef)}</span></div>`;
-  if (general.length) html += `<div class="muted">${general.map(e => `${esc(e.ort)} ${esc(e.zeitraum)} <span class="mono">${fmt(e.wert, 2)}</span> (${refLink(e)})`).join(' · ')}</div>`;
-  if (derived && !pick) html += `<div class="muted small">Kein Faktor-Vorschlag: Mit der Obergrenze als Flotte ist der abgeleitete Wert eine Untergrenze der echten Fahrten je Fahrzeug; tatsächlich fahren meist weniger Fahrzeuge.</div>`;
-  if (pick) {
-    const f = pick.wert / m.rvd, ops = [...new Set(list.map(x => x.op))];
-    html += `<div class="calib-act">Vorschlag: Fahrten × <b class="mono">${fmt(f, 2)}</b> für ${esc(ops.join(', '))}, damit die Schätzung ${esc(pick.zeitraum)}${sameQ ? ' (gleiche Jahreszeit)' : ''} trifft. <button id="btn-calib-apply" data-f="${f}" data-ops="${esc(JSON.stringify(ops))}">übernehmen</button>${ops.some(o => calibFor(o) !== 1) ? ' <button id="btn-calib-reset" data-ops="' + esc(JSON.stringify(ops)) + '">Korrektur zurücksetzen</button>' : ''} <span class="muted small">Faktor gilt je Anbieter für alle Gebiete und nur in diesem Browser.</span></div>`;
+// ---------- Kalibrierung: Referenzwerte (data/reference.json, Branch main) gegen die eigene Messung, Regeln in lib/pulse-calib.js ----------
+// Voi: Umsatz je Fahrzeug und Tag (gemessen, netto × Realisierung) über die Tage der Kalibrierung, Flotte-Tage gewichtet
+async function voiRevenue(days) {
+  let rev = 0, fleet = 0, n = 0;
+  for (const d of days || []) {
+    const r = await econGroups(d, (key) => { const [a, op, t] = key.split('|'); return a !== 'DE' && op === 'Voi' && t === 'scooter'; }); if (!r) continue;
+    const c = E.combine([...r.out.values()].map(x => x.m).filter(x => x.plausible)); if (c?.revDay != null && c.fleet > 0) { rev += c.revDay; fleet += c.fleet; n++; }
   }
-  box.innerHTML = html;
+  return fleet > 0 ? { revPerVehicleDay: rev / fleet, days: n } : null;
+}
+async function renderCalibPanel() {
+  const els = ['calib-panel', 'calib-src'].map(id => document.getElementById(id)).filter(Boolean); if (!els.length) return;
+  const head = `<div class="panel-head"><div><h2>Kalibrierung</h2><div class="sub">Öffentliche Referenzwerte mit Quelle, eigene Messung, Verhältnis und Wirkung auf die Schätzungen</div></div></div>`;
+  const calib = await getCalib(); const k = calib.k, a = calib.assume?.scooter, ref = calib.ref;
+  if (!ref) { for (const el of els) el.innerHTML = head + '<div class="empty"><b>Referenzwerte nicht ladbar.</b>reference.json fehlt oder ist nicht erreichbar; es gelten die bisherigen Annahmen (E-Scooter 12 Min.), keine Kalibrierung.</div>'; return; }
+  const voi = await voiRevenue(calib.days).catch(() => null);
+  const checks = K.plausibilityChecks(ref, { ...calib.own, voi: { ...(calib.own?.voi || {}), revPerVehicleDay: voi?.revPerVehicleDay ?? null } }, k);
+  const src = (e) => (e?.url ? link(e.url, `${esc(e.quelle || 'Quelle')} ↗`) : esc(e?.quelle || '—'));
+  const dd = (d) => d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '–';
+  const f2 = (v) => fmt(v, 2);
+  const rows = [];
+  // 1. Fahrtdauer
+  if (a?.calibrated) rows.push([`Ø Fahrt E-Scooter<div class="sub-line">Berlin, ${esc(a.from)}–${esc(a.to)} (${a.n} Quartale)</div>`, `Ø <b>${fmt(a.min, 1)} Min.</b> · Ø ${f2(a.km)} km<div class="sub-line">Quartale ${fmt(a.minRange[0], 1)}–${fmt(a.minRange[1], 1)} Min. · ${fmt(a.kmRange[0], 1)}–${fmt(a.kmRange[1], 1)} km</div>`, src(a),
+    'nicht messbar<div class="sub-line">Kennungen wechseln je Fahrt; stabile Kennungen nur im 20-Min.-Raster (Obergrenze)</div>', `${f2(a.min / a.previous.min)}<div class="sub-line">gegen bisher ${fmt(a.previous.min)} Min.</div>`, `Annahme ${fmt(a.previous.min)} → ${fmt(a.min, 1)} Min.: Auslastung × ${f2(a.min / a.previous.min)}, Umsatz je Fahrt sinkt (Minutenpreise); gemessene Dauer gilt nur darunter`]);
+  for (const e of (ref.fahrt || []).filter(x => x.ags !== K.BERLIN && x.type === 'scooter')) rows.push([`Fahrt E-Scooter<div class="sub-line">${esc(e.ort)}, ${esc(e.zeitraum)}</div>`, [e.minMedian != null ? `Median ${fmt(e.minMedian, 1)} Min.` : '', e.minMittel != null ? `Ø ${fmt(e.minMittel, 1)} Min.` : '', e.kmMedian != null ? `Median ${f2(e.kmMedian)} km` : '', e.kmMittel != null ? `Ø ${f2(e.kmMittel)} km` : ''].filter(Boolean).join(' · '), src(e), '—', a?.calibrated && e.minMittel ? `${f2(a.min / e.minMittel)}<div class="sub-line">Berliner Ø ÷ Ø hier</div>` : '—', 'Gegenprobe, nicht in der Regel (ein Betreiber, eine Stadt)']);
+  // 2. Methodenfaktor
+  const kr = k?.ref || (ref.rvd || []).filter(e => e.ags === K.BERLIN).slice(-1)[0];
+  if (kr) rows.push([`Fahrten je Fzg. und Tag, E-Scooter<div class="sub-line">Berlin, ${esc(k?.applied ? `${k.quarter} (${k.rule})` : kr.zeitraum)}</div>`, `<b>${f2(kr.wert)}</b>${k?.refMin != null ? `<div class="sub-line">Quartale ${f2(k.refMin)}–${f2(k.refMax)}</div>` : ''}`, src(kr),
+    k?.measured?.rvd ? `${f2(k.measured.rvd)}<div class="sub-line">${esc(k.source || '')}; ${dd(k.measured.from)}–${dd(k.measured.to)} · ${k.measured.days} Tag${k.measured.days === 1 ? '' : 'e'} (${fmt(k.obsShare * 100)} % der Stunden beobachtet)</div>${(k.measured.excluded || []).length ? `<div class="sub-line">ausgeschlossen (Überzählung): ${esc(k.measured.excluded.map(x => `${x.op} ${f2(x.rvd)}`).join(', '))}</div>` : ''}` : '—',
+    k?.applied ? `k = <b>${f2(k.k)}</b><div class="sub-line">${f2(k.kLow)}–${f2(k.kHigh)}</div>` : '—',
+    k?.applied ? `E-Scooter-Fahrten bundesweit × ${f2(k.k)} (kalibriert, ${esc(Rp.calibLabel(k))}), außer Zeilen über ${f2(calib.limits?.scooter)}${k.prelim ? `<div class="sub-line">vorläufig: ${esc(k.prelimWhy.join(', '))}</div>` : ''}${k.single ? `<div class="sub-line">Einschränkung: ${esc(k.single)}</div>` : ''}` : `keine Kalibrierung: ${esc(k?.reason || '')}`]);
+  // 3. Abdeckung (+ Hochrechnung nur hier)
+  for (const c of calib.coverage || []) {
+    const rv = calib.own?.byAgs?.[c.ags]?.rvd; const rvdCal = k?.applied && rv != null && !(rv > (calib.limits?.scooter ?? Infinity)) ? rv * k.k : null;
+    rows.push([`${esc(c.label[0].toUpperCase() + c.label.slice(1))} E-Scooter<div class="sub-line">${esc(c.ort)}, ${c.stand ? `Stand ${dd(c.stand)}` : ''}</div>`, `<b>${c.art === 'aktiv' ? 'rund ' : ''}${fmt(c.official)}</b><div class="sub-line">${esc(c.label)}</div>`, src(c), `${fmt(c.ours)}<div class="sub-line">in offenen Feeds${c.operators.length ? ` (${esc(c.operators.map(o => o.op).join(', '))})` : ''}</div>`, `<b>${fmt(c.share * 100, 1)} %</b>`,
+      `${esc(c.shareLabel)}${rvdCal != null ? `<div class="sub-line">Hochrechnung nur hier: ${f2(rvdCal)} × ${fmt(c.official)} ≈ ${fmt(sig2(rvdCal * c.official))} Fahrten/Tag${c.art === 'genehmigt' ? ' (auf die genehmigte Flotte, daher Obergrenze)' : ' (auf die aktive Flotte)'}</div>` : ''}`]);
+  }
+  // 4. Prüfwerte ohne Faktor
+  for (const x of checks) {
+    const u = x.unit === '€' ? ' €' : '';
+    const mv = x.measured == null ? '—' : `${f2(x.measured)}${u}${x.calibrated != null ? `<div class="sub-line">kalibriert ${f2(x.calibrated)}${u}</div>` : x.suspended ? `<div class="sub-line warn-text">${esc(Rp.SUSPENDED_TXT)}</div>` : ''}<div class="sub-line">${esc(x.kind === 'Untergrenze' ? `${x.ref.ort}, offene Feeds` : x.scope || '')}${x.unit === '€' && voi ? `, ${voi.days} Tag${voi.days === 1 ? '' : 'e'}` : ''}</div>`;
+    const ratio = x.ratioCal ?? x.ratio;
+    rows.push([`${esc(x.label.replace(/: .*/, ''))}<div class="sub-line">${esc(x.label.replace(/^[^:]*: /, ''))} · ${esc(x.ref.zeitraum || '')}</div>`, `<b>${x.kind === 'Untergrenze' ? '≥ ' : ''}${f2(x.refValue)}${u}</b>${x.how ? `<div class="sub-line">${esc(`${fmt(x.trips / 1e6, 2)} Mio. Fahrten ÷ ${x.year % 4 ? 365 : 366} ÷ Obergrenze ${fmt(x.limit)}`)}</div>` : x.ref.hinweis ? `<div class="sub-line">${esc(x.ref.hinweis)}</div>` : ''}`, `${src(x.ref)}${x.cap && x.cap.url !== x.ref.url ? ` · ${src(x.cap)}` : ''}`, mv,
+      ratio == null ? '—' : `${f2(ratio)}<div class="sub-line">${x.ratioCal != null ? 'kalibriert' : 'gemessen'} ÷ Referenz</div>`, x.suspended ? `Messung über ${f2(calib.limits?.scooter)} (1,5 × größter Berliner Quartalswert): Überzählung wahrscheinlich, Kalibrierung ausgesetzt, Zeile nicht in Summen` : x.kind === 'Untergrenze' ? 'Prüfung, kein Faktor; Untergrenze gilt nur, wenn die Flotte die Obergrenze nicht überschreitet' : 'Vergleich, kein Faktor']);
+  }
+  const rules = `<ol class="calib-rules small"><li><b>Fahrtdauer.</b> Ø Fahrt E-Scooter = Mittel der Berliner Quartalswerte${a?.calibrated ? ` (${fmt(a.min, 1)} Min., ${f2(a.km)} km)` : ''}; gemessene Dauer (20-Min.-Raster) gilt nur darunter. Räder, E-Bikes, Lastenräder: keine amtlichen Belege, bisherige Annahmen.</li>
+    <li><b>Methodenfaktor k.</b> Amtliche Fahrten je E-Scooter und Tag in Berlin (gleiches Quartal, sonst Vorjahresquartal, sonst jüngstes) ÷ unsere Berliner Messung über die letzten bis zu ${Rp.CALIB_DAYS} Tagesdateien; k gleicht verschluckte Fahrten zwischen zwei Abrufen und Kennungswechsel aus und gilt für E-Scooter bundesweit, die Spanne folgt aus dem kleinsten und größten Quartalswert.</li>
+    <li><b>Plausibilität.</b> Liegt die gemessene Zahl der Fahrten je E-Scooter und Tag eines Anbieters in einem Gebiet über ${calib.limits?.scooter ? f2(calib.limits.scooter) : '–'} (${fmt(K.CALIB.overFactor, 1)} × größter Berliner Quartalswert), gilt sie als Überzählung: keine Kalibrierung, nicht in Summen. k stammt nur aus plausiblen Berliner Anbietern${k?.source ? ` (${esc(k.source)})` : ''}${k?.single ? '; nur ein Anbieter, andere können anders zählen' : ''}.</li>
+    <li><b>Vorläufig</b> unter ${K.CALIB.minDays} Messtagen oder unter ${K.CALIB.minObsShare * 100} % beobachteter Tagesstunden; ohne Berliner Messung oder bei k außerhalb ${fmt(K.CALIB.kMin, 1)}–${fmt(K.CALIB.kMax)} keine Kalibrierung. Eigene „Korrektur ×“ ersetzt k je Anbieter.</li>
+    <li><b>Abdeckung und Prüfung.</b> Eigene E-Scooter ÷ amtliche Flotte: in Berlin Anteil an der genehmigten Flotte (Untergrenze der Feed-Abdeckung, nicht alle genehmigten Fahrzeuge fahren), in München an der aktiven Flotte; Frankfurt (Untergrenze aus Jahresfahrten und Obergrenze), Europa und Voi dienen nur dem Vergleich.</li></ol>`;
+  const table = `<div class="tbl" tabindex="0" role="region" aria-label="Kalibrierung: Referenzwerte und eigene Messung"><table class="calib-tbl"><thead><tr><th>Referenz</th><th class="n">Wert</th><th>Quelle</th><th class="n">unser Messwert</th><th class="n">Verhältnis</th><th>Wirkung</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="small">${r[2]}</td><td class="n">${r[3]}</td><td class="n">${r[4]}</td><td class="small">${r[5]}</td></tr>`).join('')}</tbody></table></div>`;
+  const foot = `<div class="muted small" style="margin-top:var(--s2)">Messzeitraum ${calib.days.length ? `${dd(calib.days[0])}–${dd(calib.days[calib.days.length - 1])}` : '–'} · Voi-Umsatz als Schätzung ${econOpts().net ? 'netto' : 'brutto'} × Realisierung ${fmt(econOpts().realization * 100)} % zu Listenpreisen (Konzernwert: tatsächlicher Umsatz aller Märkte, inkl. E-Bikes) · Referenzen in data/reference.json, Stand ${esc(ref.updatedAt || '–')}</div>`;
+  for (const el of els) el.innerHTML = head + rules + table + foot;
 }
 // Korrekturfaktoren je Anbieter, lokal im Browser (localStorage, fehlertolerant)
 const CALIB_KEY = 'mp-calib';
@@ -1765,6 +1821,7 @@ const METHOD = `
 <p>Ladestand springt von unter 40 % auf mindestens 85 % am selben Ort: Akkutausch; die Wartezeit misst die Zeit unter 20 % bis zum Tausch. Standzeit ist die Zeit seit der letzten Positionsänderung über 50 m (höchstens seit dem ersten Sammler-Kontakt). Quellenausfälle erzeugen keine Fahrten. Alle Werte sind Schätzungen aus 20-Minuten-Momentaufnahmen und keine Betreiberzahlen.</p>
 <h3>Zellen, Zonen, Preise</h3><p>Start- und Zielzellen sind etwa 250 m groß und werden je Gemeinde und Tag gezählt; „bedient“ ist eine Zelle, in der innerhalb von 7 Tagen ein verfügbares Fahrzeug stand. Betriebszonen stammen aus <span class="mono">geofencing_zones.json</span> der Anbieterfeeds, Preise aus <span class="mono">system_pricing_plans.json</span>; beides wird je Lauf neu gelesen. Wetter kommt stündlich von Open-Meteo für den Gemeindemittelpunkt. Stations-Verfügbarkeitsquoten zählen Läufe der letzten 7 Tage, in denen eine vermietende Station kein buchbares Fahrzeug bzw. keinen freien Platz hatte.</p>
 <h3>Konsistenz und Fußwege</h3><p>Hat ein System im Katalog eine zweite Adresse (Landesfeed und Betreiberfeed oder zwei GBFS-Versionen), liest der Sammler beide und vergleicht Bestand, Kennungs-Überlappung (gemeinsame ÷ alle Kennungen) und den Median-Abstand gleicher Kennungen; schlüsselt ein Verzeichnis die Kennungen um (Landesfeeds tun das), zählt stattdessen der Anteil der Fahrzeuge, zu denen in der anderen Quelle ein Fahrzeug innerhalb von 10 m steht. Liefern zwei Quellen desselben Anbieters Fahrzeuge in derselben Gemeinde, werden sie paarweise genauso verglichen; „getrennte Flotten“ heißt, dass sich die Kennungen kaum überschneiden. Fußwege in der Haltestellen-Analyse kommen vom Fußgängerprofil der FOSSGIS-Routingdienste (Valhalla, bei Ausfall OSRM auf routing.openstreetmap.de); je Haltestelle werden die zwei nächsten Fahrzeuge geroutet, der Umweg-Faktor ist Fußweg ÷ Luftlinie.</p>
+<h3>Kalibrierung</h3><p>Schätzungen werden an öffentlichen Referenzwerten mit Quelle ausgerichtet (<span class="mono">data/reference.json</span>, Regeln in <span class="mono">lib/pulse-calib.js</span>); gemessene Werte bleiben immer daneben sichtbar. <b>Fahrtdauer:</b> Die Ø Fahrt eines E-Scooters ist das Mittel der Berliner Quartalswerte Q1/2025–Q1/2026 (<a href="https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf" target="_blank" rel="noopener">Abgeordnetenhaus Berlin, Vorgang h19-2915</a>: 7,3 · 8,0 · 7,4 · 6,4 · 6,5 Min., Ø 7,1 Min. und 1,5 km) statt pauschal 12 Min.; die Heilbronner Dott-Daten (<a href="https://arxiv.org/abs/2606.25484" target="_blank" rel="noopener">arXiv 2606.25484</a>: Median 6,9, Mittel 8,7 Min.) dienen als Gegenprobe. Gemessene Dauer (20-Min.-Raster) gilt nur, wenn sie darunter liegt. Für Räder, E-Bikes und Lastenräder fehlen amtliche Belege; dort gelten die bisherigen Annahmen. <b>Fahrten:</b> Zwischen zwei Abrufen verschluckte Kettenfahrten und Kennungswechsel lassen die Messung zu niedrig ausfallen. Der Methodenfaktor k ist der amtliche Berliner Wert der Fahrten je E-Scooter und Tag im passenden Quartal (gleiches Quartal, sonst gleiches Kalenderquartal des Vorjahres, sonst das jüngste) geteilt durch unsere Berliner Messung über die letzten bis zu 14 Tagesdateien. k gilt für E-Scooter bundesweit und wird als „kalibriert (Berlin Qn/JJJJ)“ ausgewiesen; die Spanne folgt aus dem kleinsten und größten Berliner Quartalswert. Unter 7 Messtagen oder unter 50 % beobachteter Tagesstunden ist k vorläufig, ohne Berliner Messung entfällt die Kalibrierung. Eine eigene „Korrektur ×“ ersetzt k je Anbieter. <b>Plausibilität:</b> Liegt die gemessene Zahl der Fahrten je E-Scooter und Tag eines Anbieters in einem Gebiet über dem 1,5-Fachen des größten Berliner Quartalswerts (2,31 × 1,5 ≈ 3,5), gilt sie als Überzählung: Kalibrierung ausgesetzt, Zeile nicht in Summen. k stammt nur aus Berliner Anbietern mit plausibler Messung; aus welchen, steht am Faktor (derzeit nur Dott, eine Einschränkung). <b>Abdeckung:</b> Eigene E-Scooter ÷ amtliche Flotte – in Berlin Anteil an der genehmigten Flotte (46.450 genehmigte Fahrzeuge zum 01.04.2026; Untergrenze der Feed-Abdeckung, weil nicht alle genehmigten Fahrzeuge auf der Straße stehen), in München an der aktiven Flotte (rund 21.000 aktiv, Stand 04.11.2025; München vergibt keine Genehmigungen) – zeigt, welcher Teil des Markts in offenen Feeds steckt; eine Hochrechnung auf die amtliche Flotte steht nur im Panel „Kalibrierung“. <b>Prüfwerte ohne Faktor:</b> Frankfurt (10,49 Mio. Fahrten 2025 ÷ 365 ÷ Obergrenze 12.000 ≈ 2,4 als Untergrenze, falls die Flotte die Grenze einhält), Europa 1,6 (Fluctuo 2024) und der Voi-Konzern (2,40 Fahrten und 3,64 € Umsatz je Fahrzeug und Tag in Q4/2025, alle Märkte, inkl. E-Bikes).</p>
 <h3>Grenzen</h3><p>Die offenen Feeds decken nicht alle Anbieter ab; Anteile beziehen sich immer auf die erfassten Fahrzeuge. Die Nettobilanz über zehn Minuten misst Aufbau oder Rückgang des verfügbaren Bestands; Ausleihen, Rückgaben, Reservierungen und Umverteilung haben denselben Effekt, eine Tripzahl ist daraus nicht ableitbar. Versorgungsentfernungen sind Luftlinien, sofern das Fußweg-Routing nicht aktiviert ist. Basiskarte © OpenStreetMap-Mitwirkende; Haltestellen aus OpenStreetMap (ODbL).</p>`;
 
 // ---------- Versorgung an Haltestellen ----------
@@ -1887,13 +1944,10 @@ function bind() {
   $('#btn-share').addEventListener('click', copyLink);
   $('#btn-client').addEventListener('click', () => setClient(!isClient()));
   $('#econ-panel').addEventListener('change', (e) => { const i = e.target.closest('input.calib'); if (!i) return; setCalib(i.dataset.op, parseFloat(String(i.value).replace(',', '.'))); renderEcon(state.usage.day); });
-  // Kalibrierung: Vorschlag aus der Referenz übernehmen (multipliziert die vorhandene Korrektur) oder zurücksetzen
+  // Umschalter „kalibriert / gemessen“ (Standard kalibriert, im Browser gemerkt)
   $('#econ-panel').addEventListener('click', (e) => {
-    const b = e.target.closest('#btn-calib-apply, #btn-calib-reset'); if (!b) return;
-    let ops = []; try { ops = JSON.parse(b.dataset.ops || '[]'); } catch { /* leer */ }
-    const f = +b.dataset.f;
-    for (const op of ops) setCalib(op, b.id === 'btn-calib-reset' ? 1 : calibFor(op) * f);
-    renderEcon(state.usage.day);
+    const b = e.target.closest('#econ-mode button[data-cmode]'); if (!b) return;
+    setCalibMode(b.dataset.cmode); renderEcon(state.usage.day);
   });
   window.addEventListener('resize', () => placeSeg());
   document.fonts?.ready?.then(() => placeSeg());
@@ -1908,7 +1962,7 @@ function bind() {
   $('#chk-zones').addEventListener('change', () => renderZonesLayer());
   $('#chk-weather').addEventListener('change', () => renderUsage());
   ['usage-op', 'usage-type'].forEach(id => $(`#${id}`).addEventListener('change', () => { const s = state.usage.chartSel; if (!s) return; s.op = $('#usage-op').value; s.type = $('#usage-type').value; renderUsageChart(); }));
-  ['econ-min', 'econ-real', 'econ-net'].forEach(id => $(`#${id}`).addEventListener('change', () => renderEcon(state.usage.day)));
+  ['econ-min', 'econ-real', 'econ-net'].forEach(id => $(`#${id}`).addEventListener('change', () => { renderEcon(state.usage.day); renderCalibPanel().catch(e => console.error('Kalibrierung', e)); }));
   $('#usage-days').addEventListener('click', (e) => { const b = e.target.closest('[data-uday]'); if (!b) return; state.usage.day = b.dataset.uday; renderUsage(); });
   $('#btn-flow-map').addEventListener('click', () => { $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); window.scrollTo({ top: 0 }); });
   document.addEventListener('click', (e) => { const a = e.target.closest('.pick-cell'); if (!a) return; e.preventDefault(); $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); setTimeout(() => state.map.setView([+a.dataset.lat, +a.dataset.lon], 16), 300); });

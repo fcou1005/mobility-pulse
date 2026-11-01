@@ -1,8 +1,8 @@
 // Mobility Pulse — Kommunal-Bericht, Obergrenzen-Wächter, Wochen-Heatmap, Preis-Log und Feed-Prüfung.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: events/<Tag>.json (Stundenwerte, Läufe),
 // history/<Tag>.json (Bestand je Lauf), cells/<Tag>/<Land>.json (Zellen), latest.json, reference.json.
-import { GAP_MS, CELL_LAT, CELL_LON } from './pulse-track.js?v=mvxu6wlt';
-import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mvxu6wlt';
+import { GAP_MS, CELL_LAT, CELL_LON } from './pulse-track.js?v=mvxwjvvw';
+import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mvxwjvvw';
 export { CELL_LAT, CELL_LON };
 
 export const TZ = 'Europe/Berlin';
@@ -83,7 +83,8 @@ export function keyFilter({ ags = 'DE', operator = 'all', type = 'all' } = {}) {
  * Je Tag und Stunde: gemessen, wenn ≥ HEAT_MIN_OBS Minuten beobachtet und kein Lücken-Lauf; Wert auf 60 Min. bezogen.
  * Rückgabe: cells[wd][h] = { mean, n, gapDays, dates }, days[wd] = Anzahl Tagesdateien je Wochentag, max.
  */
-export function weekHeatmap(docs, keep = () => true, { minObs = HEAT_MIN_OBS } = {}) {
+// field: 'start' (Fahrtbeginne, Standard) oder 'end' (Fahrtenden) – Umschalter Start/Ziel wie in Portland
+export function weekHeatmap(docs, keep = () => true, { minObs = HEAT_MIN_OBS, field = 'start' } = {}) {
   const cells = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => ({ sum: 0, raw: 0, n: 0, gapDays: 0, thinDays: 0, dates: [], mean: null })));
   const days = zeros(7), dayList = Array.from({ length: 7 }, () => []);
   for (const doc of docs || []) {
@@ -91,7 +92,7 @@ export function weekHeatmap(docs, keep = () => true, { minObs = HEAT_MIN_OBS } =
     const wd = weekdayOf(doc.day); days[wd]++; dayList[wd].push(doc.day);
     const hq = hourQuality(doc.runs, doc.gapHours);
     const starts = zeros(24);
-    for (const [k, g] of Object.entries(doc.groups || {})) if (keep(k)) for (let h = 0; h < 24; h++) starts[h] += g.start?.[h] || 0;
+    for (const [k, g] of Object.entries(doc.groups || {})) if (keep(k)) for (let h = 0; h < 24; h++) starts[h] += g[field]?.[h] || 0;
     for (let h = 0; h < 24; h++) {
       const c = cells[wd][h];
       if (hq.gap[h]) { c.gapDays++; continue; }
@@ -101,7 +102,7 @@ export function weekHeatmap(docs, keep = () => true, { minObs = HEAT_MIN_OBS } =
   }
   let max = 0, measured = 0;
   for (const row of cells) for (const c of row) { if (c.n) { c.mean = c.sum / c.n; measured++; if (c.mean > max) max = c.mean; } }
-  return { cells, days, dayList, max, measured };
+  return { cells, days, dayList, max, measured, field };
 }
 
 // ---------- Kommunal-Bericht ----------
@@ -152,7 +153,12 @@ export function histFromDaily(daily, day) {
  * cells: { Tag → { zelle → [start,end,present,reloc,…] } } der Gemeinde, cellRuns: { Tag → Läufe der Zellendatei };
  * latestGroups: latest.json groups (Ersatz, wenn nichts gemessen ist); pop: Einwohner.
  */
-export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = {}, ags, pop = null, operator = 'all', type = 'all', latestGroups = null } = {}) {
+// rvdLimit: Plausibilitätsgrenze je Art aus der Kalibrierung (pulse-calib rvdLimits, z. B. { scooter: 3,47 }); darüber gilt die Messung als
+// Überzählung: Flag SUSPENDED, nicht in Summen, nicht kalibriert. Ohne rvdLimit nur die feste Grenze DEFAULTS.maxRvd (15).
+export const SUSPENDED = 'Kalibrierung ausgesetzt – Messung unplausibel (Überzählung wahrscheinlich)';
+export const overLimit = (rvd, ty, rvdLimit) => rvd != null && rvdLimit?.[ty] != null && rvd > rvdLimit[ty];
+const isPlausible = (flags) => !flags.some(f => f.startsWith('unplausibel') || f === SUSPENDED);
+export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = {}, ags, pop = null, operator = 'all', type = 'all', latestGroups = null, rvdLimit = null } = {}) {
   const keep = keyFilter({ ags, operator, type });
   const list = docs.filter(d => d?.day).sort((a, b) => a.day.localeCompare(b.day));
   const prof = measuredProfile(list);
@@ -209,6 +215,7 @@ export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = 
     const rvd = ridesDay != null && fleet > 0 ? ridesDay / fleet : null;
     const flags = [];
     if (rvd != null && rvd > DEFAULTS.maxRvd) flags.push('unplausibel hoch – Kennungen wechseln vermutlich ohne Fahrt');
+    else if (overLimit(rvd, a.ty, rvdLimit)) flags.push(SUSPENDED);
     if (a.ends > a.rides * 1.3 && a.rides > 20) flags.push('deutlich mehr Fahrtenden als -beginne (Neuaufstellungen oder Kennungswechsel)');
     const measured = (n) => n >= DEFAULTS.minTripsMeasured;
     return {
@@ -216,7 +223,7 @@ export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = 
       fleetSource: [...a.fleetSrc].join(' + ') || null, rides: a.rides, ends: a.ends, reloc: a.reloc, coverageDays: a.cov, ridesDay, rvd,
       disabledShare: a.tot > 0 ? a.dis / a.tot : null, disabledSource: a.disSrc,
       avgMin: measured(a.durN) ? a.durSum / a.durN / 60e3 : null, avgKm: measured(a.distN) ? a.distSum / a.distN / 1000 : null, durN: a.durN, distN: a.distN,
-      per1000Fleet: per1000(fleet), per1000Rides: per1000(ridesDay), plausible: !flags.some(f => f.startsWith('unplausibel')), flags,
+      per1000Fleet: per1000(fleet), per1000Rides: per1000(ridesDay), plausible: isPlausible(flags), flags,
     };
   }).filter(g => (g.fleet || 0) > 0 || g.rides > 0).sort((x, y) => (y.fleet || 0) - (x.fleet || 0) || y.rides - x.rides);
   const good = groups.filter(g => g.plausible);
@@ -306,6 +313,54 @@ export function capsCheck(reference, groups, { ags = 'DE', asOf = Date.now() } =
   return out;
 }
 
+// ---------- Obergrenzen-Protokoll (caps-log.json, schreibt der Sammler je Lauf) ----------
+const dayFmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: TZ });
+export const berlinDay = (ms) => dayFmt.format(new Date(ms));
+export const CAPS_LOG_FIELDS = ['at', 'ags', 'operator', 'count', 'limit', 'dtMs'];
+export const CAPS_DAILY_FIELDS = ['day', 'ags', 'operator', 'max', 'limit', 'at'];
+/**
+ * Protokoll fortschreiben: Läufe mit Bestand ≥ 90 % der Grenze (gesamt '*' und je Anbieter) als Prüfung, dazu je Tag × Gemeinde × Anbieter
+ * das Tagesmaximum (auch unter 90 %, für den Verlauf). caps: Ergebnis von capsCheck; dt: Fenster seit dem vorigen Lauf (ms) für die Dauer.
+ * Behält days Tage, höchstens maxChecks Prüfungen (älteste fallen zuerst).
+ */
+export function capsLogUpdate(prev, caps, { at = Date.now(), dt = null, days = 30, maxChecks = 6000 } = {}) {
+  const cut = at - days * 86400e3, today = berlinDay(at), dayCut = berlinDay(cut);
+  const checks = (Array.isArray(prev?.checks) ? prev.checks : []).filter(c => Array.isArray(c) && c[0] >= cut && c[0] < at);
+  const daily = new Map((Array.isArray(prev?.daily) ? prev.daily : []).filter(d => Array.isArray(d) && d[0] >= dayCut).map(d => [`${d[0]}|${d[1]}|${d[2]}`, d]));
+  const dtMs = Number.isFinite(dt) && dt > 0 ? Math.min(dt, GAP_MS) : null;
+  for (const c of caps || []) {
+    for (const [op, n, lim] of [['*', c.total, c.limit], ...(c.operators || []).map(o => [o.op, o.total, o.limit])]) {
+      if (!(n > 0) && op !== '*') continue;
+      if (lim > 0 && n / lim >= NEAR_CAP) checks.push([at, c.ags, op, n, lim, dtMs]);
+      const k = `${today}|${c.ags}|${op}`, d = daily.get(k);
+      if (!d || n > d[3]) daily.set(k, [today, c.ags, op, n, lim ?? null, at]);
+    }
+  }
+  const rules = (caps || []).map(c => ({ ags: c.ags, ort: c.ort, type: c.type, limit: c.limit ?? null, perOperator: c.perOperator ?? null, since: c.since ?? null, next: c.next ?? null, quelle: c.quelle ?? null, url: c.url ?? null }));
+  return { updatedAt: at, days, fields: CAPS_LOG_FIELDS, dailyFields: CAPS_DAILY_FIELDS, rules, checks: checks.sort((a, b) => a[0] - b[0]).slice(-maxChecks), daily: [...daily.values()].sort((a, b) => a[0].localeCompare(b[0]) || String(a[1]).localeCompare(String(b[1])) || String(a[2]).localeCompare(String(b[2]))) };
+}
+/**
+ * Verstöße der letzten days Tage je Gemeinde: je Anbieter (und '*' gesamt) Dauer über der Grenze, Dauer nahe (90–100 %), Spitzenwert,
+ * Zahl der Läufe; Verlauf = Tagesmaximum gesamt. Läufe ohne Fenster (dtMs null) zählen mit defaultDt.
+ */
+export function capsViolations(log, { ags = 'DE', asOf = Date.now(), days = 30, defaultDt = 20 * 60e3 } = {}) {
+  if (!log || !Array.isArray(log.checks)) return [];
+  const cut = asOf - days * 86400e3, dayCut = berlinDay(cut);
+  const by = new Map();
+  const A = (a) => { if (!by.has(a)) { const rule = (log.rules || []).find(r => r.ags === a) || { ags: a }; by.set(a, { ags: a, ort: rule.ort || a, rule, ops: new Map(), daily: [] }); } return by.get(a); };
+  for (const r of log.rules || []) if (ags === 'DE' || r.ags === ags) A(r.ags);
+  for (const c of log.checks) {
+    const [at, a, op, n, lim, dt] = c; if (!(at >= cut) || (ags !== 'DE' && a !== ags) || !(lim > 0)) continue;
+    const g = A(a); const o = g.ops.get(op) || { op, overMs: 0, nearMs: 0, overRuns: 0, nearRuns: 0, peak: 0, peakAt: null, limit: lim, lastOverAt: null, firstAt: at };
+    const w = Number.isFinite(dt) && dt > 0 ? dt : defaultDt;
+    if (n > lim) { o.overMs += w; o.overRuns++; o.lastOverAt = at; } else { o.nearMs += w; o.nearRuns++; }
+    if (n > o.peak) { o.peak = n; o.peakAt = at; o.limit = lim; }
+    g.ops.set(op, o);
+  }
+  for (const d of log.daily || []) { const [day, a, op, max, lim] = d; if (day < dayCut || (ags !== 'DE' && a !== ags) || op !== '*') continue; A(a).daily.push({ day, max, limit: lim }); }
+  return [...by.values()].map(g => ({ ...g, ops: [...g.ops.values()].sort((x, y) => (x.op === '*' ? -1 : y.op === '*' ? 1 : y.overMs - x.overMs || y.peak - x.peak)), daily: g.daily.sort((x, y) => x.day.localeCompare(y.day)) }));
+}
+
 // ---------- CSV ----------
 /** Zelle für CSV mit Semikolon: Zahlen mit Dezimalkomma; Text mit = + - @ (auch Tab/CR) am Anfang bekommt ' davor (Formel-Injection) */
 export function csvCell(v, digits = null) {
@@ -317,23 +372,121 @@ export function csvCell(v, digits = null) {
 }
 export const toCsv = (rows) => rows.map(r => r.map(c => (Array.isArray(c) ? csvCell(c[0], c[1]) : csvCell(c))).join(';')).join('\r\n');
 /** Bericht als Tabelle in Langform: je Tag × Anbieter × Art eine Zeile, dazu je Anbieter × Art die Zeitraumwerte (Tag = „Zeitraum“) */
-export function reportCsvRows(rep, { name = '', typeLabel = (t) => t } = {}) {
-  const head = ['Gemeinde', 'AGS', 'Zeitraum_von', 'Zeitraum_bis', 'Tag', 'Anbieter', 'Fahrzeugart', 'Flotte_Mittel', 'Flotte_Quelle', 'Fahrten_gemessen', 'Fahrten_je_Tag_hochgerechnet', 'Fahrten_je_Fahrzeug_Tag', 'Sperrquote', 'Dauer_Mittel_min', 'Distanz_Mittel_km_Luftlinie', 'Fahrzeuge_je_1000_EW', 'Fahrten_je_1000_EW_Tag', 'Beobachtet_h', 'Luecken_Laeufe', 'vorlaeufig', 'Hinweis'];
+// cal: Ergebnis von pulse-calib calibrateReport (optional) und calLabel (z. B. „Berlin Q4/2025, vorläufig“); period: { kind: 'Quartal'|'Monat'|'Tage', label }
+export function reportCsvRows(rep, { name = '', typeLabel = (t) => t, cal = null, calLabel = '', period = null } = {}) {
+  const head = ['Gemeinde', 'AGS', 'Zeitraum_von', 'Zeitraum_bis', 'Tag', 'Anbieter', 'Fahrzeugart', 'Flotte_Mittel', 'Flotte_Quelle', 'Fahrten_gemessen', 'Fahrten_je_Tag_hochgerechnet', 'Fahrten_je_Fahrzeug_Tag', 'Sperrquote', 'Dauer_Mittel_min', 'Distanz_Mittel_km_Luftlinie', 'Fahrzeuge_je_1000_EW', 'Fahrten_je_1000_EW_Tag', 'Beobachtet_h', 'Luecken_Laeufe', 'vorlaeufig', 'Hinweis',
+    'Fahrten_je_Tag_kalibriert', 'Fahrten_je_Tag_kalibriert_von', 'Fahrten_je_Tag_kalibriert_bis', 'Fahrten_je_Fahrzeug_Tag_kalibriert', 'Kalibrierfaktor', 'Kalibrierung', 'Zeitraum_Art', 'Zeitraum_Name', 'Quartal'];
   const rows = [head];
   const base = [name, rep.ags, rep.from, rep.to];
   const prelim = rep.quality.prelim ? 'ja' : 'nein';
+  const pk = period?.kind || 'Tage', pl = period?.label || '';
+  const qOf = (d) => (d && /^\d{4}-\d{2}/.test(d) ? `${d.slice(0, 4)}-Q${Math.floor((+d.slice(5, 7) - 1) / 3) + 1}` : '');
+  const qSpan = qOf(rep.from) === qOf(rep.to) ? qOf(rep.from) : `${qOf(rep.from)}–${qOf(rep.to)}`;
+  const noCal = ['', '', '', '', '', ''];
   for (const d of rep.daily) {
     for (const [k, v] of Object.entries(d.byGroup)) {
       const [op, ty] = k.split('|');
-      rows.push([...base, d.day, op, typeLabel(ty), [v.fleet, 1], '', v.rides, '', '', '', '', '', '', '', [d.obsHours, 1], d.gapRuns, prelim, '']);
+      rows.push([...base, d.day, op, typeLabel(ty), [v.fleet, 1], '', v.rides, '', '', '', '', '', '', '', [d.obsHours, 1], d.gapRuns ?? '', prelim, '', ...noCal, pk, pl, qOf(d.day)]);
     }
   }
+  const calCols = (c) => (c?.calibrated ? [[c.ridesDay, 1], [c.lo, 1], [c.hi, 1], [c.rvd, 2], [c.factor, 3], calLabel] : noCal);
   for (const g of rep.groups) {
-    rows.push([...base, 'Zeitraum', g.op, typeLabel(g.ty), [g.fleet, 1], g.fleetSource || '', g.rides, [g.ridesDay, 1], [g.rvd, 2], [g.disabledShare, 3], [g.avgMin, 1], [g.avgKm, 2], [g.per1000Fleet, 2], [g.per1000Rides, 2], [rep.quality.obsMin / 60, 1], rep.quality.gapRuns, prelim, g.flags.join(' | ')]);
+    rows.push([...base, 'Zeitraum', g.op, typeLabel(g.ty), [g.fleet, 1], g.fleetSource || '', g.rides, [g.ridesDay, 1], [g.rvd, 2], [g.disabledShare, 3], [g.avgMin, 1], [g.avgKm, 2], [g.per1000Fleet, 2], [g.per1000Rides, 2], [rep.quality.obsMin / 60, 1], rep.quality.gapRuns ?? '', prelim, g.flags.join(' | '), ...calCols(cal?.groups?.get(g.key)), pk, pl, qSpan]);
   }
-  const t = rep.totals;
-  rows.push([...base, 'Zeitraum', 'Alle', 'Alle', [t.fleet, 1], '', t.rides, [t.ridesDay, 1], [t.rvd, 2], [t.disabledShare, 3], '', '', [t.per1000Fleet, 2], [t.per1000Rides, 2], [rep.quality.obsMin / 60, 1], rep.quality.gapRuns, prelim, t.excluded.length ? `ohne ${t.excluded.join(', ')} (unplausibel)` : '']);
+  const t = rep.totals, ct = cal?.applied ? cal.totals : null;
+  rows.push([...base, 'Zeitraum', 'Alle', 'Alle', [t.fleet, 1], '', t.rides, [t.ridesDay, 1], [t.rvd, 2], [t.disabledShare, 3], '', '', [t.per1000Fleet, 2], [t.per1000Rides, 2], [rep.quality.obsMin / 60, 1], rep.quality.gapRuns ?? '', prelim, t.excluded.length ? `ohne ${t.excluded.join(', ')} (unplausibel)` : '',
+    ...(ct ? [[ct.ridesDay, 1], [ct.lo, 1], [ct.hi, 1], [ct.rvd, 2], '', calLabel] : noCal), pk, pl, qSpan]);
   return rows;
+}
+
+// ---------- Zeiträume: Monat und Quartal (Tagesdateien 30 Tage, darüber das Langzeit-Archiv) ----------
+export const ARCHIVE_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
+const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const pad = (n) => String(n).padStart(2, '0');
+const lastDayOfMonth = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m = 1…12
+/** Zeitraum 'm:YYYY-MM' oder 'q:YYYY-Qn' → { kind, key, from, to, label } */
+export function periodRange(period) {
+  let m = /^m:(\d{4})-(\d{2})$/.exec(String(period || ''));
+  if (m) { const y = +m[1], mo = +m[2]; return { kind: 'Monat', key: `${m[1]}-${m[2]}`, from: `${m[1]}-${m[2]}-01`, to: `${m[1]}-${m[2]}-${pad(lastDayOfMonth(y, mo))}`, label: `${MONTHS_DE[mo - 1]} ${y}` }; }
+  m = /^q:(\d{4})-Q([1-4])$/.exec(String(period || ''));
+  if (m) { const y = +m[1], q = +m[2], m0 = (q - 1) * 3 + 1, m1 = m0 + 2; return { kind: 'Quartal', key: `${y}-Q${q}`, from: `${y}-${pad(m0)}-01`, to: `${y}-${pad(m1)}-${pad(lastDayOfMonth(y, m1))}`, label: `Q${q}/${y}` }; }
+  return null;
+}
+/** Monate mit Daten: { key 'YYYY-MM', period 'm:…', label, days, complete } (vollständig = Daten reichen vom 1. bis zum Monatsende) */
+export function monthsOf(days) {
+  const list = [...new Set(days || [])].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort(); if (!list.length) return [];
+  const by = new Map(); for (const d of list) by.set(d.slice(0, 7), (by.get(d.slice(0, 7)) || 0) + 1);
+  return [...by].map(([k, n]) => { const r = periodRange(`m:${k}`); return { key: k, period: `m:${k}`, label: r.label, days: n, complete: list[0] <= r.from && list[list.length - 1] >= r.to }; });
+}
+/** Quartale, über die die Daten ganz reichen (erster Tag ≤ Quartalsbeginn, letzter Tag ≥ Quartalsende): ['YYYY-Qn', …] */
+export function completeQuarters(days) {
+  const list = [...new Set(days || [])].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort(); if (!list.length) return [];
+  const out = []; const y0 = +list[0].slice(0, 4), y1 = +list[list.length - 1].slice(0, 4);
+  for (let y = y0; y <= y1; y++) for (let q = 1; q <= 4; q++) { const r = periodRange(`q:${y}-Q${q}`); if (list[0] <= r.from && list[list.length - 1] >= r.to) out.push(r.key); }
+  return out;
+}
+export const daysIn = (period, days) => { const r = periodRange(period); return r ? (days || []).filter(d => d >= r.from && d <= r.to).sort() : []; };
+/**
+ * Bericht aus dem Langzeit-Archiv (archive/<Monat>.json: je Tag und Gemeinde|Anbieter|Art Tageswerte), wenn der Zeitraum über die
+ * 30 Tage der Tagesdateien hinausreicht. Gleiche Form wie municipalReport; Hochrechnung linear über die beobachtete Zeit
+ * (Tagesgang je Stunde ist im Archiv nicht enthalten), ohne Orte, Dauer, Distanz und Sperrquote.
+ */
+export function archiveReport({ archive = {}, fields = ARCHIVE_FIELDS, ags, pop = null, operator = 'all', type = 'all', days = null, rvdLimit = null } = {}) {
+  const keep = keyFilter({ ags, operator, type });
+  const F = (n) => fields.indexOf(n); const iF = F('flotte_avg'), iR = F('fahrten'), iE = F('fahrtenden'), iRl = F('umsetzungen'), iO = F('beobachtet_min');
+  const list = (days || Object.keys(archive)).filter(d => archive[d]).sort();
+  const G = new Map(); const acc = (op, ty) => { const k = `${op}|${ty}`; if (!G.has(k)) G.set(k, { op, ty, key: k, fleetDays: [], rides: 0, ends: 0, reloc: 0, cov: 0 }); return G.get(k); };
+  const daily = []; let obsT = 0, full = 0;
+  for (const day of list) {
+    const rows = archive[day] || {}; let obs = 0; for (const v of Object.values(rows)) obs = Math.max(obs, +v?.[iO] || 0);
+    const cov = Math.min(1, obs / 1440); obsT += obs; const isFull = obs >= FULL_DAY_HOURS * FULL_HOUR_MIN; if (isFull) full++;
+    const row = { day, weekday: weekdayOf(day), obsHours: obs / 60, runs: null, gapRuns: null, coverage: cov, full: isFull, fleet: 0, fleetKnown: false, rides: 0, byGroup: {} };
+    for (const [k, v] of Object.entries(rows)) {
+      if (!keep(k) || !Array.isArray(v)) continue; const [, op, ty] = k.split('|'); const a = acc(op, ty);
+      const fleet = v[iF] == null ? null : +v[iF], rides = +v[iR] || 0;
+      if (fleet != null) { a.fleetDays.push({ day, fleet }); row.fleet += fleet; row.fleetKnown = true; }
+      a.rides += rides; a.ends += +v[iE] || 0; a.reloc += +v[iRl] || 0; if ((fleet || 0) > 0 || rides > 0) a.cov += cov;
+      row.rides += rides; row.byGroup[`${op}|${ty}`] = { fleet, rides };
+    }
+    row.ridesDay = cov > 0 ? row.rides / cov : null; if (!row.fleetKnown) row.fleet = null; daily.push(row);
+  }
+  const per1000 = (v) => (pop > 0 && v != null ? (v / pop) * 1000 : null);
+  const groups = [...G.values()].map(a => {
+    const fl = a.fleetDays.map(x => x.fleet); const fleet = fl.length ? sum(fl) / fl.length : null;
+    const ridesDay = a.cov > 0 ? a.rides / a.cov : null; const rvd = ridesDay != null && fleet > 0 ? ridesDay / fleet : null;
+    const flags = []; if (rvd != null && rvd > DEFAULTS.maxRvd) flags.push('unplausibel hoch – Kennungen wechseln vermutlich ohne Fahrt'); else if (overLimit(rvd, a.ty, rvdLimit)) flags.push(SUSPENDED);
+    return { key: a.key, op: a.op, ty: a.ty, fleet, fleetMin: fl.length ? Math.min(...fl) : null, fleetMax: fl.length ? Math.max(...fl) : null, fleetDays: a.fleetDays, fleetSource: 'Archiv', rides: a.rides, ends: a.ends, reloc: a.reloc,
+      coverageDays: a.cov, ridesDay, rvd, disabledShare: null, disabledSource: null, avgMin: null, avgKm: null, durN: 0, distN: 0, per1000Fleet: per1000(fleet), per1000Rides: per1000(ridesDay), plausible: isPlausible(flags), flags };
+  }).filter(g => (g.fleet || 0) > 0 || g.rides > 0).sort((x, y) => (y.fleet || 0) - (x.fleet || 0) || y.rides - x.rides);
+  const good = groups.filter(g => g.plausible); const fleetT = sum(groups.map(g => g.fleet)); const ridesDayT = good.some(g => g.ridesDay != null) ? sum(good.map(g => g.ridesDay)) : null; const fleetGood = sum(good.map(g => g.fleet));
+  const totals = { fleet: groups.length ? fleetT : null, rides: sum(groups.map(g => g.rides)), ridesDay: ridesDayT, rvd: ridesDayT != null && fleetGood > 0 ? ridesDayT / fleetGood : null, disabledShare: null,
+    per1000Fleet: per1000(groups.length ? fleetT : null), per1000Rides: per1000(ridesDayT), excluded: groups.filter(g => !g.plausible).map(g => g.key) };
+  const quality = { source: 'archiv', days: list.length, runs: null, counted: null, gapRuns: null, gaps: [], obsMin: obsT, fullDays: full, excludedHours: 0, taintedDays: [], fleetFromHistory: [], possibleMin: list.length * 1440,
+    prelim: full < MIN_FULL_DAYS, profileSource: 'linear über die beobachtete Zeit (Archiv ohne Stundenwerte)', profileDays: 0, longestGapMs: 0 };
+  return { ags, pop, from: list[0] || null, to: list[list.length - 1] || null, days: list, quality, groups, totals, daily, cells: cellStats({}, {}) };
+}
+/** Rangliste aus dem Archiv (je Gemeinde × Art): Ø Flotte, Fahrten/Tag linear hochgerechnet, Fahrten je Fahrzeug und Tag */
+export function cityRankingArchive(archive, latest, { fields = ARCHIVE_FIELDS, type = 'all', operator = 'all', days = null, rvdLimit = null } = {}) {
+  const iF = fields.indexOf('flotte_avg'), iR = fields.indexOf('fahrten'), iO = fields.indexOf('beobachtet_min');
+  const keep = keyFilter({ ags: 'DE', operator, type }); const list = (days || Object.keys(archive || {})).filter(d => archive?.[d]).sort();
+  const G = new Map();
+  for (const day of list) {
+    const rows = archive[day]; let obs = 0; for (const v of Object.values(rows)) obs = Math.max(obs, +v?.[iO] || 0); const cov = Math.min(1, obs / 1440);
+    for (const [k, v] of Object.entries(rows)) { if (!keep(k) || !Array.isArray(v)) continue; const a = G.get(k) || { fl: [], rides: 0, cov: 0 }; if (v[iF] != null) a.fl.push(+v[iF]); a.rides += +v[iR] || 0; if ((+v[iF] || 0) > 0 || (+v[iR] || 0) > 0) a.cov += cov; G.set(k, a); }
+  }
+  const by = new Map();
+  for (const [k, a] of G) {
+    const [ags, , ty] = k.split('|'); const fleet = a.fl.length ? sum(a.fl) / a.fl.length : 0; const rd = a.cov > 0 ? a.rides / a.cov : null; const ok = !(rd != null && fleet > 0 && (rd / fleet > DEFAULTS.maxRvd || overLimit(rd / fleet, ty, rvdLimit)));
+    const r = by.get(`${ags}|${ty}`) || { ags, ty, fleet: 0, fleetGood: 0, ridesDay: 0, has: false }; r.fleet += fleet; if (ok) { r.fleetGood += fleet; if (rd != null) { r.ridesDay += rd; r.has = true; } } by.set(`${ags}|${ty}`, r);
+  }
+  return { days: list, rows: [...by.values()].map(r => ({ key: `${r.ags}|${r.ty}`, ags: r.ags, ty: r.ty, name: latest?.municipalities?.[r.ags]?.name || r.ags, fleet: r.fleet, ridesDay: r.has ? r.ridesDay : null, rvd: r.has && r.fleetGood > 0 ? r.ridesDay / r.fleetGood : null })) };
+}
+/** Vorquartal für die Rangliste: die zwei jüngsten vollständigen Quartale, wenn sie aufeinanderfolgen; sonst null */
+export function rankingQuarters(days) {
+  const qs = completeQuarters(days); if (qs.length < 2) return null;
+  const cur = qs[qs.length - 1], prev = qs[qs.length - 2];
+  const n = (q) => +q.slice(0, 4) * 4 + +q.slice(6) - 1;
+  return n(cur) - n(prev) === 1 ? { cur, prev, curDays: daysIn(`q:${cur}`, days), prevDays: daysIn(`q:${prev}`, days) } : null;
 }
 
 // ---------- Preisänderungs-Log ----------
@@ -541,7 +694,7 @@ function accumulate(list, hists, keep, profile) {
  * Rangliste je Gemeinde × Fahrzeugart über die Tagesdateien: Ø Flotte, Fahrten/Tag (hochgerechnet), Fahrten je Fahrzeug und Tag,
  * je 1.000 Einwohner. Anbieter mit unplausibler Quote (> 15) zählen nur bei der Flotte, nicht bei den Fahrten.
  */
-export function cityRanking(docs, hists, latest, { type = 'all', operator = 'all', minFleet = MIN_FLEET } = {}) {
+export function cityRanking(docs, hists, latest, { type = 'all', operator = 'all', minFleet = MIN_FLEET, rvdLimit = null } = {}) {
   const list = (docs || []).filter(d => d?.day).sort((a, b) => a.day.localeCompare(b.day));
   const prof = measuredProfile(list);
   const G = accumulate(list, hists, keyFilter({ ags: 'DE', operator, type }), prof.profile);
@@ -550,7 +703,7 @@ export function cityRanking(docs, hists, latest, { type = 'all', operator = 'all
     const [ags, op, ty] = k.split('|');
     const fleet = a.fleetDays.length ? sum(a.fleetDays) / a.fleetDays.length : 0;
     const ridesDay = a.cov > 0 ? a.rides / a.cov : null;
-    const ok = !(ridesDay != null && fleet > 0 && ridesDay / fleet > DEFAULTS.maxRvd);
+    const ok = !(ridesDay != null && fleet > 0 && (ridesDay / fleet > DEFAULTS.maxRvd || overLimit(ridesDay / fleet, ty, rvdLimit)));
     const r = by.get(`${ags}|${ty}`) || { ags, ty, fleet: 0, fleetGood: 0, ridesDay: 0, rides: 0, hasRides: false, ops: new Set(), excluded: [] };
     r.fleet += fleet; r.ops.add(op);
     if (ok) { r.fleetGood += fleet; if (ridesDay != null) { r.ridesDay += ridesDay; r.rides += a.rides; r.hasRides = true; } } else r.excluded.push(op);

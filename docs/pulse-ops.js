@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM } from './pulse-core.js?v=mvxu6wlt';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxu6wlt';
+import { haversineM } from './pulse-core.js?v=mvxwjvvw';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxwjvvw';
 
 export { BANDS, bandOf };
 
@@ -18,7 +18,7 @@ export const DEFAULTS = {
   spotRadiusM: 150, minSpacingM: 220, topN: 25, minPerSpot: 2, maxPerSpot: 15, horizonH: 3,
   vanCapacity: 20, swapCapacity: 50, workshopCapacity: 12, maxRuns: 6, maxPickupM: 4000,
   detour: 1.35, speedKmh: 18, pickupMin: 1.5, dropMin: 1.0, swapMin: 2.5, workshopMin: 3,
-  swapThreshold: 25, minBatteryForMove: 30, idleSurplusMin: 24 * 60,
+  swapThreshold: 20, swapRangeKm: 5, minBatteryForMove: 30, idleSurplusMin: 24 * 60,
   maxRunMin: 240, // Einsatz je Tour höchstens 4 h (Fahrt + vor Ort); was nicht passt, bildet weitere Touren oder bleibt „nicht eingeplant“
 };
 
@@ -439,14 +439,23 @@ export function planRebalance({ spots, vehicles, model, share = 1, depot, ...opt
  * Akku-Tausch: Fahrzeuge unter der Schwelle, priorisiert nach Ladestand und Nachfrage am Standort.
  */
 export const MAX_SWAP = 50; // höchstens 50 Akkus je Tour (Ladekapazität eines Tauschfahrzeugs)
+// Akkutausch nötig: Ladestand UND Reichweite unter der Schwelle (beides muss erfüllt sein). Meldet ein Feed nur eines
+// von beiden, entscheidet dieses; ohne Energieangabe kein Tausch.
+export function needsSwap(v, { swapThreshold = DEFAULTS.swapThreshold, swapRangeKm = DEFAULTS.swapRangeKm } = {}) {
+  if (v.disabled) return false;
+  const bat = v.battery != null ? v.battery < swapThreshold : null, rng = v.rangeKm != null ? v.rangeKm < swapRangeKm : null;
+  if (bat == null && rng == null) return false;
+  return (bat ?? true) && (rng ?? true);
+}
+const energyGap = (v, o) => v.battery != null ? 1 - v.battery / o.swapThreshold : 1 - v.rangeKm / o.swapRangeKm;
 export function planSwaps({ vehicles, model, depot, ...opts }) {
   const o = { ...DEFAULTS, ...opts }; o.swapCapacity = Math.max(1, Math.min(MAX_SWAP, o.swapCapacity));
   const cost = makeCost(o);
-  const low = vehicles.filter(v => !v.disabled && v.battery != null && v.battery < o.swapThreshold).map(v => ({ ...v }));
+  const low = vehicles.filter(v => needsSwap(v, o)).map(v => ({ ...v }));
   const sphMax = Math.max(0.01, ...[...model.cells.values()].map(c => c.startsPerHour ?? 0));
   for (const v of low) {
     const d = (model.cells.get(cellOf(v.lat, v.lon))?.startsPerHour ?? 0) / sphMax;
-    v.priority = +(0.6 * (1 - v.battery / o.swapThreshold) + 0.4 * Math.min(1, d) + ((v.idleMin ?? 0) > 360 ? 0.05 : 0)).toFixed(3);
+    v.priority = +(0.6 * Math.max(0, energyGap(v, o)) + 0.4 * Math.min(1, d) + ((v.idleMin ?? 0) > 360 ? 0.05 : 0)).toFixed(3);
   }
   const chosen = low.sort((a, b) => b.priority - a.priority).slice(0, o.swapCapacity * o.maxRuns);
   const build = (g, quick) => {
@@ -529,13 +538,13 @@ export function mapsLinks(points) {
 }
 
 /** Kennzahlen der Flotte eines Anbieters in einer Gemeinde. */
-export function fleetKpis(vehicles, { swapThreshold = DEFAULTS.swapThreshold } = {}) {
+export function fleetKpis(vehicles, { swapThreshold = DEFAULTS.swapThreshold, swapRangeKm = DEFAULTS.swapRangeKm } = {}) {
   const avail = vehicles.filter(isAvailable);
-  const withBat = vehicles.filter(v => v.battery != null && !v.disabled);
+  const withBat = vehicles.filter(v => (v.battery != null || v.rangeKm != null) && !v.disabled);
   const idleKnown = avail.filter(v => v.idleMin != null);
   return {
     total: vehicles.length, available: avail.length, disabled: vehicles.filter(v => v.disabled).length, reserved: vehicles.filter(v => v.reserved).length,
-    low: withBat.filter(v => v.battery < swapThreshold).length, batteryKnown: withBat.length,
+    low: withBat.filter(v => needsSwap(v, { swapThreshold, swapRangeKm })).length, batteryKnown: withBat.length,
     idle24: idleKnown.filter(v => v.idleMin >= 1440).length, idle6: idleKnown.filter(v => v.idleMin >= 360).length, idleKnown: idleKnown.length,
     idleMedianH: idleKnown.length ? +(quantile(idleKnown.map(v => v.idleMin), 0.5) / 60).toFixed(1) : null,
   };

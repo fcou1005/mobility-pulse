@@ -260,3 +260,18 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   assert(pw?.type === 'wfs' && new URL(pw.url).searchParams.get('typeNames') === 'gsm_wfs:mim_geofence' && new URL(pw.url).searchParams.get('request') === 'GetFeature', 'Portal: WFS-Ressource → GetFeature mit typeName aus der Ressource');
   assert(O.pickCkanResource(pkg([{ format: 'PDF', url: 'https://x/a.pdf' }])) === null, 'Portal: ohne GeoJSON/WFS → null (Warnung statt stillem Ausfall)');
 }
+
+// --- Akkutausch nur, wenn Ladestand UND Reichweite unter der Schwelle (Nutzerregel 01.11.2026)
+{
+  const o = { swapThreshold: 20, swapRangeKm: 5 };
+  assert(O.needsSwap({ battery: 15, rangeKm: 3 }, o) === true, 'Akkutausch: 15 % und 3 km → tauschen');
+  assert(O.needsSwap({ battery: 15, rangeKm: 8 }, o) === false, 'Akkutausch: 15 % aber 8 km → nicht tauschen');
+  assert(O.needsSwap({ battery: 25, rangeKm: 3 }, o) === false, 'Akkutausch: 25 % aber 3 km → nicht tauschen');
+  assert(O.needsSwap({ battery: null, rangeKm: 3 }, o) === true, 'Akkutausch: nur Reichweite gemeldet (3 km) → tauschen');
+  assert(O.needsSwap({ battery: 10, rangeKm: null }, o) === true, 'Akkutausch: nur Ladestand gemeldet (10 %) → tauschen');
+  assert(O.needsSwap({ battery: null, rangeKm: null }, o) === false, 'Akkutausch: ohne Energieangabe → nicht tauschen');
+  assert(O.needsSwap({ battery: 5, rangeKm: 1, disabled: true }, o) === false, 'Akkutausch: gesperrt → Werkstatt, nicht Tausch');
+  const mix = [V(clat, clon, { battery: 15, rangeKm: 3 }), V(clat, clon + 0.001, { battery: 15, rangeKm: 9 }), V(clat, clon + 0.002, { battery: 30, rangeKm: 2 })];
+  const swr = O.planSwaps({ vehicles: mix, model: m, depot, swapThreshold: 20, swapRangeKm: 5 });
+  assert(swr.below === 1, 'Akkutausch-Plan: nur das Fahrzeug, das beide Schwellen unterschreitet');
+}

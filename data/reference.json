@@ -8,7 +8,7 @@
       "type": "scooter",
       "zeitraum": "Q1/2025",
       "wert": 1.54,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
     },
     {
@@ -17,7 +17,7 @@
       "type": "scooter",
       "zeitraum": "Q2/2025",
       "wert": 2.25,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
     },
     {
@@ -26,7 +26,7 @@
       "type": "scooter",
       "zeitraum": "Q3/2025",
       "wert": 2.31,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
     },
     {
@@ -35,7 +35,7 @@
       "type": "scooter",
       "zeitraum": "Q4/2025",
       "wert": 1.72,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
     },
     {
@@ -44,7 +44,7 @@
       "type": "scooter",
       "zeitraum": "Q1/2026",
       "wert": 1.42,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
     },
     {
@@ -72,6 +72,20 @@
       "zeitraum": "Q4/2025",
       "wert": 2.4,
       "quelle": "micromobility.io, Voi Q4 2025",
+      "url": "https://micromobility.io/news/voi-finishes-2025-strong-with-45-q4-revenue-growth",
+      "hinweis": "Konzern, alle Märkte, inkl. E-Bikes; Ø 141.800 Fahrzeuge"
+    }
+  ],
+  "umsatz": [
+    {
+      "ags": null,
+      "ort": "Voi gesamt",
+      "type": "scooter",
+      "zeitraum": "Q4/2025",
+      "wert": 3.64,
+      "einheit": "€ je Fahrzeug und Tag",
+      "hinweis": "Konzernumsatz je eingesetztem Fahrzeug und Tag, alle Märkte, inkl. E-Bikes (Q4/2024: 3,68 €)",
+      "quelle": "micromobility.io, Voi Q4 2025",
       "url": "https://micromobility.io/news/voi-finishes-2025-strong-with-45-q4-revenue-growth"
     }
   ],
@@ -80,12 +94,50 @@
       "ags": "11000000",
       "ort": "Berlin",
       "type": "scooter",
-      "zeitraum": "2025",
-      "kmMin": 1.3,
-      "kmMax": 1.8,
-      "minMin": 6.4,
-      "minMax": 8.5,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
+      "zeitraum": "Q1/2025",
+      "minMittel": 7.3,
+      "kmMittel": 1.5,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q2/2025",
+      "minMittel": 8,
+      "kmMittel": 1.6,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q3/2025",
+      "minMittel": 7.4,
+      "kmMittel": 1.7,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q4/2025",
+      "minMittel": 6.4,
+      "kmMittel": 1.3,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+    },
+    {
+      "ags": "11000000",
+      "ort": "Berlin",
+      "type": "scooter",
+      "zeitraum": "Q1/2026",
+      "minMittel": 6.5,
+      "kmMittel": 1.6,
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
     },
     {
@@ -94,8 +146,11 @@
       "type": "scooter",
       "zeitraum": "04/2025–04/2026",
       "minMedian": 6.9,
+      "minMittel": 8.7,
       "kmMedian": 2.22,
-      "quelle": "Fraunhofer IAO/TUM, arXiv 2606.25484",
+      "kmMittel": 2.4,
+      "hinweis": "Distanz Luftlinie Start–Ziel",
+      "quelle": "Fraunhofer IAO/TUM, arXiv 2606.25484 (Tabelle 5)",
       "url": "https://arxiv.org/abs/2606.25484"
     }
   ],
@@ -106,8 +161,10 @@
       "type": "scooter",
       "stand": "2026-04-01",
       "wert": 46450,
-      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915",
-      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf"
+      "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
+      "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf",
+      "art": "genehmigt",
+      "hinweis": "genehmigte Elektrokleinstfahrzeuge (eKF), nicht zwingend auf der Straße"
     },
     {
       "ags": "09162000",
@@ -116,7 +173,9 @@
       "stand": "2025-11-04",
       "wert": 21000,
       "quelle": "Stadtrat München, Dokument 9389374",
-      "url": "https://risi.muenchen.de/risi/dokument/v/9389374"
+      "url": "https://risi.muenchen.de/risi/dokument/v/9389374",
+      "art": "aktiv",
+      "hinweis": "„rund 21.000 E-Tretroller aktiv“"
     }
   ],
   "fahrten": [
@@ -184,5 +243,7 @@
       "stand": "2022-05-06"
     }
   ],
-  "_hinweis_gebuehren": "Berlin: Die Sharing-Strategie 2035 nennt ein Entgelt pro Fahrzeug und Monat, aber keinen Betrag – deshalb kein Eintrag."
+  "_hinweis_gebuehren": "Berlin: Die Sharing-Strategie 2035 nennt ein Entgelt pro Fahrzeug und Monat, aber keinen Betrag – deshalb kein Eintrag.",
+  "_hinweis_fahrt": "Berlin: Ø Dauer und Ø Strecke je Fahrt laut Quartalstabelle eKF des Berichts (Tabelle reicht ab Q1/2023; hier Q1/2025–Q1/2026 wie bei rvd). Die frühere Spanne 1,3–1,8 km / 6,4–8,5 Min. umfasste Q1/2023–Q1/2026, nicht nur 2025.",
+  "_hinweis_kalibrierung": "Regeln in lib/pulse-calib.js: Ø Fahrtdauer E-Scooter = Mittel der Berliner Quartalswerte (fahrt); Methodenfaktor k = amtliche Fahrten je Fahrzeug und Tag Berlin (rvd, gleiches bzw. Vorjahresquartal, sonst jüngstes) ÷ eigene Messung Berlin; Spanne aus kleinstem und größtem Quartalswert."
 }

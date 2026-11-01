@@ -45,6 +45,9 @@ Carsharing wird ausgeschlossen (`data/sources-manual.json`). Gemeindezuordnung �
 - **Fahrten:** verschwundene verfügbare Fahrzeuge; verschwindet eine Kennung und taucht ≤ 40 m daneben eine neue desselben Anbieters auf, ist das ein Kennungswechsel am Ort (keine Fahrt, Standzeit läuft weiter).
 - **Rides per Vehicle per Day (RVD):** Fahrten hochgerechnet auf 24 h (Tagesgang aus ≥ 3 vollen Tagen, sonst Standardkurve) ÷ Ø Fahrzeuge auf der Straße (Fahrzeugminuten aus den Sammler-Läufen).
 - **Auslastung:** RVD × Ø Fahrtdauer ÷ 1440 Min. Dauer gemessen bei stabilen Kennungen (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40).
+- **Kalibrierung:** `lib/pulse-calib.js` + `data/reference.json`. Ø Fahrtdauer E-Scooter aus den Berliner Quartalswerten (7,1 Min.), Methodenfaktor k = amtliche Berliner Fahrten je E-Scooter und Tag ÷ eigene Berliner Messung (nur plausible Anbieter, Spanne aus den Quartalen, vorläufig unter 7 Messtagen), Messungen über 3,47 Fahrten je Fahrzeug und Tag werden nicht kalibriert. Abdeckung gegen die genehmigte (Berlin) bzw. aktive (München) Flotte. Test: `node test/econ.test.mjs`.
+- **Fahrtrouten:** nur Quellen mit stabilen Kennungen; Start-Ziel-Ströme zwischen 250-m-Zellen ab 2 Fahrten je Tag, veröffentlicht nach Tagesende (`flows/<Tag>.json`), Route im Browser per Fahrrad-OSRM (`web/flows.js`).
+- **Obergrenzen:** `caps-log.json` (Sammler prüft je Lauf gegen `data/reference.json` → `obergrenzen`).
 - **Umsatz:** Fahrten × Preis einer Ø Fahrt im Standardtarif aus `system_pricing_plans` (Abos/Pässe ausgeschlossen), netto ohne 19 % MwSt. und mit Realisierungsquote (Standard 85 %). RVD über 15 gilt als unplausibel und bleibt außerhalb der Summen. Test: `node test/econ.test.mjs`.
 
 ## Lokal

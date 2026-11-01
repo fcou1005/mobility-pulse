@@ -204,6 +204,9 @@ tr.row-excl td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
 .flag-line{white-space:normal;min-width:22ch;max-width:30ch}
 .calib-box{display:flex;flex-direction:column;gap:var(--s1);margin:0 0 var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);font-size:12.5px;color:var(--fg-2)}.calib-box:empty{display:none}
 .calib-box b{color:var(--fg)}.calib-box .pick{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}.calib-box .calib-act{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+.mode-toggle{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r-sm);overflow:hidden}.mode-toggle button{border:0;border-radius:0;background:transparent}.mode-toggle button+button{border-left:1px solid var(--line-2)}.mode-toggle button[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 16%,var(--panel));color:var(--fg);font-weight:600}
+.calib-rules{margin:0 0 var(--s3);padding-left:1.3em;color:var(--fg-2);display:grid;gap:var(--s1);max-width:110ch}.calib-rules b{color:var(--fg)}
+.calib-tbl td{min-width:12ch}.calib-tbl td.n{white-space:normal;max-width:24ch}.calib-tbl td .sub-line{font-family:var(--sans);line-height:1.35;margin-top:2px}.calib-tbl td:first-child{max-width:24ch}.calib-tbl td.small{max-width:22ch}.calib-tbl td:last-child{min-width:26ch;max-width:44ch}
 /* Fußzeile: Datenquellen und Lizenzen in allen Ansichten */
 .page-foot{display:flex;flex-direction:column;gap:2px;margin-top:var(--s6);padding-top:var(--s3);border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.page-foot b{color:var(--fg-2);font-weight:600;margin-right:4px}.page-foot a{color:var(--fg-2)}
 .legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
@@ -384,15 +387,17 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
         <div class="tbl" tabindex="0" role="region" aria-label="Anbieter im Tagesvergleich"><table id="tbl-usage"><thead><tr><th>Anbieter</th><th class="n">Fahrten</th><th class="n">Fahrtenden</th><th class="n"><abbr data-gloss="reloc" title="vom Betreiber transportiert">Umsetzungen</abbr></th><th class="n">Akkutausch</th><th class="n"><abbr data-gloss="pickup" title="aus dem Feed verschwunden (Werkstatt, Laden)">Abholungen</abbr></th></tr></thead><tbody></tbody></table></div>
         <details class="more"><summary>Weitere Spalten</summary><div class="tbl" tabindex="0" role="region" aria-label="Anbieter im Tagesvergleich, weitere Spalten"><table id="tbl-usage-more"><thead><tr><th>Anbieter</th><th class="n">Ø Dauer</th><th class="n">Ø Distanz</th><th class="n">Ø Wartezeit bis Tausch</th><th class="n">Gesperrt → frei</th><th class="n">Ø Sperrdauer</th><th>Kennungen</th></tr></thead><tbody></tbody></table></div></details></div>
       <div class="panel c12 est" id="econ-panel"><div class="panel-head"><div><h2>Umsatz &amp; Kennzahlen <span class="pill plain badge" id="econ-badge"></span><span class="pill prelim badge" id="econ-prelim" hidden>vorläufig</span></h2><div class="sub">Schätzung aus gemessenen Fahrten und den Tarifen der Feeds: <abbr data-gloss="rvd" title="Rides per Vehicle per Day">RVD</abbr>, Auslastung, Umsatz je Fahrt, Fahrzeug und Tag</div></div>
-        <div class="inline-form"><label>Ø Fahrt <input type="number" id="econ-min" min="1" max="120" placeholder="auto" style="width:72px"> Min.</label><label><abbr data-gloss="real" title="Anteil des Listenpreises, der tatsächlich bezahlt wird">Realisierung</abbr> <input type="number" id="econ-real" min="10" max="100" value="85" style="width:64px"> %</label><label><input type="checkbox" id="econ-net" checked> netto (ohne MwSt.)</label></div></div>
+        <div class="inline-form"><div class="mode-toggle" id="econ-mode" role="group" aria-label="Werte anzeigen"><button type="button" data-cmode="kal" aria-pressed="true" title="Gemessene E-Scooter-Fahrten × Kalibrierfaktor aus amtlichen Berliner Zahlen">kalibriert</button><button type="button" data-cmode="mess" aria-pressed="false" title="Gemessene Fahrten ohne Faktor">gemessen</button></div><label>Ø Fahrt <input type="number" id="econ-min" min="1" max="120" placeholder="auto" style="width:72px"> Min.</label><label><abbr data-gloss="real" title="Anteil des Listenpreises, der tatsächlich bezahlt wird">Realisierung</abbr> <input type="number" id="econ-real" min="10" max="100" value="85" style="width:64px"> %</label><label><input type="checkbox" id="econ-net" checked> netto (ohne MwSt.)</label></div></div>
         <div class="tiles" id="econ-tiles"></div>
         <div class="excl" id="econ-excl"></div>
         <div class="calib-box" id="econ-calib" aria-live="polite"></div>
         <div class="tbl" tabindex="0" role="region" aria-label="Umsatz und Kennzahlen je Anbieter"><table id="tbl-econ"><thead><tr><th>Anbieter</th><th class="n">Ø Flotte</th><th class="n">Fahrten gemessen</th><th class="n">Fahrten / Tag</th><th class="n"><abbr data-gloss="rvd" title="Rides per Vehicle per Day">Rides / Fzg. / Tag</abbr></th><th class="n">Umsatz / Tag</th></tr></thead><tbody></tbody></table></div>
         <details class="more"><summary>Weitere Spalten: Korrektur, Auslastung, Tarif, Einzelpreise</summary><div class="tbl" tabindex="0" role="region" aria-label="Umsatz und Kennzahlen, weitere Spalten"><table id="tbl-econ-more"><thead><tr><th>Anbieter</th><th class="n"><abbr data-gloss="calib" title="Faktor auf die gemessenen Fahrten">Korrektur&nbsp;×</abbr></th><th class="n"><abbr data-gloss="util" title="Anteil der Zeit in Fahrt">Auslastung</abbr></th><th class="n">Ø Fahrt</th><th>Tarif (Standard)</th><th class="n">€ / Fahrt</th><th class="n">€ / Fzg. / Tag</th></tr></thead><tbody></tbody></table></div></details>
         <div class="muted small" id="econ-note" style="margin-top:var(--s3)"></div></div>
+      <div class="panel c12 est" id="calib-panel"></div>
       <div class="panel c6"><div class="panel-head"><div><h2>Nachfrage-Räume</h2><div class="sub"><abbr data-gloss="cell" title="Raster von etwa 250 × 250 m">Zellen</abbr> (≈ 250 m) mit den meisten Fahrtbeginnen und Netto-Abfluss am Tag; Lage per OpenStreetMap/Nominatim</div></div><button id="btn-flow-map">Auf Karte zeigen</button></div><div class="tbl" tabindex="0" role="region" aria-label="Nachfrage-Räume"><table id="tbl-cells"><thead><tr><th>Lage</th><th class="n">Starts</th><th class="n">Ziele</th><th class="n">Netto</th><th class="n"><abbr data-gloss="reloc" title="vom Betreiber transportiert">Umsetzungen</abbr></th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel c6"><div class="panel-head"><div><h2>Stationen: Verfügbarkeitsquote</h2><div class="sub">Anteil der Sammler-Läufe der letzten 7 Tage, in denen die Station leer bzw. voll war</div></div></div><div class="tbl" tabindex="0" role="region" aria-label="Stationen: Verfügbarkeitsquote"><table id="tbl-quota"><thead><tr><th>Station</th><th>Anbieter</th><th class="n">Läufe</th><th class="n">Leer</th><th class="n">Voll</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel c12" id="fl-panel"></div>
     </div>
   </section>
 
@@ -414,7 +419,8 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
           <label>Horizont (h)<input type="number" id="ops-horizon" value="3" min="1" max="12"></label>
           <label>Transporter (Fzg.)<input type="number" id="ops-van" value="20" min="2" max="80"></label>
           <label>Akkus je Tour (max. 50)<input type="number" id="ops-swapcap" value="50" min="2" max="50"></label>
-          <label>Tausch unter (%)<input type="number" id="ops-swapthr" value="25" min="5" max="60"></label>
+          <label title="Akkutausch nur, wenn Ladestand UND Reichweite unter der Schwelle liegen">Tausch: Ladestand unter (%)<input type="number" id="ops-swapthr" value="20" min="5" max="60"></label>
+          <label title="Akkutausch nur, wenn Ladestand UND Reichweite unter der Schwelle liegen">und Reichweite unter (km)<input type="number" id="ops-swaprange" value="5" min="1" max="40" step="0.5"></label>
           <label>Touren je Art<input type="number" id="ops-maxruns" value="6" min="1" max="20"></label>
           <label>Einsatz je Tour (h)<input type="number" id="ops-maxh" value="4" min="1" max="12" step="0.5"></label>
           <label class="chk"><input type="checkbox" id="ops-osm" checked> ÖPNV &amp; Abstellflächen (OSM)</label>
@@ -491,6 +497,7 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
     </div>
     <div class="panel" id="rp-feedchecks"></div>
     <div class="panel" id="rp-pricelog"></div>
+    <div class="panel internal" id="calib-src"></div>
     <div class="panel prose quiet" id="method"></div>
   </section>
   <footer class="page-foot" id="page-foot" aria-label="Datenquellen und Lizenzen">Daten: offene GBFS-Feeds der Anbieter · Gemeindegrenzen © GeoBasis-DE / BKG, VG250, dl-de/by-2-0 · Karten © OpenStreetMap-Mitwirkende (ODbL)</footer>

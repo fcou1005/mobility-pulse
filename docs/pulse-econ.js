@@ -110,7 +110,8 @@ export function hourProfile(eventDocs, { minDays = 3 } = {}) {
  */
 // hourMin: Minuten je Ortsstunde des Tages (events/<Tag>.json → hourMin; Zeitumstellung: Stunde 2 = 120 bzw. 0 Min.). Die Abdeckung
 // rechnet je Stunde bis zu hourMin/60 Stunden an; ridesDay bezieht sich so immer auf einen 24-Stunden-Tag (Stunde 2 nicht doppelt).
-export function kpis({ g, obsMin, obsMinV = null, profile = DEFAULT_PROFILE, plan = null, type = 'scooter', fleetFallback = null, ride = null, realization = DEFAULTS.realization, net = true, hourMin = null }) {
+// assume: Ø Fahrt je Art aus der Kalibrierung (pulse-calib rideAssumptions: { scooter: { min, km, calibrated } … }); fehlt sie, gilt DEFAULT_RIDE.
+export function kpis({ g, obsMin, obsMinV = null, profile = DEFAULT_PROFILE, plan = null, type = 'scooter', fleetFallback = null, ride = null, assume = null, realization = DEFAULTS.realization, net = true, hourMin = null }) {
   // Stunden ohne Beobachtung (z. B. gestörte Stunden nach einer Lücke) zählen auch mit ihren Ereignissen und Fahrzeugminuten nicht
   const on = (a) => (a || []).map((x, h) => ((obsMin[h] || 0) > 0 ? x : 0));
   g = { ...g, start: on(g.start), end: on(g.end), rot: on(g.rot), vmin: on(g.vmin), vminTot: on(g.vminTot) };
@@ -123,11 +124,16 @@ export function kpis({ g, obsMin, obsMinV = null, profile = DEFAULT_PROFILE, pla
   const fleet = vminTot > 0 && obsV > 0 ? vminTot / obsV : fleetFallback;
   const avail = vmin > 0 && obsV > 0 ? vmin / obsV : null;
   const ridesDay = coverage > 0 ? rides / coverage : null;
-  const def = DEFAULT_RIDE[type] || DEFAULT_RIDE.unknown;
+  const def = assume?.[type] || DEFAULT_RIDE[type] || DEFAULT_RIDE.unknown;
+  const cal = !!def.calibrated;
   const measured = (g.tripDurN || 0) >= DEFAULTS.minTripsMeasured;
-  // gemessene Dauer ist auf das Sammler-Raster (20 Min) gerundet → nur als Obergrenze nutzen
-  const avgMin = ride?.min ?? (measured ? Math.min(g.tripDurSum / g.tripDurN / 60e3, def.min * 2) : def.min);
-  const avgKm = ride?.km ?? ((g.tripDistN || 0) >= DEFAULTS.minTripsMeasured ? g.tripDistSum / g.tripDistN / 1000 : def.km);
+  // gemessene Dauer ist auf das Sammler-Raster (20 Min) gerundet → nur als Obergrenze nutzen: mit kalibrierter Annahme gilt sie nur darunter,
+  // sonst höchstens die doppelte Annahme. Gemessene Distanz ist Luftlinie (Untergrenze): mit kalibrierter Annahme gilt sie nur darüber.
+  const mMin = measured ? g.tripDurSum / g.tripDurN / 60e3 : null;
+  const avgMin = ride?.min ?? (measured ? Math.min(mMin, cal ? def.min : def.min * 2) : def.min);
+  const mKm = (g.tripDistN || 0) >= DEFAULTS.minTripsMeasured ? g.tripDistSum / g.tripDistN / 1000 : null;
+  const avgKm = ride?.km ?? (mKm != null ? (cal ? Math.max(mKm, def.km) : mKm) : def.km);
+  const durationSource = ride?.min != null ? 'Vorgabe' : measured && (!cal || mMin < def.min) ? 'gemessen' : cal ? 'kalibriert' : 'Annahme';
   const rvd = ridesDay != null && fleet > 0 ? ridesDay / fleet : null;
   const utilization = rvd != null ? (rvd * avgMin) / 1440 : null;
   const perRide = plan ? fare(plan, avgMin, avgKm) : null;
@@ -139,7 +145,7 @@ export function kpis({ g, obsMin, obsMinV = null, profile = DEFAULT_PROFILE, pla
   if (coverage < 0.25) flags.push('weniger als ein Viertel des Tagesgangs beobachtet');
   return {
     rides, ends, rot, coverage, obsMin: obsTotal, fleet, avail, ridesDay, rvd, rvdAvail: ridesDay != null && avail > 0 ? ridesDay / avail : null,
-    avgMin, avgKm, durationSource: ride?.min != null ? 'Vorgabe' : measured ? 'gemessen' : 'Annahme', utilization, perRide, revDay,
+    avgMin, avgKm, durationSource, utilization, perRide, revDay,
     revPerVehicleDay: revDay != null && fleet > 0 ? revDay / fleet : null, revPerHour: revDay != null ? revDay / 24 : null, plausible: !flags.some(f => f.startsWith('unplausibel')), flags,
   };
 }
