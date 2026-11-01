@@ -9,6 +9,14 @@ on:
         description: 'Gemeindegrenzen neu aufbereiten'
         type: boolean
         default: false
+      takt:
+        description: 'Takt der Kette in Minuten (Standard 20; 5 für eine Stichprobe)'
+        type: string
+        default: '20'
+      takt_bis:
+        description: 'Takt gilt bis einschließlich (JJJJ-MM-TT), danach wieder 20 Min.'
+        type: string
+        default: ''
 
 concurrency:
   group: collect
@@ -24,6 +32,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false   # Token nicht im Checkout ablegen; Push nutzt eigenen Token
 
       - uses: actions/setup-node@v5
         with:
@@ -69,8 +79,17 @@ jobs:
           DB_API_KEY: ${{ secrets.DB_API_KEY }}
         run: node scripts/build-catalog.mjs
 
+      - name: Verfolgungszustand aus dem privaten Cache
+        uses: actions/cache/restore@v5
+        with:
+          path: track-state
+          key: track-${{ github.run_id }}
+          restore-keys: |
+            track-
+
       - name: Sammeln
         env:
+          TRACK_DIR: track-state
           DATA_DIR: out
           BOUNDARIES: cache/boundaries.json
           SOURCES_FILE: data/sources.json
@@ -89,18 +108,39 @@ jobs:
           cd out
           rm -rf .git
           git init -q
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          # alten Stand holen: der Push überträgt dann nur geänderte Dateien (der Commit bleibt ohne Vorgänger)
+          git fetch -q --depth 1 origin data || echo "kein alter Datenstand"
           git checkout -q --orphan data
           git add -A
           git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Daten $(date -u +%FT%TZ)"
-          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" data:data
+          git push -f -q origin data:data
           echo "veröffentlicht: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/latest.json"
+      - name: Verfolgungszustand im privaten Cache sichern
+        if: ${{ always() && hashFiles('track-state/**') != '' }}
+        uses: actions/cache/save@v5
+        with:
+          path: track-state
+          key: track-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Nächsten Lauf anstoßen (hält genau eine Kette am Leben, egal ob der Zeitplan anspringt)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          TAKT_IN: ${{ inputs.takt }}
+          BIS_IN: ${{ inputs.takt_bis }}
         run: |
           andere() { gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId != $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
           if [ "$(andere)" -gt 0 ]; then echo "Ein anderer Lauf ist aktiv oder wartet, keine zweite Kette"; exit 0; fi
-          sleep 900
+          TAKT="$TAKT_IN"; BIS="$BIS_IN"
+          case "$TAKT" in ''|*[!0-9]*) TAKT=20 ;; esac
+          if ! [[ "$BIS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then BIS=''; fi
+          if [ -n "$BIS" ] && [[ "$(TZ=Europe/Berlin date +%F)" > "$BIS" ]]; then TAKT=20; BIS=''; fi
+          if [ -z "$BIS" ]; then TAKT=20; fi
+          if [ "$TAKT" -lt 5 ]; then TAKT=5; fi
+          WARTEN=$(( TAKT * 60 - 300 )); if [ "$WARTEN" -lt 30 ]; then WARTEN=30; fi
+          echo "Takt ${TAKT} Min. (bis ${BIS:-unbegrenzt}), warte ${WARTEN} s"
+          sleep "$WARTEN"
           if [ "$(andere)" -gt 0 ]; then echo "Inzwischen läuft ein anderer Lauf, keine zweite Kette"; exit 0; fi
-          gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main
+          if [ "$TAKT" != 20 ]; then gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main -f takt="$TAKT" -f takt_bis="$BIS"
+          else gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main; fi
