@@ -1,9 +1,9 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvxiqrtx';
+import * as O from './pulse-ops.js?v=mvxjldrh';
 
-let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE
+let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
-const S = { map: null, layers: {}, ops: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, fleet: true, spots: true, rebalance: true, swap: false, workshop: false, station: true }, busy: false, op: null };
+const S = { map: null, layers: {}, ops: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, fleet: true, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, op: null, focus: null };
 const RUN_COLOR = { rebalance: '#60a5fa', swap: '#34d399', workshop: '#ef6b6b', station: '#f59e0b' };
 const RUN_LABEL = { rebalance: 'Umsetzen', swap: 'Akkutausch', workshop: 'Werkstatt', station: 'Stationsausgleich' };
 const STOP_LABEL = { pickup: 'Abholen', drop: 'Ausbringen', swap: 'Akku tauschen', pickup_disabled: 'Defekt abholen' };
@@ -28,7 +28,9 @@ export function initOps(ctx) {
   ['#ops-type', '#ops-band', '#ops-days'].forEach(id => $(id).addEventListener('change', () => computePlan()));
   $('#ops-depot').addEventListener('click', () => { S.pickDepot = !S.pickDepot; $('#ops-depot').classList.toggle('primary', S.pickDepot); status(S.pickDepot ? 'Klick auf die Karte setzt das Depot.' : ''); });
   $('#ops-layers').addEventListener('click', (e) => { const b = e.target.closest('[data-l]'); if (!b) return; S.show[b.dataset.l] = !S.show[b.dataset.l]; drawMap(false); });
-  $('#ops-runs').addEventListener('click', (e) => { const b = e.target.closest('[data-fit]'); if (!b || !S.plan) return; const r = allRuns().find(x => x.id === b.dataset.fit); if (!r) return; S.show[r.kind] = true; drawMap(false); S.map.fitBounds(L.latLngBounds([[S.plan.depot.lat, S.plan.depot.lon], ...r.stops.map(s => [s.lat, s.lon])]).pad(0.15)); });
+  // Klick auf Tourkarte oder „Auf Karte“: nur diese Tour zeichnen und einpassen; Links bleiben Links
+  $('#ops-runs').addEventListener('click', (e) => { if (e.target.closest('a')) return; const c = e.target.closest('[data-run]'); if (c && S.plan) focusRun(c.dataset.run); });
+  $('#ops-runs-all').addEventListener('click', () => { S.focus = null; markFocus(); drawMap(true); });
   $('#ops-csv-spots').addEventListener('click', () => S.plan && download(`spots_${slug()}.csv`, O.spotsCsv(S.plan.spots.spots, { name: X.muniName(S.plan.ags) }), 'text/csv'));
   $('#ops-csv-analysis').addEventListener('click', () => S.plan && download(`spots-analyse_${slug()}.csv`, '﻿' + O.spotsAnalysisCsv(S.plan.spots.spots), 'text/csv'));
   $('#ops-csv-runs').addEventListener('click', () => S.plan && download(`touren_${slug()}.csv`, '﻿' + O.runsCsv(allRuns(), S.plan.depot), 'text/csv'));
@@ -49,7 +51,7 @@ function ensureMap() {
   if (S.map) { setTimeout(() => S.map.invalidateSize(), 50); return; }
   S.map = L.map('ops-map', { preferCanvas: true }).setView([51.1, 10.4], 6);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende' }).addTo(S.map);
-  for (const k of ['demand', 'fleet', 'spots', 'rebalance', 'swap', 'workshop', 'station', 'depot']) S.layers[k] = L.layerGroup().addTo(S.map);
+  for (const k of ['demand', 'fleet', 'spots', 'groups', 'collect', 'rebalance', 'swap', 'workshop', 'station', 'depot']) S.layers[k] = L.layerGroup().addTo(S.map);
   S.map.on('click', (e) => { if (!S.pickDepot || !S.plan) return; S.depot[S.plan.ags] = { lat: e.latlng.lat, lon: e.latlng.lng }; S.pickDepot = false; $('#ops-depot').classList.remove('primary'); computePlan(); });
 }
 
@@ -66,6 +68,7 @@ function showPicker() {
   el.innerHTML = `<h2>Gemeinde wählen</h2><div class="sub">Die Disposition rechnet je Gemeinde und Anbieter. Oben im Filter ist jede Gemeinde wählbar; hier die größten Flotten.</div><div class="chips">${munis.map(m => `<a href="#ops" class="chip ops-pick" data-ags="${m.ags}">${X.esc(m.name)} <span class="muted">${X.fmt(m.avail)}</span></a>`).join('')}</div>`;
   for (const k in S.layers) S.layers[k].clearLayers();
   $('#ops-tiles').innerHTML = ''; $('#ops-runs').innerHTML = ''; $('#ops-warn').innerHTML = ''; $('#ops-spots-sub').textContent = ''; $('#ops-spots tbody').innerHTML = '<tr><td colspan="10" class="empty"><b>Noch kein Plan.</b>Oben eine Gemeinde wählen.</td></tr>'; status('');
+  $('#ops-groups-sub').textContent = ''; $('#ops-groups tbody').innerHTML = '<tr><td colspan="5" class="empty"><b>Noch kein Plan.</b>Oben eine Gemeinde wählen.</td></tr>'; $('#ops-runs-all').hidden = true;
 }
 
 // ---------- Daten ----------
@@ -172,10 +175,11 @@ async function computePlan() {
     status('Lade Zonen und Umgebung …');
     const pre = O.scoreSpots(model, { topN: Math.min(80, topN * 3), minSpacingM: spacing * 0.6 });
     const useOsm = $('#ops-osm').checked;
-    const [np, ctxDoc, wfs] = await Promise.all([
+    const [np, ctxDoc, wfs, groupDoc] = await Promise.all([
       loadNoPark(ags, op, b ? [b[0] - 0.02, b[1] - 0.02, b[2] + 0.02, b[3] + 0.02] : null),
       useOsm ? contextFor(ags) : Promise.resolve(null),
       officialParking(ags),
+      X.loadGroups(),
     ]);
     const osm = ctxDoc?.state === 'ok' ? ctxDoc : null;
     if (useOsm && !osm && pre.spots.length) overpassBackground(ags, pre.spots, () => { if (X.state.scope === ags) computePlan(); });
@@ -195,10 +199,10 @@ async function computePlan() {
     const workshop = O.planWorkshop({ vehicles, workshopCapacity: van, ...common });
     const station = stations.length ? O.planStationBalance({ stations, vanCapacity: van, ...common }) : null;
     const kpi = O.fleetKpis(vehicles, { swapThreshold: num('#ops-swapthr', 25) });
-    S.plan = { ags, op, type, band, bandNote, model, share, spots, rebalance, swaps, workshop, station, kpi, depot, np, osm, wfs, fleet: { vehicles, stations }, at: fleet.at, days: cellDocs.length };
-    S.routed = {};
+    S.plan = { ags, op, type, band, bandNote, model, share, spots, rebalance, swaps, workshop, station, kpi, depot, np, osm, wfs, groups: groupSpots(groupDoc, op, ags), fleet: { vehicles, stations }, at: fleet.at, days: cellDocs.length };
+    S.routed = {}; S.focus = null;
     status(`<b>Berechnet ${hhmm()}</b> · ${X.esc(op)} in ${X.esc(X.muniName(ags))} · Flotte vom ${new Date(fleet.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Nachfrage aus ${model.days} Tag${model.days === 1 ? '' : 'en'} (${X.fmt(model.hours, 1)} Messstunden)${bandNote ? ` · ${bandNote}` : ''}${osmNote}`);
-    renderTiles(); drawMap(true); renderRuns(); renderSpots();
+    renderTiles(); drawMap(true); renderRuns(); renderSpots(); renderGroups();
     const plan = S.plan; X.econFor(ags, op, type).then(e => { if (S.plan === plan) { plan.econ = e || false; renderTiles(); } }).catch(() => { plan.econ = false; });
     if ($('#ops-route').checked) routeRuns();
   } catch (e) { console.error(e); status(`<span class="warn-text">Plan konnte nicht berechnet werden: ${X.esc(e.message)}.</span> Parameter prüfen und „Plan berechnen“ erneut drücken.`); }
@@ -231,9 +235,21 @@ function renderTiles() {
 }
 function legend() {
   const chip = (k, label, color) => `<button class="chip${S.show[k] ? ' on' : ''}" data-l="${k}"${color ? ` style="${S.show[k] ? `background:${color};color:#06121a` : `border-color:${color}`}"` : ''}>${label}</button>`;
-  $('#ops-layers').innerHTML = chip('demand', 'Nachfrage') + chip('fleet', 'Flotte') + chip('spots', 'Spots') + chip('rebalance', 'Umsetzen', RUN_COLOR.rebalance) + (S.plan?.station ? chip('station', 'Stationen', RUN_COLOR.station) : '') + chip('swap', 'Akkutausch', RUN_COLOR.swap) + chip('workshop', 'Werkstatt', RUN_COLOR.workshop);
-  $('#ops-legend').innerHTML = `<span><i class="sq" style="background:#49c7b0;border-color:#49c7b0"></i>Fahrtbeginne/h (${abbr('Zelle', 'Raster von etwa 250 × 250 m; Starts, Ziele und Bestand werden je Zelle gezählt')} ≈ 250 m)</span><span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span><span><i class="dot" style="background:#e3b341"></i>Akku niedrig</span><span><i class="dot" style="background:#c084fc"></i>&gt; 24 h unbewegt</span><span><b class="ops-spot-mini">1</b>Spot (gestrichelt = Rang unsicher)</span><span><b class="ops-spot-mini" style="background:var(--fg)">D</b>Depot</span>`;
+  const opc = X.opColor(S.plan.op), g = S.plan.groups;
+  $('#ops-layers').innerHTML = chip('demand', 'Nachfrage') + chip('fleet', 'Flotte') + chip('spots', 'Spots') + chip('groups', 'Anbieter-Spots', opc) + chip('collect', 'Einsammel-Orte', opc) + chip('rebalance', 'Umsetzen', RUN_COLOR.rebalance) + (S.plan?.station ? chip('station', 'Stationen', RUN_COLOR.station) : '') + chip('swap', 'Akkutausch', RUN_COLOR.swap) + chip('workshop', 'Werkstatt', RUN_COLOR.workshop);
+  $('#ops-legend').innerHTML = `<span><i class="sq" style="background:#49c7b0;border-color:#49c7b0"></i>Fahrtbeginne/h (${abbr('Zelle', 'Raster von etwa 250 × 250 m; Starts, Ziele und Bestand werden je Zelle gezählt')} ≈ 250 m)</span><span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span><span><i class="dot" style="background:#e3b341"></i>Akku niedrig</span><span><i class="dot" style="background:#c084fc"></i>&gt; 24 h unbewegt</span><span><b class="ops-spot-mini">1</b>Spot (gestrichelt = Rang unsicher)</span><span><b class="ops-spot-mini" style="background:var(--fg)">D</b>Depot</span>`
+    + (S.show.groups && g?.deploy.length ? `<span>${groupSvg('deploy', opc, 12)}vermuteter Anbieter-Spot (Beobachtung, Größe = Ausbringungen)</span>` : '')
+    + (S.show.collect && g?.collect.length ? `<span>${groupSvg('collect', opc, 12)}Einsammel-Ort (Beobachtung)</span>` : '');
 }
+// Raute = Ausbringung, gestricheltes Sechseck = Einsammeln; Umriss in der Anbieterfarbe
+function groupSvg(kind, color, size, css = 'display:inline-block;vertical-align:-1px;margin-right:6px;') {
+  const shape = kind === 'deploy' ? '12,1.5 22.5,12 12,22.5 1.5,12' : '6.5,2.5 17.5,2.5 23,12 17.5,21.5 6.5,21.5 1,12';
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" style="${css}overflow:visible"><polygon points="${shape}" fill="${color}" fill-opacity=".14" stroke="${color}" stroke-width="2.5" vector-effect="non-scaling-stroke"${kind === 'collect' ? ' stroke-dasharray="4 3"' : ''}/></svg>`;
+}
+const whenText = (ms) => new Date(ms).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const avgText = (x) => X.fmt(x, Number.isInteger(x) ? 0 : 1);
+const typesText = (t) => Object.entries(t || {}).sort((a, b) => b[1] - a[1]).map(([k]) => X.TYPE[k] || k).join(', ');
+const groupPopup = (s, kind) => `<b>${kind === 'deploy' ? 'Vermuteter Deploy-Spot' : 'Einsammel-Ort'}</b> · ${X.esc(S.plan.op)}<br>${X.fmt(s.count)}× ${kind === 'deploy' ? 'ausgebracht' : 'eingesammelt'} · zuletzt ${whenText(s.last)}<br>Ø ${avgText(s.avg)} Fahrzeuge${typesText(s.types) ? ` · ${X.esc(typesText(s.types))}` : ''}<br><span style="color:var(--muted)">aus Beobachtung, keine Anbieterdaten</span>`;
 function drawMap(fit) {
   const p = S.plan; if (!p) return;
   legend();
@@ -266,8 +282,14 @@ function drawMap(fit) {
         .bindPopup(`<b>Spot ${s.rank}</b>${s.park ? ` · ${esc(parkLabel(s.park))}` : ''}<br>Ziel ${f(s.target)} Fzg. · vorhanden ${f(n?.have)} · fehlen ${f(n?.need)}<br>${f(s.startsPerHourOp, 2)} Fahrtbeginne/h (Anbieter) · Score ${f(s.score, 2)} · Stabilität ${p.model.hours < 24 ? 'vorläufig' : s.stabilityLabel}`).addTo(Lx.spots);
     }
   }
+  // Vermutete Anbieter-Spots und Einsammel-Orte (Gruppen-Ereignisse), Größe nach Anzahl, unter den eigenen Spots
+  for (const [kind, l] of [['deploy', 'groups'], ['collect', 'collect']]) {
+    if (!S.show[l]) continue;
+    for (const s of p.groups?.[kind] || []) { const z = Math.round(16 + 4 * Math.sqrt(Math.min(s.count, 25)));
+      L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'ops-group', html: groupSvg(kind, X.opColor(p.op), z, ''), iconSize: [z, z] }), zIndexOffset: -500, title: `${kind === 'deploy' ? 'Vermuteter Deploy-Spot' : 'Einsammel-Ort'} · ${s.count}×` }).bindPopup(groupPopup(s, kind)).addTo(Lx[l]); }
+  }
   for (const r of allRuns()) {
-    if (!S.show[r.kind]) continue;
+    if (!S.show[r.kind] || (S.focus && r.id !== S.focus)) continue;
     const geo = S.routed[r.id]?.coords || [[p.depot.lat, p.depot.lon], ...r.stops.map(s => [s.lat, s.lon]), [p.depot.lat, p.depot.lon]];
     L.polyline(geo, { color: RUN_COLOR[r.kind], weight: 3, opacity: .85, dashArray: S.routed[r.id] ? null : '6 5' }).bindPopup(runTitle(r)).addTo(Lx[r.kind]);
     r.stops.forEach((s, i) => L.circleMarker([s.lat, s.lon], { radius: 5, weight: 2, color: RUN_COLOR[r.kind], fillColor: s.type === 'drop' ? RUN_COLOR[r.kind] : '#ffffff', fillOpacity: 1 })
@@ -278,7 +300,18 @@ function drawMap(fit) {
     const pts = p.spots.spots.length ? [...p.spots.spots.map(s => [s.lat, s.lon]), [p.depot.lat, p.depot.lon]] : p.fleet.vehicles.map(v => [v.lat, v.lon]);
     if (pts.length) S.map.fitBounds(L.latLngBounds(pts).pad(0.08));
   }
-  $('#ops-map-sub').textContent = `${X.muniName(p.ags)} · ${p.op} · ${p.band === 'day' ? 'ganzer Tag' : O.BANDS[p.band].label}`;
+  $('#ops-map-sub').textContent = `${X.muniName(p.ags)} · ${p.op} · ${p.band === 'day' ? 'ganzer Tag' : O.BANDS[p.band].label}${S.focus ? ` · nur Tour ${S.focus}` : ''}`;
+}
+// Tour-Fokus: nur eine Tour auf der Karte, Karte darauf eingepasst; „Alle Touren zeigen“ und neuer Plan heben ihn auf
+function focusRun(id) {
+  const r = allRuns().find(x => x.id === id); if (!r) return;
+  S.focus = id; S.show[r.kind] = true; markFocus(); drawMap(false);
+  const pts = S.routed[r.id]?.coords || [[S.plan.depot.lat, S.plan.depot.lon], ...r.stops.map(s => [s.lat, s.lon])];
+  S.map.fitBounds(L.latLngBounds(pts).pad(0.15));
+}
+function markFocus() {
+  document.querySelectorAll('#ops-runs .ops-run').forEach(el => el.classList.toggle('focus', el.dataset.run === S.focus));
+  $('#ops-runs-all').hidden = !S.focus;
 }
 const parkLabel = (pk) => ({ station: 'Station des Anbieters (Pflicht-Abstellzone)', escooter: 'E-Scooter-Stellfläche', official: 'amtliche Abstellfläche', sharing: 'Sharing-/Mobilitätspunkt', rad: 'Radabstellanlage' }[pk.cat] || pk.cat) + (pk.name ? ` „${pk.name}“` : '');
 const runTitle = (r) => `<b>${r.id} · ${RUN_LABEL[r.kind]}</b> · ${X.fmt(r.vehicles)} Fzg. · ${X.fmt(r.km, 1)} km · ${X.fmt(r.totalMin)} min`;
@@ -289,7 +322,7 @@ function renderRuns() {
     if (!plan) return '';
     const body = runs.length ? runs.map(r => {
       const pts = [p.depot, ...r.stops, p.depot]; const links = O.mapsLinks(pts);
-      return `<div class="card ops-run" style="border-left:3px solid ${RUN_COLOR[kind]}"><b>${r.id} · ${f(r.vehicles)} Fzg. · ${f(r.stops.length)} Stopps</b>
+      return `<div class="card ops-run${S.focus === r.id ? ' focus' : ''}" data-run="${r.id}" title="Nur diese Tour auf der Karte zeigen" style="border-left:3px solid ${RUN_COLOR[kind]}"><b>${r.id} · ${f(r.vehicles)} Fzg. · ${f(r.stops.length)} Stopps</b>
         <p>${f(r.km, 1)} km · ${f(r.driveMin)} min Fahrt + ${f(r.handleMin)} min vor Ort = <b>${f(r.totalMin)} min</b>${S.routed[r.id] ? ' · Straße' : ''}</p>
         <details><summary>Stoppliste</summary><ol class="small">${r.stops.map(s => `<li>${STOP_LABEL[s.type]} ${f(s.count)}${s.station ? ` · ${esc(s.station)} (${esc(s.fill)})` : ''}${s.spotRank ? ` · Spot ${s.spotRank}` : ''}${s.battery?.length ? ` · Akku ${s.battery.slice(0, 6).join('/')} %` : ''}${s.idleMaxH ? ` · steht ${f(s.idleMaxH)} h` : ''}</li>`).join('')}</ol></details>
         <div class="foot"><button class="chip" data-fit="${r.id}">Auf Karte</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener" title="Google Maps erlaubt höchstens 10 Punkte je Route">${links.length > 1 ? `Route Teil ${i + 1} von ${links.length}` : 'Route'} ↗</a>`).join(' · ')}</div></div>`;
@@ -303,6 +336,8 @@ function renderRuns() {
     (sb ? block('station', sb, `${f(sb.empty)} fast leere, ${f(sb.full)} fast volle von ${f(sb.stations)} Stationen · ${f(sb.moves)} Räder umverteilen`) : '') +
     block('swap', sw, sw.below ? `${f(sw.below)} Fahrzeuge unter ${num('#ops-swapthr', 25)} % · priorisiert nach Ladestand und Nachfrage am Standort${sw.unplanned ? ` · ${f(sw.unplanned)} offen` : ''}` : 'Kein Fahrzeug unter der Schwelle oder kein Ladestand im Feed.') +
     block('workshop', ws, ws.disabled ? `${f(ws.disabled)} gesperrte Fahrzeuge, längste Sperre zuerst` : 'Keine gesperrten Fahrzeuge.');
+  $('#ops-runs-sub').textContent = `Touren für ${p.op} · Reihenfolge optimiert; lange Touren in mehrere Routen geteilt`;
+  markFocus();
 }
 function renderSpots() {
   const p = S.plan, f = X.fmt, esc = X.esc;
@@ -314,7 +349,7 @@ function renderSpots() {
   const F = { N: 'Nachfrage (Starts/h)', U: 'Unterversorgung (Starts/h ÷ Bestand)', Ö: 'ÖPNV-Nähe (Haltepunkte ≤ 200 m)', A: 'Abstellfläche in der Nähe' };
   const fac = (x, l) => `${bar(x)} <abbr title="${F[l]}: ${f((x ?? 0) * 100)} %">${l}</abbr>`;
   $('#ops-spots tbody').innerHTML = p.spots.spots.map(s => { const n = needBy.get(s.cell); const k = geoKey(s.lat, s.lon); const g = s.rank <= GEO_TOP ? GEO.get(k) : undefined;
-    const osm = `<a href="https://www.openstreetmap.org/?mlat=${s.lat.toFixed(5)}&mlon=${s.lon.toFixed(5)}#map=18/${s.lat.toFixed(5)}/${s.lon.toFixed(5)}" target="_blank" rel="noopener" class="mono" title="Auf OpenStreetMap öffnen">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</a>`;
+    const osm = osmLink(s.lat, s.lon);
     const place = s.park ? esc(parkLabel(s.park)) : 'Zellmitte';
     const main = s.rank > GEO_TOP ? place : `<span class="geo-main" data-geo="${k}" data-fallback="${place}">${g ? esc(g) : g === null ? place : '<span class="muted">Adresse wird gesucht …</span>'}</span>`;
     return `<tr><td class="n">${s.rank}</td><td>${main}<div class="sub-line">${osm}${s.rank <= GEO_TOP ? ` · ${place}` : ''}</div></td>
@@ -323,6 +358,47 @@ function renderSpots() {
     <td class="small" style="white-space:nowrap">${fac(s.factors.demand, 'N')} ${fac(s.factors.underserved, 'U')}${p.spots.activeFactors.includes('transit') ? ` ${fac(s.factors.transit, 'Ö')}` : ''}${p.spots.activeFactors.includes('parking') ? ` ${fac(s.factors.parking, 'A')}` : ''}</td>
     <td>${prelim ? '<span class="pill prelim" title="Stabilität erst ab 24 Messstunden aussagekräftig">vorläufig</span>' : `<span class="pill ${s.stabilityLabel === 'stabil' ? 'live' : s.stabilityLabel === 'mittel' ? 'delayed' : 'stale'}">${s.stabilityLabel}</span>`}<div class="sub-line">${f(s.stability * 100)} % der Varianten</div></td></tr>`; }).join('') || '<tr><td colspan="10" class="empty"><b>Keine Spots: zu wenig Nachfrage gemessen.</b>Unter „Parameter“ einen längeren Zeitraum bei „Nachfrage aus“ wählen.</td></tr>';
   queueGeo(p.spots.spots.slice(0, GEO_TOP));
+}
+const osmLink = (lat, lon) => `<a href="https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lon.toFixed(5)}#map=18/${lat.toFixed(5)}/${lon.toFixed(5)}" target="_blank" rel="noopener" class="mono" title="Auf OpenStreetMap öffnen">${lat.toFixed(5)}, ${lon.toFixed(5)}</a>`;
+
+// ---------- Vermutete Deploy-Spots des Anbieters (groups.json, aus Beobachtung) ----------
+// Ereignis: ≥ 5 Fahrzeuge eines Anbieters tauchen in einem Lauf ≤ 40 m beieinander auf (deploy) bzw. verschwinden zusammen (collect).
+// Hier je Anbieter und Gemeinde zu Orten gebündelt: Ereignis fällt in den Ort, dessen Mittelpunkt ≤ 60 m entfernt ist.
+const GROUP_FIELDS = ['at', 'art', 'anbieter', 'gemeinde', 'lat', 'lon', 'anzahl', 'arten'], GROUP_MERGE_M = 60, GROUP_GEO_TOP = 10;
+function groupSpots(doc, op, ags) {
+  const ix = Object.fromEntries((doc?.fields || GROUP_FIELDS).map((f, i) => [f, i]));
+  const out = { deploy: [], collect: [], any: !!doc?.events?.length, events: 0 };
+  const evs = (doc?.events || []).filter(e => e[ix.anbieter] === op && e[ix.gemeinde] === ags && Number.isFinite(e[ix.lat]) && Number.isFinite(e[ix.lon]) && Number.isFinite(e[ix.at])).sort((a, b) => a[ix.at] - b[ix.at]);
+  for (const e of evs) {
+    const list = out[e[ix.art]]; if (!list) continue;
+    const pt = { lat: e[ix.lat], lon: e[ix.lon] };
+    let best = null, bd = Infinity; for (const s of list) { const d = O.dist(s, pt); if (d < bd) { bd = d; best = s; } }
+    if (!best || bd > GROUP_MERGE_M) list.push(best = { lat: pt.lat, lon: pt.lon, count: 0, vehicles: 0, first: e[ix.at], last: e[ix.at], types: {} });
+    best.lat = (best.lat * best.count + pt.lat) / (best.count + 1); best.lon = (best.lon * best.count + pt.lon) / (best.count + 1);
+    best.count++; best.vehicles += +e[ix.anzahl] || 0; best.last = Math.max(best.last, e[ix.at]); best.first = Math.min(best.first, e[ix.at]);
+    for (const [t, n] of Object.entries(e[ix.arten] || {})) best.types[t] = (best.types[t] || 0) + (+n || 0);
+    if (e[ix.art] === 'deploy') out.events++;
+  }
+  for (const k of ['deploy', 'collect']) out[k].sort((a, b) => b.count - a.count || b.last - a.last).forEach((s, i) => { s.avg = s.vehicles / s.count; s.rank = i + 1; });
+  return out;
+}
+function renderGroups() {
+  const p = S.plan, f = X.fmt, esc = X.esc, g = p.groups, list = g?.deploy || [];
+  const where = `${p.op} in ${X.muniName(p.ags)}`;
+  $('#ops-groups-sub').textContent = list.length ? `${f(g.events)} Ausbringung${g.events === 1 ? '' : 'en'} an ${f(list.length)} Ort${list.length === 1 ? '' : 'en'} seit ${new Date(Math.min(...list.map(s => s.first))).toLocaleDateString('de-DE')} · ${where}${g.collect.length ? ` · ${f(g.collect.length)} Einsammel-Ort${g.collect.length === 1 ? '' : 'e'} (Kartenebene)` : ''}` : where;
+  const tb = $('#ops-groups tbody');
+  if (!list.length) { tb.innerHTML = `<tr><td colspan="5" class="empty">${g?.any ? `Für ${esc(where)} noch keine Gruppen beobachtet – entsteht, sobald mindestens 5 Fahrzeuge des Anbieters zusammen auftauchen.` : 'Noch keine Gruppen beobachtet – entsteht, sobald mindestens 5 Fahrzeuge eines Anbieters zusammen auftauchen.'}</td></tr>`; return; }
+  const own = p.spots.spots;
+  tb.innerHTML = list.map(s => {
+    let near = null, nd = Infinity; for (const o of own) { const d = O.dist(o, s); if (d < nd) { nd = d; near = o; } }
+    const k = geoKey(s.lat, s.lon), geo = s.rank <= GROUP_GEO_TOP ? GEO.get(k) : undefined, ty = typesText(s.types);
+    const main = s.rank > GROUP_GEO_TOP ? osmLink(s.lat, s.lon) : `<span class="geo-main" data-geo="${k}" data-fallback="Adresse nicht gefunden">${geo ? esc(geo) : geo === null ? 'Adresse nicht gefunden' : '<span class="muted">Adresse wird gesucht …</span>'}</span>`;
+    return `<tr><td>${main}<div class="sub-line">${s.rank <= GROUP_GEO_TOP ? osmLink(s.lat, s.lon) : ''}${s.rank <= GROUP_GEO_TOP && ty ? ' · ' : ''}${esc(ty)}</div></td>
+    <td class="n"><b>${f(s.count)}</b></td><td class="n">${whenText(s.last)}${s.count > 1 ? `<div class="sub-line">erstmals ${new Date(s.first).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</div>` : ''}</td>
+    <td class="n">${avgText(s.avg)}</td>
+    <td class="n">${near ? `Spot ${near.rank} · ${f(Math.round(nd / 10) * 10)} m${nd <= O.DEFAULTS.spotRadiusM ? '<div class="sub-line">im Spot-Radius</div>' : ''}` : '<span class="muted">kein Spot</span>'}</td></tr>`;
+  }).join('');
+  queueGeo(list.slice(0, GROUP_GEO_TOP));
 }
 // Straße/Stadtteil für die Top-Spots per Nominatim (OSM): im Hintergrund, höchstens 1 Anfrage/s, Cache im Speicher
 const GEO = new Map(), GEO_TOP = 20; const geoQueue = []; let geoBusy = false;

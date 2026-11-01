@@ -259,7 +259,7 @@ export async function readGbfsSystem(source, fetchJson, { now = Date.now(), maxV
     const reportedAt = toMs(v.last_reported);
     // Verwaiste Einträge: gesperrt und seit über 7 Tagen kein Signal (z. B. Zeus: Hälfte der Flotte seit Monaten stumm).
     // Sie zählen weder als Bestand noch als gesperrt; nur die Anzahl bleibt sichtbar.
-    if (bool(v.is_disabled) && reportedAt != null && now - reportedAt > GHOST_MS) { res.ghosts = (res.ghosts || 0) + 1; continue; }
+    if (bool(v.is_disabled) && reportedAt != null && now - reportedAt > GHOST_MS) { res.ghosts = (res.ghosts || 0) + 1; (res.ghostIds ??= []).push(v.vehicle_id ?? v.bike_id); continue; }
     res.vehicles.push({
       rawId: v.vehicle_id ?? v.bike_id ?? `${source.id}#${idx}`, lat, lon, type, propulsion: vt?.propulsion || null,
       reserved: bool(v.is_reserved) ?? false, disabled: bool(v.is_disabled) ?? false, batteryPct: battery, rangeKm: rangeM != null ? rangeM / 1000 : null,

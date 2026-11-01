@@ -1,6 +1,6 @@
-import * as C from './pulse-core.js?v=mvxiqrtx';
-import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvxiqrtx';
-import * as E from './pulse-econ.js?v=mvxiqrtx';
+import * as C from './pulse-core.js?v=mvxjldrh';
+import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvxjldrh';
+import * as E from './pulse-econ.js?v=mvxjldrh';
 
 const QS = new URLSearchParams(location.search);
 const DEMO = QS.get('demo') === '1'; // eingefrorener Demo-Stand (Branch demo), ohne Live-Abruf und ohne Nachladen
@@ -713,10 +713,29 @@ function computeSignals() {
       if (n && prev >= 20 && Math.abs(cur - prev) / prev >= 0.3) out.push({ cat: 'jump', sev: 'warn', w: Math.abs(cur - prev), title: `${op}${place(ags)}: Bestand ${cur > prev ? '+' : ''}${fmt(cur - prev)} in einer Stunde`, text: `Verfügbar ${fmt(prev)} → ${fmt(cur)} über die letzten drei Sammler-Punkte. Ausleihen, Umverteilung oder ein Quellenproblem können dahinterstehen.`, foot: 'Sammler-Verlauf' });
     }
   }
+  out.push(...groupSignals());
   const sevW = { bad: 3, warn: 2, info: 1 };
   return out.sort((a, b) => sevW[b.sev] - sevW[a.sev] || b.w - a.w);
 }
-const CATS = { all: 'Alle', disabled: 'Gesperrt', energy: 'Energie', stations: 'Stationen', jump: 'Bestandssprung', data: 'Datenqualität' };
+// Gruppen-Ausbringungen (groups.json): einmal je Sammler-Stand anfragen, auch wenn die Datei fehlt; danach Briefing neu zeichnen
+let groupsReq = null;
+const loadGroups = () => groupsReq ??= loadOnce('groups', 'groups.json', 30000);
+const BERLIN_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' });
+function groupSignals() {
+  if (!groupsReq) loadGroups().then(d => { if (!d?.events?.length) return; renderBriefing(); if (currentView === 'signals') renderSignals(); });
+  const d = state.usage.groups; if (!d?.events?.length) return [];
+  const ix = Object.fromEntries((d.fields || ['at', 'art', 'anbieter', 'gemeinde', 'lat', 'lon', 'anzahl', 'arten']).map((f, i) => [f, i]));
+  const ref = DEMO && state.latest?.at ? state.latest.at : Date.now(), today = BERLIN_DAY.format(ref);
+  const by = new Map();
+  for (const e of d.events) {
+    if (e[ix.art] !== 'deploy' || !(e[ix.at] > ref - 30 * 3600e3) || BERLIN_DAY.format(e[ix.at]) !== today) continue;
+    const ags = e[ix.gemeinde], op = e[ix.anbieter];
+    if ((state.scope !== 'DE' && ags !== state.scope) || (state.operator !== 'all' && op !== state.operator) || (state.type !== 'all' && !(e[ix.arten]?.[state.type] > 0))) continue;
+    const a = by.get(`${ags}|${op}`) || { n: 0, veh: 0 }; a.n++; a.veh += e[ix.anzahl] || 0; by.set(`${ags}|${op}`, a);
+  }
+  return [...by].map(([k, a]) => { const [ags, op] = k.split('|'); return { cat: 'deploy', sev: 'info', w: a.n, title: `${op} · ${muniName(ags)}: heute ${fmt(a.n)}× Gruppen ausgebracht (Ø ${fmt(a.veh / a.n)} Fahrzeuge)`, text: 'Mindestens 5 Fahrzeuge des Anbieters tauchten in einem Sammler-Lauf gemeinsam innerhalb von 40 m auf (Transporter-Ausbringung). Orte unter Disposition → „Vermutete Deploy-Spots“.', foot: 'Abgeleitet aus Beobachtung, keine Anbieterdaten' }; });
+}
+const CATS = { all: 'Alle', disabled: 'Gesperrt', energy: 'Energie', stations: 'Stationen', jump: 'Bestandssprung', deploy: 'Ausbringung', data: 'Datenqualität' };
 function sigCard(s) { return `<div class="card ${s.sev}"><div class="k">${CATS[s.cat] || s.cat} · ${s.sev === 'bad' ? 'kritisch' : s.sev === 'warn' ? 'auffällig' : 'hinweis'}</div><b>${esc(s.title)}</b><p>${esc(s.text)}</p><div class="foot">${esc(s.foot)}</div></div>`; }
 function renderSignals() {
   const all = computeSignals();
@@ -903,13 +922,11 @@ async function renderUsage() {
     tile(abbr('Abholungen', 'pickup'), fmt(pickups), 'gesperrte oder fast leere Fahrzeuge verschwunden'),
     tile('Sperrdauer', tot.disDurN ? durText(tot.disDurSum / tot.disDurN) : '—', `${fmt(sum(tot.disOff))} Fahrzeuge wieder freigegeben`),
   ].join('');
-  // Tagesgang
-  const series = [...byOp].map(([name, a]) => ({ name, values: a.start, color: state.scope === 'DE' && state.operator === 'all' ? null : opColor(name) })).sort((x, y) => sum(y.values) - sum(x.values)).slice(0, 8);
+  // Tagesgang: eigene Filter im Panel (Vorgabe aus den globalen Filtern); Änderung zeichnet nur das Diagramm neu
   let weather = null;
   if ($('#chk-weather').checked) weather = await loadWeather(day);
-  $('#chart-usage').innerHTML = hourChart(series, weather, runs);
-  $('#usage-chart-sub').textContent = `Fahrtbeginne je Stunde${state.scope === 'DE' && state.operator === 'all' ? ' und Fahrzeugart' : ' und Anbieter'}${weather ? ` · Wetter ${weather.name}` : ''}`;
-  $('#usage-legend').innerHTML = series.map((s, i) => `<span><i class="dot" style="background:${s.color || palette(i)}"></i>${esc(s.name)} <span class="mono">${fmt(sum(s.values))}</span></span>`).join('') + (weather ? `<span><i class="dot" style="background:#6aa9ff"></i>Niederschlag mm</span><span><i class="dot" style="background:#e3b341"></i>Temperatur °C</span>` : '');
+  state.usage.chartData = { doc, weather, runs };
+  usageChartOptions(doc); renderUsageChart();
   // Standzeiten
   const idle = await loadOnce('idle', 'idle.json');
   const ib = [0, 0, 0, 0, 0]; let in_ = 0;
@@ -924,6 +941,42 @@ async function renderUsage() {
   $('#tbl-usage-more tbody').innerHTML = list.map(([name, a]) => { const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mode = modes.includes('stable') ? 'stabil' : modes.includes('rotating') ? 'rotierend' : 'offen';
     return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mode === 'stabil' ? 'Dauer/Distanz messbar' : mode === 'rotierend' ? 'nur Start/Ziel-Zählung' : 'noch zu wenige Läufe'}</div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Keine Ereignisse im Filter.</td></tr>';
   renderCellsTable(day); renderQuota(); if (!isClient()) renderEcon(day, doc).catch(e => console.error('Umsatz', e));
+}
+// Tagesgang-Filter: Anbieter und Arten mit Ereignissen im Gebiet am Tag; eigene Wahl bleibt, bis sich oben Gebiet, Anbieter oder Art ändern
+const inArea = (ags) => ags !== 'DE' && (state.scope === 'DE' || ags === state.scope);
+function usageChartOptions(doc) {
+  const key = `${state.scope}|${state.operator}|${state.type}`;
+  if (state.usage.chartSel?.key !== key) state.usage.chartSel = { key, op: state.operator, type: state.type };
+  const s = state.usage.chartSel, ops = new Set(), types = new Set();
+  for (const [k, g] of Object.entries(doc.groups || {})) {
+    const [ags, op, ty] = k.split('|');
+    if (!inArea(ags) || !['start', 'end', 'reloc', 'swap', 'pickup'].some(f => sum(g[f] || []) > 0)) continue;
+    ops.add(op); types.add(ty);
+  }
+  if (s.op !== 'all') ops.add(s.op); if (s.type !== 'all') types.add(s.type);
+  const order = Object.keys(TYPE), rank = (t) => order.includes(t) ? order.indexOf(t) : 99;
+  $('#usage-op').innerHTML = '<option value="all">Alle</option>' + [...ops].sort((a, b) => a.localeCompare(b, 'de')).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  $('#usage-type').innerHTML = '<option value="all">Alle</option>' + [...types].sort((a, b) => rank(a) - rank(b)).map(t => `<option value="${esc(t)}">${esc(TYPE[t] || t)}</option>`).join('');
+  $('#usage-op').value = s.op; $('#usage-type').value = s.type;
+}
+// Ein Anbieter gewählt: eine Linie je Fahrzeugart; sonst eine Linie je Anbieter (gefiltert nach Art, Top 8)
+function renderUsageChart() {
+  const c = state.usage.chartData, s = state.usage.chartSel; if (!c || !s) return;
+  const { op, type } = s, perType = op !== 'all';
+  const by = new Map();
+  for (const [k, g] of Object.entries(c.doc.groups || {})) {
+    const [ags, o, ty] = k.split('|');
+    if (!inArea(ags) || (perType && o !== op) || (type !== 'all' && ty !== type)) continue;
+    const name = perType ? ty : o; const a = by.get(name) || new Array(24).fill(0);
+    for (let h = 0; h < 24; h++) a[h] += g.start?.[h] || 0;
+    by.set(name, a);
+  }
+  const order = Object.keys(TYPE);
+  const all = [...by].map(([name, values]) => perType ? { name: TYPE[name] || name, values, color: palette(Math.max(0, order.indexOf(name))) } : { name, values, color: opColor(name) }).sort((x, y) => sum(y.values) - sum(x.values));
+  const series = all.slice(0, 8), tyLabel = TYPE[type] || type;
+  $('#chart-usage').innerHTML = series.length ? hourChart(series, c.weather, c.runs) : '<div class="empty"><b>Keine Fahrtbeginne für diese Auswahl.</b>Anbieter oder Fahrzeugart im Tagesgang auf „Alle“ stellen.</div>';
+  $('#usage-chart-sub').textContent = (perType ? `Fahrtbeginne je Stunde · ${op} nach Fahrzeugart${type !== 'all' ? ` (nur ${tyLabel})` : ''}` : `Fahrtbeginne je Stunde und Anbieter${type !== 'all' ? ` · ${tyLabel}` : ''}${all.length > 8 ? ` · Top 8 von ${all.length}` : ''}`) + (c.weather ? ` · Wetter ${c.weather.name}` : '');
+  $('#usage-legend').innerHTML = series.map((x, i) => `<span><i class="dot" style="background:${x.color || palette(i)}"></i>${esc(x.name)} <span class="mono">${fmt(sum(x.values))}</span></span>`).join('') + (c.weather && series.length ? `<span><i class="dot" style="background:#6aa9ff"></i>Niederschlag mm</span><span><i class="dot" style="background:#e3b341"></i>Temperatur °C</span>` : '');
 }
 // ---------- Umsatz & Kennzahlen ----------
 function econOpts() {
@@ -1342,6 +1395,7 @@ function bind() {
   $('#chk-wfs').addEventListener('change', (e) => e.target.checked ? loadWfs() : (state.layers.wfs.clearLayers(), clearNotice('wfs')));
   $('#chk-zones').addEventListener('change', () => renderZonesLayer());
   $('#chk-weather').addEventListener('change', () => renderUsage());
+  ['usage-op', 'usage-type'].forEach(id => $(`#${id}`).addEventListener('change', () => { const s = state.usage.chartSel; if (!s) return; s.op = $('#usage-op').value; s.type = $('#usage-type').value; renderUsageChart(); }));
   ['econ-min', 'econ-real', 'econ-net'].forEach(id => $(`#${id}`).addEventListener('change', () => renderEcon(state.usage.day)));
   $('#usage-days').addEventListener('click', (e) => { const b = e.target.closest('[data-uday]'); if (!b) return; state.usage.day = b.dataset.uday; renderUsage(); });
   $('#btn-flow-map').addEventListener('click', () => { $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); window.scrollTo({ top: 0 }); });
@@ -1372,7 +1426,7 @@ async function init() {
   if (QS.get('kunde') === '1') { document.body.classList.add('mode-client'); $('#btn-client').setAttribute('aria-pressed', 'true'); $('#btn-share').textContent = 'Kundenlink kopieren'; }
   if (DEMO) document.body.classList.add('mode-demo');
   initMap(); bind();
-  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, TYPE, econFor, syncUrl });
+  initOps({ state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE, econFor, syncUrl });
   setView(location.hash.slice(1) || 'live');
   await loadBase();
   populateScope();
@@ -1382,7 +1436,7 @@ async function init() {
   if (deep && state.latest) liveFetch();
   if (DEMO) return; // Demo-Stand: kein Nachladen
   // Sammler-Stand alle 2 Min. prüfen; bei neuem Lauf alles neu laden (Ereignis-, Zonen- und Flottendateien inklusive)
-  setInterval(async () => { const s = await getJson(fresh('status.json')); if (s.ok && s.json.at !== state.status?.at) { const l = await getJson(fresh('latest.json')); if (l.ok) { state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex']) state.usage[k] = null; populateScope(); populateOperators(); clearNotice('stale'); renderAll(); } } }, 2 * 60e3);
+  setInterval(async () => { const s = await getJson(fresh('status.json')); if (s.ok && s.json.at !== state.status?.at) { const l = await getJson(fresh('latest.json')); if (l.ok) { state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null; groupsReq = null; populateScope(); populateOperators(); clearNotice('stale'); renderAll(); } } }, 2 * 60e3);
   setInterval(renderStamp, 30e3);
 }
 init();
