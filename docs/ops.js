@@ -1,5 +1,5 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvxjldrh';
+import * as O from './pulse-ops.js?v=mvxjq4h9';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -195,7 +195,7 @@ async function computePlan() {
     const freeFloating = vehicles.length > 0;
     if (!freeFloating) spots.spots = [];
     const rebalance = O.planRebalance({ spots: spots.spots, vehicles: vehicles.filter(O.isAvailable), model, share, vanCapacity: van, ...common });
-    const swaps = O.planSwaps({ vehicles: vehicles.filter(v => !v.reserved), model, swapCapacity: num('#ops-swapcap', 30), swapThreshold: num('#ops-swapthr', 25), ...common });
+    const swaps = O.planSwaps({ vehicles: vehicles.filter(v => !v.reserved), model, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 25), ...common });
     const workshop = O.planWorkshop({ vehicles, workshopCapacity: van, ...common });
     const station = stations.length ? O.planStationBalance({ stations, vanCapacity: van, ...common }) : null;
     const kpi = O.fleetKpis(vehicles, { swapThreshold: num('#ops-swapthr', 25) });
@@ -230,7 +230,7 @@ function renderTiles() {
     tile('Spots', `${f(p.spots.spots.length)}`, `Ziel ${f(target)} Fzg. · fehlen ${f(need)}${p.spots.excluded ? ` · ${f(p.spots.excluded)} Zellen durch Zonen ausgeschlossen` : ''}`, need > target * 0.5 ? 'warn' : ''),
     tile('Akku & Standzeit', k.batteryKnown ? `${f(k.low)}` : 'k. A.', `${k.batteryKnown ? `unter ${num('#ops-swapthr', 25)} % von ${f(k.batteryKnown)}` : 'kein Ladestand im Feed'} · ${f(k.idle24)} über 24 h unbewegt (Median ${k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h'})`, (k.batteryKnown && k.low / k.batteryKnown > 0.25) || (k.idleKnown && k.idle24 / k.idleKnown > 0.3) ? 'warn' : ''),
     tile('Umsatz / Tag', p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? (prelim ? `${rv(p.econ.revDay * 0.7)}–${rv(p.econ.revDay * 1.3)} €` : `${f(p.econ.revDay)} €`) : '—', p.econ === undefined ? 'Schätzung wird geladen' : !p.econ ? 'keine Fahrtdaten für diesen Anbieter' : `${prelim ? 'vorläufig (unter 3 Messtagen) · ' : ''}${p.econ.plausible ? '' : 'Fahrtenzahl unplausibel · '}${f(p.econ.rvd, 2)} Rides/Fzg./Tag · Auslastung ${p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %'} · netto`, `est${p.econ && !p.econ.plausible ? ' warn' : ''}`),
-    tile('Touren', `${f(runs.length)}`, `${f(km, 1)} km · ${f(min / 60, 1)} h Einsatz${Object.keys(S.routed).length ? ' · Straßenrouting' : ' · Luftlinie × 1,35'}`),
+    tile('Touren', `${f(runs.length)}`, `${f(km, 1)} km · ${f(min / 60, 1)} h Einsatz · ${Object.keys(S.routed).length ? `${f(Object.keys(S.routed).length)}/${f(runs.length)} nach Straße` : $('#ops-route')?.checked ? 'Straßenrouting läuft …' : 'Luftlinie × 1,35'}`),
   ].join('');
 }
 function legend() {
@@ -425,20 +425,46 @@ async function pumpGeo() {
     }
   } finally { geoBusy = false; }
 }
+// Straßenrouting: Reihenfolge je Tour nach echter Fahrzeit (OSRM-Matrix), dann Strecke und km nach Straße.
+// Demo-Server: höchstens eine Anfrage je Sekunde, bis 100 Punkte je Matrix.
+const pause = () => new Promise(res => setTimeout(res, 1100));
+async function roadOptimize(r, p) {
+  if (r.stops.length + 1 > 99) return false;
+  const W = r.stops.map((st, k) => ({ lat: st.lat, lon: st.lon, i: k + 1, st })), D0 = { lat: p.depot.lat, lon: p.depot.lon, i: 0 };
+  const coords = [D0, ...W].map(x => `${x.lon.toFixed(5)},${x.lat.toFixed(5)}`).join(';');
+  const t = (await X.getJson(`https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration,distance`, { timeout: 30000 })).json;
+  if (t?.code !== 'Ok') return false;
+  const cost = (a, b) => t.durations[a.i][b.i] ?? 1e7;
+  // Umsetzen/Stationen: erst alle Abholungen, dann ausbringen; sonst eine Rundtour
+  const pick = W.filter(x => x.st.type === 'pickup'), drop = W.filter(x => x.st.type === 'drop');
+  let order;
+  if (pick.length && drop.length) { const a = O.orderStops(pick, { start: D0, cost }); order = [...a, ...O.orderStops(drop, { start: a[a.length - 1], end: D0, cost })]; }
+  else order = O.orderStops(W, { start: D0, end: D0, cost });
+  r.stops = order.map(x => x.st);
+  await pause();
+  const pts = [p.depot, ...r.stops, p.depot];
+  const j = (await X.getJson(`https://router.project-osrm.org/route/v1/driving/${pts.map(x => `${x.lon.toFixed(5)},${x.lat.toFixed(5)}`).join(';')}?overview=simplified&geometries=geojson`, { timeout: 30000 })).json;
+  if (j?.code !== 'Ok') return false;
+  const rt = j.routes[0];
+  S.routed[r.id] = { coords: rt.geometry.coordinates.map(([lo, la]) => [la, lo]) };
+  r.km = +(rt.distance / 1000).toFixed(1); r.driveMin = Math.round(rt.duration / 60); r.totalMin = r.driveMin + r.handleMin; r.road = true;
+  return true;
+}
 async function routeRuns() {
-  const p = S.plan; const runs = allRuns().filter(r => S.show[r.kind]);
-  let n = 0;
+  const p = S.plan; if (!p) return;
+  // Reihenfolge: fokussierte Tour, dann sichtbare Arten, dann der Rest
+  const runs = allRuns().filter(r => !S.routed[r.id]).sort((a, b) => (b.id === S.focus) - (a.id === S.focus) || (S.show[b.kind] ? 1 : 0) - (S.show[a.kind] ? 1 : 0));
+  const base = () => $('#ops-status').textContent.split(' · Straßenrouting')[0];
+  let n = 0, ok = 0;
   for (const r of runs) {
     if (S.plan !== p) return;
-    const pts = [p.depot, ...r.stops, p.depot];
-    if (pts.length > 90) continue;
-    status(`${$('#ops-status').textContent.split(' · Straßenrouting')[0]} · Straßenrouting ${++n}/${runs.length} …`);
-    const u = `https://router.project-osrm.org/route/v1/driving/${pts.map(x => `${x.lon.toFixed(5)},${x.lat.toFixed(5)}`).join(';')}?overview=simplified&geometries=geojson`;
-    const j = (await X.getJson(u, { timeout: 30000 })).json;
-    if (j?.code === 'Ok') { const rt = j.routes[0]; S.routed[r.id] = { coords: rt.geometry.coordinates.map(([lo, la]) => [la, lo]) }; r.km = +(rt.distance / 1000).toFixed(1); r.driveMin = Math.round(rt.duration / 60); r.totalMin = r.driveMin + r.handleMin; }
-    await new Promise(res => setTimeout(res, 1100)); // Demo-Server: höchstens eine Anfrage je Sekunde
+    status(`${base()} · Straßenrouting ${++n}/${runs.length} (Reihenfolge und km nach Straße) …`);
+    try { if (await roadOptimize(r, p)) ok++; } catch { /* Tour bleibt bei Luftlinie */ }
+    if (S.plan !== p) return;
+    renderTiles(); renderRuns(); markFocus(); drawMap(false);
+    await pause();
   }
-  if (S.plan === p) { status($('#ops-status').textContent.split(' · Straßenrouting')[0] + ` · Straßenrouting OSRM für ${Object.keys(S.routed).length} Touren`); renderTiles(); renderRuns(); drawMap(false); }
+  if (S.plan === p) status(`${base()} · Straßenrouting OSRM: ${ok} von ${allRuns().length} Touren nach Straße${ok < allRuns().length ? ', Rest Luftlinie × 1,35' : ''}`);
 }
 function renderMethod() {
   const A = O.AHP, f = (x) => x < 1 ? `1/${Math.round(1 / x)}` : String(x);

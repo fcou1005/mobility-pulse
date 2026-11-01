@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM } from './pulse-core.js?v=mvxjldrh';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxjldrh';
+import { haversineM } from './pulse-core.js?v=mvxjq4h9';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter } from './pulse-track.js?v=mvxjq4h9';
 
 export { BANDS, bandOf };
 
@@ -16,7 +16,7 @@ export const AHP = {
 };
 export const DEFAULTS = {
   spotRadiusM: 150, minSpacingM: 220, topN: 25, minPerSpot: 2, maxPerSpot: 15, horizonH: 3,
-  vanCapacity: 20, swapCapacity: 30, workshopCapacity: 12, maxRuns: 6, maxPickupM: 4000,
+  vanCapacity: 20, swapCapacity: 50, workshopCapacity: 12, maxRuns: 6, maxPickupM: 4000,
   detour: 1.35, speedKmh: 18, pickupMin: 1.5, dropMin: 1.0, swapMin: 2.5, workshopMin: 3,
   swapThreshold: 25, minBatteryForMove: 30, idleSurplusMin: 24 * 60,
 };

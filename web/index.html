@@ -363,11 +363,11 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
           <label>Abstand (m)<input type="number" id="ops-spacing" value="220" min="80" max="1500" step="10"></label>
           <label>Horizont (h)<input type="number" id="ops-horizon" value="3" min="1" max="12"></label>
           <label>Transporter (Fzg.)<input type="number" id="ops-van" value="20" min="2" max="80"></label>
-          <label>Akkus je Tour<input type="number" id="ops-swapcap" value="30" min="2" max="120"></label>
+          <label>Akkus je Tour (max. 50)<input type="number" id="ops-swapcap" value="50" min="2" max="50"></label>
           <label>Tausch unter (%)<input type="number" id="ops-swapthr" value="25" min="5" max="60"></label>
           <label>Touren je Art<input type="number" id="ops-maxruns" value="6" min="1" max="20"></label>
           <label class="chk"><input type="checkbox" id="ops-osm" checked> ÖPNV &amp; Abstellflächen (OSM)</label>
-          <label class="chk"><input type="checkbox" id="ops-route"> Straßenrouting (OSRM)</label>
+          <label class="chk"><input type="checkbox" id="ops-route" checked> Straßenrouting (km nach Straße, OSRM)</label>
           <div class="ops-actions"><button id="ops-depot" title="Danach auf die Karte klicken">⌖ Depot setzen</button></div>
         </div>
       </details>
