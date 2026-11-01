@@ -1,6 +1,6 @@
-import * as C from './pulse-core.js?v=mvwxzft8';
-import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvwxzft8';
-import * as E from './pulse-econ.js?v=mvwxzft8';
+import * as C from './pulse-core.js?v=mvxiqrtx';
+import { initOps, renderOps, opsFleet, applyOpsParams } from './ops.js?v=mvxiqrtx';
+import * as E from './pulse-econ.js?v=mvxiqrtx';
 
 const QS = new URLSearchParams(location.search);
 const DEMO = QS.get('demo') === '1'; // eingefrorener Demo-Stand (Branch demo), ohne Live-Abruf und ohne Nachladen
@@ -440,7 +440,7 @@ function renderLive() {
   const lowE = st.batteryKnown ? st.lowBattery / st.batteryKnown : null;
   $('#live-tiles').innerHTML = [
     tile('Verfügbar · buchbar', fmt(st.available), `${fmt(st.total)} gemeldet · ${fmt(st.reserved)} reserviert`),
-    tile('Gesperrt', fmt(st.disabled), st.total ? `${pctf(st.disabled, st.total)} des Bestands` : 'keine Fahrzeugdaten', st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
+    tile('Gesperrt', fmt(st.disabled), `${st.total ? `${pctf(st.disabled, st.total)} des Bestands` : 'keine Fahrzeugdaten'}${ghostsInScope() ? ` · <abbr title="Gesperrt und seit über 7 Tagen kein Signal: verwaiste Einträge im Feed (z. B. eingelagerte oder verlorene Fahrzeuge). Nicht im Bestand gezählt.">+${fmt(ghostsInScope())} verwaist</abbr>` : ''}`, st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
     tile('Stationen mit Angebot', `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}`, st.stations ? `${fmt(st.stationsEmpty)} leer · ${fmt(st.stationsFull)} voll` : 'keine Stationen im Gebiet', '', st.stations ? emptyTip(st) : ''),
     tile('Energie niedrig', lowE == null ? 'k. A.' : pctf(st.lowBattery, st.batteryKnown), lowE == null ? 'keine Ladestandsangabe' : `${fmt(st.lowBattery)} von ${fmt(st.batteryKnown)} mit Angabe`, lowE > 0.3 ? 'warn' : ''),
     tile('Quellen', `${fmt(usable.length)} / ${fmt(recs.length)}`, `${recs.filter(r => r.status === 'live').length} aktuell · ${recs.filter(r => r.status === 'delayed').length} verzögert${gaps ? ` · ${gaps} Datenlücke${gaps > 1 ? 'n' : ''}` : ''}`, recs.length && usable.length / recs.length < 0.7 ? 'warn' : ''),
@@ -461,6 +461,8 @@ function renderLive() {
   renderLede();
   renderMap();
 }
+// Verwaiste Einträge (gesperrt, > 7 Tage ohne Signal) der Quellen im Gebiet/Anbieter-Filter
+function ghostsInScope() { return sourcesForScope().filter(r => state.operator === 'all' || r.operator === state.operator).reduce((a, r) => a + (r.counts?.ghosts || 0), 0); }
 function renderBriefing(rows, st) {
   const items = computeSignals().slice(0, 4);
   $('#briefing').innerHTML = items.length ? items.map(sigCard).join('') : '<div class="empty"><b>Keine auffälligen Signale im Gebiet.</b>Bestand, Sperren, Energie und Quellen sind unauffällig.</div>';
@@ -510,7 +512,7 @@ function renderMap() {
         // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt, also in Anbieterfarbe
         const near = s.nearbyVehicles || 0, empty = s.renting !== false && (s.bookable ?? 0) === 0 && !near;
         L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: empty ? '#e3b341' : opColor(s.operator), fillOpacity: .2 })
-          .bindPopup(`<b>${esc(s.name || 'Station')}</b> · ${esc(s.operator)}<br>physisch ${fmt(s.physicalAvailable)} · buchbar ${fmt(s.bookable)} · Plätze ${fmt(s.docksAvailable)}${near ? `<br>${fmt(near)} Fahrzeug${near === 1 ? '' : 'e'} im Umkreis ${C.STATION_NEAR_M ?? 50} m` : ''}<br><span class="muted">${s.renting === false ? 'Ausleihe gesperrt' : 'vermietend'} · ${s.returning === false ? 'Rückgabe gesperrt' : 'Rückgabe möglich'}</span>`).addTo(L_.stations);
+          .bindPopup(`<b>${esc(s.name || 'Station')}</b> · ${esc(s.operator)}<br>physisch ${fmt(s.physicalAvailable)} · buchbar ${fmt(s.bookable)} · Plätze ${fmt(s.docksAvailable)}${near ? `<br>${fmt(near)} Fahrzeug${near === 1 ? '' : 'e'} im Umkreis ${C.STATION_NEAR_M ?? 50} m` : ''}${s.nearbyOther ? `<br><span class="muted">dazu ${fmt(s.nearbyOther)} anderer Anbieter (${esc((s.nearbyOtherOps || []).join(', '))})</span>` : ''}<br><span class="muted">${s.renting === false ? 'Ausleihe gesperrt' : 'vermietend'} · ${s.returning === false ? 'Rückgabe gesperrt' : 'Rückgabe möglich'}</span>`).addTo(L_.stations);
       }
       const ops = [...new Set(vehicles.map(v => v.operator))].slice(0, 12);
       legend.push(...ops.map(o => `<span><i class="dot" style="background:${opColor(o)}"></i>${esc(o)}</span>`), `<span><i class="dot" style="background:#ef6b6b"></i>gesperrt</span>`, `<span><i class="sq"></i>Station</span>`, `<span><i class="sq" style="border-color:#e3b341"></i>Station leer (kein Fahrzeug ≤ ${C.STATION_NEAR_M ?? 50} m)</span>`, `<span class="muted">${fmt(drawn)} / ${fmt(vehicles.length)} Fahrzeuge gezeichnet</span>`);
@@ -686,7 +688,8 @@ function computeSignals() {
     if (s.batteryKnown >= 5 && s.lowBattery / s.batteryKnown >= 0.3) out.push({ cat: 'energy', sev: s.lowBattery / s.batteryKnown >= 0.6 ? 'bad' : 'warn', w: s.lowBattery, title: `${op}${place(ags)}: ${pctf(s.lowBattery, s.batteryKnown)} niedrige Energie`, text: `${fmt(s.lowBattery)} von ${fmt(s.batteryKnown)} Fahrzeugen mit Energieangabe. Möglicher Ladebedarf.`, foot: 'Ladestand / Reichweite · Arbeitsauftrag nicht bestätigt' });
     // Leer zählt nur effektiv: gemeldet leer und kein verfügbares Fahrzeug desselben Anbieters ≤ 50 m
     const nearM = C.STATION_NEAR_M ?? 50, nearN = s.stationsEmptyNearby || 0;
-    const nearTxt = nearN ? ` Weitere ${fmt(nearN)} als leer gemeldet, aber Fahrzeuge ≤ ${nearM} m daneben (Fahrzeuge der Station nicht zugeordnet).` : '';
+    const otherN = s.stationsEmptyOtherNearby || 0;
+    const nearTxt = (nearN ? ` Weitere ${fmt(nearN)} als leer gemeldet, aber Fahrzeuge ≤ ${nearM} m daneben (Fahrzeuge der Station nicht zugeordnet).` : '') + (otherN ? ` Bei ${fmt(otherN)} der leeren stehen Fahrzeuge anderer Anbieter ≤ ${nearM} m daneben (Marktsicht: dort findet man trotzdem ein Fahrzeug).` : '');
     if (s.stations >= 3 && s.stationsEmpty / s.stations >= 0.3) out.push({ cat: 'stations', sev: s.stationsEmpty / s.stations >= 0.6 ? 'bad' : 'warn', w: s.stationsEmpty, title: `${op}${place(ags)}: ${fmt(s.stationsEmpty)} leere Stationen (${pctf(s.stationsEmpty, s.stations)})`, text: `${fmt(s.stationsEmpty)} von ${fmt(s.stations)} gemeldeten Stationen bieten derzeit kein Fahrzeug, auch keins im Umkreis von ${nearM} m.${nearTxt}`, foot: 'Stationsstatus und Fahrzeugpositionen' });
     else if (s.stations >= 3 && nearN / s.stations >= 0.3) out.push({ cat: 'data', sev: 'info', w: nearN, title: `${op}${place(ags)}: ${fmt(nearN)} Stationen als leer gemeldet, Fahrzeuge daneben`, text: `Der Stationsfeed meldet kein buchbares Fahrzeug, aber ≤ ${nearM} m stehen verfügbare Fahrzeuge desselben Anbieters. Die Fahrzeuge sind der Station im Feed nicht zugeordnet; effektiv leer sind ${fmt(s.stationsEmpty)}.`, foot: 'Stationsstatus und Fahrzeugpositionen' });
     if (s.stations >= 3 && s.stationsFull / s.stations >= 0.3) out.push({ cat: 'stations', sev: 'info', w: s.stationsFull, title: `${op}${place(ags)}: ${fmt(s.stationsFull)} volle Stationen`, text: 'Rückgabe an diesen Stationen ist nicht möglich (keine freien Plätze).', foot: 'num_docks_available = 0' });
@@ -826,9 +829,9 @@ function renderQuality() {
   const L0 = state.latest; const box = $('#quality');
   if (!L0) { box.innerHTML = '<div class="empty"><b>Noch kein Sammler-Stand.</b>Die Bereinigung erscheint nach dem ersten Lauf.</div>'; return; }
   const d = L0.dedupe || {}; const recs = L0.sources || [];
-  const tot = { unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0 };
+  const tot = { unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0, ghosts: 0 };
   for (const r of recs) for (const k in tot) tot[k] += r.counts?.[k] || 0;
-  const worst = recs.map(r => ({ r, n: (r.counts?.unassigned || 0) + (r.counts?.outside || 0) + (r.counts?.missing || 0) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 6);
+  const worst = recs.map(r => ({ r, n: (r.counts?.unassigned || 0) + (r.counts?.outside || 0) + (r.counts?.missing || 0) + (r.counts?.ghosts || 0) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 8);
   box.innerHTML = `<dl class="kv">
     <dt>Fahrzeug-Dubletten entfernt<small>gleiches Fahrzeug in mehreren Quellen${d.prefixVariants ? `, davon ${fmt(d.prefixVariants)} nur mit anderem Kennungs-Präfix` : ''}</small></dt><dd>${fmt(d.duplicates)}</dd>
     <dt>Stations-Dubletten<small>gleiche Kennung oder gleicher Name ≤ 60 m</small></dt><dd>${fmt(d.stationDuplicates)}</dd>
@@ -836,8 +839,9 @@ function renderQuality() {
     <dt>Ohne Gemeinde<small>Position in Deutschland, aber keiner Gemeinde zuordenbar</small></dt><dd>${fmt(tot.unassigned)}</dd>
     <dt>Außerhalb Deutschlands</dt><dd>${fmt(tot.outside)}</dd>
     <dt>Ohne Koordinaten<small>${tot.stationFallback ? `${fmt(tot.stationFallback)} über Stationsposition ersetzt` : 'ohne Ersatzposition'}</small></dt><dd>${fmt(tot.missing)}</dd>
+    ${tot.ghosts ? `<dt>Verwaiste Einträge<small>gesperrt und seit über 7 Tagen ohne Signal (z. B. eingelagert, verloren); nicht im Bestand und nicht als gesperrt gezählt</small></dt><dd>${fmt(tot.ghosts)}</dd>` : ''}
     ${tot.repaired ? `<dt>Koordinaten repariert<small>vertauschte Breite/Länge, Zahlenformat</small></dt><dd>${fmt(tot.repaired)}</dd>` : ''}
-  </dl>${worst.length ? `<div class="tbl" style="margin-top:var(--s3)"><table><thead><tr><th>Quelle</th><th class="n">ohne Gemeinde</th><th class="n">außerhalb</th><th class="n">ohne Koord.</th></tr></thead><tbody>${worst.map(({ r }) => `<tr><td>${esc(r.name || r.id)}<div class="sub-line mono">${esc(r.id)}</div></td><td class="n">${fmt(r.counts?.unassigned || 0)}</td><td class="n">${fmt(r.counts?.outside || 0)}</td><td class="n">${fmt(r.counts?.missing || 0)}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+  </dl>${worst.length ? `<div class="tbl" style="margin-top:var(--s3)"><table><thead><tr><th>Quelle</th><th class="n">ohne Gemeinde</th><th class="n">außerhalb</th><th class="n">ohne Koord.</th><th class="n" title="gesperrt und über 7 Tage ohne Signal, nicht im Bestand">verwaist</th></tr></thead><tbody>${worst.map(({ r }) => `<tr><td>${esc(r.name || r.id)}<div class="sub-line mono">${esc(r.id)}</div></td><td class="n">${fmt(r.counts?.unassigned || 0)}</td><td class="n">${fmt(r.counts?.outside || 0)}</td><td class="n">${fmt(r.counts?.missing || 0)}</td><td class="n">${fmt(r.counts?.ghosts || 0)}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
 function renderLicenses() {
   const box = $('#licenses'); const recs = (state.latest?.sources || []).filter(r => !(r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(r.status)));

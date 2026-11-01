@@ -124,6 +124,7 @@ const results = await pool(expanded, async (src) => {
 
 // ---------- Auswertung ----------
 const allVehicles = [], allStations = [], sourceOut = [], snapshots = [];
+const ghostKeys = []; // verwaiste Einträge: aus dem Verfolgungszustand entfernen, ohne Ereignis
 const munis = new Map(); // ags → {name,state,pop,bbox}
 const typeOrder = C.VEHICLE_TYPES;
 const chargeThreshold = 20, rangeThreshold = 5;
@@ -155,7 +156,8 @@ for (const { src, sys, probe, error } of results) {
   rec.sourceChanged = !!(prevRec?.fingerprint && prevRec.fingerprint !== rec.fingerprint);
   rec.vehicleTypes = [...new Set([...Object.values(sys.vehicleTypes).map(t => t.type), ...sys.vehicles.map(v => v.type)])];
 
-  const counts = { vehicles: sys.vehicles.length, stations: sys.stations.length, assigned: 0, unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0, posStale: 0 };
+  for (const id of sys.ghostIds || []) if (id != null) ghostKeys.push(T.vehicleKey(src.operator, id));
+  const counts = { vehicles: sys.vehicles.length, stations: sys.stations.length, assigned: 0, unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0, posStale: 0, ghosts: sys.ghosts || 0 };
   const agsSet = new Set();
   const usable = rec.status === 'live' || rec.status === 'delayed';
   for (const v of sys.vehicles) {
@@ -400,6 +402,7 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   const stateFile = path.join(DATA, 'track', 'state.json.gz');
   let prevState = null;
   if (existsSync(stateFile)) { try { prevState = JSON.parse(gunzipSync(await readFile(stateFile)).toString('utf8')); } catch (e) { log('Track-Zustand unlesbar, Neustart:', e.message); } }
+  if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwinden still, keine Abholung
   const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, latencyMs: r.latencyMs })), now });
   await writeFile(stateFile, gzipSync(JSON.stringify(tr.state)));
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);

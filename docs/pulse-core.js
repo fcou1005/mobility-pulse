@@ -1,6 +1,7 @@
 // Mobility Pulse — gemeinsame Kernbibliothek für Sammler (Node) und Dashboard (Browser).
 // Keine Abhängigkeiten. ESM.
 
+export const GHOST_MS = 7 * 86400e3; // gesperrt und so lange ohne Signal = verwaister Eintrag, kein Bestand
 export const LIVE_MS = 5 * 60e3;      // ≤ 5 Min: aktuell (GBFS-Latenzvorgabe)
 export const DELAYED_MS = 30 * 60e3;  // ≤ 30 Min: verzögert, darüber veraltet
 export const DE_BBOX = { minLon: 5.8, minLat: 47.2, maxLon: 15.1, maxLat: 55.2 };
@@ -256,6 +257,9 @@ export async function readGbfsSystem(source, fetchJson, { now = Date.now(), maxV
     if (battery != null && battery <= 1 && battery >= 0) battery = battery * 100; // 2.3: 0..1
     if (battery == null && rangeM != null && vt?.maxRangeM) battery = Math.min(100, Math.round((rangeM / vt.maxRangeM) * 100));
     const reportedAt = toMs(v.last_reported);
+    // Verwaiste Einträge: gesperrt und seit über 7 Tagen kein Signal (z. B. Zeus: Hälfte der Flotte seit Monaten stumm).
+    // Sie zählen weder als Bestand noch als gesperrt; nur die Anzahl bleibt sichtbar.
+    if (bool(v.is_disabled) && reportedAt != null && now - reportedAt > GHOST_MS) { res.ghosts = (res.ghosts || 0) + 1; continue; }
     res.vehicles.push({
       rawId: v.vehicle_id ?? v.bike_id ?? `${source.id}#${idx}`, lat, lon, type, propulsion: vt?.propulsion || null,
       reserved: bool(v.is_reserved) ?? false, disabled: bool(v.is_disabled) ?? false, batteryPct: battery, rangeKm: rangeM != null ? rangeM / 1000 : null,
@@ -366,7 +370,7 @@ export function dedupeStations(stations) {
 export function emptyStats() {
   return { total: 0, available: 0, reserved: 0, disabled: 0, batteryKnown: 0, lowBattery: 0, rangeKnown: 0, lowRange: 0, stationVehicles: 0, geoStation: 0, posStale: 0,
     stations: 0, stationsInstalled: 0, stationsRenting: 0, stationsEmpty: 0, stationsFull: 0, stationPhysical: 0, stationBookable: 0, stationDocks: 0,
-    stationsEmptyReported: 0, stationsEmptyNearby: 0 };
+    stationsEmptyReported: 0, stationsEmptyNearby: 0, stationsEmptyOtherNearby: 0 };
 }
 export function addVehicle(st, v, { chargeThreshold = 20, rangeThreshold = 5 } = {}) {
   st.total++;
@@ -387,7 +391,7 @@ export function addStation(st, s, countVehicles) {
   if (s.installed !== false && s.renting !== false && (s.bookable ?? 0) === 0) {
     // als leer gemeldet – aber stehen frei abgestellte Fahrzeuge desselben Anbieters direkt daneben, ist die Station faktisch versorgt
     st.stationsEmptyReported++;
-    if (s.nearbyVehicles > 0) st.stationsEmptyNearby++; else st.stationsEmpty++;
+    if (s.nearbyVehicles > 0) st.stationsEmptyNearby++; else { st.stationsEmpty++; if (s.nearbyOther > 0) st.stationsEmptyOtherNearby++; }
   }
   if (s.installed !== false && s.returning !== false && s.docksAvailable === 0) st.stationsFull++;
   if (countVehicles) { st.stationVehicles += phys; st.total += phys; st.available += s.bookable ?? 0; if (s.disabled) st.disabled += s.disabled; }
@@ -407,13 +411,17 @@ export function operatorFromName(text, aliases) {
 export const STATION_NEAR_M = 50; // Umkreis, in dem frei abgestellte Fahrzeuge einer Station zugerechnet werden
 /** Zählt je Station verfügbare Fahrzeuge desselben Anbieters im Umkreis (setzt station.nearbyVehicles). */
 export function countNearbyVehicles(vehicles, stations, radiusM = STATION_NEAR_M) {
+  // Raster ohne Anbieter: zählt eigene (nearbyVehicles) und fremde Fahrzeuge (nearbyOther, Marktsicht)
   const CL = 0.0005, CO = 0.0008; const grid = new Map();
-  for (const v of vehicles) { if (v.disabled || v.reserved || !Number.isFinite(v.lat)) continue; const k = `${v.operator}|${Math.floor(v.lat / CL)}|${Math.floor(v.lon / CO)}`; (grid.get(k) || grid.set(k, []).get(k)).push(v); }
+  for (const v of vehicles) { if (v.disabled || v.reserved || !Number.isFinite(v.lat)) continue; const k = `${Math.floor(v.lat / CL)}|${Math.floor(v.lon / CO)}`; (grid.get(k) || grid.set(k, []).get(k)).push(v); }
   for (const s of stations) {
     if (!Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
-    const i = Math.floor(s.lat / CL), j = Math.floor(s.lon / CO); let n = 0;
-    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const v of grid.get(`${s.operator}|${i + di}|${j + dj}`) || []) if (haversineM(s.lat, s.lon, v.lat, v.lon) <= radiusM) n++;
-    s.nearbyVehicles = n;
+    const i = Math.floor(s.lat / CL), j = Math.floor(s.lon / CO); let own = 0, other = 0; const otherOps = new Set();
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const v of grid.get(`${i + di}|${j + dj}`) || []) {
+      if (haversineM(s.lat, s.lon, v.lat, v.lon) > radiusM) continue;
+      if (v.operator === s.operator) own++; else { other++; otherOps.add(v.operator); }
+    }
+    s.nearbyVehicles = own; s.nearbyOther = other; s.nearbyOtherOps = [...otherOps];
   }
   return stations;
 }
