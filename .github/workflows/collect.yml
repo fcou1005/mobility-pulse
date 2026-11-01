@@ -20,12 +20,12 @@ permissions:
 
 jobs:
   collect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # fest, damit der Wechsel auf Ubuntu 26 nichts kaputt macht
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -46,7 +46,7 @@ jobs:
       - name: Gemeindegrenzen aus Cache
         id: bcache
         if: ${{ !inputs.rebuild_boundaries }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: cache/boundaries.json
           key: vg250-${{ steps.month.outputs.m }}-v2
