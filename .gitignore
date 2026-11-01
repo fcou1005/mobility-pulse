@@ -5,3 +5,4 @@ cache/
 test/out/
 test/server.pid
 .uitest/
+.realdata/
