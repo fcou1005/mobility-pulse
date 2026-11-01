@@ -560,16 +560,35 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
   const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes, gap: tr.gap });
   await writeFile(evFile, JSON.stringify(evDoc));
-  // Gruppen-Ereignisse (≥ 5 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt), 30 Tage
+  // Gruppen-Ereignisse (≥ T.GROUP_MIN = 4 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt): dauerhaft je Monat in
+  // groups/<JJJJ-MM>.json (Monat nach Europe/Berlin, nie gekürzt) mit Verzeichnis groups/index.json; groups.json (30 Tage) bleibt als
+  // Rückfall für Briefing/Signale und ältere Seitenstände. Erster Lauf mit Monatsdateien übernimmt die Ereignisse aus groups.json.
   {
+    const rows = (tr.groups || []).map(T.groupRow);
     const gf = path.join(DATA, 'groups.json');
     const gd = existsSync(gf) ? JSON.parse(await readFile(gf, 'utf8')) : { events: [] };
-    gd.fields = ['at', 'art', 'anbieter', 'gemeinde', 'lat', 'lon', 'anzahl', 'arten'];
-    for (const g of tr.groups || []) gd.events.push([g.at, g.kind, g.op, g.ags, g.lat, g.lon, g.n, g.types]);
+    gd.fields = T.GROUP_FIELDS;
+    gd.events.push(...rows);
     gd.events = gd.events.filter(e => now - e[0] <= 30 * 86400e3);
     gd.updatedAt = now;
     await writeFile(gf, JSON.stringify(gd));
-    if (tr.groups?.length) log(`Gruppen: ${tr.groups.filter(g => g.kind === 'deploy').length} ausgebracht, ${tr.groups.filter(g => g.kind === 'collect').length} eingesammelt`);
+    const gDir = path.join(DATA, 'groups'), gIdxFile = path.join(gDir, 'index.json');
+    await mkdir(gDir, { recursive: true });
+    const gIdx = existsSync(gIdxFile) ? JSON.parse(await readFile(gIdxFile, 'utf8')) : null;
+    const add = gIdx ? rows : gd.events; // Dubletten (gleicher Lauf, Art, Anbieter, Ort) fallen in mergeGroupMonths weg
+    const touched = [...new Set(add.map(r => T.dayOf(r[0]).slice(0, 7)))];
+    const prev = {}; for (const m of touched) { const f = path.join(gDir, `${m}.json`); prev[m] = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; }
+    const changed = T.mergeGroupMonths(prev, add, { at: now });
+    for (const [m, doc] of Object.entries(changed)) await writeFile(path.join(gDir, `${m}.json`), JSON.stringify(doc));
+    const months = (await readdir(gDir)).filter(f => /^\d{4}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 7)).sort();
+    const counts = {}; let first = gIdx?.first ?? null, last = gIdx?.last ?? null;
+    for (const m of months) {
+      const doc = changed[m] || (gIdx?.counts?.[m] != null ? null : JSON.parse(await readFile(path.join(gDir, `${m}.json`), 'utf8')));
+      counts[m] = doc ? doc.events.length : gIdx.counts[m];
+      if (doc?.events.length) { first = Math.min(first ?? Infinity, doc.events[0][0]); last = Math.max(last ?? -Infinity, doc.events[doc.events.length - 1][0]); }
+    }
+    await writeFile(gIdxFile, JSON.stringify(T.groupIndex(months, counts, { at: now, first, last })));
+    if (tr.groups?.length) log(`Gruppen: ${tr.groups.filter(g => g.kind === 'deploy').length} ausgebracht, ${tr.groups.filter(g => g.kind === 'collect').length} eingesammelt (groups/: ${months.length} Monat${months.length === 1 ? '' : 'e'}, ${Object.values(counts).reduce((a, b) => a + b, 0)} Ereignisse)`);
   }
   { const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0); runEv = { start: 0, end: 0, rot: 0 }; for (const h of tr.hourly.values()) { runEv.start += s(h.start); runEv.end += s(h.end); runEv.rot += s(h.rot); } }
   // Langzeit-Archiv: Tageswerte je Gemeinde|Anbieter|Art, eine Datei je Monat, wird nie gekürzt

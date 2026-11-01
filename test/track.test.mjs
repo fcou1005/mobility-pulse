@@ -81,7 +81,27 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   assert(q.groups.some(x => x.kind === 'collect' && x.n === 6), 'Einsammeln: 6 verschwinden zusammen');
   const few = [...Array(3)].map((_, i) => V('f' + i, 48.80, 9.30 + i * 0.00005));
   q = T.trackRun(q.state, { vehicles: [...base, ...few], stations: [], sourceRecs: recs, now: u0 + 80 * 60e3 });
-  assert(!q.groups.length, 'unter 5 Fahrzeugen keine Gruppe');
+  assert(T.GROUP_MIN === 4 && !q.groups.length, 'unter 4 Fahrzeugen keine Gruppe (3 zusammen)');
+  const four = [...Array(4)].map((_, i) => V('q' + i, 48.85, 9.35 + i * 0.00005));
+  q = T.trackRun(q.state, { vehicles: [...base, ...few, ...four], stations: [], sourceRecs: recs, now: u0 + 100 * 60e3 });
+  assert(q.groups.length === 1 && q.groups[0].kind === 'deploy' && q.groups[0].n === 4, 'ab 4 Fahrzeugen ≤ 40 m: Ausbringung erkannt');
+  const spread = [...Array(4)].map((_, i) => V('s' + i, 48.86, 9.36 + i * 0.0004)); // je ≈ 30 m, äußere 90 m auseinander
+  q = T.trackRun(q.state, { vehicles: [...base, ...few, ...four, ...spread], stations: [], sourceRecs: recs, now: u0 + 120 * 60e3 });
+  assert(!q.groups.some(g => g.kind === 'deploy'), '4 Fahrzeuge über 90 m verteilt: keine Gruppe (40 m um ein Fahrzeug)');
+}
+// Gruppen dauerhaft in Monatsdateien (groups/<JJJJ-MM>.json), nichts wird gelöscht, Dubletten einmal
+{
+  const g = (iso, kind = 'deploy', lat = 48.5) => T.groupRow({ at: Date.parse(iso), kind, op: 'Dott', ags: '08416041', lat, lon: 9.05, n: 4, types: { scooter: 4 } });
+  const old = { month: '2026-10', fields: T.GROUP_FIELDS, events: [g('2026-10-02T10:00:00Z')] };
+  const rows = [g('2026-10-31T22:30:00Z'), g('2026-10-31T23:30:00Z'), g('2026-10-02T10:00:00Z'), g('2026-11-01T08:00:00Z', 'collect')];
+  const ch = T.mergeGroupMonths({ '2026-10': old, '2026-11': null }, rows, { at: 1 });
+  assert(Object.keys(ch).sort().join() === '2026-10,2026-11', 'Monat nach Ortszeit: 31.10. 23:30 UTC = 01.11. 00:30 in Berlin → November');
+  assert(ch['2026-10'].events.length === 2 && ch['2026-11'].events.length === 2 && old.events.length === 1, 'Oktober: alter + neuer Eintrag, Dublette einmal, Eingabe unverändert');
+  assert(ch['2026-11'].events[0][0] < ch['2026-11'].events[1][0] && ch['2026-11'].fields.join() === 'at,art,anbieter,gemeinde,lat,lon,anzahl,arten' && ch['2026-11'].month === '2026-11', 'nach Zeit sortiert, Felder wie groups.json');
+  const again = T.mergeGroupMonths(ch, rows, { at: 2 });
+  assert(again['2026-10'].events.length === 2 && again['2026-11'].events.length === 2, 'erneuter Lauf mit denselben Zeilen fügt nichts hinzu');
+  const ix = T.groupIndex(['2026-11', '2026-10', 'x'], { '2026-10': 2, '2026-11': 2 }, { at: 3, first: 10, last: 20 });
+  assert(ix.months.join() === '2026-10,2026-11' && ix.events === 4 && ix.min === 4 && ix.radiusM === 40 && ix.counts['2026-11'] === 2, 'groups/index.json: Monate, Anzahl, Regeln (≥ 4 Fzg., 40 m)');
 }
 // M1 – Lauf nach Lücke (> 45 Min): Zustand wird fortgeschrieben, aber keine Ereignisse, Fahrzeugminuten, Zellen, Gruppen
 {

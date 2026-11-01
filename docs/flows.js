@@ -2,7 +2,7 @@
 // Linie je Strom = wahrscheinlichster Radweg zwischen den Zellmitten (FOSSGIS-OSRM, Fahrradprofil), nicht gemessen; Rückfall Luftlinie (gestrichelt).
 // Nur Anbieter mit stabilen Kennungen, nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
-import { VEHICLE_TYPE_LABEL as TYPE } from './pulse-core.js?v=mvxwjvvw';
+import { VEHICLE_TYPE_LABEL as TYPE } from './pulse-core.js?v=mvxyn4sh';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)

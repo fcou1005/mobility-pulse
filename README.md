@@ -36,7 +36,7 @@ Carsharing wird ausgeschlossen (`data/sources-manual.json`). Gemeindezuordnung �
 ## Disposition (`lib/pulse-ops.js`, Ansicht „Disposition“)
 
 - **Nachfrage:** Fahrtbeginne je ≈250-m-Zelle und Tageszeit-Band (Nacht, Morgen, Vormittag, Mittag, Nachmittag, Abend) ÷ Messstunden; Markt über alle Anbieter, Anbieteranteil = Anteil am verfügbaren Bestand.
-- **Deploy-Spots:** MCDA mit AHP-Gewichten (Nachfrage 0,56 · Unterversorgung 0,25 · ÖPNV-Nähe 0,10 · Abstellfläche 0,10; CR 0,016), Abstellverbote aus den GBFS-Zonen als Ausschluss, Mindestabstand, ±20-%-Sensitivität je Gewicht. Spots rasten auf E-Scooter-Stellflächen, amtliche Flächen (Berlin WFS) oder Sharing-Punkte ein; Radabstellanlagen zählen halb.
+- **Deploy-Spots:** MCDA mit AHP-Gewichten (Netto-Abfluss 0,52 · Nachfrage 0,28 · ÖPNV-Nähe 0,10 · Abstellfläche 0,10; CR 0,0015). Netto-Abfluss = (Fahrtbeginne − Fahrtenden) ÷ Messstunden je Zelle; Bedarf = Netto-Abfluss × Horizont + Grundbestand, Fehlmenge = Bedarf − Bestand im Umkreis von 150 m, Abstellverbote aus den GBFS-Zonen als Ausschluss, Mindestabstand, ±20-%-Sensitivität je Gewicht. Spots rasten auf E-Scooter-Stellflächen, amtliche Flächen (Berlin WFS) oder Sharing-Punkte ein; Radabstellanlagen zählen halb.
 - **Touren:** Umsetzen (Überschuss → Spots mit Bedarf, Transporterkapazität, erst einsammeln, dann ausbringen), Akkutausch (Priorität aus Ladestand und Nachfrage), Werkstatt (gesperrte Fahrzeuge), Stationsausgleich (≤ 20 % aus ≥ 80 % auf 50 %). Reihenfolge Nächster Nachbar + 2-opt + Or-opt; optional OSRM-Straßenrouting im Browser.
 - **Exporte:** Spots-CSV im Backend-Format (`name,lat,lng,deploymentStatus,parkingStatus,deploymentRadius,deploymentVehicles`), Analyse-CSV, Touren-CSV, GeoJSON. Test: `node test/ops.test.mjs`.
 
@@ -47,6 +47,7 @@ Carsharing wird ausgeschlossen (`data/sources-manual.json`). Gemeindezuordnung �
 - **Auslastung:** RVD × Ø Fahrtdauer ÷ 1440 Min. Dauer gemessen bei stabilen Kennungen (≥ 20 Fahrten), sonst Annahme (E-Scooter 12 Min., E-Bike 16, Rad 18, Lastenrad 40).
 - **Kalibrierung:** `lib/pulse-calib.js` + `data/reference.json`. Ø Fahrtdauer E-Scooter aus den Berliner Quartalswerten (7,1 Min.), Methodenfaktor k = amtliche Berliner Fahrten je E-Scooter und Tag ÷ eigene Berliner Messung (nur plausible Anbieter, Spanne aus den Quartalen, vorläufig unter 7 Messtagen), Messungen über 3,47 Fahrten je Fahrzeug und Tag werden nicht kalibriert. Abdeckung gegen die genehmigte (Berlin) bzw. aktive (München) Flotte. Test: `node test/econ.test.mjs`.
 - **Fahrtrouten:** nur Quellen mit stabilen Kennungen; Start-Ziel-Ströme zwischen 250-m-Zellen ab 2 Fahrten je Tag, veröffentlicht nach Tagesende (`flows/<Tag>.json`), Route im Browser per Fahrrad-OSRM (`web/flows.js`).
+- **Vermutete Deploy-Spots:** ab 4 Fahrzeugen eines Anbieters ≤ 40 m in einem Lauf; dauerhaft in `groups/<JJJJ-MM>.json` (+ `groups/index.json`), `groups.json` (30 Tage) bleibt für das Briefing.
 - **Obergrenzen:** `caps-log.json` (Sammler prüft je Lauf gegen `data/reference.json` → `obergrenzen`).
 - **Umsatz:** Fahrten × Preis einer Ø Fahrt im Standardtarif aus `system_pricing_plans` (Abos/Pässe ausgeschlossen), netto ohne 19 % MwSt. und mit Realisierungsquote (Standard 85 %). RVD über 15 gilt als unplausibel und bleibt außerhalb der Summen. Test: `node test/econ.test.mjs`.
 

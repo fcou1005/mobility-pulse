@@ -1,9 +1,10 @@
-import * as C from './pulse-core.js?v=mvxwjvvw';
-import * as Ops from './ops.js?v=mvxwjvvw';
-import * as E from './pulse-econ.js?v=mvxwjvvw';
-import * as K from './pulse-calib.js?v=mvxwjvvw';
-import * as Rp from './report.js?v=mvxwjvvw';
-import * as Fl from './flows.js?v=mvxwjvvw';
+import * as C from './pulse-core.js?v=mvxyn4sh';
+import * as Ops from './ops.js?v=mvxyn4sh';
+import * as E from './pulse-econ.js?v=mvxyn4sh';
+import * as K from './pulse-calib.js?v=mvxyn4sh';
+import * as Rp from './report.js?v=mvxyn4sh';
+import * as R from './pulse-report.js?v=mvxyn4sh';
+import * as Fl from './flows.js?v=mvxyn4sh';
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
 const QS = new URLSearchParams(location.search);
@@ -641,13 +642,13 @@ function renderLive() {
   const eff = recs.map(effStatus);
   const usable = eff.filter(e => USABLE.has(e.status));
   const gaps = rows.filter(r => r.gap).length;
-  const en = energyTotal(rows), lowE = en.n ? en.low / en.n : null;
+  const en = energyFor(), lowE = !en.pending && en.known ? en.low / en.known : null;
   const dockKnown = st.stationsEmptyDock != null;
   $('#live-tiles').innerHTML = [
     tile('Verfügbar · buchbar', fmt(st.available), `${fmt(st.total)} gemeldet · ${fmt(st.reserved)} reserviert`),
     tile('Gesperrt', fmt(st.disabled), `${st.total ? `${pctf(st.disabled, st.total)} des Bestands` : 'keine Fahrzeugdaten'}${ghostsInScope() ? ` · <abbr title="Gesperrt und seit über 7 Tagen kein Signal: verwaiste Einträge im Feed (z. B. eingelagerte oder verlorene Fahrzeuge). Nicht im Bestand gezählt.">+${fmt(ghostsInScope())} verwaist</abbr>` : ''}`, st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
     tile('Stationen mit Angebot', `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}`, st.stations ? `${fmt(st.stationsEmpty)} leer${dockKnown ? ` (${fmt(st.stationsEmptyDock)} Docks, ${fmt(st.stationsEmptyVirtual)} Abstellzonen)` : ''} · ${fmt(st.stationsFull)} voll` : 'keine Stationen im Gebiet', '', st.stations ? emptyTip(st) : ''),
-    tile('Energie niedrig', lowE == null ? 'k. A.' : `${en.approx ? '≈ ' : ''}${pctf(en.low, en.n)}`, lowE == null ? 'keine Energieangabe' : `${fmt(en.low)} von ${fmt(en.n)} mit Angabe${en.approx ? cl(' · nur-Reichweite-Quellen relativ zur üblichen Reichweite', ' · Lime: weniger als ¼ der üblichen Reichweite') : ''}`, lowE > 0.3 ? 'warn' : ''),
+    tile('Energie niedrig', energyVal(en), energySub(en), lowE > 0.3 ? 'warn' : ''),
     tile(cl('Quellen', 'Datenaktualität'), `${fmt(usable.length)} / ${fmt(recs.length)}`, `${eff.filter(e => e.status === 'live').length} aktuell · ${eff.filter(e => e.status === 'delayed').length} verzögert · ${eff.filter(e => e.status === 'stale').length} veraltet${gaps ? ` · ${gaps} ${cl('Datenlücke', 'Anbieter ohne Daten')}${gaps > 1 && !isClient() ? 'n' : ''}` : ''}`, recs.length && usable.length / recs.length < 0.7 ? 'warn' : '', gl('fresh')),
   ].join('');
   // Tabelle: „Δ Sammler“ nur, wenn es etwas zeigt (Live-Abruf mit Abweichung); Lizenzen stehen unter Datenvertrauen › Quellen
@@ -659,8 +660,8 @@ function renderLive() {
     const s = r.st;
     const d = r.delta ? `<span style="color:var(--${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : 'muted'})">${r.delta.diff > 0 ? '+' : ''}${fmt(r.delta.diff)}</span><div class="sub-line">${ageText(r.delta.sinceMs)}</div>` : '—';
     if (r.gap) return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${esc(r.gap.city)} · seit ${esc(r.gap.since)}</div></td><td colspan="${cols - 2}" class="sub-line">${esc(r.gap.note)}</td><td><span class="pill gap">Datenlücke</span></td></tr>`;
-    const e = energyOf(r.op, s);
-    const eCell = !e ? 'k. A.' : e.missing ? `k. A.<div class="sub-line">${cl('nur Reichweite im Feed', 'nur Reichweite bekannt')}</div>` : e.rel ? `≈ ${pctf(e.low, e.n)}<div class="sub-line">Reichweite &lt; 25 % des Üblichen</div>` : `${pctf(e.low, e.n)}<div class="sub-line">${fmt(e.n)} mit Angabe</div>`;
+    const e = energyOfOp(r.op);
+    const eCell = e.pending ? '…' : !e.known ? 'k. A.' : `${energyVal(e)}<div class="sub-line">${fmt(e.known)} mit Angabe${e.rangeOnly === e.known ? ' · nur Reichweite' : e.rangeOnly ? ` · ${fmt(e.rangeOnly)} nur Reichweite` : ''}</div>`;
     return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line internal">${r.sources.length} Quelle${r.sources.length === 1 ? '' : 'n'}${r.changed ? ' · Quellenwechsel' : ''}${r.sources.some(x => x.snapshot) ? ' · Momentaufnahme Sammler' : ''}${r.sources.some(x => x.status === 'collector') ? ' · Sammler-Stand' : ''}</div></td>
       <td class="internal">${r.dirs.map(dirLabel).join(' · ') || '–'}<div class="sub-line">Qualität ${esc(r.quality ?? '–')}/100</div></td>
       <td class="n">${fmt(s.available)}<div class="sub-line">${fmt(s.total)} gemeldet</div></td><td class="n">${fmt(s.disabled)}</td>${showDelta ? `<td class="n">${d}</td>` : ''}
@@ -759,15 +760,17 @@ function renderMap() {
     } else {
       // Rasterzellen ca. 500 m
       const cells = new Map();
-      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; if (v.batteryPct != null) { c.known++; if (v.batteryPct < state.thresholds.charge) c.low++; } cells.set(k, c); }
+      // Energie niedrig wie überall (energyLow): Grenzen des Live-Abrufs bzw. des Sammlers, je nachdem woher die Positionen stammen
+      const lim = src === coll ? { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM } : { charge: state.thresholds.charge, range: state.thresholds.range };
+      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
       const max = Math.max(1, ...[...cells.values()].map(c => layerMode === 'energy' ? c.low : c.n));
       for (const c of cells.values()) {
         const val = layerMode === 'energy' ? c.low : c.n; if (!val) continue;
         const a = 0.15 + 0.7 * (val / max);
         L.rectangle([[c.lat - .00225, c.lon - .0035], [c.lat + .00225, c.lon + .0035]], { weight: 0, fillColor: layerMode === 'energy' ? '#e3b341' : '#49c7b0', fillOpacity: a })
-          .bindPopup(layerMode === 'energy' ? `${fmt(c.low)} Fahrzeuge unter ${state.thresholds.charge} % (von ${fmt(c.known)} mit Angabe)` : `${fmt(c.n)} verfügbare Fahrzeuge in dieser Zelle`).addTo(L_.grid);
+          .bindPopup(layerMode === 'energy' ? `${fmt(c.low)} Fahrzeuge mit niedriger Energie (Ladestand &lt; ${fmt(lim.charge)} % und Reichweite &lt; ${fmt(lim.range)} km) von ${fmt(c.known)} mit Angabe` : `${fmt(c.n)} verfügbare Fahrzeuge in dieser Zelle`).addTo(L_.grid);
       }
-      legend.push(`<span>${layerMode === 'energy' ? 'Niedrige Energie' : 'Verfügbare Fahrzeuge'} je ${cl('~500-m-Zelle', 'Fläche von etwa 500 × 500 m')}, dunkler = mehr (max ${fmt(max)})</span>`);
+      legend.push(`<span>${layerMode === 'energy' ? `Energie niedrig (Ladestand &lt; ${fmt(lim.charge)} % und Reichweite &lt; ${fmt(lim.range)} km; Lime über die Reichweite)` : 'Verfügbare Fahrzeuge'} je ${cl('~500-m-Zelle', 'Fläche von etwa 500 × 500 m')}, dunkler = mehr (max ${fmt(max)})</span>`);
     }
     if (src === coll) legend.push(`<span class="muted">${cl(`Sammler-Stand ${timeText(coll.at)} – „Live abrufen“ ersetzt die Positionen.`, `Stand ${timeText(coll.at)}`)}</span>`);
   } else {
@@ -856,44 +859,75 @@ async function loadWfs() {
   notice(`MobiData-Karte: ${fmt(n)} Punkte im Ausschnitt (${fresh} zeitlich bestätigt, ${unk} Aktualität ungeklärt, ${old} älter${r.json.features.length >= 4000 ? ', Antwort begrenzt' : ''}). Nicht in Kennzahlen enthalten.`, '', 'wfs');
 }
 
-// ---------- Performance Lab ----------
-// Reichweite ohne Ladestand (z. B. Lime): relative Schwelle aus dem Sammler (counts.lowRangeRel = Fahrzeuge unter 25 % des 95. Perzentils der Quelle, Vertrag 4)
-function lowRangeRel(op = null) {
-  let low = 0, n = 0, any = false;
-  for (const r of sourcesForScope()) { if (op && r.operator !== op) continue; if (state.operator !== 'all' && r.operator !== state.operator) continue; const c = r.counts || {}; if (c.lowRangeRel == null) continue; any = true; low += c.lowRangeRel; n += c.vehicles || 0; }
-  return any && n ? { low, n } : null;
+// ---------- Energie niedrig: eine Regel für Übersicht, Briefing, Leistung, Karte und CSV (lib/pulse-report.js energyLow) ----------
+// Wie die Disposition (lib/pulse-ops.js needsSwap): Ladestand < 20 % UND Reichweite < 5 km, wo beides gemeldet ist; sonst entscheidet die
+// gemeldete Angabe. Anbieter, deren Feeds nur Reichweite melden (Lime; die Kernbibliothek leitet für sie einen Ladestand aus Reichweite ÷
+// Maximalreichweite ab), zählen nur über die Reichweite. Gezählt je Fahrzeug: Live-Abruf (state.live.vehicles) oder Sammler-Stand
+// (ops/<Land>.json; für Deutschland alle Länder, geteilter Cache mit Karte und Disposition). Fehlt die Datei: Rückfall auf die Zähler der
+// Gruppe – genau, wo nur eine Angabe vorliegt; mit beiden Angaben höchstens min(Ladestand niedrig, Reichweite niedrig), als „≈“ markiert.
+const RANGE_ONLY_OPS = new Set(R.RANGE_ONLY_OPS);
+const rangeOnly = (op) => RANGE_ONLY_OPS.has(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
+const energyLimits = () => (state.mode === 'live' && state.live ? { charge: state.thresholds.charge, range: state.thresholds.range } : { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM });
+const ENERGY = new Map(); let energyWait = 0; // `${Stand}|${Land}` → Map(Gruppe → Zähler) | 'loading' | null (Datei fehlt)
+function energyLand(land) {
+  const k = `${state.latest?.at}|${land}`;
+  if (!ENERGY.has(k)) {
+    ENERGY.set(k, 'loading'); energyWait++;
+    const lim = { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM }; // Sammler-Stand: Grenzen des Sammlers
+    cached(`ops/${land}.json`, 90000).then(r => { ENERGY.set(k, r.ok && r.json?.vehicles ? R.energyFromOps(r.json, { charge: lim.charge, range: lim.range, rangeOnly }) : null); }, () => ENERGY.set(k, null))
+      .finally(() => { if (--energyWait === 0) markDirty('live', 'lab', 'signals'); });
+  }
+  return ENERGY.get(k);
 }
-// Anbieter, deren Feeds nur Reichweite melden: die Kernbibliothek leitet den Ladestand aus Reichweite ÷ Maximalreichweite ab, das ist für sie
-// zu pessimistisch (Lime: 64 % „niedrig“). Für sie gilt „niedrig“ relativ zur üblichen Reichweite der Quelle. Künftig per counts.batteryNative = 0 erkennbar.
-const RANGE_ONLY_OPS = new Set(['Lime']);
-const rangeOnly = (op) => RANGE_ONLY_OPS.has(op) || sourcesForScope().some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
-// Energie niedrig eines Anbieters im Gebiet: {low, n, rel} – rel = Anteil der Quelle (< 25 % des 95. Perzentils) auf den Bestand im Gebiet umgelegt
-function energyOf(op, s) {
-  if (!rangeOnly(op)) return s.batteryKnown ? { low: s.lowBattery, n: s.batteryKnown, rel: false } : null;
-  const rel = lowRangeRel(op); if (!rel) return s.rangeKnown ? { low: null, n: 0, rel: true, missing: true } : null;
-  const n = s.rangeKnown || s.total || 0; return { low: Math.round((rel.low / rel.n) * n), n, rel: true };
+let liveEnergy = null;
+function liveEnergyGroups() {
+  if (!(state.mode === 'live' && state.live?.vehicles?.length)) return null;
+  const lim = energyLimits(), key = `${state.live.at}|${lim.charge}|${lim.range}|${state.live.vehicles.length}`;
+  if (liveEnergy?.key !== key) {
+    const m = new Map();
+    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) }); m.set(k, e); }
+    liveEnergy = { key, map: m };
+  }
+  return liveEnergy.map;
 }
-function energyTotal(rows) {
-  let low = 0, n = 0, approx = false;
-  for (const r of rows) { if (r.gap) continue; const e = energyOf(r.op, r.st); if (!e || e.missing) continue; low += e.low; n += e.n; if (e.rel) approx = true; }
-  return { low, n, approx };
+// Rückfall ohne Einzelfahrzeuge: aus den Zählern der Gruppe
+function energyFromStats(op, st) {
+  if (rangeOnly(op) || !st.batteryKnown) return { known: st.rangeKnown || 0, low: st.lowRange || 0, rangeOnly: st.rangeKnown || 0, rangeOnlyLow: st.lowRange || 0 };
+  if (!st.rangeKnown) return { known: st.batteryKnown, low: st.lowBattery, rangeOnly: 0, rangeOnlyLow: 0 };
+  return { known: Math.max(st.batteryKnown, st.rangeKnown), low: Math.min(st.lowBattery, st.lowRange), rangeOnly: Math.max(0, st.rangeKnown - st.batteryKnown), rangeOnlyLow: 0, approx: true };
 }
+function groupEnergy(k, st) {
+  const live = liveEnergyGroups(); if (live?.has(k)) return live.get(k);
+  const land = state.latest?.municipalities?.[k.split('|')[0]]?.state;
+  const m = land ? energyLand(land) : null;
+  if (m === 'loading') return { pending: true };
+  if (m instanceof Map) return m.get(k) || R.emptyEnergy(); // Gruppe ohne Fahrzeugliste (z. B. nur Stationen): keine Energieangabe
+  return energyFromStats(k.split('|')[1], st);
+}
+// Energie über die Gruppen im Gebiet und Filter; keep(key) wählt zusätzlich aus (Anbieter, Art)
+function energyFor(keep = null) {
+  const out = { ...R.emptyEnergy(), pending: false, approx: false };
+  for (const [k, st] of scopeGroups()) { if (keep && !keep(k)) continue; const e = groupEnergy(k, st); if (e.pending) { out.pending = true; continue; } if (e.approx) out.approx = true; for (const f of ['known', 'low', 'rangeOnly', 'rangeOnlyLow']) out[f] += e[f] || 0; }
+  return out;
+}
+const energyOfOp = (op) => energyFor(k => k.split('|')[1] === op);
+const energyRule = () => { const l = energyLimits(); return `Ladestand < ${fmt(l.charge)} % und Reichweite < ${fmt(l.range)} km`; };
+const energyVal = (e) => (e.pending ? '…' : e.known ? `${e.approx ? '≈ ' : ''}${pctf(e.low, e.known)}` : 'k. A.');
+const energySub = (e) => (e.pending ? 'Energie wird je Fahrzeug ausgewertet …' : e.known ? `${energyRule()} · ${fmt(e.low)} von ${fmt(e.known)} mit Energieangabe${e.rangeOnly ? ` (davon ${fmt(e.rangeOnly)} nur Reichweite)` : ''}${e.approx ? ' · ≈ Obergrenze ohne Einzelfahrzeuge' : ''}` : 'keine Energieangabe');
 function renderLab() {
   const groups = scopeGroups(); const st = sumStats([...groups.values()]);
-  // Ladestand nur aus Feeds mit eigenem Ladestand; reine Reichweite-Quellen (Lime) relativ zur üblichen Reichweite der Quelle
-  const native = sumStats([...groups].filter(([k]) => !rangeOnly(k.split('|')[1])).map(([, s]) => s));
-  const roOps = [...new Set([...groups.keys()].map(k => k.split('|')[1]).filter(rangeOnly))];
-  const rel = roOps.reduce((a, op) => { const r = lowRangeRel(op); return r ? { low: a.low + r.low, n: a.n + r.n } : a; }, { low: 0, n: 0 });
+  // Energie niedrig je Fahrzeug nach der Regel der Disposition; Anbieter nur mit Reichweite (Lime) zählen über die Reichweite mit
+  const en = energyFor(); const lim = energyLimits();
   $('#lab-tiles').innerHTML = [
     tile('Buchbare Fahrzeuge', fmt(st.available), `${pctf(st.available, st.total)} von ${fmt(st.total)} gemeldeten`),
-    tile(`Ladestand unter ${state.mode === 'live' ? state.thresholds.charge : 20} %`, native.batteryKnown ? pctf(native.lowBattery, native.batteryKnown) : 'k. A.', native.batteryKnown ? `${fmt(native.lowBattery)} von ${fmt(native.batteryKnown)} mit Ladestand${roOps.length ? ` · ohne ${esc(roOps.join(', '))} (nur Reichweite)` : ''}` : 'keine Ladestandsangabe'),
-    roOps.length ? tile('Reichweite unter 25 % des Üblichen', rel.n ? pctf(rel.low, rel.n) : 'k. A.', rel.n ? `${esc(roOps.join(', '))}: ${fmt(rel.low)} von ${fmt(rel.n)} Fahrzeugen${cl(' der Quelle · Schwelle = ¼ des 95. Perzentils je Quelle', ' mit weniger als einem Viertel der üblichen Reichweite')}` : `${esc(roOps.join(', '))} ${cl('melden nur Reichweite; relative Schwelle ab dem nächsten Sammler-Lauf', 'melden nur die Reichweite')}`) : tile(`Reichweite unter ${state.mode === 'live' ? state.thresholds.range : 5} km`, st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : 'k. A.', st.rangeKnown ? `${fmt(st.lowRange)} von ${fmt(st.rangeKnown)} mit Reichweite` : 'keine Reichweitenangabe'),
+    tile('Energie niedrig', energyVal(en), energySub(en), !en.pending && en.known && en.low / en.known > 0.3 ? 'warn' : ''),
+    tile(`Reichweite unter ${fmt(lim.range)} km`, st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : 'k. A.', st.rangeKnown ? `${fmt(st.lowRange)} von ${fmt(st.rangeKnown)} mit Reichweite, unabhängig vom Ladestand` : 'keine Reichweitenangabe'),
     tile('Stationen mit Angebot', st.stations ? `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}` : '—', st.stations ? `${fmt(st.stationBookable)} buchbar · ${fmt(st.stationDocks)} freie Plätze` : 'keine Stationen im Filter', '', st.stations ? emptyTip(st) : ''),
   ].join('');
   // Fahrzeugarten
   const byType = new Map();
   for (const [k, s] of groups) { const ty = k.split('|')[2]; byType.set(ty, [...(byType.get(ty) || []), s]); }
-  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = sumStats(list); return `<tr><td>${esc(TYPE[ty] || ty)}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${s.batteryKnown ? pctf(s.lowBattery, s.batteryKnown) : 'k. A.'}<div class="sub-line">${s.batteryKnown ? `n = ${fmt(s.batteryKnown)}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : 'k. A.'}</td></tr>`; }).sort().join('') || emptyRow(6, 'Keine Fahrzeuge im Filter.', 'Fahrzeugart oder Anbieter auf „Alle“ stellen.');
+  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = sumStats(list); const e = energyFor(k => k.split('|')[2] === ty); return `<tr><td>${esc(TYPE[ty] || ty)}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${energyVal(e)}<div class="sub-line">${!e.pending && e.known ? `n = ${fmt(e.known)}${e.rangeOnly ? ` · ${fmt(e.rangeOnly)} nur Reichweite` : ''}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : 'k. A.'}</td></tr>`; }).sort().join('') || emptyRow(6, 'Keine Fahrzeuge im Filter.', 'Fahrzeugart oder Anbieter auf „Alle“ stellen.');
   // Stationen je Anbieter
   const byOp = new Map();
   for (const [k, s] of groups) { const op = k.split('|')[1]; byOp.set(op, [...(byOp.get(op) || []), s]); }
@@ -901,11 +935,11 @@ function renderLab() {
   // Scorecard
   const rows = operatorRows().filter(r => !r.gap);
   // Score = gleich gewichtetes Mittel der vorhandenen Teilwerte; die Gewichte stehen im Kopf, die genutzten Teile je Zeile im Tooltip
-  $('#tbl-score tbody').innerHTML = rows.map(r => { const s = r.st; const avail = s.total ? s.available / s.total : null; const dis = s.total ? s.disabled / s.total : null; const e = energyOf(r.op, s); const low = e && !e.missing && e.n ? e.low / e.n : null; const emp = s.stations ? s.stationsEmpty / s.stations : null;
+  $('#tbl-score tbody').innerHTML = rows.map(r => { const s = r.st; const avail = s.total ? s.available / s.total : null; const dis = s.total ? s.disabled / s.total : null; const e = energyOfOp(r.op); const low = !e.pending && e.known ? e.low / e.known : null; const emp = s.stations ? s.stationsEmpty / s.stations : null;
     const named = [['Verfügbar', avail != null ? avail * 100 : null], ['100 − Sperrquote', dis != null ? 100 - dis * 100 : null], ['100 − Energie niedrig', low != null ? 100 - low * 100 : null], ['100 − leere Stationen', emp != null ? 100 - emp * 100 : null], ['Quellenqualität', r.quality]].filter(x => x[1] != null);
     const score = named.length ? Math.round(named.reduce((a, x) => a + x[1], 0) / named.length) : null;
     const how = named.length ? `${named.map(([l, v]) => `${l} ${fmt(v)}`).join(' · ')} → je ${fmt(100 / named.length)} % Gewicht` : '';
-    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${low == null ? 'k. A.' : `${e.rel ? '≈ ' : ''}${pctf(e.low, e.n)}`}</td><td class="n"${emp == null ? '' : ` title="${esc(emptyTip(s))}"`}>${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${esc(r.quality ?? '—')}</td><td class="n" title="${esc(how)}"><b>${score ?? '—'}</b><div class="sub-line">${named.length} Teilwerte</div></td></tr>`; }).join('') || emptyRow(8, 'Keine Anbieter im Filter.', 'Gebiet mit Angebot wählen.');
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${e.pending ? '…' : low == null ? 'k. A.' : energyVal(e)}</td><td class="n"${emp == null ? '' : ` title="${esc(emptyTip(s))}"`}>${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${esc(r.quality ?? '—')}</td><td class="n" title="${esc(how)}"><b>${score ?? '—'}</b><div class="sub-line">${named.length} Teilwerte</div></td></tr>`; }).join('') || emptyRow(8, 'Keine Anbieter im Filter.', 'Gebiet mit Angebot wählen.');
   // Städtevergleich
   const munis = state.latest?.municipalities || {};
   const src = new Map(Object.entries(state.latest?.groups || {})); // Gebietsvergleich immer aus dem Sammler-Stand (vollständig)
@@ -1003,7 +1037,13 @@ function histBaseline(ags, op) {
 function computeSignals() {
   const groups = scopeGroups(); const munis = state.latest?.municipalities || {};
   const by = new Map();
-  for (const [k, s] of groups) { const [ags, op] = k.split('|'); const key = `${ags}|${op}`; by.set(key, [...(by.get(key) || []), s]); }
+  const ebk = new Map(); // Energie je Gemeinde|Anbieter (Einzelfahrzeuge, Regel energyLow)
+  for (const [k, s] of groups) {
+    const [ags, op] = k.split('|'); const key = `${ags}|${op}`; by.set(key, [...(by.get(key) || []), s]);
+    const g = groupEnergy(k, s), e = ebk.get(key) || { ...R.emptyEnergy(), pending: false, approx: false };
+    if (g.pending) e.pending = true; else { if (g.approx) e.approx = true; for (const f of ['known', 'low', 'rangeOnly', 'rangeOnlyLow']) e[f] += g[f] || 0; }
+    ebk.set(key, e);
+  }
   const out = [];
   const place = (ags) => state.scope === 'DE' ? ` · ${munis[ags]?.name || ags}` : '';
   const daily = state.daily || null, today = BERLIN_DAY.format(state.latest?.at || Date.now());
@@ -1013,11 +1053,12 @@ function computeSignals() {
     // Tagesmittel der Vortage, wo vorhanden; Stationen (nicht in daily.json) und alter Datenstand: Mittel des Tages bisher
     const base = { disabled: db?.disabled ?? hb?.disabled, low: db?.low ?? hb?.low, emptyDock: db?.emptyDock ?? hb?.emptyDock, src: db ? 'Vortage' : 'Tag', srcSt: db?.emptyDock != null ? 'Vortage' : 'Tag' };
     if (s.total >= 5 && s.disabled / s.total >= 0.25) { const sv = severity(s.disabled / s.total, base.disabled, base.src); out.push({ cat: 'disabled', sev: sv.sev, w: s.disabled, n: fmt(s.disabled), title: `${op}${place(ags)}: ${fmt(s.disabled)} gesperrt (${pctf(s.disabled, s.total)})`, text: 'Der Feed markiert Fahrzeuge als nicht nutzbar. Ein konkreter Wartungsauftrag ist daraus nicht ableitbar.', foot: `Gemeldetes is_disabled / Stationsfeld · ${sv.foot}` }); }
-    if (!rangeOnly(op) && s.batteryKnown >= 5 && s.lowBattery / s.batteryKnown >= 0.3) { const sv = severity(s.lowBattery / s.total, base.low, base.src); out.push({ cat: 'energy', sev: sv.sev, w: s.lowBattery, n: pctf(s.lowBattery, s.batteryKnown), title: `${op}${place(ags)}: ${pctf(s.lowBattery, s.batteryKnown)} niedrige Energie`, text: `${fmt(s.lowBattery)} von ${fmt(s.batteryKnown)} Fahrzeugen mit Energieangabe. Möglicher Ladebedarf.`, foot: `Ladestand / Reichweite · Arbeitsauftrag nicht bestätigt · ${sv.foot}` }); }
-    else if (rangeOnly(op) && s.rangeKnown >= 5) {
-      // Quelle ohne Ladestand (nur Reichweite, z. B. Lime): relative Schwelle des Sammlers statt fester 5 km bzw. abgeleitetem Ladestand
-      const rel = lowRangeRel(op);
-      if (rel && rel.low / rel.n >= 0.3) out.push({ cat: 'energy', sev: 'info', w: rel.low, n: pctf(rel.low, rel.n), title: `${op}${place(ags)}: ${pctf(rel.low, rel.n)} Reichweite unter 25 % des Üblichen`, text: `${fmt(rel.low)} von ${fmt(rel.n)} Fahrzeugen der Quelle liegen unter einem Viertel der üblichen Reichweite (95. Perzentil je Quelle). Kein Ladestand im Feed.`, foot: 'Reichweite relativ zur Quelle · ohne Vergleichswert' });
+    // Energie niedrig: feste Regel für alle Anbieter (auch Lime über die Reichweite), wie Kacheln und Disposition. Die Stufe misst die
+    // Abweichung vom Vortagesmittel am Ladestand-Anteil am Bestand – die Tageswerte (history/daily.json) kennen nur diesen Zähler.
+    const e = ebk.get(key);
+    if (!e.pending && e.known >= 5 && e.low / e.known >= 0.3) {
+      const sv = severity(s.total ? s.lowBattery / s.total : 0, base.low, base.src); const ro = e.rangeOnly === e.known;
+      out.push({ cat: 'energy', sev: sv.sev, w: e.low, n: energyVal(e), title: `${op}${place(ags)}: ${energyVal(e)} niedrige Energie`, text: `${fmt(e.low)} von ${fmt(e.known)} Fahrzeugen mit Energieangabe: ${energyRule()}${ro ? ' (Feed meldet nur Reichweite: unter der Reichweiten-Grenze)' : e.rangeOnly ? `; ${fmt(e.rangeOnly)} nur mit Reichweite` : ''}. Möglicher Ladebedarf.`, foot: `Energie je Fahrzeug · Arbeitsauftrag nicht bestätigt · Trend am Ladestand-Anteil: ${sv.foot}` });
     }
     // Leer zählt nur effektiv: gemeldet leer und kein verfügbares Fahrzeug desselben Anbieters ≤ 50 m. Alarm nur für Docks; virtuelle Stationen getrennt (Vertrag 3)
     const nearM = C.STATION_NEAR_M ?? 50, nearN = s.stationsEmptyNearby || 0;
@@ -1813,7 +1854,7 @@ const METHOD = `
 <h3>Frische</h3><p>Der Sammler bewertet jeden Feed beim Lauf: bis fünf Minuten Alter aktuell, bis 30 Minuten verzögert, darüber veraltet (Spalte „Status“ unter Einzelquellen). Die Übersicht zeigt das Datenalter <em>jetzt</em> – Feedalter bei der Messung plus Zeit seit dem Lauf – mit einer Definition für Kachel, Tabelle und Ampel: aktuell bis 30 Minuten (Sammler-Takt 20 Minuten plus 10), verzögert bis 60 Minuten, darüber veraltet. Veraltete und zeitlich unklare Quellen fließen nicht in Kennzahlen ein, bleiben aber als Lücke sichtbar. Positionsalter (je Fahrzeug) und Quellenalter (je Feed) sind getrennte Merkmale.</p>
 <h3>Geo-Prüfung und Ortszuordnung</h3><p>Zahlenformate werden normalisiert, eindeutig vertauschte Breiten- und Längengrade korrigiert. Fehlt ein Koordinatenpaar, dient eine referenzierte Stationsposition als gekennzeichneter Ersatz. Positionen außerhalb Deutschlands oder ohne Gemeinde bleiben außen vor. Die Gemeinde ergibt sich aus GPS und BKG-Gemeindegrenze (VG250, vereinfacht ca. 30 m); ein Sammelfeed kann mehrere Orte beliefern. Die Anbieterauswahl folgt der tatsächlichen GPS-Abdeckung des gewählten Orts.</p>
 <h3>Dubletten und Quellenwechsel</h3><p>Fahrzeuge desselben Anbieters werden über alle Quellen zusammengeführt: UUIDs und Quellenpräfixe werden vereinheitlicht, der jüngste Stand gewinnt, bei Gleichstand die direkte Position vor dem Stationsersatz. Gleiche Kennungen an weit entfernten Positionen (über 300 m) bleiben als Prüffälle erhalten. Stationen gelten als gleich bei gleicher Kennung oder gleichem Namen innerhalb von 60 m. Ein Fingerabdruck aus Endpunkt, Version, Feeds und Fahrzeugarten erkennt Quellenwechsel; danach beginnen Zeitvergleiche neu.</p>
-<h3>Energie</h3><p>Ladestand und Reichweite haben getrennte Nenner; gezählt werden nur Fahrzeuge mit der jeweiligen Angabe. Fehlt der Ladestand, wird er bei bekannter Maximalreichweite aus der Reichweite abgeleitet. Für Anbieter, die nur Reichweite melden (Lime), gilt „Energie niedrig“ relativ zur Quelle: unter einem Viertel des 95. Perzentils ihrer Reichweiten. Alarme werden nach der Abweichung vom Mittel der Vortage (sonst des Tages bisher) gestuft: ab 5 Punkten darüber auffällig, ab 15 kritisch, ein dauerhaft hoher Anteil bleibt ein Hinweis. Grenzen lassen sich unter Marktbild › Leistung einstellen und gelten im Live-Abruf; der Sammler rechnet mit 20 % und 5 km.</p>
+<h3>Energie</h3><p>„Energie niedrig“ folgt überall derselben Regel wie die Disposition: Ladestand unter 20 % <i>und</i> Reichweite unter 5 km, wo ein Feed beides meldet; meldet er nur eines, entscheidet dieses. Anbieter, die nur Reichweite melden (Lime), zählen über die Reichweite unter 5 km; ihr aus Reichweite ÷ Maximalreichweite abgeleiteter Ladestand zählt nicht. Nenner sind die Fahrzeuge mit Energieangabe, gesperrte eingeschlossen; gezählt wird je Fahrzeug aus dem Sammler-Stand (bzw. dem Live-Abruf). Alarme ab 30 % niedriger Energie werden nach der Abweichung vom Mittel der Vortage (sonst des Tages bisher) gestuft, gemessen am Ladestand-Anteil, den die Tageswerte führen: ab 5 Punkten darüber auffällig, ab 15 kritisch, ein dauerhaft hoher Anteil bleibt ein Hinweis. Grenzen lassen sich unter Marktbild › Leistung einstellen und gelten im Live-Abruf; der Sammler rechnet mit 20 % und 5 km.</p>
 <h3>Verlauf</h3><p>Der Sammler läuft alle 20 Minuten unabhängig vom Browser (GitHub Actions) und speichert bereinigte Summen je Gemeinde, Anbieter und Fahrzeugart für 30 Tage. Individuelle Fahrzeugwege werden nicht archiviert. Der Live-Abruf im Browser liest die offenen Feeds direkt; Zugangsquellen (MOBIDROM NRW) kommen als Momentaufnahme des letzten Sammler-Laufs. Δ Sammler vergleicht den Live-Stand mit dem letzten Sammler-Punkt desselben Quellen-Fingerabdrucks.</p>
 <h3>Qualität</h3><p>Der Qualitätswert einer Quelle beurteilt Frische (70 %) und vorhandene Merkmale wie Energie, Zeitstempel und Fahrzeugart (30 %). Er bewertet die Quelle, nicht den Betrieb des Unternehmens. Gesperrte Fahrzeuge, leere Stationen und Niedrigakku sind Hinweise aus dem Feed; was ein Betreiber gerade bearbeitet, ist ohne internen Zugang nicht bekannt.</p>
 <h3>Nutzung und Bewegung</h3><p>Der Sammler merkt sich je Fahrzeug eine gehashte Kennung mit gerundeter Position, Ladestand und Sperrstatus. Verschwindet eine Kennung zwischen zwei Läufen, zählt das als Fahrtbeginn (bei gesperrtem oder fast leerem Fahrzeug als Abholung); eine neue Kennung zählt als Fahrtende. GBFS schreibt vor, Kennungen nach jeder Fahrt zu wechseln, deshalb sind das Zählungen ohne Zuordnung von Start zu Ziel. Bei Systemen mit stabilen Kennungen (etwa stationsbasierte Räder) kehrt die Kennung zurück; dann sind Dauer und Luftlinien-Distanz messbar und werden als Ø ausgewiesen.</p>
@@ -1985,7 +2026,8 @@ function exportCsv() {
   const rows = operatorRows(); const head = ['Anbieter', 'Gebiet', 'Verfuegbar', 'Gemeldet', 'Gesperrt', 'Reserviert', 'EnergieNiedrig', 'MitEnergieangabe', 'Stationen', 'LeereStationen', 'Status', 'Datenalter_min', 'Quellen', 'Lizenz'];
   // Zellen, die mit = + - @ (oder Tab/CR) beginnen, würden in Tabellenprogrammen als Formel laufen: Text mit ' davor
   const cell = (v) => { let s = String(v ?? ''); if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`; return `"${s.replace(/"/g, '""')}"`; };
-  const lines = rows.map(r => [r.op, scopeLabel(), r.st.available, r.st.total, r.st.disabled, r.st.reserved, r.st.lowBattery, r.st.batteryKnown, r.st.stations, r.st.stationsEmpty, STATUS[r.status] || r.status, r.age == null ? '' : Math.round(r.age / 60e3), r.dirs.map(d => DIRS[d] || d).join('|'), r.license || ''].map(cell).join(';'));
+  const en = (op) => { const e = energyOfOp(op); return e.pending ? ['', ''] : [e.low, e.known]; }; // Energie niedrig nach energyLow (wie Kacheln und Disposition)
+  const lines = rows.map(r => [r.op, scopeLabel(), r.st.available, r.st.total, r.st.disabled, r.st.reserved, ...en(r.op), r.st.stations, r.st.stationsEmpty, STATUS[r.status] || r.status, r.age == null ? '' : Math.round(r.age / 60e3), r.dirs.map(d => DIRS[d] || d).join('|'), r.license || ''].map(cell).join(';'));
   const blob = new Blob(['﻿' + [head.join(';'), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `mobility-pulse_${state.scope}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
@@ -2014,7 +2056,7 @@ async function init() {
     state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = REQ.get('boundaries-active.json'); resetCache(); if (keepB && state.bIndex) REQ.set('boundaries-active.json', keepB); // Grenzen ändern sich nicht je Lauf
-    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.();
+    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.();
     const hi = await cached('history/index.json', 25000); if (hi.ok) state.histIndex = hi.json;
     populateScope(); populateOperators(); clearNotice('stale'); renderAll();
   }, 2 * 60e3);

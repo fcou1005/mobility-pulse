@@ -220,8 +220,11 @@
     "cottbus",
     "schwerin",
     "weimar",
-    "greifswald"
-   ]
+    "greifswald",
+    "nuremberg",
+    "brunswick"
+   ],
+   "_comment_slugs": "Dott-Schreibweisen laut MobilityData systems.csv: nuremberg, brunswick (alte Schreibweisen bleiben als Kandidaten; antworten am 01.11.2026 alle mit 4xx)."
   },
   "lime": {
    "operator": "Lime",

@@ -36,10 +36,17 @@ assert(sp.spots[0].cell === cellAt(0, 0), 'Rang 1 = Zelle mit höchster Nachfrag
 let minD = Infinity; for (let a = 0; a < sp.spots.length; a++) for (let b = a + 1; b < sp.spots.length; b++) minD = Math.min(minD, O.dist(sp.spots[a], sp.spots[b]));
 assert(minD >= 400, `Mindestabstand eingehalten (${Math.round(minD)} m)`);
 assert(sp.spots.every(s => s.stability >= 0 && s.stability <= 1), 'Stabilität 0…1');
-assert(sp.spots[0].target === Math.max(2, Math.ceil(4 * 0.5 * 3)), 'Ziel = ceil(Starts/h × Anteil × 3 h)');
-assert(sp.activeFactors.join() === 'demand,underserved', 'ohne ÖPNV/Abstellflächen nur zwei Faktoren aktiv');
+// Zentrum Band Mittag: 12 Starts, 10 Enden in 3 h, Anteil 0,5 → Starts 2/h, Enden 1,67/h, Netto 0,33/h; Bedarf = 0,33 × 3 h + 2 × 1 h = 3
+{
+  const s = sp.spots[0];
+  assert(s.starts === 12 && s.ends === 10 && s.hours === 3 && s.startsPerHourOp === 2 && s.endsPerHourOp === 1.67 && s.outPerHourOp === 0.33, `Spot 1: Starts/Enden gezählt (12/10 in 3 h), Anbieter ${s.startsPerHourOp}/${s.endsPerHourOp}/${s.outPerHourOp} je h`);
+  assert(s.base === 2 && s.drain === 1 && s.needRaw === 3 && s.target === 3, `Bedarf = Netto-Abfluss × Horizont + Grundbestand = ${s.drain} + ${s.base} = ${s.needRaw} → ${s.target}`);
+  assert(Math.abs(s.outSeOp - Math.sqrt(22) / 3 * 0.5) < 0.006, `Standardfehler Netto ${s.outSeOp} = √(12 + 10) ÷ 3 h × 0,5`);
+}
+assert(sp.activeFactors.join() === 'outflow,demand', 'ohne ÖPNV/Abstellflächen zwei Faktoren aktiv: Netto-Abfluss, Nachfrage');
+assert(sp.perturbations === 4 && sp.prelim === true && sp.hours === 3, 'Sensitivität: 2 Faktoren × ±20 % = 4 Varianten; 3 Messstunden → vorläufig');
 const wsum = sp.activeFactors.reduce((s, k) => s + sp.weights[k], 0);
-assert(Math.abs(O.AHP.weights.demand + O.AHP.weights.underserved + O.AHP.weights.transit + O.AHP.weights.parking - 1) < 1e-3 && wsum > 0, 'AHP-Gewichte summieren auf 1');
+assert(Math.abs(O.AHP.weights.outflow + O.AHP.weights.demand + O.AHP.weights.transit + O.AHP.weights.parking - 1) < 1e-3 && wsum > 0, 'AHP-Gewichte summieren auf 1');
 // Abstellverbot: Polygon um das Zentrum → Rang 1 darf dort nicht liegen
 const [clat, clon] = cellCenter(cellAt(0, 0));
 const sq = (lat, lon, d) => ({ type: 'Polygon', coordinates: [[[lon - d, lat - d], [lon + d, lat - d], [lon + d, lat + d], [lon - d, lat + d], [lon - d, lat - d]]] });
@@ -274,4 +281,121 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const mix = [V(clat, clon, { battery: 15, rangeKm: 3 }), V(clat, clon + 0.001, { battery: 15, rangeKm: 9 }), V(clat, clon + 0.002, { battery: 30, rangeKm: 2 })];
   const swr = O.planSwaps({ vehicles: mix, model: m, depot, swapThreshold: 20, swapRangeKm: 5 });
   assert(swr.below === 1, 'Akkutausch-Plan: nur das Fahrzeug, das beide Schwellen unterschreitet');
+}
+
+// --- AHP neu: Netto-Abfluss, Nachfrage, ÖPNV, Abstellfläche (Nutzerwunsch 01.11.2026: Nachfrage mit Zahlen)
+{
+  const A = O.AHP;
+  assert(A.criteria.join() === 'outflow,demand,transit,parking' && !('underserved' in A.weights), 'Kriterien: Netto-Abfluss ersetzt Unterversorgung');
+  // Referenz: skills/mcda-suitability-analysis/scripts/ahp_weights.py (numpy-Eigenvektor) → 0,5183 / 0,2839 / 0,0989 / 0,0989, CR 0,0015
+  assert(A.weights.outflow === 0.5183 && A.weights.demand === 0.2839 && A.weights.transit === 0.0989 && A.weights.parking === 0.0989, `AHP-Gewichte wie Referenz (${Object.values(A.weights).join(' / ')})`);
+  assert(A.cr < 0.10 && Math.abs(A.cr - 0.0015) < 0.0002 && Math.abs(A.lambdaMax - 4.0042) < 0.0005, `Konsistenzquote CR = ${A.cr} < 0,10 (λmax = ${A.lambdaMax})`);
+  const bad = O.ahpWeights([[1, 9, 1 / 9], [1 / 9, 1, 9], [9, 1 / 9, 1]]);
+  assert(bad.cr >= 0.10, `zirkuläre Urteile (A > B > C > A): CR = ${bad.cr.toFixed(2)} ≥ 0,10 wird erkannt`);
+  let threw = false; try { O.ahpWeights([[1, 3], [3, 1]]); } catch { threw = true; }
+  assert(threw, 'nicht reziproke Matrix wird abgelehnt');
+}
+// --- Netto-Abfluss entscheidet: viele Starts ohne Rückkehr schlagen hohen, ausgeglichenen Umschlag
+{
+  const munis = { [AGS]: {} }, cA = cellAt(-3, -3), cB = cellAt(3, 3), cC = cellAt(0, 3);
+  const put = (cell, st, en) => { const c = new Array(22).fill(0); c[4 + 2] = st; c[16 + 2] = en; c[10 + 2] = 4 * 9; c[0] = st; c[1] = en; munis[AGS][cell] = c; };
+  put(cA, 60, 60); // 20 Starts/h, 20 Enden/h: ausgeglichen
+  put(cB, 30, 0);  // 10 Starts/h, keine Rückkehr: Abfluss 10/h
+  put(cC, 3, 15);  // Zufluss: 1 Start/h, 5 Enden/h
+  const doc = { day: '2026-11-01', bandMin: [0, 0, 180, 0, 0, 0], bandRuns: [0, 0, 9, 0, 0, 0], munis };
+  const md = O.buildDemandModel([doc], AGS, 2);
+  assert(md.cells.get(cA).outPerHour === 0 && md.cells.get(cB).outPerHour === 10 && md.cells.get(cC).outPerHour === -4 && md.dayHours['2026-11-01'] === 3, 'Netto-Abfluss je Zelle = (Starts − Enden) ÷ Messstunden (0 / 10 / −4 je h)');
+  const r = O.scoreSpots(md, { topN: 3, minSpacingM: 100, share: 1, horizonH: 2 });
+  const byCell = Object.fromEntries(r.spots.map(s => [s.cell, s]));
+  assert(byCell[cB].rank === 1 && byCell[cA].rank === 2, `Rang 1 = Zelle mit Abfluss (Score ${byCell[cB].score}) vor ausgeglichener Zelle mit doppelter Nachfrage (${byCell[cA].score})`);
+  assert(byCell[cB].target === 15 && byCell[cB].needRaw === 30 && byCell[cB].capped === true, `Abfluss 10/h × 2 h + Grundbestand 10 = ${byCell[cB].needRaw} → auf 15 begrenzt`);
+  assert(byCell[cA].drain === 0 && byCell[cA].target === 15 && byCell[cA].base === 20, 'ausgeglichene Zelle: nur Grundbestand (Starts einer Stunde)');
+  assert(byCell[cC].drain === 0 && byCell[cC].factors.outflow === 0 && byCell[cC].target === 2, 'Zufluss: Faktor Netto-Abfluss 0, Bedarf = Grundbestand 1 → Mindestwert 2');
+  assert(r.rho !== null && Math.abs(r.rho) <= 1, `Rangkorrelation Nachfrage/Netto-Abfluss berichtet (ρ = ${r.rho})`);
+  // Sensitivität ±20 % bleibt: B bleibt in allen Varianten vorn
+  assert(byCell[cB].stability === 1 && byCell[cB].stabilityLabel === 'stabil', 'Sensitivität ±20 %: Abfluss-Spot stabil');
+  // needOf: Zelle ohne Messung → nichts
+  const z = O.needOf(undefined, 1);
+  assert(z.raw === 0 && z.target === 2, 'needOf ohne Zelle: rechnerisch 0, Mindestwert 2');
+  // Spearman: perfekte und gegenläufige Ränge
+  assert(O.spearman([1, 2, 3, 4], [10, 20, 30, 40]) === 1 && O.spearman([1, 2, 3, 4], [4, 3, 2, 1]) === -1, 'Spearman ±1');
+}
+// --- Ströme (flows/<Tag>.json) belegen Abfluss/Zufluss
+{
+  const cX = cellAt(0, 0), cY = cellAt(1, 1), cZ = cellAt(2, 2);
+  const md = O.buildDemandModel([{ ...cellsDoc(), day: '2026-11-02' }], AGS, 3);
+  const fdoc = { day: '2026-11-02', fields: ['gemeinde', 'von', 'nach', 'anbieter', 'art', 'band', 'anzahl', 'dauer_s', 'luftlinie_m'], munis: { [AGS]: { trips: 14, shown: 12, below: 2, cut: 0 } },
+    flows: [[AGS, cX, cY, 'Bolt', 'scooter', 3, 5, 900, 3000], [AGS, cX, cZ, null, null, null, 4, 600, 2000], [AGS, cY, cX, 'Bolt', 'scooter', 3, 2, 300, 1000], [AGS, cX, cX, 'Bolt', 'scooter', 3, 9, 100, 200], ['09162000', cX, cY, 'Bolt', 'scooter', 3, 7, 1, 1]] };
+  O.attachFlows(md, [fdoc, { day: '2026-11-03', munis: { [AGS]: {} }, flows: [] }]);
+  const fx = md.cells.get(cX).flow, fy = md.cells.get(cY).flow;
+  assert(fx.out === 5 && fx.in === 2 && fy.out === 2 && fy.in === 5, 'Ströme Band Mittag: X 5 ab / 2 an, Y 2 ab / 5 an (gleiche Zelle und andere Gemeinde zählen nicht)');
+  assert(md.flow.days === 1 && md.flow.hours === 3 && md.flow.trips === 7 && md.flow.noBand === 4 && md.flow.below === 2, 'nur Tage mit Messstunden; Zeile ohne Band (4) nur ganztags; 2 Fahrten unter Mindestschwelle ausgewiesen');
+  const mdDay = O.attachFlows(O.buildDemandModel([{ ...cellsDoc(), day: '2026-11-02' }], AGS, 'day'), [fdoc]);
+  assert(mdDay.cells.get(cX).flow.out === 9 && mdDay.flow.noBand === 0, 'ganzer Tag: Zeile ohne Band zählt mit (9 ab)');
+  const sx = O.scoreSpots(md, { topN: 3, minSpacingM: 100 }).spots.find(s => s.cell === cX);
+  assert(sx.flow.out === 5 && sx.flow.in === 2, 'Spot trägt den Strom-Beleg');
+}
+// --- Umsetz-Touren nach Fehlmenge priorisiert
+{
+  const D2 = { lat: 48.50, lon: 9.00 };
+  const spotsP = [{ rank: 1, cell: 'a', lat: 48.52, lon: 9.05, score: 0.9, target: 3 }, { rank: 2, cell: 'b', lat: 48.53, lon: 9.07, score: 0.5, target: 9 }];
+  const cellsP = new Map();
+  const pool = [...Array(4)].map((_, i) => V(48.525 + i * 1e-4, 9.06, { idleMin: 3000 })); // 4 Überschuss-Fahrzeuge zwischen beiden Spots
+  const rp = O.planRebalance({ spots: spotsP, vehicles: pool, model: { cells: cellsP }, depot: D2, vanCapacity: 20 });
+  const toB = rp.runs.flatMap(r => r.stops).filter(s => s.type === 'drop' && s.spotRank === 2).reduce((s, x) => s + x.count, 0);
+  assert(rp.moves === 4 && toB === 4, `knapper Überschuss geht an den Spot mit der größten Fehlmenge (9 vor 3, trotz niedrigerem Score): ${toB} von 4`);
+  const drop = rp.runs[0].stops.find(s => s.type === 'drop');
+  assert(drop.need === 9 && drop.have === 0 && rp.runs[0].prio === 9, 'Ausbring-Stopp nennt Bedarf, Bestand und Fehlmenge');
+  // zwei Touren mit Kapazität 2, nur eine erlaubt: die eine Tour bedient den Spot mit der größten Fehlmenge
+  const far2 = [{ rank: 1, cell: 'c', lat: 48.60, lon: 9.20, score: 0.9, target: 2 }, { rank: 2, cell: 'd', lat: 48.40, lon: 8.80, score: 0.4, target: 6 }];
+  const poolC = [V(48.6045, 9.20, { idleMin: 3000 }), V(48.6046, 9.20, { idleMin: 3000 }), V(48.4045, 8.80, { idleMin: 3000 }), V(48.4046, 8.80, { idleMin: 3000 })]; // je 500 m neben den Spots
+  const one = O.planRebalance({ spots: far2, vehicles: poolC, model: { cells: new Map() }, depot: D2, vanCapacity: 2, maxRuns: 1 });
+  assert(one.runs.length === 1 && one.runs[0].stops.filter(s => s.type === 'drop').every(s => s.spotRank === 2), 'nur eine Tour möglich: sie fährt zum Spot mit Fehlmenge 6 (nicht zum weiter entfernten mit 2)');
+  const two = O.planRebalance({ spots: far2, vehicles: poolC, model: { cells: new Map() }, depot: D2, vanCapacity: 2, maxRuns: 2 });
+  assert(two.runs[0].id === 'R1' && two.runs[0].prio === 6 && two.runs[1].prio === 2, 'R1 = Tour zur größten Fehlmenge');
+  const rc = O.runsCsv(two.runs, D2);
+  assert(/Spot 2 \(Bedarf 6, Bestand 0, Fehlmenge 6\)/.test(rc), 'Touren-CSV nennt Bedarf, Bestand, Fehlmenge');
+}
+// --- Analyse-CSV mit allen Zahlen
+{
+  const csvA = O.spotsAnalysisCsv(sp.spots, plan.needs).split('\n');
+  const head = csvA[0].split(';'), row = csvA[1].split(';'), at = (k) => row[head.indexOf(k)];
+  assert(head.join() === O.SPOTS_ANALYSIS_FIELDS.join() && head.includes('netto_abfluss_je_h_anbieter') && head.includes('fehlmenge') && !head.includes('f_unterversorgung'), 'Analyse-CSV: Netto-Abfluss, Bedarf, Fehlmenge statt Unterversorgung');
+  assert(at('starts_markt') === '12' && at('enden_markt') === '10' && at('messstunden') === '3' && at('bedarf_fzg') === '3' && at('grundbestand') === '2' && at('abfluss_im_horizont') === '1', 'Analyse-CSV: Zahlen von Spot 1');
+}
+// --- CSV-Formelschutz
+{
+  assert(O.csvCell('=HYPERLINK("x")') === `"'=HYPERLINK(""x"")"` && O.csvCell('@SUM(A1)') === "'@SUM(A1)" && O.csvCell('+1+2') === "'+1+2" && O.csvCell('-2+3') === "'-2+3", 'Formel-Schutz: = @ + - am Anfang bekommen ein führendes Hochkomma');
+  assert(O.csvCell('-0.123456') === '-0.123456' && O.csvCell(-3) === '-3' && O.csvCell('a;b') === '"a;b"' && O.csvCell(null) === '' && O.csvCell('Zeile\nzwei') === '"Zeile\nzwei"', 'Zahlen bleiben, Trennzeichen/Zeilenumbruch gequotet');
+  assert(O.spotsAnalysisCsv([{ ...sp.spots[0], park: { cat: 'escooter', name: '=cmd|calc' } }]).split('\n')[1].endsWith(";escooter =cmd|calc"), 'Abstellflächen-Name mitten im Feld bleibt Text');
+}
+// --- Vermutete Deploy-Spots: Orte aus Gruppen-Ereignissen (Monatsdateien), Filter, Sortierung, CSV
+{
+  const F = O.GROUP_FIELDS, t = Date.parse('2026-10-20T08:00:00Z'), dLat = (m) => m / 111320;
+  const e = (dt, kind, op, lat, lon, n, ags = AGS) => [t + dt * 3600e3, kind, op, ags, lat, lon, n, { scooter: n }];
+  const oct = { month: '2026-10', fields: F, events: [e(0, 'deploy', 'Dott', 48.5, 9.05, 6), e(24, 'deploy', 'Dott', 48.5 + dLat(40), 9.05, 4), e(48, 'deploy', 'Dott', 48.5 + dLat(200), 9.05, 8), e(1, 'collect', 'Dott', 48.5, 9.05, 5), e(2, 'deploy', 'Bolt', 48.5, 9.05, 4), e(3, 'deploy', 'Dott', 48.6, 9.1, 9, '08111000')] };
+  const nov = { month: '2026-11', fields: F, events: [e(24 * 13, 'deploy', 'Dott', 48.5 + dLat(20), 9.05, 5)] };
+  const g = O.groupPlaces([oct, nov, { fields: F, events: [oct.events[0]] }], { ags: AGS }); // groups.json-Kopie eines Ereignisses zählt nicht doppelt
+  const dott = g.deploy.filter(p => p.op === 'Dott');
+  assert(g.events.deploy === 5 && g.events.collect === 1 && g.ops.join() === 'Bolt,Dott', `Ereignisse der Gemeinde über Monate, Dublette einmal (${g.events.deploy} Ausbringungen, 1 Einsammeln)`);
+  assert(dott.length === 2 && dott[0].count === 3 && dott[0].vehicles === 15 && Math.abs(dott[0].avg - 5) < 1e-9 && dott[1].count === 1, 'Ausbringungen ≤ 60 m zusammengefasst (3×, Ø 5 Fzg.), 200 m entfernt eigener Ort');
+  assert(g.deploy.some(p => p.op === 'Bolt' && p.count === 1) && g.collect.length === 1, 'Anbieter und Art getrennt');
+  assert(dott[0].first === t && dott[0].last === t + 24 * 13 * 3600e3, 'erstmals/zuletzt über Monatsgrenze');
+  const label = (p) => p.op === 'Bolt' ? 'Am Anger' : p.count === 3 ? 'Marktplatz · Altstadt' : 'Bahnhofstraße';
+  assert(O.filterPlaces(g.deploy, { q: 'marktpl' }, label).length === 1 && O.filterPlaces(g.deploy, { q: 'BAHNHOFSTRASSE' }, label).length === 1 && O.filterPlaces(g.deploy, { q: 'dott 48.50' }, label).length === 2, 'Textfilter Lage: Teilwort, ohne Groß-/Kleinschreibung, ß = ss');
+  assert(O.filterPlaces(g.deploy, { op: 'Bolt' }).length === 1 && O.filterPlaces(g.deploy, { op: 'all' }).length === 3, 'Filter Anbieter');
+  assert(O.filterPlaces(g.deploy, { countMin: 2 }).length === 1 && O.filterPlaces(g.deploy, { countMax: 1 }).length === 2 && O.filterPlaces(g.deploy, { avgMin: 5, avgMax: 5 }).length === 1 && O.filterPlaces(g.deploy, { avgMin: 8 }).length === 1, 'Bereichsfilter Ausbringungen und Ø Fahrzeuge');
+  assert(O.filterPlaces(g.deploy, { from: '2026-11-01' }).length === 1 && O.filterPlaces(g.deploy, { to: '2026-10-20' }).length === 1 && O.filterPlaces(g.deploy, { from: '2026-10-22', to: '2026-10-22' }).length === 1, 'Zeitraum zuletzt (Tag, Grenzen einschließlich)');
+  const near = (p) => ({ rank: 1, d: O.dist(p, { lat: 48.5, lon: 9.05 }) });
+  assert(O.sortPlaces(g.deploy, 'count', 'asc')[0].count === 1 && O.sortPlaces(g.deploy, 'count', 'desc')[0].count === 3 && O.sortPlaces(g.deploy, 'near', 'desc', { nearOf: near })[0].count === 1 && O.sortPlaces(g.deploy, 'lage', 'asc', { labelOf: label })[0].op === 'Bolt', 'Sortierung je Spalte (Anzahl, Abstand, Lage)');
+  const csv = O.placesCsv(O.sortPlaces(g.deploy, 'count'), { labelOf: (p) => p.op === 'Bolt' ? '=HYPERLINK("evil")' : 'Markt; Ecke', nearOf: near }).split('\n');
+  assert(csv[0] === O.PLACES_FIELDS.join(';') && csv.length === 4 && csv[1].startsWith('Ausbringen;Dott;"Markt; Ecke";') && csv.some(l => l.includes(`"'=HYPERLINK(""evil"")"`)), 'CSV der gefilterten Zeilen mit Formel-Schutz und Quoting');
+  assert(/;2026-10-20 10:00;2026-11-02 09:00;scooter 15;1;\d+$/.test(csv[1]), `CSV: erstmals/zuletzt in Ortszeit, Arten, nächster Spot (${csv[1].split(';').slice(-5).join(';')})`);
+  // groups.json (Rückfall, ein Dokument) geht genauso
+  assert(O.groupPlaces({ fields: F, events: oct.events }, { ags: AGS }).deploy.length === 3, 'groups.json als einzelnes Dokument');
+  // Leistung: 20.000 Ereignisse über 2 km² in < 400 ms
+  let seed = 3; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const big = { fields: F, events: [...Array(20000)].map((_, i) => e(i / 10, rnd() < 0.7 ? 'deploy' : 'collect', rnd() < 0.5 ? 'Dott' : 'Voi', 48.5 + rnd() * 0.012, 9.05 + rnd() * 0.017, 4 + Math.floor(rnd() * 6))) };
+  const t0 = performance.now(); const gb = O.groupPlaces(big, { ags: AGS }); const ms = performance.now() - t0;
+  assert(gb.events.deploy + gb.events.collect === 20000 && ms < 400, `20.000 Ereignisse → ${gb.deploy.length + gb.collect.length} Orte in ${ms.toFixed(0)} ms`);
 }

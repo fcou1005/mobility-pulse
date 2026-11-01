@@ -2,9 +2,9 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvxwjvvw';
-import * as K from './pulse-calib.js?v=mvxwjvvw';
-import { VEHICLE_TYPE_LABEL as TYPE } from './pulse-core.js?v=mvxwjvvw';
+import * as R from './pulse-report.js?v=mvxyn4sh';
+import * as K from './pulse-calib.js?v=mvxyn4sh';
+import { VEHICLE_TYPE_LABEL as TYPE } from './pulse-core.js?v=mvxyn4sh';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -82,6 +82,7 @@ export const SUSPENDED_TXT = R.SUSPENDED;
 export const calibLabel = (k) => (k?.applied ? `Berlin ${k.quarter}${k.prelim ? ' · vorläufig' : ''}` : '');
 
 // ---------- Stil (einmal in den head; nur Variablen aus index.html) ----------
+// Skala --rp-seq-0…8: Anteile 7/16/27/38/49/60/72/85/100 % Akzent in OKLab – dieselben Werte stehen in SEQ_P (Zellkarten auf Canvas)
 const CSS = `
 .rp-root{--rp-seq-0:color-mix(in oklab,var(--accent) 7%,var(--panel));--rp-seq-1:color-mix(in oklab,var(--accent) 16%,var(--panel));--rp-seq-2:color-mix(in oklab,var(--accent) 27%,var(--panel));--rp-seq-3:color-mix(in oklab,var(--accent) 38%,var(--panel));--rp-seq-4:color-mix(in oklab,var(--accent) 49%,var(--panel));--rp-seq-5:color-mix(in oklab,var(--accent) 60%,var(--panel));--rp-seq-6:color-mix(in oklab,var(--accent) 72%,var(--panel));--rp-seq-7:color-mix(in oklab,var(--accent) 85%,var(--panel));--rp-seq-8:var(--accent);
   --rp-na:repeating-linear-gradient(135deg,color-mix(in srgb,var(--muted) 34%,transparent) 0 1.5px,transparent 1.5px 6px)}
@@ -130,10 +131,18 @@ a.pick-cell{white-space:nowrap}
 .rp-fig{margin:0;min-width:0}.rp-fig figcaption{font-size:12.5px;font-weight:600;color:var(--fg);margin-bottom:var(--s1)}
 svg.rp-cellmap{display:block;width:100%;height:auto;max-height:340px;background:var(--panel-2);border-radius:var(--r-sm)}
 svg.rp-cellmap rect{fill:var(--rp-f)}svg.rp-cellmap rect.on{stroke:var(--fg);stroke-width:.18}
+div.rp-cellmap{height:clamp(260px,46vw,380px);border-radius:var(--r-sm);border:1px solid var(--line);overflow:hidden;z-index:0;background:var(--panel-2)}
+div.rp-cellmap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+div.rp-cellmap .leaflet-tile-pane{filter:grayscale(1) invert(1) brightness(.8) contrast(.88)}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) div.rp-cellmap .leaflet-tile-pane{filter:grayscale(1) contrast(.92) brightness(1.04)}}
+:root[data-theme="light"] div.rp-cellmap .leaflet-tile-pane{filter:grayscale(1) contrast(.92) brightness(1.04)}
+img.rp-cellmap-img{display:block;width:100%;height:auto;border-radius:var(--r-sm)}
+.rp-cellnote{margin:0 0 var(--s2)}
 .rp-status{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--fg);white-space:nowrap}
 .rp-status i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font:700 10px/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none}
 .rp-status.ok i{background:var(--ok)}.rp-status.near i{background:var(--warn)}.rp-status.over i{background:var(--bad)}
-.rp-status.unchecked i,.rp-status.unknown i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
+.rp-status.unchecked i,.rp-status.unknown i,.rp-status.none i,.rp-status.unlicensed i,.rp-status.info i,.rp-status.hint i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
+details.rp-capinfo{margin-top:var(--s3);font-size:12.5px;color:var(--fg-2)}details.rp-capinfo summary{cursor:pointer;color:var(--fg);font-weight:500}details.rp-capinfo ul{margin:var(--s2) 0 0;padding-left:1.2em;display:grid;gap:4px}
 .rp-meter{position:relative;height:8px;border-radius:4px;background:color-mix(in srgb,var(--rp-c,var(--accent)) 20%,var(--panel-2));min-width:80px}
 .rp-meter>i{display:block;height:100%;border-radius:4px;background:var(--rp-c,var(--accent))}
 .rp-meter>b{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:var(--fg)}
@@ -160,6 +169,7 @@ svg.rp-cellmap rect{fill:var(--rp-f)}svg.rp-cellmap rect.on{stroke:var(--fg);str
   .rp-print-root .rp-grid2{grid-template-columns:1fr}
   .rp-print-root .rp-head h2{font-size:20px}
   .rp-print-root svg.rp-cellmap{max-height:250px}
+  .rp-print-root img.rp-cellmap-img{max-height:260px;object-fit:contain}
   .rp-print-root a{color:inherit;text-decoration:none}
 }`;
 function injectStyle() {
@@ -172,7 +182,7 @@ function prep(el, ctx) { injectStyle(); el.classList.add('rp-root'); const s = s
 const head = (title, sub, right = '') => `<div class="panel-head"><div><h2>${title}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${right}</div>`;
 const tile = (l, v, s) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
 const emptyBox = (b, t) => `<div class="empty"><b>${b}</b>${t}</div>`;
-const STATUS = { ok: ['✓', 'ok'], near: ['!', 'nahe'], over: ['✕', 'über'], unchecked: ['?', 'nicht prüfbar'], unknown: ['–', 'ohne Grenze'] };
+const STATUS = { ok: ['✓', 'ok'], near: ['!', 'nahe'], over: ['✕', 'über'], unchecked: ['?', 'nicht prüfbar'], unknown: ['–', 'ohne Grenze'], hint: ['i', 'Hinweis (gerechnete Zahl)'], info: ['i', 'nur Information'], none: ['–', 'keine Grenze laut Quelle'], unlicensed: ['–', 'ohne Zulassung laut Quelle'] };
 const badge = (s) => `<span class="rp-status ${s}"><i aria-hidden="true">${STATUS[s][0]}</i>${STATUS[s][1]}</span>`;
 const safeLink = (ctx, url, label) => (/^https?:\/\//i.test(String(url || '')) ? `<a href="${ctx.esc(url)}" target="_blank" rel="noopener">${ctx.esc(label)}</a>` : ctx.esc(label));
 const rampSpans = (from = 1, to = 8) => Array.from({ length: to - from + 1 }, (_, i) => `<span class="rp-s${from + i}"></span>`).join('');
@@ -332,7 +342,16 @@ function dailyTable(ctx, rep, k = null) {
   return `<div class="tbl"><table><thead><tr><th>Tag</th><th class="n">Beobachtet</th><th class="n">Läufe</th><th class="n">Lücken-Läufe</th><th class="n">Ø Flotte · je Anbieter</th>${client ? '' : '<th class="n">Fahrten gemessen</th>'}<th class="n">Fahrten / Tag hochgerechnet</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 const cellLink = (c) => `<a href="#live" class="pick-cell" data-lat="${c.lat.toFixed(5)}" data-lon="${c.lon.toFixed(5)}">${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</a>`;
+// Zellkarte: mit Leaflet eine echte Karte (OSM-Kacheln, Zellen als halbtransparente Rechtecke, mountCellMaps); ohne Leaflet das Raster als SVG
 function cellMap(ctx, cs, key, title) {
+  if (!cs.grid.length) return '';
+  if (!hasLeaflet()) return cellSvg(ctx, cs, key, title);
+  return `<figure class="rp-fig"><figcaption id="rp-cm-${key}">${title}</figcaption><div class="rp-chart"><div class="rp-cellmap" data-key="${key}" role="region" aria-labelledby="rp-cm-${key}" aria-describedby="rp-cm-desc"></div></div></figure>`;
+}
+function cellSvg(ctx, cs, key, title) {
+  return cs.grid.length ? `<figure class="rp-fig"><figcaption>${title}</figcaption><div class="rp-chart">${cellSvgMarkup(cs, key, title)}</div></figure>` : '';
+}
+function cellSvgMarkup(cs, key, title) {
   const grid = cs.grid; if (!grid.length) return '';
   let i0 = Infinity, i1 = -Infinity, j0 = Infinity, j1 = -Infinity, lat = 0;
   for (const c of grid) { if (c.i < i0) i0 = c.i; if (c.i > i1) i1 = c.i; if (c.j < j0) j0 = c.j; if (c.j > j1) j1 = c.j; lat += c.lat; }
@@ -340,7 +359,7 @@ function cellMap(ctx, cs, key, title) {
   const ky = R.CELL_LAT / (R.CELL_LON * Math.cos((lat * Math.PI) / 180)); // Zellen etwa quadratisch zeichnen
   const W = j1 - j0 + 1, H = (i1 - i0 + 1) * ky, g = 0.14;
   const rects = grid.map((c, n) => `<rect class="rp-s${R.suppressed(c[key]) ? 0 : R.heatClass(c[key], cs.max)}" x="${(c.j - j0 + g / 2).toFixed(2)}" y="${((i1 - c.i) * ky + g / 2).toFixed(2)}" width="${(1 - g).toFixed(2)}" height="${(ky - g).toFixed(2)}" data-i="${n}"/>`).join('');
-  return `<figure class="rp-fig"><figcaption>${title}</figcaption><div class="rp-chart"><svg class="rp-cellmap" viewBox="0 0 ${W} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${title}: Raster mit ${grid.length} Zellen, Werte in der Tabelle" data-key="${key}">${rects}</svg></div></figure>`;
+  return `<svg class="rp-cellmap" viewBox="0 0 ${W} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${title}: Raster mit ${grid.length} Zellen, Werte in der Tabelle" data-key="${key}">${rects}</svg>`;
 }
 function cellsSection(ctx, rep, s) {
   const cs = rep.cells; const { fmt } = ctx;
@@ -350,9 +369,12 @@ function cellsSection(ctx, rep, s) {
   const weak = cs.weak.map((c, i) => `<tr><td class="n">${i + 1}</td><td>${cellLink(c)}</td><td class="n">${num(ctx, c.presAvg, 1)}</td><td class="n">${cnt(ctx, c.start)}</td><td class="n">${R.suppressed(c.start) ? '—' : num(ctx, c.perVehicle, 2)}</td></tr>`).join('');
   const k5 = R.heatClassFloor(5, cs.max);
   const top = [...cs.grid].sort((a, b) => (b.start + b.end) - (a.start + a.end)).slice(0, 30);
-  return `<section class="rp-sec"><h3>Orte: Start- und Zielverteilung</h3><div class="sub">Zellen ≈ 280 × 250 m · ${plural(cs.days, 'Tag', 'Tage')} · ${fmt(cs.n)} Zellen mit Bestand oder Bewegung${filt ? ' · Zellen zählen alle Anbieter und Arten (Filter wirkt hier nicht)' : ''} · Datenschutz: Orte mit weniger als ${R.MIN_COUNT} Fahrten erscheinen als „< ${R.MIN_COUNT}“ (Schwelle wie Portland), damit keine einzelne Fahrt erkennbar ist</div>
+  const live = hasLeaflet();
+  return `<section class="rp-sec"><h3>Orte: Start- und Zielverteilung</h3><div class="sub">Zellen ≈ 280 × 250 m · ${plural(cs.days, 'Tag', 'Tage')} · ${fmt(cs.n)} Zellen mit Bestand oder Bewegung · alle Anbieter und Fahrzeugarten · Datenschutz: Orte mit weniger als ${R.MIN_COUNT} Fahrten erscheinen als „< ${R.MIN_COUNT}“ (Schwelle wie Portland), damit keine einzelne Fahrt erkennbar ist</div>
+    ${filt ? `<div class="note small rp-cellnote" role="note"><b>Filter wirkt hier nicht:</b> Die Zellen zählen alle Anbieter und Fahrzeugarten der Gemeinde (die Zellendateien des Sammlers sind nicht nach Anbieter getrennt). Die übrigen Abschnitte zeigen ${filterText(ctx)}.</div>` : ''}
+    ${live ? `<p class="vh" id="rp-cm-desc">Karte mit ${fmt(cs.n)} Zellen auf OpenStreetMap; beide Karten bewegen sich gemeinsam. Pfeiltasten verschieben, Plus und Minus zoomen. Alle Werte stehen in der Tabelle unter „Als Tabelle“.</p>` : ''}
     <div class="rp-maps" data-rp="cellmaps">${cellMap(ctx, cs, 'start', 'Fahrtbeginne')}${cellMap(ctx, cs, 'end', 'Fahrtenden')}</div>
-    <div class="rp-legend"><span>Fahrten je Zelle</span><span class="rp-ramp"><em>${R.MIN_COUNT}</em>${rampSpans()}<em>${num(ctx, cs.max)}</em></span><span class="muted">gestaucht: Mitte der Skala ≈ ${num(ctx, k5)}</span><span><i class="rp-sw rp-s0"></i>Bestand, weniger als ${R.MIN_COUNT} Fahrten (unterdrückt)</span>
+    <div class="rp-legend"><span>Fahrten je Zelle</span><span class="rp-ramp"><em>${R.MIN_COUNT}</em>${rampSpans()}<em>${num(ctx, cs.max)}</em></span><span class="muted">gestaucht: Mitte der Skala ≈ ${num(ctx, k5)}</span><span><i class="rp-sw rp-s0"></i>Bestand, weniger als ${R.MIN_COUNT} Fahrten (unterdrückt)</span>${live ? '<span class="muted">Karten gekoppelt · Zelle antippen oder überfahren für Werte</span>' : ''}
       <button type="button" class="rp-noprint" data-rp="cellscsv" title="Alle Zellen; Zählungen unter ${R.MIN_COUNT} als „<${R.MIN_COUNT}“">↓ Orte-CSV</button><button type="button" class="rp-noprint" data-rp="toggle" data-k="cells" aria-expanded="${s.show.cells ? 'true' : 'false'}">${s.show.cells ? 'Tabelle ausblenden' : 'Als Tabelle'}</button></div>
     <div class="tbl" data-rp-view="cells"${s.show.cells ? '' : ' hidden'} style="margin-top:var(--s2)"><table><thead><tr><th>Zelle (Mittelpunkt)</th><th class="n">Fahrtbeginne</th><th class="n">Fahrtenden</th><th class="n">Ø verfügbar je Lauf</th><th class="n">Umsetzungen</th></tr></thead><tbody>${top.map(c => `<tr><td>${cellLink(c)}</td><td class="n">${cnt(ctx, c.start)}</td><td class="n">${cnt(ctx, c.end)}</td><td class="n">${num(ctx, c.presAvg, 1)}</td><td class="n">${cnt(ctx, c.reloc)}</td></tr>`).join('')}</tbody></table></div>
     <div class="rp-grid2" style="margin-top:var(--s4)">
@@ -427,16 +449,17 @@ export async function renderReport(el, ctx) {
     bindCellTips(el);
   });
   const title = head('Kommunal-Bericht', 'Druckbarer Bericht je Gemeinde: Flotte, Fahrten, Orte und Datenqualität im gewählten Zeitraum');
-  if (!state.latest) { el.innerHTML = title + emptyBox('Noch kein Datenstand.', 'Der Bericht erscheint, sobald der Sammler-Stand geladen ist.'); return; }
-  if (!state.scope || state.scope === 'DE') { el.innerHTML = title + emptyBox('Gemeinde wählen.', 'Der Bericht gilt je Gemeinde: oben unter „Gebiet“ eine Gemeinde auswählen.'); return; }
+  const put = (html) => { unmountCellMaps(s); el.innerHTML = html; }; // Karten vor dem Ersetzen abbauen (Leaflet hält sonst Ereignisse und Kacheln)
+  if (!state.latest) { put(title + emptyBox('Noch kein Datenstand.', 'Der Bericht erscheint, sobald der Sammler-Stand geladen ist.')); return; }
+  if (!state.scope || state.scope === 'DE') { put(title + emptyBox('Gemeinde wählen.', 'Der Bericht gilt je Gemeinde: oben unter „Gebiet“ eine Gemeinde auswählen.')); return; }
   const tok = ++s.tok; el.classList.add('rp-busy');
-  if (!el.querySelector('.rp-report')) el.innerHTML = title + '<div class="muted small">Bericht wird zusammengestellt …</div>';
+  if (!el.querySelector('.rp-report')) put(title + '<div class="muted small">Bericht wird zusammengestellt …</div>');
   try {
     const ags = state.scope, m = state.latest.municipalities?.[ags] || {};
     const name = m.name || ctx.muniName?.(ags) || ags;
     const [idx, archDays] = await Promise.all([usageIndex(ctx), archiveDayList(ctx).catch(() => [])]); const all = (idx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
     if (tok !== s.tok) return;
-    if (!all.length) { el.innerHTML = title + emptyBox('Noch keine Tagesdateien.', 'Der Bericht braucht gemessene Bewegungen; sie entstehen ab dem zweiten Sammler-Lauf.'); return; }
+    if (!all.length) { put(title + emptyBox('Noch keine Tagesdateien.', 'Der Bericht braucht gemessene Bewegungen; sie entstehen ab dem zweiten Sammler-Lauf.')); return; }
     if (!periodOptions(all, archDays).some(([v]) => v === s.period)) s.period = 'all';
     const days = pickDays(all, s.period, archDays);
     const useArchive = days.some(d => !all.includes(d));
@@ -462,10 +485,11 @@ export async function renderReport(el, ctx) {
     const cal = K.calibrateReport(rep, calib.k);
     const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive };
     s.rep = rep; s.meta = meta;
-    el.innerHTML = head('Kommunal-Bericht', `Druckbarer Bericht je Gemeinde · ${esc(name)}`, reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref);
+    put(head('Kommunal-Bericht', `Druckbarer Bericht je Gemeinde · ${esc(name)}`, reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref));
+    mountCellMaps(el, s);
   } catch (e) {
     console.error('Bericht', e);
-    if (tok === s.tok) el.innerHTML = title + emptyBox('Bericht nicht erstellbar.', 'Daten nicht ladbar – Seite später neu laden.');
+    if (tok === s.tok) put(title + emptyBox('Bericht nicht erstellbar.', 'Daten nicht ladbar – Seite später neu laden.'));
   } finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
 }
 function bindCellTips(el) {
@@ -481,25 +505,160 @@ function bindCellTips(el) {
   });
   el.addEventListener('pointerleave', () => { el.querySelectorAll('.rp-chart').forEach(hideTip); el.querySelectorAll('svg.rp-cellmap rect.on').forEach(x => x.classList.remove('on')); });
 }
+
+// ---------- Zellkarten auf OpenStreetMap (Leaflet) ----------
+// Zwei Karten (Fahrtbeginne, Fahrtenden), gekoppelt: die zuletzt bediente Karte führt, die andere folgt ohne eigene Animation.
+// Zellen als halbtransparente Rechtecke auf einem Canvas-Renderer in den Farben der Skala; Kacheln entsättigt (dunkles Thema: invertiert),
+// damit die Skala lesbar bleibt. Tooltip je Zelle beim Überfahren oder Antippen; Werte für alle Zellen in der Tabelle.
+const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTR = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende';
+const CELL_FILL = 0.72; // Deckkraft der Zellen über der Karte
+const hasLeaflet = () => typeof window !== 'undefined' && !!window.L && typeof window.L.map === 'function';
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Skala als Zahlen (gleiche Anteile wie --rp-seq-0…8 im CSS): Akzentfarbe in OKLab mit der Fläche gemischt
+const SEQ_P = [7, 16, 27, 38, 49, 60, 72, 85, 100];
+const hexRgb = (h) => { const m = String(h || '').trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i); if (!m) return null; let s = m[1]; if (s.length === 3) s = [...s].map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(s.slice(i, i + 2), 16) / 255); };
+const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4), unlin = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+function toOklab([r, g, b]) {
+  [r, g, b] = [r, g, b].map(lin);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+function fromOklab([L, a, b]) {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
+  return `#${rgb.map(c => Math.round(Math.max(0, Math.min(1, unlin(c))) * 255).toString(16).padStart(2, '0')).join('')}`;
+}
+function rampColors(accent, panel) {
+  const A = hexRgb(accent), P = hexRgb(panel); if (!A || !P) return SEQ_P.map(() => accent || '#0f766e');
+  const a = toOklab(A), p = toOklab(P);
+  return SEQ_P.map(q => fromOklab(a.map((x, i) => x * (q / 100) + p[i] * (1 - q / 100))));
+}
+const cssVar = (el, name, d) => (getComputedStyle(el).getPropertyValue(name) || '').trim() || d;
+const PRINT_ACCENT = '#0f766e', PRINT_PANEL = '#ffffff'; // helle Werte wie @media print in index.html
+const cellBounds = (c) => [[c.lat - R.CELL_LAT / 2, c.lon - R.CELL_LON / 2], [c.lat + R.CELL_LAT / 2, c.lon + R.CELL_LON / 2]];
+const cellClass = (c, key, max) => (R.suppressed(c[key]) ? 0 : R.heatClass(c[key], max));
+function unmountCellMaps(s) {
+  if (s.cellMaps?.length && s.cellMapsAgs) { const v = s.cellMaps[0].map; try { if (v.getSize().x) s.cellView = { ags: s.cellMapsAgs, center: v.getCenter(), zoom: v.getZoom() }; } catch { /* Karte ohne Ansicht */ } }
+  for (const m of s.cellMaps || []) { try { m.ro?.disconnect(); m.map.remove(); } catch { /* bereits entfernt */ } }
+  s.cellMaps = [];
+}
+function mountCellMaps(el, s) {
+  unmountCellMaps(s);
+  const boxes = [...el.querySelectorAll('.rp-report div.rp-cellmap[data-key]')]; const cs = s.rep?.cells;
+  if (!boxes.length || !hasLeaflet() || !cs?.grid?.length) return;
+  const L = window.L, still = reducedMotion(), { fmt } = s.ctx;
+  const colors = rampColors(cssVar(el, '--accent', PRINT_ACCENT), cssVar(el, '--panel', PRINT_PANEL)), ink = cssVar(el, '--fg', '#111820');
+  const idx = new Map(cs.grid.map((c, n) => [`${c.i}:${c.j}`, n]));
+  const all = L.latLngBounds(cs.grid.flatMap(cellBounds));
+  const maps = boxes.map(box => {
+    const key = box.dataset.key;
+    const map = L.map(box, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, dragging: !L.Browser.mobile, tap: false, zoomSnap: 0.5, zoomDelta: 0.5,
+      zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, inertia: !still, minZoom: 8, maxZoom: 18 });
+    const tiles = L.tileLayer(OSM_URL, { maxZoom: 19, attribution: OSM_ATTR, crossOrigin: 'anonymous' }).addTo(map);
+    const renderer = L.canvas({ padding: 0.3 });
+    for (const c of cs.grid) L.rectangle(cellBounds(c), { renderer, stroke: false, fillColor: colors[cellClass(c, key, cs.max)], fillOpacity: CELL_FILL, interactive: false }).addTo(map);
+    const hi = L.rectangle(cellBounds(cs.grid[0]), { renderer, interactive: false, fill: false, color: ink, weight: 2, opacity: 0 }).addTo(map);
+    return { map, key, box, tiles, hi };
+  });
+  const keep = s.cellView?.ags === s.rep.ags ? s.cellView : null;
+  for (const m of maps) { if (keep) m.map.setView(keep.center, keep.zoom, { animate: false }); else m.map.fitBounds(all, { padding: [8, 8], animate: false }); }
+  // Kopplung: die zuletzt bediente Karte gibt Mitte und Zoom vor
+  let lead = maps[0];
+  const follow = (src, center, zoom, anim) => { for (const m of maps) { if (m === src) continue; const c = m.map.getCenter(); if (m.map.getZoom() === zoom && Math.abs(c.lat - center.lat) < 1e-9 && Math.abs(c.lng - center.lng) < 1e-9) continue; m.map.setView(center, zoom, { animate: anim && !still }); } };
+  for (const m of maps) {
+    for (const ev of ['pointerdown', 'wheel', 'focusin', 'mouseenter', 'touchstart']) m.box.addEventListener(ev, () => { lead = m; }, { passive: true });
+    m.map.on('move', () => { if (lead === m && !m.map._animatingZoom) follow(m, m.map.getCenter(), m.map.getZoom(), false); });
+    m.map.on('zoomanim', (e) => { if (lead === m) follow(m, e.center, e.zoom, true); });
+    m.map.on('zoomend moveend', () => { if (lead === m) follow(m, m.map.getCenter(), m.map.getZoom(), false); });
+  }
+  // Tooltip je Zelle (Überfahren, Antippen), Markierung derselben Zelle in beiden Karten
+  const hide = () => { for (const m of maps) { m.hi.setStyle({ opacity: 0 }); const b = m.box.closest('.rp-chart'); if (b) hideTip(b); } };
+  const show = (m, latlng) => {
+    const n = idx.get(`${Math.round(latlng.lat / R.CELL_LAT)}:${Math.round(latlng.lng / R.CELL_LON)}`); const c = n == null ? null : cs.grid[n];
+    if (!c) { hide(); return; }
+    for (const x of maps) { x.hi.setBounds(cellBounds(c)); x.hi.setStyle({ opacity: 1 }); if (x !== m) { const b = x.box.closest('.rp-chart'); if (b) hideTip(b); } }
+    const key = m.key, other = key === 'start' ? 'end' : 'start', v = (x) => (R.suppressed(x) ? `< ${R.MIN_COUNT}` : fmt(x));
+    const p = m.map.latLngToContainerPoint([c.lat + R.CELL_LAT / 2, c.lon]);
+    showTipAt(m.box.closest('.rp-chart'), p.x, p.y, `${v(c[key])} ${key === 'start' ? 'Fahrtbeginne' : 'Fahrtenden'}`, [`${v(c[other])} ${other === 'start' ? 'Fahrtbeginne' : 'Fahrtenden'} · Ø ${c.presAvg == null ? '—' : fmt(c.presAvg, 1)} verfügbar je Lauf`, `Zelle ${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}`]);
+  };
+  for (const m of maps) {
+    m.map.on('mousemove', (e) => show(m, e.latlng)); m.map.on('click', (e) => show(m, e.latlng));
+    m.map.on('mouseout movestart zoomstart', hide);
+    // Größe ändert sich (Fenster, Spaltenumbruch, Ansicht erst später sichtbar): Kartengröße nachziehen
+    if (typeof ResizeObserver === 'function') { let w0 = m.box.clientWidth, h0 = m.box.clientHeight; m.ro = new ResizeObserver(() => { const w = m.box.clientWidth, h = m.box.clientHeight; if (w === w0 && h === h0) return; const was = !w0; w0 = w; h0 = h; m.map.invalidateSize({ animate: false }); if (was && w && !keep) m.map.fitBounds(all, { padding: [8, 8], animate: false }); }); m.ro.observe(m.box); }
+  }
+  s.cellMaps = maps; s.cellMapsAgs = s.rep.ags;
+}
+// Tooltip an einer Stelle im Diagrammkasten (Kartenpunkt), sonst wie showTip
+function showTipAt(box, px, py, value, label) {
+  if (!box) return;
+  const t = tip(box); t.replaceChildren(); const b = document.createElement('b'); b.textContent = value; t.append(b);
+  for (const l of [].concat(label || [])) { const d = document.createElement('div'); d.textContent = l; t.append(d); }
+  t.hidden = false;
+  const w = box.getBoundingClientRect();
+  const x = Math.max(t.offsetWidth / 2 + 4, Math.min(w.width - t.offsetWidth / 2 - 4, px));
+  let y = py; if (y - t.offsetHeight - 10 < 0) y = py + t.offsetHeight + 24;
+  t.style.left = `${x}px`; t.style.top = `${y}px`;
+}
+// Druck: Kacheln abwarten (höchstens ms), dann Karte + Zellen in hellen Druckfarben als Bild; ohne Freigabe der Kacheln (CORS) null
+function tilesSettled(tiles, ms = 4000) {
+  return new Promise(res => { if (!tiles?.isLoading?.()) { res(); return; } const done = () => { clearTimeout(t); tiles.off('load', done); res(); }; const t = setTimeout(done, ms); tiles.on('load', done); });
+}
+async function cellMapImage(m, cs) {
+  const W = m.box.clientWidth, H = m.box.clientHeight; if (!W || !H) return null;
+  await tilesSettled(m.tiles);
+  const k = 2, cv = document.createElement('canvas'); cv.width = W * k; cv.height = H * k;
+  const g = cv.getContext('2d'); if (!g) return null; g.scale(k, k);
+  g.fillStyle = '#eef1f4'; g.fillRect(0, 0, W, H);
+  const br = m.box.getBoundingClientRect(); let tiles = 0;
+  g.save(); if ('filter' in g) g.filter = 'grayscale(1) contrast(.92) brightness(1.04)';
+  for (const img of m.box.querySelectorAll('.leaflet-tile-pane img.leaflet-tile-loaded')) { const r = img.getBoundingClientRect(); if (r.right < br.left || r.left > br.right || r.bottom < br.top || r.top > br.bottom) continue; try { g.drawImage(img, r.left - br.left, r.top - br.top, r.width, r.height); tiles++; } catch { /* Kachel nicht zeichenbar */ } }
+  g.restore();
+  const colors = rampColors(PRINT_ACCENT, PRINT_PANEL); g.globalAlpha = CELL_FILL;
+  for (const c of cs.grid) { const [[s0, w0], [n0, e0]] = cellBounds(c); const a = m.map.latLngToContainerPoint([n0, w0]), b = m.map.latLngToContainerPoint([s0, e0]); if (b.x < 0 || a.x > W || b.y < 0 || a.y > H) continue; g.fillStyle = colors[cellClass(c, m.key, cs.max)]; g.fillRect(a.x, a.y, Math.max(0.5, b.x - a.x), Math.max(0.5, b.y - a.y)); }
+  g.globalAlpha = 1;
+  const note = '© OpenStreetMap-Mitwirkende'; g.font = '10px system-ui, sans-serif'; const tw = g.measureText(note).width;
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - tw - 10, H - 16, tw + 10, 16); g.fillStyle = '#3b4855'; g.fillText(note, W - tw - 5, H - 4.5);
+  try { return tiles ? cv.toDataURL('image/png') : null; } catch { return null; } // Kacheln ohne CORS-Freigabe: Canvas gesperrt → Rückfall
+}
 function reportCsv(el) {
   const s = st(el); if (!s.rep) return;
   const rows = R.reportCsvRows(s.rep, { name: s.meta.name, typeLabel: typeName, cal: s.meta.cal, calLabel: calibLabel(s.meta.calib?.k), period: s.meta.period });
   const per = s.meta.period?.key ? `${s.meta.period.key}_` : '';
   download(`kommunal-bericht_${s.rep.ags}_${per}${s.rep.from}_${s.rep.to}.csv`, R.toCsv(rows));
 }
-/** Nur den Bericht drucken: Kopie als oberstes Element, alles andere per @media print ausgeblendet; nach dem Druck aufräumen */
-export function printReport(el) {
+/**
+ * Nur den Bericht drucken: Kopie als oberstes Element, alles andere per @media print ausgeblendet; nach dem Druck aufräumen.
+ * Zellkarten: Kacheln laden abwarten (höchstens 4 s) und Karte samt Zellen als Bild einsetzen (eine geklonte Leaflet-Karte druckt keine
+ * Canvas-Zellen); sind die Kacheln nicht zeichenbar, druckt das Zellraster ohne Kartenhintergrund mit Hinweis.
+ */
+export async function printReport(el) {
   const art = el?.querySelector('.rp-report'); if (!art) return;
-  const s = st(el);
+  const s = st(el); const btn = el.querySelector('button[data-rp="print"]');
+  if (s.printing) return; s.printing = true;
+  if (btn) { btn.setAttribute('aria-busy', 'true'); btn.dataset.label = btn.textContent; btn.textContent = 'Karten werden vorbereitet …'; }
+  let shots = [];
+  try { shots = await Promise.all((s.cellMaps || []).map(m => cellMapImage(m, s.rep.cells).catch(() => null))); } catch { shots = []; }
+  if (btn) { btn.removeAttribute('aria-busy'); btn.textContent = btn.dataset.label || 'Drucken / PDF'; }
+  s.printing = false;
   document.querySelectorAll('.rp-print-root').forEach(n => n.remove());
   const root = document.createElement('div'); root.className = 'rp-print-root rp-root';
   root.appendChild(art.cloneNode(true)); root.querySelectorAll('.rp-tip,.rp-noprint').forEach(n => n.remove());
+  root.querySelectorAll('[id]').forEach(n => n.removeAttribute('id')); // keine doppelten IDs neben dem Original
+  root.querySelectorAll('div.rp-cellmap[data-key]').forEach((box, i) => {
+    const key = box.dataset.key, url = shots[i], fig = box.closest('.rp-fig'); const title = fig?.querySelector('figcaption')?.textContent || '';
+    const host = box.closest('.rp-chart') || box;
+    if (url) { const img = document.createElement('img'); img.className = 'rp-cellmap-img'; img.alt = `${title}: Zellen auf OpenStreetMap`; img.src = url; host.replaceChildren(img); }
+    else if (s.rep?.cells) { host.innerHTML = cellSvgMarkup(s.rep.cells, key, title) + '<div class="small muted">Kartenhintergrund nicht druckbar (Kacheln nicht geladen); Zellen ohne Karte.</div>'; }
+  });
   document.body.appendChild(root); document.body.classList.add('rp-printing');
   const title = document.title; document.title = `Kommunal-Bericht ${s.meta?.name || ''} ${s.rep?.from || ''}${s.rep?.to && s.rep.to !== s.rep.from ? ` bis ${s.rep.to}` : ''}`.trim();
   let done = false;
   const end = () => { if (done) return; done = true; document.body.classList.remove('rp-printing'); root.remove(); document.title = title; window.removeEventListener('afterprint', end); };
   window.addEventListener('afterprint', end);
   setTimeout(end, 120e3); // Browser ohne afterprint
+  await Promise.all([...root.querySelectorAll('img')].map(i => (i.decode ? i.decode().catch(() => {}) : null)));
   window.print();
 }
 
@@ -548,19 +707,42 @@ function violationsBlock(ctx, c, v, s) {
 }
 function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const { fmt, esc, opColor } = ctx;
-  const limTxt = c.limit != null ? fmt(c.limit) : '—';
+  const hasTotal = c.limit != null;
+  const limTxt = hasTotal ? `${fmt(c.limit)}${c.limitDerived ? ` (${DERIVED_TXT})` : ''}` : '—';
   const hist = c.previous != null ? `bis ${dd(new Date(Date.parse(`${c.since}T00:00:00Z`) - 86400e3).toISOString().slice(0, 10))}: ${fmt(c.previous)}` : c.next ? `ab ${dd(c.next.from)}: ${fmt(c.next.limit)}` : '';
-  const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${o.limit != null ? fmt(o.limit) : '—'}</td><td style="min-width:120px">${o.limit != null ? meter(ctx, o.total, o.limit, o.status) : '<span class="muted small">keine Grenze je Anbieter</span>'}</td><td class="n">${o.share != null ? pctTxt(ctx, o.share, 0) : '—'}</td><td>${badge(o.limit != null ? o.status : 'unknown')}</td></tr>`).join('');
-  const districts = c.districts.map(d => `<tr><td>${esc(d.label)}</td><td class="n">${fmt(d.limit)}</td><td>${badge('unchecked')}</td><td class="small muted">nicht prüfbar ohne Bezirksgrenzen – der Feed nennt nur Koordinaten, die Bezirksgeometrie fehlt im Datenstand</td></tr>`).join('');
+  // Verfügbar ÷ erlaubt: buchbar ÷ Grenze je Anbieter; ohne Grenze je Anbieter Anteil an der Gesamtgrenze; ohne Zulassung laut Quelle: keine Rate
+  const own = (o) => o.limit != null;
+  const rate = (o, f) => (o.licensed === false ? null : own(o) ? o[f] : f === 'availShare' ? o.capShareAvail : o.capShare);
+  const derivedOf = (o) => (own(o) ? o.derived : c.limitDerived);
+  const shareNote = (o) => (o.licensed === false || own(o) ? '' : hasTotal ? '<div class="sub-line">Anteil an der Gesamtgrenze</div>' : '');
+  const limCell = (o) => (o.licensed === false ? '—' : own(o) ? `${fmt(o.limit)}${o.derived ? `<div class="sub-line">${DERIVED_TXT}</div>` : ''}` : '—');
+  const meterCell = (o) => (o.licensed === false ? `<span class="muted small">nicht in der Anbieterliste der Quelle</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) : '<span class="muted small">keine Grenze je Anbieter</span>');
+  const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${fmt(o.available)}</td><td class="n">${limCell(o)}</td><td style="min-width:120px">${meterCell(o)}</td><td class="n">${rateCell(ctx, rate(o, 'share'), false, derivedOf(o))}${shareNote(o)}</td><td class="n">${rateCell(ctx, rate(o, 'availShare'), false, derivedOf(o))}${shareNote(o)}</td><td>${badge(o.licensed === false ? 'unlicensed' : own(o) ? o.status : 'unknown')}</td></tr>`).join('');
+  const zoneNum = (d) => [d.limit != null ? `gesamt ${fmt(d.limit)}` : null, d.perOperator != null ? `je Anbieter ${fmt(d.perOperator)}${d.perOperatorDerived ? ` (${DERIVED_TXT})` : ''}` : null].filter(Boolean).join(' · ') || '—';
+  const districts = c.districts.map(d => `<tr><td>${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${d.hinweis ? `${esc(d.hinweis)} · ` : ''}nicht prüfbar ohne Gebietsgrenze – der Feed nennt nur Koordinaten, die Grenze des Teilgebiets fehlt im Datenstand</td></tr>`).join('');
   const per1000 = pop ? (c.total / pop) * 1000 : null;
   const pre = rep?.quality.prelim ? ' · vorläufig' : '';
-  return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}</span></h3>${badge(c.status)}</div>
-    <div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">von ${limTxt} · ${pctTxt(ctx, c.share, 0)}</span></div></div>
-    <div class="small muted">Obergrenze gesamt ${limTxt}${c.perOperator != null ? ` · je Anbieter ${fmt(c.perOperator)}` : ''}${hist ? ` · ${hist}` : ''}${c.since && !c.previous ? ` · gilt seit ${esc(/^\d{4}-\d{2}$/.test(c.since) ? `${c.since.slice(5)}/${c.since.slice(0, 4)}` : c.since)}` : ''} · Quelle: ${safeLink(ctx, c.url, c.quelle || 'Quelle')}</div>
-    ${ops ? `<div class="tbl"><table><thead><tr><th>Anbieter</th><th class="n">Bestand</th><th class="n">davon gesperrt</th><th class="n">Grenze</th><th>Auslastung</th><th class="n">Anteil</th><th>Status</th></tr></thead><tbody>${ops}</tbody></table></div>` : emptyBox('Keine E-Scooter im Feed.', 'Kein offener Feed meldet hier gerade Fahrzeuge dieser Art.')}
-    ${districts ? `<div class="tbl"><table><thead><tr><th>Bezirks-Obergrenze</th><th class="n">Grenze</th><th>Status</th><th>Hinweis</th></tr></thead><tbody>${districts}</tbody></table></div>` : ''}
-    ${violationsBlock(ctx, c, viol, s)}
+  const links = [safeLink(ctx, c.url, c.quelle || 'Quelle'), ...(c.links || []).map((l, i) => safeLink(ctx, l.url, l.quelle || `Quelle ${i + 2}`))].join(' · ');
+  const listTxt = c.listed ? ` · Anbieter laut Quelle: ${esc(c.listed.join(', '))}${c.listComplete ? '' : ' (Liste unvollständig, keine Zulassungsprüfung)'}` : '';
+  const head = hasTotal
+    ? `<div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status === 'hint' ? 'near' : c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">von ${fmt(c.limit)} · ${pctTxt(ctx, c.share, 0)}</span></div></div>
+    <div class="small">Verfügbar ÷ erlaubt gesamt: <b>${c.availShare == null ? '—' : rateTxt(ctx, c.availShare)}</b> <span class="muted">(${fmt(c.available)} buchbar von ${fmt(c.limit)})</span>${overMark(c.availShare, c.limitDerived)}</div>`
+    : `<div class="small"><b>${fmt(c.total)}</b> ${esc(typeName(c.type))} gemeldet · ${c.perOperator != null ? 'keine Gesamtgrenze, Grenze je Anbieter siehe Tabelle' : 'keine stadtweite Grenze'}</div>`;
+  return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · ${esc(c.art)}` : ''}</span></h3>${badge(c.status)}</div>
+    ${head}
+    <div class="small muted">Obergrenze gesamt ${limTxt}${c.perOperator != null ? ` · je Anbieter ${fmt(c.perOperator)}${c.perOperatorDerived ? ` (${DERIVED_TXT})` : ''}` : ''}${hist ? ` · ${hist}` : ''}${c.since && !c.previous ? ` · gilt seit ${esc(standTxt(c.since))}` : ''}${c.stand ? ` · Stand ${esc(standTxt(c.stand))}` : ''} · amtlich · Quelle: ${links}${listTxt}</div>
+    ${c.hinweis ? `<div class="small muted">${esc(c.hinweis)}</div>` : ''}
+    ${ops ? `<div class="tbl"><table><thead><tr><th>Anbieter</th><th class="n">Bestand</th><th class="n">davon gesperrt</th><th class="n">Buchbar</th><th class="n">Grenze</th><th>Auslastung</th><th class="n" title="gemeldet ÷ Grenze">Gemeldet ÷ erlaubt</th><th class="n" title="buchbar ÷ Grenze">Verfügbar ÷ erlaubt</th><th>Status</th></tr></thead><tbody>${ops}</tbody></table></div>` : emptyBox(`Keine ${esc(typeName(c.type))} im Feed.`, 'Kein offener Feed meldet hier gerade Fahrzeuge dieser Art.')}
+    ${districts ? `<div class="tbl"><table><thead><tr><th>Teilgebiet mit eigener Grenze</th><th class="n">Grenze</th><th>Status</th><th>Hinweis</th></tr></thead><tbody>${districts}</tbody></table></div>` : ''}
+    ${c.hasRate ? violationsBlock(ctx, c, viol, s) : ''}
     <div class="tiles">${tile(`${esc(typeName(c.type))} je 1.000 EW`, num(ctx, per1000, 1), pop ? `${fmt(c.total)} Fahrzeuge · ${fmt(pop)} Einwohner` : 'Einwohnerzahl fehlt')}${tile('Fahrten je 1.000 EW und Tag', num(ctx, rep?.totals.per1000Rides, 1), rep ? `${esc(typeName(c.type))}, ${plural(rep.days.length, 'Tag', 'Tage')} hochgerechnet, gemessen${pre}` : 'noch keine Tagesdateien')}</div></div>`;
+}
+// Einträge ohne Prüfung (nicht amtlich, „keine“): kompakte Tabelle mit Zahl laut Quelle und heutigem Bestand zur Einordnung
+function capInfoTable(ctx, list, title) {
+  const { esc, fmt } = ctx; if (!list.length) return '';
+  const rows = list.map(c => `<tr><td><b>${esc(c.ort)}</b><div class="sub-line">${esc(typeName(c.type))}${c.art ? ` · ${esc(c.art)}` : ''}</div></td><td>${badge(c.status)}<div class="sub-line">${esc(R.CAP_SOURCE_STATUS[c.sourceStatus] || c.sourceStatus)}${c.statusText && c.statusText !== R.CAP_SOURCE_STATUS[c.sourceStatus] ? ` – ${esc(c.statusText)}` : ''}</div></td>
+    <td class="small">${c.sourceStatus === 'keine' ? '—' : capInfoTxt(ctx, c) || '—'}</td><td class="n">${fmt(c.total)}</td><td class="small">${safeLink(ctx, c.url, c.quelle || 'Quelle')}${c.stand ? ` · ${esc(standTxt(c.stand))}` : ''}</td></tr>`).join('');
+  return `<h3 style="font-size:13px;margin:var(--s4) 0 var(--s1)">${title}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>Stadt</th><th>Status der Quelle</th><th>Zahl laut Quelle</th><th class="n">Bestand heute</th><th>Quelle</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /**
  * Obergrenzen-Wächter: Gemeinden mit Eintrag in reference.json → obergrenzen (bei 'DE' alle), Bestand aus latest.json groups.
@@ -580,7 +762,7 @@ export async function renderCaps(el, ctx) {
     });
     el.addEventListener('pointerleave', hide);
   });
-  const title = head('Obergrenzen-Wächter', `Aktueller E-Scooter-Bestand gegen kommunale Obergrenzen · Sammler-Stand ${stamp(state.latest?.at)}`);
+  const title = head('Obergrenzen-Wächter', `Aktueller Bestand gegen kommunale Obergrenzen (amtliche Zahlen) · Sammler-Stand ${stamp(state.latest?.at)}`);
   if (!state.latest) { el.innerHTML = title + emptyBox('Noch kein Datenstand.', 'Die Prüfung erscheint, sobald der Sammler-Stand geladen ist.'); return; }
   el.classList.add('rp-busy');
   try {
@@ -589,16 +771,19 @@ export async function renderCaps(el, ctx) {
     const caps = R.capsCheck(ref, state.latest.groups, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() });
     const [{ docs }, log] = await Promise.all([allDocs(ctx), fetchJson(ctx, 'caps-log.json', true)]); if (tok !== s.tok) return;
     s.viol = log ? R.capsViolations(log, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() }) : null;
-    const violFor = (ags) => (log ? s.viol.find(v => v.ags === ags) || null : undefined);
+    const violFor = (c) => (log ? s.viol.find(v => v.ags === R.capLogKey(c)) || null : undefined); // je Gemeinde und Art
     const repFor = (ags, ty) => (docs.length ? R.municipalReport({ docs, ags, pop: state.latest.municipalities?.[ags]?.pop || null, type: ty, latestGroups: state.latest.groups }) : null);
-    const defn = `<p class="note small" style="margin:var(--s3) 0 0">Bestand = alle E-Scooter, die die offenen Feeds in der Gemeinde melden: verfügbar, reserviert <b>und gesperrt</b>, nach Abgleich doppelter Quellen. Anbieter ohne offenen Feed fehlen, die Prüfung ist deshalb eine Untergrenze. Status: ok unter ${R.NEAR_CAP * 100} %, nahe ab ${R.NEAR_CAP * 100} %, über bei mehr als 100 % der Grenze.</p>`;
+    const defn = `<p class="note small" style="margin:var(--s3) 0 0">Bestand = alle E-Scooter, die die offenen Feeds in der Gemeinde melden: verfügbar, reserviert <b>und gesperrt</b>, nach Abgleich doppelter Quellen. Anbieter ohne offenen Feed fehlen, die Prüfung ist deshalb eine Untergrenze. Status: ok unter ${R.NEAR_CAP * 100} %, nahe ab ${R.NEAR_CAP * 100} %, über bei mehr als 100 % der Grenze. Geprüft werden nur amtliche Zahlen; gerechnete Zahlen (${DERIVED_TXT}) geben nur einen Hinweis, Teilgebiets-Grenzen (z. B. Berlin innerhalb des S-Bahn-Rings) sind ohne Gebietsgrenze nicht prüfbar, Anbieter außerhalb der vollständigen Anbieterliste der Quelle stehen als „ohne Zulassung laut Quelle“ da (kein Verstoß). <b>Verfügbar ÷ erlaubt</b> = buchbare Fahrzeuge des Anbieters ÷ seine erlaubte Zahl; ohne Grenze je Anbieter steht dort sein Anteil an der Gesamtgrenze. Je Stadt und Anbieter mit Tagesverlauf unter Marktbild › Leistung › Verfügbarkeit je Stadt.</p>`;
     let body = '';
-    if (caps.length) body = caps.map(c => capBlock(ctx, c, repFor(c.ags, c.type), state.latest.municipalities?.[c.ags]?.pop || null, violFor(c.ags), s)).join('');
+    // geprüft wird nur, was amtlich ist; amtliche Einträge nur mit Teilgebiets-Grenzen als Block mit „nicht prüfbar“, der Rest kompakt zur Information
+    const checked = caps.filter(c => c.official && (c.hasRate || (state.scope && state.scope !== 'DE'))), rest = caps.filter(c => !checked.includes(c));
+    if (caps.length) body = checked.map(c => capBlock(ctx, c, repFor(c.ags, c.type), state.latest.municipalities?.[c.ags]?.pop || null, violFor(c), s)).join('')
+      + capInfoTable(ctx, rest, state.scope && state.scope !== 'DE' ? 'Weitere Angaben ohne Prüfung' : `Weitere Einträge ohne Prüfung (${rest.length}): nur Teilgebiete, geplant, Presse, ungeprüft, veraltet oder keine Obergrenze`);
     else {
       const ags = state.scope, m = state.latest.municipalities?.[ags] || {};
       const total = Object.entries(state.latest.groups || {}).filter(([k]) => k.startsWith(`${ags}|`) && k.endsWith('|scooter')).reduce((a, [, g]) => a + (g.total || 0), 0);
       const rep = repFor(ags, 'scooter');
-      body = `<div class="note">Für ${esc(m.name || ags)} ist keine Obergrenze hinterlegt (reference.json → obergrenzen). Hinterlegt sind: ${(ref.obergrenzen || []).map(o => esc(o.ort)).join(', ') || 'keine'}.</div>
+      body = `<div class="note">Für ${esc(m.name || ags)} ist keine Obergrenze hinterlegt (reference.json → obergrenzen). Amtlich mit Zahl hinterlegt sind: ${[...new Set(R.capsCheck(ref, state.latest.groups, { asOf: state.latest.at || Date.now() }).filter(c => c.hasRate).map(c => c.ort))].map(esc).join(', ') || 'keine'}.</div>
         <div class="tiles" style="margin-top:var(--s3)">${tile('E-Scooter je 1.000 EW', num(ctx, m.pop ? (total / m.pop) * 1000 : null, 1), m.pop ? `${ctx.fmt(total)} Fahrzeuge · ${ctx.fmt(m.pop)} Einwohner` : 'Einwohnerzahl fehlt')}${tile('Fahrten je 1.000 EW und Tag', num(ctx, rep?.totals.per1000Rides, 1), rep ? `E-Scooter, hochgerechnet${rep.quality.prelim ? ' · vorläufig' : ''}` : 'noch keine Tagesdateien')}</div>`;
     }
     el.innerHTML = title + body + defn;
@@ -794,7 +979,7 @@ const EXTRA_CSS = `
 .rp-sort span{font-size:9px;min-width:8px}
 .rp-city{all:unset;cursor:pointer;font-weight:500;color:var(--fg);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:2px}
 a.rp-city{text-decoration:underline}.rp-city:hover{text-decoration-color:var(--accent)}.rp-city:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
-tr.rp-sel td{background:color-mix(in srgb,var(--accent) 11%,transparent)}tr.rp-sel .muted{color:var(--fg)}tr.rp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+tr.rp-sel td{background:color-mix(in srgb,var(--accent) 11%,transparent)}tr.rp-sel .muted{color:var(--fg)}tr.rp-sel .sub-line{color:var(--fg-2)}tr.rp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .rp-mini{display:inline-block;width:44px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));vertical-align:middle;margin-left:6px;overflow:hidden}.rp-mini>i{display:block;height:100%;background:var(--accent)}
 .rp-defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s2) var(--s4);margin:0 0 var(--s3)}
 .rp-defs div{font-size:12.5px;color:var(--fg-2)}.rp-defs b{color:var(--fg);font-weight:600}
@@ -807,13 +992,20 @@ svg.rp-line .xh{stroke:var(--fg-2);stroke-width:1}svg.rp-line:focus-visible{outl
 svg.rp-line circle.end{stroke:var(--panel);stroke-width:2}svg.rp-line circle.sel{fill:none;stroke:var(--fg);stroke-width:2}
 .rp-tip .row{display:flex;gap:8px;align-items:center;white-space:nowrap}.rp-tip .row b{display:inline;font-size:13px;min-width:56px;text-align:right}.rp-tip .row i{width:12px;height:2px;border-radius:1px;flex:none}
 .rp-tip .hd{color:var(--muted);font-size:11px;margin-bottom:2px}
+.rp-captable tbody th{position:static;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--fg);vertical-align:top;background:transparent;border-bottom:1px solid var(--line);min-width:150px}
+.rp-captable tbody th .sub-line{font-weight:400;color:var(--muted)}
+.rp-captable tbody+tbody tr:first-child>*{border-top:1px solid var(--line-2)}
+.rp-captable td.n .sub-line{font-family:var(--sans);white-space:normal;min-width:7em}
+.rp-captable tr.rp-sum td{font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
+.rp-captable tbody.rp-selg>tr>*{background:color-mix(in srgb,var(--accent) 11%,transparent)}.rp-captable tbody.rp-selg th{box-shadow:inset 3px 0 0 var(--accent)}.rp-captable tbody.rp-selg .muted,.rp-captable tbody.rp-selg .sub-line{color:var(--fg-2)}
+.rp-over{font-size:11.5px;margin-left:4px;vertical-align:1px}.rp-over i{width:14px;height:14px;font-size:9px}
 .rp-prof{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
 .rp-prof .card dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px var(--s3);font-size:12.5px}
 .rp-prof .card dt{color:var(--muted)}.rp-prof .card dd{margin:0;color:var(--fg)}
 `;
 function injectExtra() { if (document.getElementById('rp-style-2')) return; const s = document.createElement('style'); s.id = 'rp-style-2'; s.textContent = EXTRA_CSS + EXTRA_CSS_2; document.head.appendChild(s); }
 function prep2(el, ctx) { const s = prep(el, ctx); injectExtra(); return s; }
-const opsDoc = (ctx, land) => fetchJson(ctx, `ops/${land}.json`, true);
+const opsDoc = (ctx, land) => fetchJson(ctx, `ops/${land}.json`); // ohne Laufstempel: derselbe Download wie Übersicht (Energie) und Karte
 async function latestHist(ctx, day = null) { const hidx = await histIndex(ctx); const days = (hidx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)); const d = day && days.includes(day) ? day : lastOf(days); return { days, day: d || null, hist: d ? await histDoc(ctx, hidx, d) : null }; }
 
 // ======================================================================
@@ -924,13 +1116,14 @@ export async function renderAvailability(el, ctx) {
     bindFilters(el, s, draw);
     el.addEventListener('change', async (e) => { if (e.target.dataset?.f === 'day') { s.day = e.target.value; s.histLoading = true; draw(); const h = await latestHist(s.ctx, s.day); s.hist = h.hist; s.histLoading = false; draw(); } });
     bindSort(el, s, AV_COLS, draw); bindCity(el, ctx); bindLine(el, () => s.chart);
-    el.addEventListener('click', (e) => { if (e.target.closest('button[data-rp="avtable"]')) { s.showTable = !s.showTable; draw(); } else if (e.target.closest('button[data-rp="avcsv"]')) availCsv(el); });
+    el.addEventListener('click', (e) => { if (e.target.closest('button[data-rp="avtable"]')) { s.showTable = !s.showTable; draw(); } else if (e.target.closest('button[data-rp="avcsv"]')) availCsv(el); else if (e.target.closest('button[data-rp="capcsv"]')) capCsv(el); });
   });
   if (!state.latest) { el.innerHTML = head('Verfügbarkeit je Stadt', '') + emptyBox('Noch kein Datenstand.', 'Die Tabelle erscheint, sobald der Sammler-Stand geladen ist.'); return; }
   const tok = ++s.tok;
   draw();
   try {
     if (!s.hist || s.histAt !== state.latest.at) { s.histLoading = true; const h = await latestHist(ctx, s.day); if (tok !== s.tok) return; s.hist = h.hist; s.histDays = h.days; s.day = h.day; s.histAt = state.latest.at; s.histLoading = false; draw(); }
+    if (s.ref === undefined) { s.ref = await reference(ctx); if (tok !== s.tok) return; draw(); } // Obergrenzen (reference.json) für Verfügbar ÷ erlaubt
     // Einsatzbereitschaft: ops/<Land>.json der Länder in der Tabelle (und der gewählten Gemeinde) nachladen
     if (s.opsAt !== state.latest.at) { s.ops.clear(); s.readyCache.clear(); s.opsFailed.clear(); s.opsAt = state.latest.at; }
     const lands = [...new Set(Object.values(state.latest.municipalities || {}).map(m => m.state).filter(Boolean))].filter(l => !s.ops.has(l) && !s.opsFailed.has(l));
@@ -943,13 +1136,81 @@ function drawAvailability(el) {
   const d = availData(ctx, s); s.rows = d.rows;
   const th = ctx.state.latest.thresholds || {};
   const defs = `<div class="rp-defs"><div><b>Verfügbarkeit</b> = buchbare ÷ gemeldete Fahrzeuge. Buchbar = nicht gesperrt und nicht reserviert; bei Stationsfeeds ohne Fahrzeugliste die buchbaren Fahrzeuge an Stationen. Gemeldet = alle Fahrzeuge der offenen Feeds nach Abgleich doppelter Quellen.</div>
-    <div><b>Einsatzbereit</b> = buchbar <i>und</i> Energie ausreichend, bezogen auf die Fahrzeuge mit Energieangabe: Ladestand ≥ ${th.chargeThreshold ?? 20} %, ohne Ladestand Reichweite ≥ ${th.rangeThreshold ?? 5} km; Anbieter, die nur Reichweite melden (${esc(R.RANGE_ONLY_OPS.join(', '))}), Reichweite ≥ ¼ ihrer üblichen (95. Perzentil im Land). Ohne Energieangabe: k. A.${s.opsStamp ? ` Energie-Stand ${stamp(s.opsStamp)}.` : ''}</div>
+    <div><b>Einsatzbereit</b> = buchbar <i>und</i> Energie nicht niedrig, bezogen auf die Fahrzeuge mit Energieangabe. Energie niedrig = Ladestand unter ${th.chargeThreshold ?? 20} % und Reichweite unter ${th.rangeThreshold ?? 5} km, wo beides gemeldet ist, sonst die gemeldete Angabe; Anbieter, die nur Reichweite melden (${esc(R.RANGE_ONLY_OPS.join(', '))}), über die Reichweite – dieselbe Regel wie Disposition und Übersicht. Ohne Energieangabe: k. A.${s.opsStamp ? ` Energie-Stand ${stamp(s.opsStamp)}.` : ''}</div>
     <div><b>Tagesmittel / -minimum</b> = Verfügbarkeit über die Sammler-Punkte des Tages${s.hist?.t?.length ? ` (${s.hist.t.length} Punkte, ${hhmm(s.hist.t[0])}–${hhmm(lastOf(s.hist.t))} Uhr)` : ''}; Stand der übrigen Spalten ${stamp(ctx.state.latest.at)}.</div></div>`;
   const right = `<div class="rp-ctl rp-noprint"><button type="button" data-rp="avcsv" title="Alle Zeilen im Filter">↓ CSV</button></div>`;
   const focus = document.activeElement && el.contains(document.activeElement) ? (document.activeElement.dataset?.f || null) : null;
   el.innerHTML = head('Verfügbarkeit je Stadt', `Buchbare und einsatzbereite Fahrzeuge je Gemeinde in ganz Deutschland · ${d.rows.length} Städte im Filter · Klick auf den Spaltenkopf sortiert`, right)
-    + filterCtl(ctx, s) + defs + availTable(ctx, s, d) + availChart(ctx, s);
+    + filterCtl(ctx, s) + defs + availTable(ctx, s, d) + capRateSection(ctx, s) + availChart(ctx, s);
   if (focus) el.querySelector(`[data-f="${focus}"]`)?.focus();
+}
+// ---------- Verfügbar ÷ erlaubt je Anbieter gegen die Obergrenzen ----------
+// Überschreitung (über 100 %) mit Symbol und Text, nahe (ab 90 %) mit Symbol und Text – nie nur über die Farbe. Gerechnete Grenze
+// (nicht in der Quelle): statt „Überschreitung/nahe“ nur ein Hinweis-Zeichen, kein Verstoß.
+const overMark = (v, derived = false) => (v != null && v > 1 ? (derived ? ` <span class="rp-status hint rp-over"><i aria-hidden="true">i</i>über gerechneter Zahl</span>` : ` <span class="rp-status over rp-over"><i aria-hidden="true">✕</i>Überschreitung</span>`) : '');
+const nearMark = (v, derived = false) => (v != null && v <= 1 && v >= R.NEAR_CAP && !derived ? ` <span class="rp-status near rp-over"><i aria-hidden="true">!</i>nahe</span>` : '');
+// knapp an 100 % mit einer Nachkommastelle („100,1 %“ statt „100 %“ neben „Überschreitung“, „> 99,9 %“ knapp darunter)
+const rateTxt = (ctx, v) => (v >= 0.995 && v < 1.005 ? pctFine(ctx, v, 1) : pctTxt(ctx, v, 0));
+const rateCell = (ctx, v, bar = false, derived = false) => (v == null ? '<span class="muted">—</span>' : `<b>${rateTxt(ctx, v)}</b>${bar ? miniBar(Math.min(1, v)) : ''}${overMark(v, derived)}${bar ? nearMark(v, derived) : ''}`);
+const standTxt = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(x || '') ? dd(x) : /^\d{4}-\d{2}$/.test(x || '') ? `${x.slice(5)}/${x.slice(0, 4)}` : x || '');
+const DERIVED_TXT = 'gerechnet, nicht in der Quelle';
+const numsTxt = (ctx, a) => (a?.length ? a.map(v => ctx.fmt(v)).join('–') : null);
+// Zahlen eines Eintrags ohne Kennzahl in einem Satz: „gesamt 9.000–10.000 · je Anbieter 800 · Teilgebiete: Innenstadt 19.000 (je Anbieter 4.750, gerechnet)“
+function capInfoTxt(ctx, x) {
+  const parts = [];
+  const g = numsTxt(ctx, x.info?.gesamt), j = numsTxt(ctx, x.info?.jeAnbieter);
+  if (g) parts.push(`gesamt ${g}`); if (j) parts.push(`je Anbieter ${j}`);
+  const z = (x.districts || []).filter(d => d.limit != null || d.perOperator != null).map(d => `${ctx.esc(d.label)} ${[d.limit != null ? ctx.fmt(d.limit) : null, d.perOperator != null ? `je Anbieter ${ctx.fmt(d.perOperator)}${d.perOperatorDerived ? ` (${DERIVED_TXT})` : ''}` : null].filter(Boolean).join(', ')}`);
+  if (z.length) parts.push(`nur Teilgebiet${z.length > 1 ? 'e' : ''}: ${z.join('; ')} – nicht prüfbar ohne Gebietsgrenze`);
+  return parts.join(' · ');
+}
+const capInfoLine = (ctx, x) => {
+  const why = x.sourceStatus === 'keine' ? 'keine Obergrenze laut Quelle' : !x.official ? `${ctx.esc(R.CAP_SOURCE_STATUS[x.sourceStatus] || x.sourceStatus)}${x.statusText && x.statusText !== R.CAP_SOURCE_STATUS[x.sourceStatus] ? ` (${ctx.esc(x.statusText)})` : ''}, nur zur Information` : 'amtlich, aber keine stadtweite Zahl';
+  const nums = x.sourceStatus === 'keine' ? '' : capInfoTxt(ctx, x);
+  return `<b>${ctx.esc(x.ort)}</b>${x.types?.[0] && x.types[0] !== 'scooter' ? ` (${ctx.esc(x.types.map(typeName).join(', '))})` : ''}: ${why}${nums ? ` · ${nums}` : ''}${x.url ? ` · ${safeLink(ctx, x.url, 'Quelle')}` : ''}`;
+};
+function capRateSection(ctx, s) {
+  const { esc, fmt, state } = ctx;
+  const h3 = (sub, right = '') => `<div class="panel-head" style="margin-top:var(--s5)"><div><h3 style="margin:0;font-size:14px" id="rp-caprate-h">Verfügbar ÷ erlaubt je Anbieter</h3><div class="sub">${sub}</div></div>${right}</div>`;
+  if (s.ref === undefined) return h3('Obergrenzen werden geladen …');
+  if (!s.ref?.obergrenzen?.length) return h3('Keine Obergrenzen hinterlegt (reference.json → obergrenzen).');
+  const ca = R.capAvailability(s.ref, state.latest, { hist: s.hist, operator: s.op, type: s.type, asOf: state.latest.at || Date.now() }); s.capRows = ca.rows;
+  const scope = state.scope && state.scope !== 'DE' ? state.scope : null;
+  const scopeName = scope ? state.latest.municipalities?.[scope]?.name || ctx.muniName?.(scope) || scope : null;
+  const capAgs = new Set((s.ref.obergrenzen || []).map(e => e.ags));
+  const notes = [];
+  if (scope && !capAgs.has(scope)) notes.push(`<b>${esc(scopeName)}:</b> keine Obergrenze bekannt – Städte ohne Eintrag in reference.json → obergrenzen sind hier ausgeblendet.`);
+  if (scope) for (const x of ca.info.filter(i => i.ags === scope)) notes.push(capInfoLine(ctx, x));
+  if (ca.skipped.length) notes.push(`Für ${esc(typeName(s.type))} ist keine amtliche Obergrenze hinterlegt; die Grenzen von ${esc([...new Set(ca.skipped.map(x => x.ort))].join(', '))} gelten für ${esc([...new Set(ca.skipped.flatMap(x => x.types))].map(typeName).join(', '))}.`);
+  const day = s.hist?.day || s.day; const tN = s.hist?.t?.length || 0;
+  const nCities = new Set(ca.rows.map(r => r.ags)).size;
+  const sub = `${plural(ca.cities, 'amtliche Grenze', 'amtliche Grenzen')} mit stadtweiter Zahl${nCities ? ` · ${plural(nCities, 'Stadt', 'Städte')} im Filter` : ''} · gezählt nur die Fahrzeugart der Grenze · Stand ${stamp(state.latest.at)}${tN ? ` · Tagesmittel/-minimum ${day ? dd(day) : ''} aus ${fmt(tN)} Sammler-Punkten` : ''}`;
+  const right = ca.rows.length ? `<div class="rp-ctl rp-noprint"><button type="button" data-rp="capcsv" title="Alle Zeilen im Filter">↓ CSV</button></div>` : '';
+  const defs = `<div class="rp-defs"><div><b>Verfügbar ÷ erlaubt</b> = buchbare Fahrzeuge des Anbieters ÷ seine erlaubte Fahrzeugzahl (Obergrenze je Anbieter). Gibt die Stadt nur eine Gesamtgrenze vor, steht dort der Anteil des Anbieters an der Gesamtgrenze; die Zeile „Alle Anbieter“ setzt die Summe gegen die Gesamtgrenze.</div>
+    <div><b>Gemeldet ÷ erlaubt</b> = alle gemeldeten Fahrzeuge (auch gesperrte und reservierte) ÷ dieselbe Grenze – so prüft der Obergrenzen-Wächter. Über 100 % ist eine Überschreitung (✕), ab ${R.NEAR_CAP * 100} % nahe (!); bei gerechneten Zahlen (${DERIVED_TXT}) nur ein Hinweis (i). Anbieter ohne offenen Feed fehlen: Untergrenze.</div>
+    <div><b>Nur amtliche Grenzen</b> mit stadtweiter Zahl. Grenzen für Teilgebiete (z. B. Berlin innerhalb des S-Bahn-Rings) sind ohne Gebietsgrenze nicht prüfbar; geplante, nur in der Presse genannte oder veraltete Zahlen stehen als Information darunter. <b>Tagesmittel / -minimum</b> = Verfügbar ÷ erlaubt über die Sammler-Punkte des gewählten Tages.</div></div>`;
+  const noteHtml = notes.length ? `<div class="note small" role="note" style="margin:0 0 var(--s2)">${notes.join('<br>')}</div>` : '';
+  const others = scope ? [] : ca.info;
+  const otherHtml = others.length ? `<details class="rp-capinfo"><summary>Weitere Einträge ohne amtliche stadtweite Zahl (${others.length})</summary><ul>${others.map(x => `<li>${capInfoLine(ctx, x)}</li>`).join('')}</ul></details>` : '';
+  if (!ca.rows.length) return h3(sub, right) + defs + noteHtml + (ca.skipped.length || (scope && notes.length) ? '' : emptyBox('Keine Fahrzeuge im Filter.', 'Anbieter oder Fahrzeugart auf „Alle“ stellen.')) + otherHtml;
+  const byCity = new Map(); for (const r of ca.rows) { const k = `${r.ags}|${r.types.join(',')}`; if (!byCity.has(k)) byCity.set(k, []); byCity.get(k).push(r); }
+  const kindTxt = { operator: 'je Anbieter', share: 'Anteil an gesamt', total: 'gesamt', unlicensed: '', none: 'keine Zahl' };
+  const bodies = [...byCity.values()].sort((a, b) => a[0].ort.localeCompare(b[0].ort, 'de') || a[0].types[0].localeCompare(b[0].types[0])).map(list => {
+    const first = list[0]; const land = state.latest.municipalities?.[first.ags]?.state;
+    const zones = (first.districts || []).length ? `<div class="sub-line">${plural(first.districts.length, 'Teilgebiet', 'Teilgebiete')} mit eigener Grenze: nicht prüfbar</div>` : '';
+    const src = `${safeLink(ctx, first.url, first.quelle || 'Quelle')}${first.stand ? ` · Stand ${esc(standTxt(first.stand))}` : ''}${first.next ? ` · ab ${dd(first.next.from)}: ${fmt(first.next.limit)}` : ''}`;
+    const ty = first.types[0] !== 'scooter' ? ` <span class="muted">· ${esc(first.types.map(typeName).join(', '))}</span>` : '';
+    return `<tbody${first.ags === scope ? ' class="rp-selg" aria-current="true"' : ''}>${list.map((r, i) => `<tr${r.op === '*' ? ' class="rp-sum"' : ''}>${i === 0 ? `<th scope="rowgroup" rowspan="${list.length}" class="rp-cityth">${cityCell(ctx, r.ags, r.ort, land)}${ty}<div class="sub-line">${src}</div>${zones}</th>` : ''}
+      <td>${r.op === '*' ? '<b>Alle Anbieter</b>' : `<span class="op"><i style="background:${ctx.opColor(r.op)}"></i>${esc(r.op)}</span>`}${r.kind === 'unlicensed' ? `<div class="sub-line">${badge('unlicensed')}</div>` : ''}</td><td class="n">${fmt(r.total)}</td><td class="n">${fmt(r.available)}</td>
+      <td class="n">${r.limit != null ? fmt(r.limit) : '—'}<div class="sub-line">${kindTxt[r.kind] || ''}${r.derived ? `${kindTxt[r.kind] ? ' · ' : ''}${DERIVED_TXT}` : ''}</div></td>
+      <td class="n">${rateCell(ctx, r.availRate, true, r.derived)}</td><td class="n">${rateCell(ctx, r.totalRate, false, r.derived)}</td>
+      <td class="n">${rateCell(ctx, r.dayMean, false, r.derived)}</td><td class="n">${rateCell(ctx, r.dayMin, false, r.derived)}${r.dayMinAt ? `<div class="sub-line">${hhmm(r.dayMinAt)} Uhr</div>` : ''}</td></tr>`).join('')}</tbody>`;
+  }).join('');
+  return h3(sub, right) + defs + noteHtml + `<div class="tbl" tabindex="0" role="region" aria-labelledby="rp-caprate-h"><table class="rp-captable"><thead><tr><th scope="col">Stadt (Quelle, Stand der Grenze)</th><th scope="col">Anbieter</th><th scope="col" class="n">Gemeldet</th><th scope="col" class="n">Buchbar</th><th scope="col" class="n">Erlaubt</th><th scope="col" class="n">Verfügbar ÷ erlaubt</th><th scope="col" class="n">Gemeldet ÷ erlaubt</th><th scope="col" class="n">Tagesmittel</th><th scope="col" class="n">Tagesminimum</th></tr></thead>${bodies}</table></div>` + otherHtml;
+}
+function capCsv(el) {
+  const s = st(el); if (!s.capRows) return; const ctx = s.ctx;
+  download(`verfuegbar-je-erlaubt_${s.op}_${s.type}_${new Date(ctx.state.latest?.at || Date.now()).toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`, R.toCsv(R.capAvailabilityCsvRows(s.capRows, { operator: s.op, type: s.type, at: ctx.state.latest?.at, typeLabel: typeName, day: s.hist?.day || s.day })));
 }
 function availCsv(el) {
   const s = st(el); if (!s.rows) return; const ctx = s.ctx;

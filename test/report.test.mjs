@@ -112,6 +112,95 @@ const docSun = { day: '2026-11-08', runs: [...fullHourRuns('2026-11-08', 15).map
   const all = R.capsCheck(ref, groups, { ags: 'DE', asOf: Date.parse('2026-11-01T09:00:00Z') });
   assert(all.length === 2 && all[1].limit === 10500 && all[1].total === 3186 && all[1].operators[0].limit === null, 'Deutschlandweit: alle Gemeinden mit Eintrag; Frankfurt ohne Grenze je Anbieter');
   assert(R.capsCheck(ref, groups, { ags: '08416041' }).length === 0, 'Gemeinde ohne Eintrag: keine Prüfung');
+  const voi = st[0].operators[0];
+  assert(voi.available === 1380 && near(voi.availShare, 1380 / 1500) && near(voi.capShareAvail, 1380 / 6000) && st[0].available === 2407 && near(st[0].availShare, 2407 / 6000), 'Verfügbar ÷ erlaubt: Voi 1.380 buchbar ÷ 1.500 je Anbieter; gesamt 2.407 ÷ 6.000');
+  assert(all[1].operators[0].availShare === null && near(all[1].operators[0].capShare, 3186 / 10500), 'Frankfurt (nur Gesamtgrenze): kein Wert je Anbieter, Anteil an der Gesamtgrenze');
+}
+
+// ---------- Obergrenzen: Status der Quelle, Zonen, gerechnete Grenzen, Zulassung ----------
+{
+  const asOf = Date.parse('2026-11-01T09:00:00Z');
+  const ref = { obergrenzen: [
+    { ags: 'B', ort: 'Berlin', type: 'scooter', gesamt: null, jeAnbieter: null, zonen: [{ name: 'Innenstadt (S-Bahn-Ring)', gesamt: 19000, jeAnbieter: 4750, jeAnbieterAbgeleitet: true }], anbieterZahl: 5, anbieter: ['Bolt', 'Lime', 'Dott (TIER)'], status: 'amtlich' },
+    { ags: 'D', ort: 'Dresden', type: 'scooter', gesamt: 250, jeAnbieter: 83, jeAnbieterAbgeleitet: true, anbieter: [], status: 'amtlich' },
+    { ags: 'D', ort: 'Dresden', type: 'bike', gesamt: 300, jeAnbieter: null, status: 'amtlich' },
+    { ags: 'HB', ort: 'Bremen', type: 'scooter', gesamt: 100, jeAnbieter: 60, gesamtAbgeleitet: true, status: 'amtlich' },
+    { ags: 'HD', ort: 'Heidelberg', type: 'scooter', gesamt: 120, jeAnbieter: 40, anbieterZahl: 3, anbieter: ['Dott (TIER)', 'Bolt', 'Voi'], status: 'amtlich' },
+    { ags: 'K', ort: 'Köln', type: 'scooter', gesamt: [9000, 10000], status: 'geplant', statusText: 'ab 2027 angekündigt' },
+    { ags: 'MA', ort: 'Mannheim', type: 'scooter', gesamt: 20, status: 'presse', statusText: 'nur Pressebericht' },
+    { ags: 'HH', ort: 'Hamburg', type: 'scooter', gesamt: null, jeAnbieter: null, status: 'keine' } ] };
+  const groups = { 'B|Bolt|scooter': { total: 3000, available: 2900 }, 'B|Voi|scooter': { total: 2000, available: 1900 }, 'D|Voi|scooter': { total: 100, available: 95 }, 'D|Bolt|scooter': { total: 50, available: 50 }, 'D|nextbike|bike': { total: 290, available: 280 },
+    'HB|Voi|scooter': { total: 70, available: 65 }, 'HB|Bolt|scooter': { total: 40, available: 40 }, 'HD|Dott|scooter': { total: 45, available: 44 }, 'HD|Zeus|scooter': { total: 30, available: 30 }, 'HD|Bolt|scooter': { total: 20, available: 20 },
+    'MA|Voi|scooter': { total: 50, available: 50 }, 'K|Voi|scooter': { total: 10, available: 10 }, 'HH|Voi|scooter': { total: 10, available: 10 } };
+  const caps = R.capsCheck(ref, groups, { asOf }); const by = (ort, ty = 'scooter') => caps.find(c => c.ort === ort && c.types.includes(ty));
+  const be = by('Berlin');
+  assert(be.official && !be.hasRate && be.limit === null && be.status === 'unknown' && be.districts.length === 1 && be.districts[0].limit === 19000 && be.districts[0].perOperator === 4750 && be.districts[0].perOperatorDerived && be.districts[0].status === 'unchecked' && be.operators.every(o => o.limit === null),
+    'Berlin: 19.000 gelten nur innerhalb des S-Bahn-Rings → Zone nicht prüfbar, keine stadtweite Grenze, keine Rate');
+  assert(be.operators.every(o => o.licensed === null), 'Anbieterliste unvollständig (3 von 5 genannt): niemand als „ohne Zulassung“ markiert');
+  const dr = by('Dresden'), drVoi = dr.operators.find(o => o.op === 'Voi');
+  assert(drVoi.limit === 83 && drVoi.derived && drVoi.status === 'hint' && drVoi.availStatus === 'hint' && dr.status === 'ok' && by('Dresden', 'bike').limit === 300 && by('Dresden', 'bike').total === 290 && by('Dresden', 'bike').status === 'near',
+    'Dresden: 833-artige Grenze je Anbieter gerechnet → über der Zahl nur „Hinweis“; Räder als eigener Eintrag je Art');
+  const hb = by('Bremen');
+  assert(hb.limitDerived && hb.status === 'hint' && hb.operators.find(o => o.op === 'Voi').status === 'over', 'Bremen: Gesamtzahl gerechnet → gesamt nur Hinweis; die genannte Zahl je Anbieter bleibt prüfbar (Voi 70 > 60 über)');
+  const hd = by('Heidelberg'), zeus = hd.operators.find(o => o.op === 'Zeus'), dott = hd.operators.find(o => o.op === 'Dott');
+  assert(zeus.licensed === false && zeus.limit === null && zeus.status === 'unlicensed' && dott.licensed === true && dott.status === 'over' && hd.total === 95 && hd.status === 'ok', 'Heidelberg: Zeus nicht in der vollständigen Liste → „ohne Zulassung laut Quelle“, kein Verstoß; „Dott (TIER)“ passt auf Dott; gesamt zählt alle');
+  const ko = by('Köln'), ma = by('Mannheim'), hh = by('Hamburg');
+  assert(!ko.official && ko.limit === null && ko.status === 'info' && ko.info.gesamt.join('–') === '9000–10000' && ma.status === 'info' && ma.info.gesamt[0] === 20 && ma.operators[0].limit === null && ma.operators[0].status === 'unknown' && hh.status === 'none' && !hh.hasRate,
+    'nicht amtlich (geplant, presse): Zahl nur zur Information, keine Kennzahl; „keine“ = keine Obergrenze laut Quelle');
+  const log = R.capsLogUpdate(null, caps, { at: asOf });
+  const ops = new Set(log.daily.map(d => `${d[1]}|${d[2]}`));
+  assert(!ops.has('MA|*') && !ops.has('K|*') && !ops.has('HH|*') && !ops.has('B|*') && log.checks.every(c => c[1] !== 'MA') && !log.checks.some(c => c[1] === 'HD' && c[2] === 'Zeus') && !log.checks.some(c => c[1] === 'D' && c[2] === 'Voi') && !log.checks.some(c => c[1] === 'HB' && c[2] === '*') && log.checks.some(c => c[1] === 'HB' && c[2] === 'Voi') && log.checks.some(c => c[1] === 'HD' && c[2] === 'Dott'),
+    'Sammler-Protokoll: keine Prüfung aus nicht amtlichen, gerechneten, nur zonalen Grenzen oder für nicht zugelassene Anbieter; genannte Zahlen weiter');
+  assert(log.daily.some(d => d[1] === 'D' && d[2] === '*' && d[4] === 250) && log.daily.some(d => d[1] === 'D~bike' && d[2] === '*' && d[4] === 300) && log.checks.some(c => c[1] === 'D~bike' && c[3] === 290),
+    'Dresden E-Scooter und Räder getrennt im Protokoll (Schlüssel AGS bzw. AGS~Art)');
+  const vd = R.capsViolations(log, { ags: 'D', asOf: asOf + 60e3 });
+  assert(vd.length === 2 && vd.some(v => v.ags === 'D~bike' && v.ops.some(o => o.op === '*' && o.nearRuns === 1)), 'Verstöße je Gemeinde und Art abrufbar');
+  const ca = R.capAvailability(ref, { groups }, { asOf });
+  const row = (a, op) => ca.rows.find(r => r.ags === a && r.op === op);
+  assert(row('HD', 'Zeus').kind === 'unlicensed' && row('HD', 'Zeus').availRate === null && row('D', 'Voi').derived && row('D', 'Voi').availStatus === 'hint' && row('HB', '*').derived && row('HB', '*').availStatus === 'hint' && !ca.rows.some(r => ['B', 'K', 'MA', 'HH'].includes(r.ags)),
+    'Verfügbar ÷ erlaubt: nur amtliche Einträge mit stadtweiter Zahl; gerechnete Grenzen markiert, ohne Zulassung ohne Rate');
+  assert(ca.info.map(i => i.ort).join() === 'Berlin,Köln,Mannheim,Hamburg' && ca.info[0].districts[0].limit === 19000 && ca.info[1].sourceStatus === 'geplant' && ca.cities === 4, 'übrige Einträge als Information (Teilgebiet, geplant, Presse, keine)');
+  const bike = R.capAvailability(ref, { groups }, { asOf, type: 'bike' });
+  assert(bike.rows.every(r => r.ags === 'D' && r.types[0] === 'bike') && bike.rows.find(r => r.op === 'nextbike').kind === 'share', 'Filter Räder: nur der Räder-Eintrag Dresden');
+}
+
+// ---------- Verfügbar ÷ erlaubt je Anbieter und Stadt ----------
+{
+  const asOf = Date.parse('2026-11-01T09:00:00Z');
+  const ref = { obergrenzen: [
+    { ags: 'S', ort: 'Stuttgart', type: 'scooter', gesamt: 600, jeAnbieter: 150, quelle: 'Stadt, 20.10.2026', url: 'https://example.org' },
+    { ags: 'F', ort: 'Frankfurt', type: 'scooter', gesamt: 1200, ab: '2026-07-01', gesamtAb: 1000, stand: '2026-02-26' },
+    { ags: 'K', ort: 'Köln', type: ['scooter'], gesamt: 400, anbieter: [{ anbieter: 'voi', limit: 100 }, { name: 'Bolt', max: 80 }, 'Lime'], zonen: [{ name: 'Altstadt', limit: 50 }], neuesFeld: { x: 1 } },
+    { ags: 'M', ort: 'Mstadt', type: 'scooter', anbieter: { Voi: 20, Tier: { fahrzeuge: 30 } } } ] };
+  const latest = { groups: {
+    'S|Voi|scooter': { total: 160, available: 140, disabled: 20 }, 'S|Bolt|scooter': { total: 100, available: 90 }, 'S|nb|bike': { total: 500, available: 500 },
+    'F|Lime|scooter': { total: 700, available: 650 }, 'F|Voi|scooter': { total: 300, available: 280 },
+    'K|Voi|scooter': { total: 110, available: 105 }, 'K|Bolt|scooter': { total: 50, available: 40 }, 'K|Lime|scooter': { total: 90, available: 88 },
+    'M|Voi|scooter': { total: 10, available: 10 }, 'B|Voi|scooter': { total: 999, available: 999 } } };
+  const hist = { t: [Date.parse('2026-06-30T12:00:00Z'), Date.parse('2026-07-01T12:00:00Z'), Date.parse('2026-07-01T12:20:00Z')], series: {
+    'S|Voi|scooter': { total: [160, 160, 160], available: [120, 165, null] }, 'S|Bolt|scooter': { available: [60, 60, 60] },
+    'F|Lime|scooter': { available: [600, 600, 700] }, 'F|Voi|scooter': { available: [240, 200, 300] }, 'S|nb|bike': { available: [500, 500, 500] } } };
+  const ca = R.capAvailability(ref, latest, { hist, asOf });
+  const row = (a, op) => ca.rows.find(r => r.ags === a && r.op === op);
+  const sv = row('S', 'Voi'), sAll = row('S', '*'), fl = row('F', 'Lime'), fAll = row('F', '*');
+  assert(ca.cities === 4 && !ca.rows.some(r => r.ags === 'B') && sv.kind === 'operator' && sv.limit === 150 && near(sv.availRate, 140 / 150) && near(sv.totalRate, 160 / 150) && sv.totalStatus === 'over' && sv.availStatus === 'near',
+    'Stuttgart je Anbieter: Voi 140 buchbar ÷ 150 = 93 % (nahe), gemeldet 160 ÷ 150 = 107 % (Überschreitung); Stadt ohne Grenze fehlt');
+  assert(near(sv.dayMean, (120 / 150 + 165 / 150) / 2) && near(sv.dayMin, 0.8) && sv.dayN === 2 && sAll.kind === 'total' && sAll.available === 230 && near(sAll.availRate, 230 / 600), 'Tagesmittel/-minimum aus den Sammler-Punkten (Punkt ohne Wert übersprungen); Zeile alle Anbieter gegen die Gesamtgrenze, Räder zählen nicht');
+  assert(fl.kind === 'share' && fl.limit === 1000 && near(fl.availRate, 0.65) && near(fl.dayMean, (600 / 1200 + 600 / 1000 + 700 / 1000) / 3) && near(fl.dayMin, 0.5) && near(fAll.availRate, 930 / 1000) && fAll.stand === '2026-02-26',
+    'Frankfurt nur Gesamtgrenze: Anteil des Anbieters an der Gesamtgrenze (ab 01.07. 1.000 statt 1.200, je Sammler-Punkt die damals gültige), Stand aus dem Eintrag');
+  const kv = row('K', 'Voi'), kb = row('K', 'Bolt'), kl = row('K', 'Lime');
+  assert(kv.kind === 'operator' && kv.limit === 100 && kv.availStatus === 'over' && kb.limit === 80 && kl.kind === 'share' && kl.limit === 400 && row('M', 'Voi').limit === 20,
+    'neue Felder: anbieter als Liste (Name ohne Groß/Klein, limit/max) oder Objekt; zugelassen ohne Zahl → Anteil an der Gesamtgrenze; unbekannte Felder stören nicht');
+  const kc = R.capsCheck(ref, latest.groups, { ags: 'K', asOf })[0];
+  assert(kc.districts.some(d => d.label === 'Altstadt' && d.limit === 50 && d.status === 'unchecked') && kc.listed.join() === 'voi,Bolt,Lime' && kc.types.join() === 'scooter', 'zonen als nicht prüfbare Teilgrenzen; Liste der zugelassenen Anbieter');
+  assert(!row('M', '*') && row('M', 'Voi').kind === 'operator', 'ohne Gesamtgrenze keine Summenzeile');
+  const fv = R.capAvailability(ref, latest, { hist, asOf, operator: 'Voi' });
+  assert(fv.rows.every(r => r.op === 'Voi') && fv.rows.length === 4, 'Filter Anbieter: nur dessen Zeilen, keine Summenzeile');
+  const fb = R.capAvailability(ref, latest, { asOf, type: 'bike' });
+  assert(fb.rows.length === 0 && fb.skipped.length === 4 && fb.cities === 4, 'Filter Fahrzeugart ohne Grenze: keine Zeilen, Städte als „Grenze gilt für E-Scooter“ gemeldet');
+  assert(R.capAvailability(null, latest).rows.length === 0 && R.capAvailability(ref, latest, { asOf }).rows.find(r => r.ags === 'S' && r.op === 'Voi').dayN === 0, 'ohne reference.json leer; ohne Verlauf kein Tagesmittel');
+  const csv = R.capAvailabilityCsvRows(ca.rows, { at: asOf });
+  assert(csv.length === ca.rows.length + 1 && csv.every(r => r.length === csv[0].length) && R.toCsv(csv).includes('Anteil an der Gesamtgrenze'), 'CSV Verfügbar ÷ erlaubt: gleiche Spaltenzahl, Bezug je Zeile');
 }
 
 // ---------- CSV ----------
@@ -167,7 +256,13 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
     if (E.observedMinutes && E.gapHours) assert(docs.every(d => { const a = R.hourQuality(d.runs).obsOk, b = E.observedMinutes(d.runs), g = E.gapHours(d.runs); return a.every((m, h) => Math.abs(m - b[h]) < 1e-9) && R.hourQuality(d.runs).gap.every((x, h) => x === !!g[h]); }), 'gleiche Lücken-Regel wie pulse-econ (observedMinutes/gapHours) auf den echten Tagesdateien');
     const ref = JSON.parse(readFileSync(path.resolve(D, '..', 'data', 'reference.json'), 'utf8'));
     const caps = R.capsCheck(ref, latest.groups, { ags: 'DE', asOf: latest.at });
-    assert(caps.length === 2 && caps[0].total > 0 && caps.every(c => ['ok', 'near', 'over'].includes(c.status)), `echte Daten Obergrenzen: ${caps.map(c => `${c.ort} ${c.total}/${c.limit} ${c.status}`).join(', ')}`);
+    const rated = caps.filter(c => c.official && c.limit > 0);
+    assert(caps.length === ref.obergrenzen.length && rated.length >= 1 && rated.every(c => ['ok', 'near', 'over', 'hint'].includes(c.status)) && caps.filter(c => !c.official).every(c => c.limit == null && ['info', 'none'].includes(c.status) && c.operators.every(o => o.limit == null)),
+      `echte Daten Obergrenzen: amtlich mit Zahl ${rated.map(c => `${c.ort} ${c.total}/${c.limit} ${c.status}`).join(', ')}; nicht amtlich ohne Kennzahl`);
+    const log = R.capsLogUpdate(null, caps, { at: latest.at });
+    const officialAgs = new Set(ref.obergrenzen.filter(R.capOfficial).map(e => e.ags));
+    const agsOf = (k) => String(k).split('~')[0];
+    assert(log.rules.length >= 1 && log.rules.every(r => officialAgs.has(agsOf(r.ags))) && log.daily.every(d => officialAgs.has(agsOf(d[1]))), `Protokoll (Sammler): nur amtliche Einträge mit Zahl (${log.rules.map(r => r.ags).join(', ')})`);
   } else console.log('ok: echte Daten übersprungen (.realdata fehlt)');
 }
 
@@ -188,9 +283,36 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
   const rd = R.readinessFromOps(ops);
   const A = rd.get('A'), B = rd.get('B');
   assert(A.total === 5 && A.known === 4 && A.ready === 2 && A.okEnergy === 3, 'Einsatzbereit: buchbar und Ladestand ≥ 20 % (sonst Reichweite ≥ 5 km); gesperrt zählt nicht, ohne Energieangabe nicht im Nenner');
-  // Lime meldet nur Reichweite: 95. Perzentil der Reichweiten 21…40 → 39; Schwelle ¼ = 9,75 km → alle 20 ausreichend, obwohl Ladestand 5 %
-  assert(B.known === 20 && B.ready === 20, 'Anbieter nur mit Reichweite (Lime): niedrig relativ zur üblichen Reichweite, nicht über den abgeleiteten Ladestand');
+  // Lime meldet nur Reichweite (21…40 km): der abgeleitete Ladestand 5 % zählt nicht → alle 20 ausreichend
+  assert(B.known === 20 && B.ready === 20, 'Anbieter nur mit Reichweite (Lime): beurteilt über Reichweite ≥ 5 km, nicht über den abgeleiteten Ladestand');
   assert(R.readinessFromOps(ops, { type: 'bike' }).size === 0 && R.readinessFromOps(null).size === 0, 'Filter Art in der Einsatzbereitschaft; fehlende Datei = leer');
+  const ops2 = { ...ops, vehicles: [[0, 0, 0, 0, 0, 10, 8, 0, 0], [0, 0, 0, 0, 0, 10, 3, 0, 0], [0, 0, 1, 0, 0, 90, 3, 0, 1], [0, 0, 1, 0, 0, 5, 6, 0, 1]] };
+  const r2 = R.readinessFromOps(ops2);
+  assert(r2.get('A').known === 2 && r2.get('A').ready === 1 && r2.get('B').ready === 1, 'Einsatzbereit = nicht „Energie niedrig“: 10 % mit 8 km reicht (beides gemeldet, Reichweite genügt), 10 % mit 3 km nicht; Lime 3 km niedrig trotz 90 %');
+
+  // Energie niedrig: eine Regel wie die Disposition
+  const lo = (b, r, o) => R.energyLow(b, r, o);
+  assert(lo(10, 3) === true && lo(10, 8) === false && lo(30, 3) === false && lo(10, null) === true && lo(null, 3) === true && lo(null, null) === null && lo(25, null) === false,
+    'Energie niedrig: Ladestand < 20 % UND Reichweite < 5 km, wo beides gemeldet; sonst die gemeldete Angabe; ohne Angabe null');
+  assert(lo(90, 3, { rangeOnly: true }) === true && lo(5, 12, { rangeOnly: true }) === false && lo(5, null, { rangeOnly: true }) === null, 'nur Reichweite (Lime): Ladestand zählt nicht, Reichweite < 5 km = niedrig');
+  assert(lo(15, 4, { charge: 10, range: 5 }) === false && lo(9, 4, { charge: 10 }) === true && lo('12', '4') === true, 'eigene Grenzen (Live-Abruf) und Zahlen als Text');
+  const O = await import('../lib/pulse-ops.js').catch((e) => { console.log(`ok: Abgleich mit needsSwap übersprungen (pulse-ops.js nicht ladbar: ${e.message})`); return null; });
+  if (O?.needsSwap) {
+    const vals = [null, 0, 5, 19, 20, 21, 50, 100], rng = [null, 0, 2, 4.9, 5, 5.1, 12];
+    let same = 0, n = 0;
+    for (const b of vals) for (const r of rng) { n++; const a = O.needsSwap({ battery: b, rangeKm: r, disabled: false }, { swapThreshold: 20, swapRangeKm: 5 }), c = lo(b, r) === true; if (a === c) same++; }
+    assert(same === n, `gleiche Entscheidung wie needsSwap der Disposition für alle ${n} Kombinationen aus Ladestand und Reichweite (nicht gesperrt)`);
+  }
+  const doc = { types: ['scooter', 'bike'], ops: ['Voi', 'Lime', 'nb'], munis: ['A', 'B'], vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde', vehicles: [
+    [0, 0, 0, 0, 0, 10, 3, 0, 0], [0, 0, 0, 0, 2, 10, 8, 0, 0], [0, 0, 0, 0, 0, 50, 2, 0, 0], [0, 0, 1, 0, 0, 12, 4, 0, 0], [0, 0, 1, 0, 0, 12, 6, 0, 0], [0, 0, 1, 0, 0, 90, 1, 0, 1],
+    [0, 0, 2, 1, 0, null, null, 0, 0], [0, 0, 2, 1, 0, null, 3, 0, 0]] };
+  const en = R.energyFromOps(doc);
+  const voi = en.get('A|Voi|scooter'), lime = en.get('A|Lime|scooter'), nb = en.get('A|nb|bike');
+  assert(voi.known === 3 && voi.low === 1 && voi.rangeOnly === 0 && lime.known === 2 && lime.low === 1 && lime.rangeOnly === 2 && lime.rangeOnlyLow === 1 && nb.known === 1 && nb.low === 1 && nb.rangeOnly === 1,
+    'Energie je Gruppe aus ops/<Land>.json: Voi 1 von 3 (gesperrt zählt mit), Lime über Reichweite 1 von 2, Rad ohne Ladestand über Reichweite');
+  const tot = R.sumEnergy([...en.values()]);
+  assert(tot.known === 7 && tot.low === 4 && tot.rangeOnly === 4 && R.energyFromOps(doc, { keep: (a) => a === 'B' }).size === 1 && R.energyFromOps(null).size === 0, 'Summe über Gruppen; Filter je Gemeinde; fehlende Datei = leer');
+  assert(R.energyFromOps(doc, { charge: 15, range: 3.5 }).get('A|Lime|scooter').low === 0, 'Grenzen aus dem Live-Abruf wirken auf die Zählung');
   const hist = { day: '2026-11-01', t: [1, 2, 3], series: { 'A|Voi|scooter': { total: [100, 100, null], available: [90, 50, null] }, 'A|Bolt|scooter': { total: [200, 200, 200], available: [200, 200, 160] }, 'DE||scooter': { total: [1, 1, 1], available: [0, 0, 0] } } };
   const ha = R.histAvailability(hist).byAgs.get('A');
   assert(near(ha.mean, (290 / 300 + 250 / 300 + 160 / 200) / 3) && near(ha.min, 0.8) && ha.minAt === 3 && ha.n === 3, 'Tagesmittel und -minimum der Verfügbarkeit aus den Sammler-Punkten, Punkte ohne Wert übersprungen');
@@ -346,4 +468,14 @@ assert(R.csvCell('a;b') === '"a;b"' && R.csvCell('Sag "Hallo"') === '"Sag ""Hall
   const rk = R.cityRanking([doc], {}, latest, { type: 'scooter', minFleet: 0, rvdLimit: lim }).rows[0];
   assert(rk.excluded.join() === 'Lime' && near(rk.rvd, 1.92, 1e-6) && rk.fleet === 200, 'Rangliste: überzählender Anbieter nur bei der Flotte');
   assert(R.overLimit(3.5, 'scooter', lim) && !R.overLimit(3.4, 'scooter', lim) && !R.overLimit(9, 'bike', lim) && !R.overLimit(9, 'scooter', null), 'Grenze nur für Arten mit Referenz');
+}
+
+// Ausgenommene Anbieter (Dresden: MOBIbike mit Bestandsschutz) zählen nicht gegen die Obergrenze
+{
+  const R2 = await import('../lib/pulse-report.js');
+  const ref = { obergrenzen: [{ ags: '14612000', ort: 'Dresden', type: 'bike', gesamt: 3000, status: 'amtlich', ausgenommeneAnbieter: ['nextbike'] }] };
+  const groups = { '14612000|nextbike|bike': { total: 1716, available: 1700 }, '14612000|Donkey|bike': { total: 200, available: 190 } };
+  const c = R2.capsCheck(ref, groups, { ags: '14612000' })[0];
+  if (!c || c.operators.some(o => o.op === 'nextbike')) throw new Error('ausgenommener Anbieter gezählt');
+  console.log('ok: ausgenommener Anbieter (Bestandsschutz) zählt nicht gegen die Obergrenze');
 }

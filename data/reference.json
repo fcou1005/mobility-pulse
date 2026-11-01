@@ -191,26 +191,687 @@
   ],
   "obergrenzen": [
     {
-      "ags": "08111000",
-      "ort": "Stuttgart",
+      "ags": "11000000",
+      "ort": "Berlin",
       "type": "scooter",
-      "gesamt": 6000,
-      "jeAnbieter": 1500,
-      "innenstadtbezirke": 800,
-      "zentraleInnenstadt": 100,
-      "seit": "2024-01",
-      "quelle": "Stadt Stuttgart, 20.10.2026",
-      "url": "https://www.stuttgart.de/service/aktuelle-meldungen/2026/oktober/zwei-jahre-sonderregeln-fuer-e-scooter-in-stuttgart-stadt-zieht-positive-bilanz"
+      "art": "erlaubt (Höchstzahl Innenstadt)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Innenstadt (innerhalb S-Bahn-Ring)",
+          "gesamt": 19000,
+          "jeAnbieter": 4750,
+          "jeAnbieterAbgeleitet": true
+        }
+      ],
+      "anbieterZahl": 5,
+      "anbieter": [
+        "Bolt",
+        "Lime",
+        "Dott (TIER)"
+      ],
+      "seit": "2024-01-01",
+      "stand": "2026-07-22",
+      "quelle": "Abgeordnetenhaus Berlin, Schriftliche Anfrage Drs. 19/26583 (Antwort SenMVKU vom 22.07.2026)",
+      "url": "https://pardok.parlament-berlin.de/starweb/adis/citat/VT/19/SchrAnfr/S19-26583.pdf",
+      "hinweis": "„Seit dem 01.01.2024 sind in der Innenstadt 19.000 eKF erlaubt“, gleichmäßig auf vier in der Innenstadt tätige Unternehmen; 4.750 = 19.000 ÷ 4 (gerechnet). Werte je Anbieter veröffentlicht der Senat nicht (Geschäftsgeheimnis). Fünf Unternehmen insgesamt; die Antwort nennt Bolt, LimeBike und TIER (DOTT) nur im Zusammenhang mit Sicherheitsmaßnahmen. Außerhalb des S-Bahn-Rings keine Grenze genannt. Weitere Reduzierung angekündigt, ohne Zahl.",
+      "quelle2": "Land Berlin, Meldung vom 09.11.2023",
+      "url2": "https://www.berlin.de/aktuelles/8548735-958090-anzahl-vonescootern-wird-reduziert.html",
+      "status": "amtlich"
+    },
+    {
+      "ags": "02000000",
+      "ort": "Hamburg",
+      "type": "scooter",
+      "art": "keine Obergrenze",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": 5,
+      "anbieter": [
+        "Bolt",
+        "Dott",
+        "Lime",
+        "Ryde",
+        "Voi"
+      ],
+      "seit": "2025-01-01",
+      "stand": "2026",
+      "quelle": "Behörde für Verkehr und Mobilitätswende Hamburg, Seite „Elektro-Tretroller“",
+      "url": "https://www.hamburg.de/politik-und-verwaltung/behoerden/bvm/projekte-und-initiativen/elektro-tretroller-193402",
+      "hinweis": "Seite nennt keine Höchstzahl, nur Sondernutzungsgebühr je Fahrzeug und Rahmenvertrag mit der BVM seit 01.01.2025 (Vertrag im Transparenzportal nicht gelesen). Seite ohne Datum (© 2026).",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "09162000",
+      "ort": "München",
+      "type": "scooter",
+      "art": "keine Obergrenze (geplant)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2026-07-01",
+      "quelle": "Stadt München, Mobilitätsreferat: Antwort vom 01.07.2026 (Antrag 20-26/A 05256); Antwortschreiben vom 04.11.2025 (Anfrage 20-26/Q 00692)",
+      "url": "https://risi.muenchen.de/risi/dokument/v/9788061",
+      "hinweis": "E-Tretroller-Verleih „bedarf derzeit keiner Erlaubnis oder Genehmigung“ (04.11.2025, rund 21.000 aktiv). Antwort vom 01.07.2026 auf Antrag 20-26/A 05256: Flottenobergrenze und Sharing-Gebühren für eine spätere Stadtratsvorlage geplant, ohne Zahlen.",
+      "url2": "https://risi.muenchen.de/risi/dokument/v/9389374",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "05315000",
+      "ort": "Köln",
+      "type": "scooter",
+      "art": "vereinbarte Reduzierung (Innenstadt)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Innenstadt",
+          "gesamt": 4500,
+          "jeAnbieter": 650,
+          "hinweis": "„knapp über 4.500“, je Anbieter „rund 650“"
+        }
+      ],
+      "anbieterZahl": 7,
+      "anbieter": [],
+      "seit": "2021-09-03",
+      "stand": "2021-09-01",
+      "quelle": "Stadt Köln, Pressemitteilung vom 01.09.2021",
+      "url": "https://www.stadt-koeln.de/politik-und-verwaltung/presse/mitteilungen/23779/index.html",
+      "hinweis": "35 % weniger als zuvor >7.000 in der Innenstadt; Stadt wollte 50 %. Stadtweit keine Zahl genannt.",
+      "status": "amtlich"
+    },
+    {
+      "ags": "05315000",
+      "ort": "Köln",
+      "type": "scooter",
+      "art": "geplant",
+      "gesamt": [
+        9000,
+        10000
+      ],
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": 3,
+      "anbieter": [],
+      "seit": "2027-01-01",
+      "stand": "2026-07-08",
+      "quelle": "Verliebt in Köln, 08.07.2026 (zitiert Mitteilung der Verwaltung); Radio Erft, 23.07.2026",
+      "url": "https://verliebtinkoeln.com/10-000-statt-20-000-koeln-will-zahl-der-e-scooter-halbieren/",
+      "hinweis": "Plan der Verwaltung (Mitteilung an den Mobilitätsausschuss, laut Presse): von fast 20.000 auf 9.000–10.000 senken, Anbieter von sechs auf voraussichtlich drei begrenzen, neue Genehmigungen ab 01.01.2027. Keine amtliche Quelle geöffnet; je Anbieter nicht genannt.",
+      "url2": "https://www.radioerft.de/artikel/koeln-will-zahl-der-e-scooter-deutlich-begrenzen-2711175",
+      "status": "geplant",
+      "statusText": "ab 2027 angekündigt (Presse)"
     },
     {
       "ags": "06412000",
       "ort": "Frankfurt am Main",
       "type": "scooter",
-      "gesamt": 12000,
-      "ab": "2026-07-01",
-      "gesamtAb": 10500,
-      "quelle": "traffiQ, Pressemitteilung 26.02.2026",
-      "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf"
+      "art": "Höchstzahl (Sondernutzungserlaubnis)",
+      "gesamt": 10500,
+      "jeAnbieter": 3500,
+      "zonen": [
+        {
+          "name": "zentraler Innenstadtbereich",
+          "gesamt": 2400
+        }
+      ],
+      "anbieterZahl": 3,
+      "anbieter": [
+        "Lime",
+        "Voi",
+        "Bolt"
+      ],
+      "seit": "2026-07-01",
+      "stand": "2026-07-03",
+      "quelle": "traffiQ, Pressemitteilung 26.02.2026; hessenschau, 03.07.2026",
+      "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf",
+      "hinweis": "Vorher 12.000 stadtweit (ab Oktober 2025 mit Bolt, Dott, Lime, Voi, RideMovi, Ryde). Stadt nannte die drei Ausgewählten nicht; Lime, Voi und Bolt bestätigten laut hessenschau ihre Erlaubnis. Abgrenzung der Innenstadtzone nicht beschrieben.",
+      "url2": "https://www.hessenschau.de/wirtschaft/nur-noch-drei-e-scooter-verleiher-in-frankfurt-v2,scooter-frankfurt-verleiher-100.html",
+      "url3": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2025/traffiQ_2025-122_SNE_E-Scooter_ab_Oktober.pdf",
+      "status": "amtlich"
+    },
+    {
+      "ags": "08111000",
+      "ort": "Stuttgart",
+      "type": "scooter",
+      "art": "Höchstzahl (Sondernutzungserlaubnis)",
+      "gesamt": 6000,
+      "jeAnbieter": 1500,
+      "zonen": [
+        {
+          "name": "Innenstadtbezirke",
+          "jeAnbieter": 800
+        },
+        {
+          "name": "zentrale Innenstadt",
+          "jeAnbieter": 100
+        }
+      ],
+      "anbieterZahl": null,
+      "anbieter": [
+        "Bolt",
+        "Dott (TIER)",
+        "Lime",
+        "Voi"
+      ],
+      "seit": "2024-01",
+      "stand": "2026-10-20",
+      "quelle": "Stadt Stuttgart, 20.10.2026; Stuttgarter Zeitung, 17.01.2025",
+      "url": "https://www.stuttgart.de/service/aktuelle-meldungen/2026/oktober/zwei-jahre-sonderregeln-fuer-e-scooter-in-stuttgart-stadt-zieht-positive-bilanz",
+      "hinweis": "Werte aus data/reference.json übernommen (Stadt Stuttgart 20.10.2026). Stuttgarter Zeitung 17.01.2025: Genehmigung zwei Jahre ab 01.01.2025, Deckel 1.500 je Unternehmen, 100 im City-Bereich, Gebühr 4,50–7,50 € je Roller und Monat.",
+      "url2": "https://www.stuttgarter-zeitung.de/lokales/stuttgart/e-roller-in-stuttgart-neue-lizenzen-zum-scooterfahren-79030240.html",
+      "status": "amtlich",
+      "innenstadtbezirke": 800,
+      "zentraleInnenstadt": 100
+    },
+    {
+      "ags": "05111000",
+      "ort": "Düsseldorf",
+      "type": "scooter",
+      "art": "Höchstzahl (Stand 2022)",
+      "gesamt": 8400,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Zone 1: Altstadt, Carlstadt, Stadtmitte",
+          "gesamt": 1800
+        },
+        {
+          "name": "Zone 2: 13 Stadtteile (u. a. Pempelfort, Golzheim, Derendorf, Bilk, Oberkassel)",
+          "gesamt": 4900
+        },
+        {
+          "name": "übriges Stadtgebiet",
+          "gesamt": 1700
+        }
+      ],
+      "anbieterZahl": 5,
+      "anbieter": [
+        "Bird",
+        "Bolt",
+        "Lime",
+        "TIER",
+        "Voi"
+      ],
+      "seit": null,
+      "stand": "2022-02-22",
+      "quelle": "Ddorf-Aktuell, 22.02.2022",
+      "url": "https://www.ddorf-aktuell.de/2022/02/22/duesseldorf-entwickelt-system-fuer-mehr-ordnung-bei-e-scootern/",
+      "hinweis": "Reduzierung von 12.700 auf 8.400. Aktueller Stand nicht geprüft: duesseldorf.de sperrt WebFetch (robots.txt). Quelle ist Lokalpresse.",
+      "status": "ungeprüft",
+      "statusText": "Stand 2022, Aktualität nicht bestätigt"
+    },
+    {
+      "ags": "14713000",
+      "ort": "Leipzig",
+      "type": "scooter",
+      "art": "Höchstzahl Pilotphase (abgelaufen)",
+      "gesamt": 840,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": 2,
+      "anbieter": [
+        "Voi",
+        "TIER"
+      ],
+      "seit": "2021-11-01",
+      "stand": "2022-04-18",
+      "quelle": "Leipziger Zeitung, 18.04.2022",
+      "url": "https://www.l-iz.de/wirtschaft/mobilitaet/2022/04/e-scooter-verleih-in-leipzig-verleihnetz-waechst-weiter-testbetrieb-bis-2024-444360",
+      "hinweis": "Pilotphase bis Ende März 2024; aktuelle Regel nicht gefunden (Ratsinformationssystem sperrt WebFetch). 10/2026 laut Ratgeberseite Dott und Voi aktiv, ohne amtliche Grenze.",
+      "status": "veraltet",
+      "statusText": "Pilotphase bis 2024 – aktuelle Regel nicht gefunden"
+    },
+    {
+      "ags": "14612000",
+      "ort": "Dresden",
+      "type": "scooter",
+      "art": "Höchstzahl (Interessenbekundung)",
+      "gesamt": 2500,
+      "jeAnbieter": 833,
+      "zonen": [
+        {
+          "name": "Gebiet 1",
+          "jeAnbieter": 250,
+          "hinweis": "max. 30 % der Flotte"
+        },
+        {
+          "name": "Gebiet 2",
+          "jeAnbieter": 290,
+          "hinweis": "max. 35 % der Flotte"
+        },
+        {
+          "name": "Gebiet 3",
+          "hinweis": "mind. 25 % der Flotte"
+        },
+        {
+          "name": "Gebiet 4",
+          "hinweis": "mind. 10 % der Flotte"
+        }
+      ],
+      "anbieterZahl": 3,
+      "anbieter": [],
+      "seit": "2025-07",
+      "stand": "2025-05-06",
+      "quelle": "Landeshauptstadt Dresden, Interessenbekundungsverfahren E-Scooter vom 06.05.2025 (Nr. 2.1, 2.2, 6.4)",
+      "url": "https://www.dresden.de/media/pdf/Strassenbau/Sharing_2025-05-06_Interessenbekundung_E-Scooter.pdf",
+      "hinweis": "Bis zu drei Erlaubnisse für drei Jahre, Auswahl bis 30.06.2025. Die Gebietswerte (250/290) passen zu 30 %/35 % von 833, gelten also vermutlich je Anbieter (Lesart, nicht ausdrücklich so genannt). Gebietsgrenzen in einer nicht gelesenen Anlage. Ausgewählte Anbieter nicht geprüft.",
+      "jeAnbieterAbgeleitet": true,
+      "statusText": "833 je Anbieter gerechnet (2.500 ÷ 3 Erlaubnisse)",
+      "status": "amtlich"
+    },
+    {
+      "ags": "14612000",
+      "ort": "Dresden",
+      "type": "bike",
+      "art": "Höchstzahl (Interessenbekundung)",
+      "gesamt": 3000,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": 3,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2025-05-19",
+      "quelle": "electrive, 19.05.2025",
+      "url": "https://www.electrive.net/2025/05/19/dresden-sucht-neue-anbieter-fuer-bike-und-roller-sharing/",
+      "hinweis": "Drei Betreiber mit zusammen bis zu 3.000 Rädern; MOBIbike (nextbike/DVB, 1.500 Räder, Ausbau bis 5.000 möglich) hat Bestandsschutz und zählt nicht dazu. MOBIbike (nextbike/DVB) ist ausgenommen und wird nicht gezählt.",
+      "status": "amtlich",
+      "ausgenommeneAnbieter": [
+        "nextbike"
+      ]
+    },
+    {
+      "ags": "03241001",
+      "ort": "Hannover",
+      "type": "scooter",
+      "art": "geplant",
+      "gesamt": 6000,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Innenstadt (Marktkonsultation 2025, stationsgebunden)",
+          "gesamt": 1000
+        },
+        {
+          "name": "übrige Stadtgebiete (Marktkonsultation 2025, free floating)",
+          "gesamt": 4000
+        }
+      ],
+      "anbieterZahl": 3,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2026-06-19",
+      "quelle": "Landeshauptstadt Hannover, „Hannover regelt E-Scooter-Betrieb neu“; TED-Bekanntmachung 458642-2025",
+      "url": "https://www.hannover.de/Service/Presse-Medien/Landeshauptstadt-Hannover/Aktuelle-Meldungen-und-Veranstaltungen/Hannover-regelt-E-Scooter-Betrieb-neu",
+      "hinweis": "Stadtseite (zuletzt aktualisiert 19.06.2026): Begrenzung auf 6.000 im Stadtgebiet, drei Unternehmen per Ausschreibung, Entscheidung 2. Jahreshälfte 2026. Zonenwerte stammen aus der Markterkundung (TED 458642-2025, ausdrücklich kein Vergabeverfahren). Gebühr 9,63 € (Innenstadt) bzw. 5,22 € je Fahrzeug und Monat.",
+      "url2": "https://ted.europa.eu/de/notice/458642-2025/pdf",
+      "status": "geplant",
+      "statusText": "angekündigt, noch nicht in Kraft"
+    },
+    {
+      "ags": "09564000",
+      "ort": "Nürnberg",
+      "type": "scooter",
+      "art": "Höchstzahl (Sondernutzungsvertrag)",
+      "gesamt": 4000,
+      "jeAnbieter": 800,
+      "zonen": [
+        {
+          "name": "Zone A: Altstadt"
+        },
+        {
+          "name": "Zone B: bis Bundesstraßenring B4R"
+        },
+        {
+          "name": "Zone C: übriges Stadtgebiet"
+        }
+      ],
+      "anbieterZahl": 5,
+      "anbieter": [
+        "Voi",
+        "Dott (TIER)",
+        "Lime",
+        "Bolt"
+      ],
+      "seit": "2024-05-01",
+      "stand": "2024-04-25",
+      "quelle": "Stadt Nürnberg, Pressemitteilung Nr. 437 vom 25.04.2024; Stadtseite Verkehrsplanung E-Scooter",
+      "url": "https://www.nuernberg.de/presse/mitteilungen/pm_23093.html",
+      "hinweis": "PM 25.04.2024: ca. 300 Sammelparkplätze „für bis zu 4 000 E-Scooter“ (vorher >6.000), Testzeit fünf Jahre; damals Bolt, Lime, Superpedestrian, Tier, VOI. Stadtseite: 800 je Anbieter, nennt VOI, dott (TIER), Lime, Bolt. Keine Zahl je Zone.",
+      "url2": "https://www.nuernberg.de/internet/verkehrsplanung/escooter.html",
+      "status": "amtlich"
+    },
+    {
+      "ags": "04011000",
+      "ort": "Bremen",
+      "type": "scooter",
+      "art": "Höchstzahl (Sondernutzungskonzept)",
+      "gesamt": 2700,
+      "jeAnbieter": 1350,
+      "zonen": [
+        {
+          "name": "Kernstadtzone",
+          "gesamt": 1000,
+          "jeAnbieter": 500
+        },
+        {
+          "name": "erweitertes Gebiet (außerhalb Kernstadtzone)",
+          "gesamt": 1000,
+          "jeAnbieter": 500
+        },
+        {
+          "name": "Bremen-Nord",
+          "gesamt": 700,
+          "jeAnbieter": 350
+        }
+      ],
+      "anbieterZahl": 2,
+      "anbieter": [],
+      "seit": "2025-05-01",
+      "stand": "2024-10-15",
+      "quelle": "Senat der Freien Hansestadt Bremen, Vorlage „Anpassung Sondernutzungskonzept“ zur Sitzung 15.10.2024",
+      "url": "https://www.rathaus.bremen.de/sixcms/media.php/13/top%2012_20241015_Anpassung_Sondernutzungskonzept_nach_Landesstrassengesetz.pdf",
+      "gesamtAbgeleitet": true,
+      "hinweis": "Gesamt 2.700 = Summe der Zonen (gerechnet); Muster-Erlaubnis: 1.350 je Anbieter, davon bis 500 in der Kernstadtzone, Laufzeit drei Jahre ab 01.05.2025. Anbieter im Dokument nicht genannt.",
+      "status": "amtlich"
+    },
+    {
+      "ags": "05113000",
+      "ort": "Essen",
+      "type": "scooter",
+      "art": "nicht gefunden",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2026-11-01",
+      "quelle": null,
+      "url": null,
+      "hinweis": "Keine amtliche Quelle mit Höchstzahl gefunden.",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "05913000",
+      "ort": "Dortmund",
+      "type": "scooter",
+      "art": "Höchstzahl je Anbieter (Innenstadt, Stand 2022)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Innenstadtbezirke und PHOENIX See",
+          "jeAnbieter": 300
+        },
+        {
+          "name": "Außenbezirke",
+          "hinweis": "keine Begrenzung, free floating"
+        }
+      ],
+      "anbieterZahl": 5,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2022-03-01",
+      "quelle": "Stadt Dortmund, Drucksache Nr. 23331-22 vom 01.03.2022",
+      "url": "https://rathaus.dortmund.de/dosys/gremrech.nsf/0/343D9EF333B05EFEC12587F9004F0534/$FILE/VorlageVG%2323331-22.doc.pdf",
+      "hinweis": "Damals ca. 3.500 E-Roller insgesamt (Bestand, keine Grenze). Ratsbeschluss für 31.03.2022 vorgesehen; aktueller Stand nicht geprüft (dortmund.de sperrt WebFetch).",
+      "status": "amtlich"
+    },
+    {
+      "ags": "05314000",
+      "ort": "Bonn",
+      "type": "scooter",
+      "art": "keine Obergrenze (in Quelle)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2024-12-13",
+      "quelle": "Stadt Bonn, Pressemitteilung 13.12.2024",
+      "url": "https://www.bonn.de/pressemitteilungen/dezember-2024/stadt-wird-abstellen-von-e-scootern-und-leihraedern-regeln.php",
+      "hinweis": "Ratsbeschluss 12.12.2024 regelt Abstellflächen mit Abstellverbot im Umkreis, nennt keine Höchstzahl.",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "05515000",
+      "ort": "Münster",
+      "type": "scooter",
+      "art": "keine Obergrenze (Stand 2021)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": 3,
+      "anbieter": [
+        "Tier",
+        "Lime",
+        "Bolt"
+      ],
+      "seit": null,
+      "stand": "2021-11-23",
+      "quelle": "Stadt Münster, Beschlussvorlage V/0842/2021",
+      "url": "https://oparl.stadt-muenster.de/bodies/0001/downloadfiles/00495396.pdf",
+      "hinweis": "Vorlage V/0842/2021: keine Höchstzahl, Gebühr 12,50 € je Fahrzeug und Quartal ab 01.04.2022, Bestand ca. 4.000. Neuere Quelle nicht abrufbar (ms-aktuell.de Client-Fehler).",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "08222000",
+      "ort": "Mannheim",
+      "type": "scooter",
+      "art": "zugelassen",
+      "gesamt": 2000,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": 3,
+      "anbieter": [],
+      "seit": "2025-01",
+      "stand": "2026-03-18",
+      "quelle": "Wochenblatt-Reporter Mannheim, 18.03.2026",
+      "url": "https://www.wochenblatt-reporter.de/mannheim/c-lokales/neue-e-scooter-regeln-ab-april-2026-was-sich-in-mannheim-aendert_a733551",
+      "hinweis": "„Zahl der zugelassenen E-Scooter Anfang 2025 um ein Drittel auf 2.000 Fahrzeuge reduziert“, Anbieter auf drei begrenzt. Nur Lokalpresse; amtliche Quelle nicht gefunden.",
+      "status": "presse",
+      "statusText": "nur Pressebericht"
+    },
+    {
+      "ags": "08212000",
+      "ort": "Karlsruhe",
+      "type": "scooter",
+      "art": "Höchstzahl je Anbieter (öffentlich-rechtlicher Vertrag)",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Kerngebiet 1 (innenstadtnah)",
+          "jeAnbieter": 300
+        },
+        {
+          "name": "Kerngebiet 2 (Durlach)",
+          "jeAnbieter": 100
+        }
+      ],
+      "anbieterZahl": 3,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2024-10-22",
+      "quelle": "Stadt Karlsruhe, Informationsvorlage 2024/0969 (Gemeinderat 22.10.2024)",
+      "url": "https://web1.karlsruhe.de/ris/oparl/bodies/0001/downloadfiles/a/00660540.pdf",
+      "hinweis": "Max. 5 Fahrzeuge je Abstellort; insgesamt ca. 3.900 Fahrzeuge verteilt (Bestand, keine Grenze). Vertrag bis 31.10.2024, Verlängerung um mind. ein Jahr geplant; neuerer Stand nicht geprüft.",
+      "status": "amtlich"
+    },
+    {
+      "ags": "08311000",
+      "ort": "Freiburg im Breisgau",
+      "type": "scooter",
+      "art": "nicht gefunden",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2026-11-01",
+      "quelle": null,
+      "url": null,
+      "hinweis": "Keine Quelle mit Höchstzahl gefunden.",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "09761000",
+      "ort": "Augsburg",
+      "type": "scooter",
+      "art": "nicht gefunden",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2026-11-01",
+      "quelle": null,
+      "url": "https://risi.muenchen.de/risi/dokument/v/9389374",
+      "hinweis": "Keine Quelle mit Höchstzahl gefunden; in Bayern ist der Verleih derzeit nicht erlaubnispflichtig (Aussage Stadt München, 04.11.2025).",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "08221000",
+      "ort": "Heidelberg",
+      "type": "scooter",
+      "art": "Höchstzahl (Auswahlverfahren)",
+      "gesamt": 1200,
+      "jeAnbieter": 400,
+      "zonen": [],
+      "anbieterZahl": 3,
+      "anbieter": [
+        "Dott (TIER)",
+        "Bolt",
+        "Voi"
+      ],
+      "seit": "2026-04-01",
+      "stand": "2026-04-22",
+      "quelle": "Stadt Heidelberg, Pressemitteilung 22.04.2026",
+      "url": "https://www.heidelberg.de/HD/Presse/22_04_2026+e-tretroller+in+heidelberg_+auswahlverfahren+fuer+anbieter+abgeschlossen.html",
+      "hinweis": "Genehmigungsperiode 01.04.2026–31.03.2028; Voi neu in Heidelberg. Keine Zonenwerte.",
+      "status": "amtlich"
+    },
+    {
+      "ags": "08421000",
+      "ort": "Ulm",
+      "type": "scooter",
+      "art": "nicht gefunden",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2020-10-05",
+      "quelle": "Schwäbische Zeitung, 23.09.2020",
+      "url": "https://www.schwaebische.de/regional/ulm-alb-donau/ulm/e-scooter-sorgen-fuer-aerger-73077",
+      "hinweis": "Einzige Quelle (Presse 2020): Gesamtzahl für Ulm/Neu-Ulm „derzeit offen“, Anbieter (Zeus, Tier) strebten je ca. 300 an. Keine amtliche Grenze gefunden.",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "08416041",
+      "ort": "Tübingen",
+      "type": "scooter",
+      "art": "nicht gefunden",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2026-11-01",
+      "quelle": null,
+      "url": null,
+      "hinweis": "Keine Quelle mit Höchstzahl gefunden.",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "06414000",
+      "ort": "Wiesbaden",
+      "type": "scooter",
+      "art": "keine Obergrenze",
+      "gesamt": null,
+      "jeAnbieter": null,
+      "zonen": [],
+      "anbieterZahl": null,
+      "anbieter": [
+        "Tier",
+        "Lime",
+        "Bird",
+        "Bolt"
+      ],
+      "seit": null,
+      "stand": "2026-05-07",
+      "quelle": "Stadt Wiesbaden, Vorlage 21-F-63-0020 (Feb. 2022); Beschluss Nr. 0046 (07.05.2026)",
+      "url": "https://piwi.wiesbaden.de/dokument/v/2894427",
+      "hinweis": "Magistratsvorlage Feb. 2022: keine Höchstzahl, damals >2.000 Scooter von vier Anbietern (Tier, Lime, Bird, Bolt). Beschluss Nr. 0046 vom 07.05.2026 betrifft nur Abstellzonen (>30 Pflichtzonen im Fünfeck seit Ende 2024).",
+      "url2": "https://piwi.wiesbaden.de/dokument/v/3748243",
+      "status": "keine",
+      "statusText": "keine Obergrenze laut Quelle oder nicht gefunden"
+    },
+    {
+      "ags": "07315000",
+      "ort": "Mainz",
+      "type": "scooter",
+      "art": "Höchstzahl (Sondernutzungskonzept)",
+      "gesamt": 1200,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "Innenstadt",
+          "gesamt": 300
+        }
+      ],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": null,
+      "quelle": "Stadt Mainz, Sondernutzungskonzept für E-Tretroller-Vermietsysteme",
+      "url": "https://www.mainz.de/newsdesk/publications/Mainz/181010100000354890.php.media/354891/Sondernutzungskonzept-E-Tretroller.pdf",
+      "hinweis": "Bei mehreren Anbietern gleichmäßig aufgeteilt; Erlaubnis 24 Monate. Dokument ohne Datum (Stand vermutlich 2019/2020); aktuelle Richtlinie (https://www.mainz.de/verzeichnisse/ortsrecht/sondernutzung-e-tretroller-vermietsystem-richtline.php.media/993285/richtlinie-sondernutzung-e-tretroller-vermietsysteme.pdf) nicht gelesen.",
+      "status": "ungeprüft",
+      "statusText": "Sondernutzungskonzept ohne Datum"
+    },
+    {
+      "ags": "05334002",
+      "ort": "Aachen",
+      "type": "scooter",
+      "art": "Vorschlag der Verwaltung",
+      "gesamt": 2250,
+      "jeAnbieter": null,
+      "zonen": [
+        {
+          "name": "4 Zonen mit eigenem Kontingent",
+          "hinweis": "Werte in Tabelle 1/Anlagen 2–3, nicht gelesen"
+        }
+      ],
+      "anbieterZahl": null,
+      "anbieter": [],
+      "seit": null,
+      "stand": "2025-08-14",
+      "quelle": "Stadt Aachen, Vorlage FB 68/0250/WP18 (25.07.2025, Fassung 14.08.2025)",
+      "url": "https://ratsinfo.aachen.de/public/wicket/resource/org.apache.wicket.Application/doc1428743.pdf",
+      "hinweis": "„zunächst eine gesamtstädtische Obergrenze von 2.250 E-Tretrollern vorgeschlagen“; Entscheidung Mobilitätsausschuss 04.09.2025 – Beschluss nicht geprüft.",
+      "status": "geplant",
+      "statusText": "Vorschlag der Verwaltung"
     }
   ],
   "gebuehren": [
@@ -245,5 +906,6 @@
   ],
   "_hinweis_gebuehren": "Berlin: Die Sharing-Strategie 2035 nennt ein Entgelt pro Fahrzeug und Monat, aber keinen Betrag – deshalb kein Eintrag.",
   "_hinweis_fahrt": "Berlin: Ø Dauer und Ø Strecke je Fahrt laut Quartalstabelle eKF des Berichts (Tabelle reicht ab Q1/2023; hier Q1/2025–Q1/2026 wie bei rvd). Die frühere Spanne 1,3–1,8 km / 6,4–8,5 Min. umfasste Q1/2023–Q1/2026, nicht nur 2025.",
-  "_hinweis_kalibrierung": "Regeln in lib/pulse-calib.js: Ø Fahrtdauer E-Scooter = Mittel der Berliner Quartalswerte (fahrt); Methodenfaktor k = amtliche Fahrten je Fahrzeug und Tag Berlin (rvd, gleiches bzw. Vorjahresquartal, sonst jüngstes) ÷ eigene Messung Berlin; Spanne aus kleinstem und größtem Quartalswert."
+  "_hinweis_kalibrierung": "Regeln in lib/pulse-calib.js: Ø Fahrtdauer E-Scooter = Mittel der Berliner Quartalswerte (fahrt); Methodenfaktor k = amtliche Fahrten je Fahrzeug und Tag Berlin (rvd, gleiches bzw. Vorjahresquartal, sonst jüngstes) ÷ eigene Messung Berlin; Spanne aus kleinstem und größtem Quartalswert.",
+  "_hinweis_obergrenzen": "status: amtlich = in der Quelle als geltende Regel; geplant/presse/ungeprüft/veraltet = nicht für die Verfügbar-÷-erlaubt-Rechnung; jeAnbieterAbgeleitet = nicht in der Quelle genannt, sondern gerechnet; zonen = gelten nur in einem Teilgebiet (ohne Gebietsgrenze nicht prüfbar). Recherche 01.11.2026."
 }
