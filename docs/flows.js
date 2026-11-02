@@ -3,8 +3,9 @@
 // Gemessen: nur Anbieter mit stabilen Kennungen (flows/). Geschätzt: Anbieter mit rotierenden Kennungen, erwartete Fahrten je ≈ 500-m-Zellenpaar
 // (flows-est/, lib/pulse-flowest.js, keine Einzelverknüpfung). Nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyuri2c';
-import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mvyuri2c';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyx0klq';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mvyx0klq';
+import { mapKeys } from './mapkeys.js?v=mvyx0klq';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -177,6 +178,7 @@ function ensureMap(S) {
   S.map = L.map(S.q('map'), { zoomControl: true, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, inertia: !still }).setView([51.1, 10.4], 6);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('flows.openstreetmapContributors') }).addTo(S.map);
   S.layer = L.layerGroup().addTo(S.map);
+  mapKeys(S.map); // Tastatur: N/P durch die Ströme im Ausschnitt, Hervorhebung wie beim Überfahren (web/mapkeys.js)
   S.hasMap = true;
 }
 

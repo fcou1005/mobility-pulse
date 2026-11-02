@@ -1,9 +1,9 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM } from './pulse-core.js?v=mvyuri2c';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvyuri2c';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mvyx0klq';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvyx0klq';
 
-export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS };
+export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
 // ---------- AHP ----------
 // Gewichte = Haupteigenvektor der Paarvergleichsmatrix (Potenzmethode), Konsistenzquote CR = CI / RI (Saaty), CI = (λmax − n) / (n − 1)
@@ -169,8 +169,12 @@ export function pickCkanResource(pkg, typeNames = null) {
 // ops/<Land>.json → Fahrzeuge als Objekte
 export function decodeFleet(doc) {
   // rangeDerived = Feld 10 „reichweiteAbgeleitet“ (Reichweite aus dem Ladestand gerechnet, M-16; ältere Dateien ohne Feld → false)
-  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idleMin, m, rd]) => ({
+  // rangeLimitKm = Feld 11 „reichweiteSchwelleKm“ (Reichweiten-Schwelle der Quelle, pulse-core rangeLimitCheck; null/fehlt = Standard)
+  // rangeFlat = Feld 12 „reichweiteKonstant“ (Reichweite der Quelle konstant, pulse-core rangeFlatCheck: für Energie/Akkutausch unbekannt; fehlt = nein)
+  // Felder am Zeilenende ohne Wert schreibt der Sammler nicht (fehlend = null)
+  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idleMin, m, rd, rl, rf]) => ({
     lat, lon, operator: doc.ops[op], type: doc.types[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), battery: bat, rangeKm: range, idleMin, ags: doc.munis[m], rangeDerived: rd === 1,
+    rangeLimitKm: Number.isFinite(rl) ? rl : null, rangeFlat: rf === 1,
   }));
   // physical = physischer Bestand an der Station (Fahrzeuge), virtual = Merkmal der Station (Feld 12 „virtuell“: 1/0; ältere Dateien ohne Feld → null)
   const stations = (doc?.stations || []).map(([lat, lon, op, name, bookable, docks, capacity, m, renting, returning, physical, virtual]) => ({
@@ -187,24 +191,41 @@ export function operatorShare(fleet, ags, operator) {
 }
 
 // ---------- Nachfrage ----------
+// Unsicherheit des Netto-Abflusses (M-10): z = Faktor der vorsichtigen Untergrenze max(0, Abfluss − z · SE) in der MCDA; Poisson-Bootstrap der
+// Start-/Endzählungen mit draws Ziehungen und festem Startwert seed (deterministisch); „stabil“ nur, wenn der Spot in ≥ minShare der Ziehungen
+// unter den Top-N bleibt (zusätzlich zur ±20-%-Gewichts-Sensitivität). 200 Ziehungen: Standardfehler eines Anteils um 0,8 ≈ 0,03.
+export const BOOT = { z: 2, draws: 200, seed: 20261102, minShare: 0.8 };
 /**
  * Nachfragemodell je Zelle aus den Tagesdateien cells/<Tag>/<Land>.json.
  * band = 0…5 oder 'day'. Starts/Ziele sind Marktgrößen (alle Anbieter), Präsenz = Ø verfügbare Fahrzeuge je Lauf.
- * Netto-Abfluss outPerHour = (Fahrtbeginne − Fahrtenden) ÷ Messstunden: > 0 = Fahrzeuge fließen ab, < 0 = sammeln sich an.
- * outSe = √(Starts + Enden) ÷ Messstunden (Standardfehler bei Poisson-Zählungen). Lücken-Läufe zählen in den Zellendateien nicht.
- * dayHours[Tag] = Messstunden des Bands an diesem Tag (für Ströme aus flows/<Tag>.json).
+ * Lücken-Läufe zählen in den Zellendateien nicht. dayHours[Tag] = Messstunden des Bands an diesem Tag (für Ströme aus flows/<Tag>.json).
+ *
+ * Ausgleich (M-10): Jede Fahrt hat einen Beginn und ein Ende, über die Gemeinde müssten Σ Starts und Σ Enden gleich sein. Gezählt sind sie es nicht:
+ * Ausbringungen und Rückläufe aus dem Lager (neue Kennungen) zählen als Enden ohne Beginn, Fahrten über die Gemeindegrenze und am Rand des
+ * Messfensters als Beginn ohne Ende bzw. umgekehrt (31.10./01.11.2026: Σ Enden über Σ Starts in Stuttgart um 13 %, in Frankfurt um 17 %).
+ * Ohne Ausgleich rückt jede Zelle Richtung Zufluss, und das Abschneiden negativer Werte in der MCDA verstärkt das. Daher je Gemeinde (Markt;
+ * die Zellendateien tragen keine Anbieter, der Anbieter bekommt seinen Anteil): Enden × k mit k = Σ Starts ÷ Σ Enden. Die Summen enthalten die
+ * unterdrückten Ereignisse (cells/…: below je Gemeinde, Zelle × Band unter 3 Ereignissen), die keiner Zelle zugeordnet werden. Danach ist der
+ * Netto-Abfluss über die ganze Gemeinde (Zellen + below) 0. Die Starts bleiben (Nachfrage, besser gemessen); der Überschuss an Enden wird
+ * proportional zu den gezählten Enden verteilt – Annahme: Nicht-Fahrt-Enden fallen wie Fahrt-Enden an (Randsummen-Ausgleich wie beim
+ * Gravitationsmodell mit festen Randsummen). An eigenen Deploy-Orten eines Anbieters bleibt der Abfluss deshalb eher zu niedrig.
+ *   outPerHour = (S − k·E) ÷ h, outSe = √(S + k²·E) ÷ h (Poisson, k fest; die Unsicherheit von k steckt im Bootstrap),
+ *   outLow = max(0, outPerHour − z·outSe) (vorsichtige Untergrenze, Faktor der MCDA), outPerHourRaw = (S − E) ÷ h (ohne Ausgleich),
+ *   endsPerHour = E ÷ h (gezählt), endsPerHourBal = k·E ÷ h. model.balance = { starts, ends, belowStarts, belowEnds, totalStarts, totalEnds, k }.
  */
 export function buildDemandModel(cellDocs, ags, band = 'day') {
   const bands = band === 'day' ? BANDS.map(b => b.id) : [band];
-  let hours = 0, runs = 0, days = 0;
+  let hours = 0, runs = 0, days = 0, belowS = 0, belowE = 0;
   const cells = new Map(), dayHours = {};
   for (const doc of cellDocs) {
     if (!doc) continue;
-    const m = doc.munis?.[ags]; if (!m) continue;
+    const m = doc.munis?.[ags], bl = doc.below?.[ags]; if (!m && !Array.isArray(bl)) continue;
     const h = sum(bands.map(b => doc.bandMin?.[b] || 0)) / 60, r = sum(bands.map(b => doc.bandRuns?.[b] || 0));
     if (h <= 0 && r <= 0) continue;
     hours += h; runs += r; days++; if (doc.day) dayHours[doc.day] = (dayHours[doc.day] || 0) + h;
-    for (const [cell, c] of Object.entries(m)) {
+    // below = [Starts × 6 Bänder, Enden × 6 Bänder, Starts ohne Band, Enden ohne Band] (belowFields); ohne Band zählt wie in den Zellen nicht
+    if (Array.isArray(bl)) for (const b of bands) { belowS += +bl[b] || 0; belowE += +bl[BANDS.length + b] || 0; }
+    for (const [cell, c] of Object.entries(m || {})) {
       if (c.length < 22) continue;
       const e = cells.get(cell) || { cell, starts: 0, ends: 0, presence: 0, reloc: 0 };
       for (const b of bands) { e.starts += c[4 + b]; e.presence += c[10 + b]; e.ends += c[16 + b]; }
@@ -212,26 +233,34 @@ export function buildDemandModel(cellDocs, ags, band = 'day') {
       cells.set(cell, e);
     }
   }
+  let sumS = 0, sumE = 0; for (const e of cells.values()) { sumS += e.starts; sumE += e.ends; }
+  const totS = sumS + belowS, totE = sumE + belowE, k = totS > 0 && totE > 0 ? totS / totE : 1;
   for (const e of cells.values()) {
     const [lat, lon] = cellCenter(e.cell);
     e.lat = lat; e.lon = lon;
     e.startsPerHour = hours > 0 ? e.starts / hours : null;
     e.endsPerHour = hours > 0 ? e.ends / hours : null;
+    e.endsPerHourBal = hours > 0 ? (k * e.ends) / hours : null;
     e.supplyAvg = runs > 0 ? e.presence / runs : 0;
-    e.outPerHour = hours > 0 ? (e.starts - e.ends) / hours : null;
-    e.outSe = hours > 0 ? Math.sqrt(e.starts + e.ends) / hours : null;
+    e.outPerHourRaw = hours > 0 ? (e.starts - e.ends) / hours : null;
+    e.outPerHour = hours > 0 ? (e.starts - k * e.ends) / hours : null;
+    e.outSe = hours > 0 ? Math.sqrt(e.starts + k * k * e.ends) / hours : null;
+    e.outLow = hours > 0 ? Math.max(0, e.outPerHour - BOOT.z * e.outSe) : null;
   }
-  return { ags, band, hours, runs, days, cells, dayHours, flow: null };
+  const balance = { starts: sumS, ends: sumE, belowStarts: belowS, belowEnds: belowE, totalStarts: totS, totalEnds: totE, k };
+  return { ags, band, hours, runs, days, cells, dayHours, flow: null, balance };
 }
 
 /**
  * Bedarf einer Zelle bzw. eines Spots für einen Anbieter (Anteil share am verfügbaren Bestand der Gemeinde):
  * Bedarf = max(0, Netto-Abfluss/h) × Horizont + Grundbestand, Grundbestand = Fahrtbeginne/h × baseH (1 h).
+ * Netto-Abfluss ausgeglichen (Enden × k, buildDemandModel) und als Schätzwert, nicht als Untergrenze: der Bedarf ist der erwartete Abfluss;
+ * die vorsichtige Untergrenze wirkt nur in der Rangfolge (MCDA). Zellen ohne endsPerHourBal (ältere Modelle) mit den gezählten Enden.
  * target = Bedarf aufgerundet, mindestens minPerSpot, höchstens maxPerSpot (capped = rechnerisch mehr).
  */
 export function needOf(c, share = 1, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
-  const startsOp = (c?.startsPerHour ?? 0) * share, endsOp = (c?.endsPerHour ?? 0) * share, outOp = startsOp - endsOp;
+  const startsOp = (c?.startsPerHour ?? 0) * share, endsOp = (c?.endsPerHourBal ?? c?.endsPerHour ?? 0) * share, outOp = startsOp - endsOp;
   const base = startsOp * o.baseH, drain = Math.max(0, outOp) * o.horizonH, raw = base + drain, up = Math.ceil(raw - 1e-9);
   return { startsOp, endsOp, outOp, base, drain, raw, target: Math.max(o.minPerSpot, Math.min(o.maxPerSpot, up)), capped: up > o.maxPerSpot };
 }
@@ -262,13 +291,73 @@ export function attachFlows(model, flowDocs) {
 }
 
 // ---------- Deploy-Spots (MCDA) ----------
-// Faktoren 0–1, Obergrenze 95. Perzentil: Netto-Abfluss (nur > 0; Zufluss = 0) und Nachfrage (Starts/h)
+// Faktoren 0–1, Obergrenze 95. Perzentil: Netto-Abfluss als vorsichtige Untergrenze outLow = max(0, ausgeglichener Abfluss − 2·SE)
+// (Zufluss und nicht gesicherter Abfluss = 0; Modelle ohne outLow: Abfluss selbst) und Nachfrage (Starts/h)
+const lowOf = (c) => c.outLow ?? Math.max(0, c.outPerHour ?? 0);
 function standardize(model) {
   const list = [...model.cells.values()].filter(c => (c.startsPerHour ?? 0) > 0 && (c.presence > 0 || c.ends > 0));
   const p95 = quantile(list.map(c => c.startsPerHour), 0.95) || 1;
-  const o95 = quantile(list.map(c => c.outPerHour).filter(x => x > 0), 0.95) || 1;
-  for (const c of list) c.f = { outflow: Math.min(1, Math.max(0, c.outPerHour ?? 0) / o95), demand: Math.min(1, c.startsPerHour / p95) };
+  const o95 = quantile(list.map(lowOf).filter(x => x > 0), 0.95) || 1;
+  for (const c of list) c.f = { outflow: Math.min(1, lowOf(c) / o95), demand: Math.min(1, c.startsPerHour / p95) };
   return list;
+}
+// ---------- Poisson-Bootstrap (M-10) ----------
+// Pseudozufall mit festem Startwert (mulberry32): gleiche Eingabe und gleicher Startwert → gleiche Ziehungen
+export function rng32(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const LANCZOS = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+function lgamma(x) { if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgamma(1 - x); x -= 1; let a = LANCZOS[0]; const t = x + 7.5; for (let i = 1; i < 9; i++) a += LANCZOS[i] / (x + i); return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a); }
+/** Poisson(λ)-Ziehung: Inversion für λ < 10, sonst PTRS (Hörmann 1993, transformierte Ablehnung, wie NumPy); rnd() ∈ [0, 1) */
+export function poisson(lam, rnd) {
+  if (!(lam > 0)) return 0;
+  if (lam < 10) { let k = 0, p = Math.exp(-lam), F = p; const u = rnd(); while (u > F && k < 1000) { k++; p *= lam / k; F += p; } return k; }
+  const slam = Math.sqrt(lam), ll = Math.log(lam), b = 0.931 + 2.53 * slam, a = -0.059 + 0.02483 * b, inva = 1.1239 + 1.1328 / (b - 3.4), vr = 0.9277 - 3.6224 / (b - 2);
+  for (;;) {
+    const U = rnd() - 0.5, V = rnd(), us = 0.5 - Math.abs(U), k = Math.floor((2 * a / us + b) * U + lam + 0.43);
+    if (us >= 0.07 && V <= vr) return k;
+    if (k < 0 || (us < 0.013 && V > us)) continue;
+    if (Math.log(V) + Math.log(inva) - Math.log(a / (us * us) + b) <= -lam + k * ll - lgamma(k + 1)) return k;
+  }
+}
+const q95sorted = (a, n) => { if (!n) return 0; const s = a.subarray(0, n).sort(); return s[Math.floor(0.95 * (n - 1))]; };
+/**
+ * Stabilität unter Zählunsicherheit: je Ziehung S*_c ~ Poisson(S_c), E*_c ~ Poisson(E_c) für jede Kandidatenzelle; übrige Zellen und unterdrückte
+ * Ereignisse (below) als eine Summe (Summe unabhängiger Poisson-Zählungen ist Poisson). Daraus wie im Modell: Ausgleich k*, Untergrenze, Nachfrage,
+ * Standardisierung (95. Perzentil), Score mit denselben Gewichten, Rang mit denselben Ausschlüssen und demselben Mindestabstand. ÖPNV und
+ * Abstellfläche hängen nicht an den Zählungen und bleiben fest. Rückgabe Map Zelle → Anteil der Ziehungen in den Top-N (nur für cells).
+ */
+function bootTop(model, cands, weights, o, cells) {
+  const R = Math.max(0, Math.floor(o.bootDraws ?? BOOT.draws)), h = model.hours, n = cands.length;
+  if (!R || !cells.length || !n || !(h > 0)) return null;
+  const rnd = rng32(o.bootSeed ?? BOOT.seed), z = BOOT.z;
+  const active = Object.keys(weights).filter(k => weights[k] > 0), wsum = sum(active.map(k => weights[k]));
+  const wO = active.includes('outflow') ? weights.outflow / wsum : 0, wD = active.includes('demand') ? weights.demand / wsum : 0;
+  const rest = active.filter(k => k !== 'outflow' && k !== 'demand');
+  const fixed = Float64Array.from(cands, c => rest.reduce((s, k) => s + (weights[k] / wsum) * (c.f[k] ?? 0), 0));
+  let cS = 0, cE = 0; for (const c of cands) { cS += c.starts; cE += c.ends; }
+  const b = model.balance || {}, restS = Math.max(0, (b.totalStarts ?? cS) - cS), restE = Math.max(0, (b.totalEnds ?? cE) - cE);
+  const S = new Float64Array(n), E = new Float64Array(n), dem = new Float64Array(n), low = new Float64Array(n), sc = new Float64Array(n), tmp = new Float64Array(n);
+  const idx = Int32Array.from({ length: n }, (_, i) => i), hits = new Map(cells.map(c => [c, 0]));
+  const topN = o.topN, minSp = o.minSpacingM, sel = [];
+  for (let r = 0; r < R; r++) {
+    let TS = poisson(restS, rnd), TE = poisson(restE, rnd);
+    for (let i = 0; i < n; i++) { S[i] = poisson(cands[i].starts, rnd); E[i] = poisson(cands[i].ends, rnd); TS += S[i]; TE += E[i]; }
+    const k = TS > 0 && TE > 0 ? TS / TE : 1;
+    let m = 0;
+    for (let i = 0; i < n; i++) { const out = (S[i] - k * E[i]) / h; low[i] = Math.max(0, out - z * Math.sqrt(S[i] + k * k * E[i]) / h); dem[i] = S[i] / h; if (dem[i] > 0) tmp[m++] = dem[i]; }
+    const p95 = q95sorted(tmp, m) || 1;
+    m = 0; for (let i = 0; i < n; i++) if (low[i] > 0) tmp[m++] = low[i];
+    const o95 = q95sorted(tmp, m) || 1;
+    for (let i = 0; i < n; i++) sc[i] = fixed[i] + wO * Math.min(1, low[i] / o95) + wD * Math.min(1, dem[i] / p95);
+    idx.sort((x, y) => sc[y] - sc[x] || dem[y] - dem[x]);
+    sel.length = 0;
+    for (let q = 0; q < n && sel.length < topN; q++) {
+      const c = cands[idx[q]]; if (c.excluded) continue;
+      if (sel.some(s => haversineM(s.loc.lat, s.loc.lon, c.loc.lat, c.loc.lon) < minSp)) continue;
+      sel.push(c);
+    }
+    for (const c of sel) if (hits.has(c.cell)) hits.set(c.cell, hits.get(c.cell) + 1);
+  }
+  return new Map([...hits].map(([c, x]) => [c, x / R]));
 }
 // Rangkorrelation (Spearman, mittlere Ränge bei Gleichstand): prüft, ob Netto-Abfluss und Nachfrage dasselbe messen (Doppelzählung)
 export function spearman(a, b) {
@@ -301,6 +390,8 @@ function rank(cands, weights, topN, minSpacingM) {
  *        stations: [{lat,lon,name}], share, horizonH, topN, minSpacingM, weights }
  * officialNoPark (Abstellverbot laut Stadt) ist wie noPark ein Ausschluss, gilt aber nicht für einen Spot auf einer ausgewiesenen
  * Abstellfläche (amtlich oder E-Scooter-Stellfläche): dort ist Abstellen erlaubt (München: Verbot im Umkreis, Fläche frei).
+ * Stabilität: ±20 % je Gewicht (stability, stabilityWeights) und Poisson-Bootstrap der Zählungen (bootShare; ctx.bootDraws, ctx.bootSeed,
+ * Standard BOOT); stabilityLabel „stabil“ nur bei allen Gewichtsvarianten und ≥ 80 % der Ziehungen, unter 80 % „unsicher“.
  */
 export function scoreSpots(model, ctx = {}) {
   const o = { ...DEFAULTS, ...ctx };
@@ -339,24 +430,38 @@ export function scoreSpots(model, ctx = {}) {
   for (const k of active) for (const f of [0.8, 1.2]) variants.push({ ...weights, [k]: weights[k] * f });
   const hits = new Map(top.map(t => [t.cell, 0]));
   for (const w of variants) { const r = rank(cands, w, o.topN, o.minSpacingM); for (const t of r) if (hits.has(t.cell)) hits.set(t.cell, hits.get(t.cell) + 1); }
+  // Zählunsicherheit: Poisson-Bootstrap (bootDraws, Standard BOOT.draws; 0 = aus, z. B. für die Vorauswahl im Browser)
+  const boot = bootTop(model, cands, weights, o, top.map(t => t.cell));
   const r2 = (x) => x == null ? null : +x.toFixed(2);
   const rho = spearman(cands.map(c => c.startsPerHour), cands.map(c => c.outPerHour ?? 0));
+  const bal = model.balance;
+  const spots = top.map((t, i) => {
+    const nd = needOf(t, share, o);
+    const stab = variants.length ? hits.get(t.cell) / variants.length : 1, bs = boot ? boot.get(t.cell) : null;
+    // Label: Gewichts-Sensitivität wie bisher (stabil = alle Varianten, mittel ≥ 75 %); unter BOOT.minShare (80 %) der Bootstrap-Ziehungen „unsicher“
+    const wl = stab >= 0.999 ? 'stabil' : stab >= 0.75 ? 'mittel' : 'unsicher';
+    const se = t.outSe ?? 0, out = t.outPerHour ?? 0;
+    return { rank: i + 1, cell: t.cell, lat: t.lat, lon: t.lon, score: +t.score.toFixed(3), factors: Object.fromEntries(Object.entries(t.f).map(([k, v]) => [k, +v.toFixed(2)])),
+      // Markt (alle Anbieter) und Anbieter-Anteil; starts/ends = gezählte Ereignisse in hours Messstunden; Enden/Abfluss ausgeglichen (× balanceK)
+      starts: t.starts, ends: t.ends, hours: +model.hours.toFixed(2), balanceK: bal ? +bal.k.toFixed(3) : 1,
+      startsPerHour: r2(t.startsPerHour), endsPerHour: r2(t.endsPerHour), endsPerHourBal: r2(t.endsPerHourBal ?? t.endsPerHour), outPerHour: r2(t.outPerHour), outPerHourRaw: r2(t.outPerHourRaw ?? t.outPerHour), outSe: r2(se), outLow: r2(lowOf(t)),
+      startsPerHourOp: r2(nd.startsOp), endsPerHourOp: r2(nd.endsOp), outPerHourOp: r2(nd.outOp), outSeOp: r2(se * share),
+      // Spanne ± z·SE (≈ 95 %) und vorsichtige Untergrenze max(0, Abfluss − z·SE), die in die MCDA eingeht (Anbieter-Anteil)
+      outLoOp: r2((out - BOOT.z * se) * share), outHiOp: r2((out + BOOT.z * se) * share), outLowOp: r2(lowOf(t) * share),
+      base: +nd.base.toFixed(1), drain: +nd.drain.toFixed(1), needRaw: +nd.raw.toFixed(1), target: nd.target, capped: nd.capped,
+      supplyAvg: +t.supplyAvg.toFixed(1), flow: t.flow ? { out: t.flow.out, in: t.flow.in } : null,
+      stability: +stab.toFixed(2), stabilityWeights: +stab.toFixed(2), bootShare: bs == null ? null : +bs.toFixed(2),
+      stabilityLabel: bs != null && bs < BOOT.minShare ? 'unsicher' : wl, park: t.park ? { cat: t.park.cat, name: t.park.name || null } : null };
+  });
   return {
     weights, activeFactors: active, excluded: cands.filter(c => c.excluded).length, candidates: cands.length, perturbations: variants.length,
     hours: model.hours, prelim: !(model.hours >= o.prelimH), horizonH: o.horizonH, baseH: o.baseH, share, rho: rho == null ? null : +rho.toFixed(2),
     excludedBy: { operator: why('Abstellverbot laut Betreiber-Zonen'), mandatory: why('Pflicht-Abstellzone ohne Station in 150 m'), official: why('Abstellverbot laut Stadt') },
-    spots: top.map((t, i) => {
-      const nd = needOf(t, share, o);
-      const stab = variants.length ? hits.get(t.cell) / variants.length : 1;
-      return { rank: i + 1, cell: t.cell, lat: t.lat, lon: t.lon, score: +t.score.toFixed(3), factors: Object.fromEntries(Object.entries(t.f).map(([k, v]) => [k, +v.toFixed(2)])),
-        // Markt (alle Anbieter) und Anbieter-Anteil; starts/ends = gezählte Ereignisse in hours Messstunden
-        starts: t.starts, ends: t.ends, hours: +model.hours.toFixed(2),
-        startsPerHour: r2(t.startsPerHour), endsPerHour: r2(t.endsPerHour), outPerHour: r2(t.outPerHour),
-        startsPerHourOp: r2(nd.startsOp), endsPerHourOp: r2(nd.endsOp), outPerHourOp: r2(nd.outOp), outSeOp: r2((t.outSe ?? 0) * share),
-        base: +nd.base.toFixed(1), drain: +nd.drain.toFixed(1), needRaw: +nd.raw.toFixed(1), target: nd.target, capped: nd.capped,
-        supplyAvg: +t.supplyAvg.toFixed(1), flow: t.flow ? { out: t.flow.out, in: t.flow.in } : null,
-        stability: +stab.toFixed(2), stabilityLabel: stab >= 0.999 ? 'stabil' : stab >= 0.75 ? 'mittel' : 'unsicher', park: t.park ? { cat: t.park.cat, name: t.park.name || null } : null };
-    }),
+    // Ausgleich je Gemeinde (Zellen + below) und Bootstrap-Einstellungen; stable/uncertain = Zahl der Spots je Label
+    balance: bal ? { ...bal, k: +bal.k.toFixed(4) } : null,
+    boot: boot ? { draws: Math.floor(o.bootDraws ?? BOOT.draws), seed: o.bootSeed ?? BOOT.seed, minShare: BOOT.minShare, z: BOOT.z } : null,
+    stable: spots.filter(s => s.stabilityLabel === 'stabil').length, uncertain: spots.filter(s => s.stabilityLabel === 'unsicher').length,
+    spots,
   };
 }
 
@@ -441,7 +546,7 @@ const idlePart = (h) => Math.min(1, h / PRIO.idleRefH) + (h >= PRIO.longIdleH ? 
 export function vehiclePrio(type, v, opts = {}) {
   const o = { ...DEFAULTS, ...opts }, h = idleH(v), why = { idleH: v.idleMin == null ? null : Math.round(h) };
   if (type !== 'swap') return { prio: r3(idlePart(h)), why };
-  const gaps = [v.battery != null ? 1 - v.battery / o.swapThreshold : null, v.rangeKm != null ? 1 - v.rangeKm / o.swapRangeKm : null].filter(x => x != null);
+  const gaps = [v.battery != null ? 1 - v.battery / o.swapThreshold : null, rangeUsable(v) ? 1 - v.rangeKm / swapRangeOf(v, o.swapRangeKm) : null].filter(x => x != null);
   const gap = gaps.length ? Math.min(1, Math.max(0, ...gaps)) : 0;
   return { prio: r3(PRIO.energyW * gap + PRIO.idleW * Math.min(1, h / PRIO.idleRefH) + (h >= PRIO.longIdleH ? PRIO.longIdleBonus : 0)), why: { battery: v.battery ?? null, rangeKm: v.rangeKm ?? null, ...why } };
 }
@@ -714,14 +819,19 @@ export function planRebalance({ spots, vehicles, model, share = 1, depot, ...opt
 export const MAX_SWAP = 50; // höchstens 50 Akkus je Tour (Ladekapazität eines Tauschfahrzeugs)
 // Akkutausch nötig: Ladestand UND Reichweite unter der Schwelle (beides muss erfüllt sein). Meldet ein Feed nur eines
 // von beiden, entscheidet dieses; ohne Energieangabe kein Tausch.
+// Reichweiten-Schwelle je Fahrzeug = min(swapRangeKm, v.rangeLimitKm): v.rangeLimitKm ist die Schwelle der Quelle (20 % des 95. Perzentils der
+// Reichweite, wenn dieses < 25 km; pulse-core rangeLimitCheck, Nutzerwunsch 02.11.2026), null = eingestellter Wert.
+export const swapRangeOf = (v, swapRangeKm = DEFAULTS.swapRangeKm) => (v?.rangeLimitKm != null && Number.isFinite(v.rangeLimitKm) ? Math.min(swapRangeKm, v.rangeLimitKm) : swapRangeKm);
+// Reichweite verwendbar: gemeldet und nicht konstant (v.rangeFlat = Platzhalter der Quelle, pulse-core rangeFlatCheck)
+export const rangeUsable = (v) => v?.rangeKm != null && !v.rangeFlat;
 export function needsSwap(v, { swapThreshold = DEFAULTS.swapThreshold, swapRangeKm = DEFAULTS.swapRangeKm } = {}) {
   if (v.disabled) return false;
   // Reichweite aus dem Ladestand gerechnet (v.rangeDerived, M-16): nur der Ladestand entscheidet; sonst UND-Regel (Nutzervorgabe)
-  const bat = v.battery != null ? v.battery < swapThreshold : null, rng = v.rangeKm != null && !(v.rangeDerived && v.battery != null) ? v.rangeKm < swapRangeKm : null;
+  const bat = v.battery != null ? v.battery < swapThreshold : null, rng = rangeUsable(v) && !(v.rangeDerived && v.battery != null) ? v.rangeKm < swapRangeOf(v, swapRangeKm) : null;
   if (bat == null && rng == null) return false;
   return (bat ?? true) && (rng ?? true);
 }
-const energyGap = (v, o) => v.battery != null ? 1 - v.battery / o.swapThreshold : 1 - v.rangeKm / o.swapRangeKm;
+const energyGap = (v, o) => v.battery != null ? 1 - v.battery / o.swapThreshold : 1 - v.rangeKm / swapRangeOf(v, o.swapRangeKm);
 export function planSwaps({ vehicles, model, depot, ...opts }) {
   const o = { ...DEFAULTS, ...opts }; o.swapCapacity = Math.max(1, Math.min(MAX_SWAP, o.swapCapacity));
   const cost = makeCost(o);
@@ -815,7 +925,7 @@ export function mapsLinks(points) {
 /** Kennzahlen der Flotte eines Anbieters in einer Gemeinde. */
 export function fleetKpis(vehicles, { swapThreshold = DEFAULTS.swapThreshold, swapRangeKm = DEFAULTS.swapRangeKm } = {}) {
   const avail = vehicles.filter(isAvailable);
-  const withBat = vehicles.filter(v => (v.battery != null || v.rangeKm != null) && !v.disabled);
+  const withBat = vehicles.filter(v => (v.battery != null || rangeUsable(v)) && !v.disabled);
   const idleKnown = avail.filter(v => v.idleMin != null);
   return {
     total: vehicles.length, available: avail.length, disabled: vehicles.filter(v => v.disabled).length, reserved: vehicles.filter(v => v.reserved).length,
@@ -839,7 +949,7 @@ const csvRows = (rows, sep = ';') => rows.map(r => r.map(x => csvCell(x, sep)).j
 // Disposition-CSV je Sprache: Deutsch (Standard) mit Semikolon, Englisch (lang 'en') mit Komma und englischen Spaltennamen/Texten.
 // Die Spots-CSV im Backend-Format (spotsCsv) ist sprachunabhängig.
 const OPS_CSV_EN = { rang: 'rank', starts_je_h_anbieter: 'starts_per_h_operator', enden_je_h_anbieter: 'ends_per_h_operator', netto_abfluss_je_h_anbieter: 'net_outflow_per_h_operator',
-  netto_abfluss_fehler_je_h: 'net_outflow_error_per_h', starts_markt: 'starts_market', enden_markt: 'ends_market', messstunden: 'measured_hours', horizont_h: 'horizon_h', grundbestand: 'base_stock',
+  netto_abfluss_fehler_je_h: 'net_outflow_error_per_h', netto_abfluss_untergrenze_je_h: 'net_outflow_lower_bound_per_h', ausgleich_k: 'balance_k', bootstrap_anteil: 'bootstrap_share', starts_markt: 'starts_market', enden_markt: 'ends_market', messstunden: 'measured_hours', horizont_h: 'horizon_h', grundbestand: 'base_stock',
   abfluss_im_horizont: 'outflow_in_horizon', bedarf_rechnerisch: 'need_calculated', bedarf_fzg: 'need_veh', bestand_umkreis: 'fleet_nearby', fehlmenge: 'shortfall', stroeme_ab: 'flows_out', stroeme_an: 'flows_in',
   f_netto_abfluss: 'f_net_outflow', f_nachfrage: 'f_demand', f_oepnv: 'f_transit', f_abstellflaeche: 'f_parking', stabilitaet: 'stability', abstellflaeche: 'parking_area',
   tour: 'run', art: 'type', stopp: 'stop', typ: 'kind', anzahl: 'count', info: 'info', prioritaet: 'priority', prio_rang: 'priority_rank', grund: 'reason', stabil: 'stable', mittel: 'medium', unsicher: 'uncertain',
@@ -852,14 +962,16 @@ export function spotsCsv(spots, { name = 'Spot', radius = 15 } = {}) {
   return csvRows([head, ...rows], ',');
 }
 // needs: planRebalance(...).needs (Bestand im Umkreis und Fehlmenge je Spot); ohne needs bleiben die Spalten leer
-export const SPOTS_ANALYSIS_FIELDS = ['rang', 'lat', 'lng', 'starts_je_h_anbieter', 'enden_je_h_anbieter', 'netto_abfluss_je_h_anbieter', 'netto_abfluss_fehler_je_h', 'starts_markt', 'enden_markt', 'messstunden',
+// enden_je_h_anbieter und netto_abfluss_je_h_anbieter ausgeglichen (Enden × ausgleich_k, M-10); enden_markt = gezählte Enden;
+// netto_abfluss_untergrenze_je_h = max(0, Abfluss − 2·Fehler) (Faktor der MCDA); bootstrap_anteil = Anteil der Ziehungen in den Top-N
+export const SPOTS_ANALYSIS_FIELDS = ['rang', 'lat', 'lng', 'starts_je_h_anbieter', 'enden_je_h_anbieter', 'netto_abfluss_je_h_anbieter', 'netto_abfluss_fehler_je_h', 'netto_abfluss_untergrenze_je_h', 'ausgleich_k', 'starts_markt', 'enden_markt', 'messstunden',
   'horizont_h', 'grundbestand', 'abfluss_im_horizont', 'bedarf_rechnerisch', 'bedarf_fzg', 'bestand_umkreis', 'fehlmenge', 'stroeme_ab', 'stroeme_an',
-  'score', 'f_netto_abfluss', 'f_nachfrage', 'f_oepnv', 'f_abstellflaeche', 'stabilitaet', 'abstellflaeche'];
+  'score', 'f_netto_abfluss', 'f_nachfrage', 'f_oepnv', 'f_abstellflaeche', 'stabilitaet', 'bootstrap_anteil', 'abstellflaeche'];
 export function spotsAnalysisCsv(spots, needs = null, { horizonH = DEFAULTS.horizonH, prelim = false, lang = 'de' } = {}) {
   const nb = new Map((needs || []).map(n => [n.cell, n]));
-  const rows = spots.map(s => { const n = nb.get(s.cell); return [s.rank, s.lat.toFixed(6), s.lon.toFixed(6), s.startsPerHourOp, s.endsPerHourOp, s.outPerHourOp, s.outSeOp, s.starts, s.ends, s.hours,
+  const rows = spots.map(s => { const n = nb.get(s.cell); return [s.rank, s.lat.toFixed(6), s.lon.toFixed(6), s.startsPerHourOp, s.endsPerHourOp, s.outPerHourOp, s.outSeOp, s.outLowOp ?? null, s.balanceK ?? null, s.starts, s.ends, s.hours,
     horizonH, s.base, s.drain, s.needRaw, s.target, n?.have ?? null, n?.need ?? null, s.flow?.out ?? null, s.flow?.in ?? null,
-    s.score, s.factors.outflow, s.factors.demand, s.factors.transit ?? null, s.factors.parking ?? null, prelim ? `${lang === 'en' ? 'preliminary' : 'vorläufig'} (${opsCsvText(s.stabilityLabel, lang)})` : opsCsvText(s.stabilityLabel, lang), s.park ? `${s.park.cat}${s.park.name ? ' ' + s.park.name : ''}` : '']; });
+    s.score, s.factors.outflow, s.factors.demand, s.factors.transit ?? null, s.factors.parking ?? null, prelim ? `${lang === 'en' ? 'preliminary' : 'vorläufig'} (${opsCsvText(s.stabilityLabel, lang)})` : opsCsvText(s.stabilityLabel, lang), s.bootShare ?? null, s.park ? `${s.park.cat}${s.park.name ? ' ' + s.park.name : ''}` : '']; });
   return opsCsv([SPOTS_ANALYSIS_FIELDS, ...rows], lang);
 }
 /** Grund eines Stopps als kurzer Text (wie die Stoppliste der Disposition): Akku/Reichweite, Standzeit, Fehlmenge, leer/voll */
@@ -955,7 +1067,7 @@ export function placesCsv(list, { labelOf = () => '', nearOf = () => null, lang 
 }
 export function planGeoJson(spots, runs, depot) {
   const f = [];
-  for (const s of spots) f.push({ type: 'Feature', properties: { kind: 'spot', rank: s.rank, target: s.target, score: s.score, stability: s.stabilityLabel }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } });
+  for (const s of spots) f.push({ type: 'Feature', properties: { kind: 'spot', rank: s.rank, target: s.target, score: s.score, stability: s.stabilityLabel, bootShare: s.bootShare ?? null, outPerHour: s.outPerHourOp ?? null, outSe: s.outSeOp ?? null }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } });
   for (const r of runs) {
     f.push({ type: 'Feature', properties: { kind: 'run', id: r.id, run: r.kind, km: r.km, minutes: r.totalMin, vehicles: r.vehicles }, geometry: { type: 'LineString', coordinates: [[depot.lon, depot.lat], ...r.stops.map(s => [s.lon, s.lat]), [depot.lon, depot.lat]] } });
     r.stops.forEach((s, i) => f.push({ type: 'Feature', properties: { kind: 'stop', run: r.id, seq: i + 1, type: s.type, count: s.count, priority: s.prio ?? null, priorityRank: s.rank ?? null, reason: stopReason(s), why: s.why ?? null }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } }));

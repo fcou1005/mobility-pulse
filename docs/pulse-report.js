@@ -1,9 +1,9 @@
 // Mobility Pulse — Kommunal-Bericht, Obergrenzen-Wächter, Wochen-Heatmap, Preis-Log und Feed-Prüfung.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: events/<Tag>.json (Stundenwerte, Läufe),
 // history/<Tag>.json (Bestand je Lauf), cells/<Tag>/<Land>.json (Zellen), latest.json, reference.json.
-import { GAP_MS, CELL_LAT, CELL_LON } from './pulse-track.js?v=mvyuri2c';
-import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mvyuri2c';
-import { hourMinutes } from './pulse-core.js?v=mvyuri2c';
+import { GAP_MS, CELL_LAT, CELL_LON } from './pulse-track.js?v=mvyx0klq';
+import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mvyx0klq';
+import { hourMinutes } from './pulse-core.js?v=mvyx0klq';
 export { CELL_LAT, CELL_LON };
 
 export const TZ = 'Europe/Berlin';
@@ -744,9 +744,12 @@ export const RANGE_ONLY_OPS = ['Lime']; // wie app.js: Feeds nur mit Reichweite 
 export const ENERGY_CHARGE = 20, ENERGY_RANGE_KM = 5;
 const finite = (x) => x != null && x !== '' && Number.isFinite(+x);
 // rangeDerived (M-16): Reichweite aus dem Ladestand gerechnet (pulse-core rangeDerivedCheck, ops-Feld „reichweiteAbgeleitet“) → nur der Ladestand
-export function energyLow(battery, rangeKm, { charge = ENERGY_CHARGE, range = ENERGY_RANGE_KM, rangeOnly = false, rangeDerived = false } = {}) {
+// rangeLimit: Reichweiten-Schwelle der Quelle (pulse-core rangeLimitCheck, ops-Feld „reichweiteSchwelleKm“; null = Standard) → Reichweite < min(range, rangeLimit)
+// rangeFlat: Reichweite der Quelle konstant (Platzhalter, pulse-core rangeFlatCheck, ops-Feld „reichweiteKonstant“) → Reichweite unbekannt
+export function energyLow(battery, rangeKm, { charge = ENERGY_CHARGE, range = ENERGY_RANGE_KM, rangeOnly = false, rangeDerived = false, rangeLimit = null, rangeFlat = false } = {}) {
   if (rangeDerived && finite(battery)) return +battery < charge;
-  const b = !rangeOnly && finite(battery) ? +battery < charge : null, r = finite(rangeKm) ? +rangeKm < range : null;
+  const lim = finite(rangeLimit) ? Math.min(range, +rangeLimit) : range;
+  const b = !rangeOnly && finite(battery) ? +battery < charge : null, r = !rangeFlat && finite(rangeKm) ? +rangeKm < lim : null;
   if (b == null && r == null) return null;
   return (b ?? true) && (r ?? true);
 }
@@ -763,7 +766,8 @@ export function sumEnergy(list) { const o = emptyEnergy(); for (const e of list 
 function opsFields(opsDoc) {
   const F = String(opsDoc?.vehicleFields || '').split(/,(?![^(]*\))/); // Kommas in Klammern („flags(1=reserviert,2=gesperrt)“) trennen nicht
   const at = (name, d) => { const i = F.findIndex(f => f.startsWith(name)); return i >= 0 ? i : d; };
-  return { iOp: at('op', 2), iTy: at('type', 3), iFl: at('flags', 4), iBat: at('akku', 5), iRg: at('reichweite', 6), iMu: at('gemeinde', 8), iRd: at('reichweiteAbgeleitet', 9) }; // Feld 10 fehlt in älteren Dateien → nicht abgeleitet
+  // Feld 10–12 fehlen in älteren Dateien bzw. am Zeilenende ohne Wert → nicht abgeleitet, Standardschwelle, nicht konstant
+  return { iOp: at('op', 2), iTy: at('type', 3), iFl: at('flags', 4), iBat: at('akku', 5), iRg: at('reichweite', 6), iMu: at('gemeinde', 8), iRd: at('reichweiteAbgeleitet', 9), iRl: at('reichweiteSchwelle', 10), iRf: at('reichweiteKonstant', 11) };
 }
 /**
  * Energie je Gruppe „Gemeinde|Anbieter|Art“ aus den Einzelfahrzeugen in ops/<Land>.json (Regel energyLow).
@@ -771,14 +775,14 @@ function opsFields(opsDoc) {
  */
 export function energyFromOps(opsDoc, { charge = ENERGY_CHARGE, range = ENERGY_RANGE_KM, rangeOnly = (op) => RANGE_ONLY_OPS.includes(op), keep = null } = {}) {
   const out = new Map(); if (!opsDoc?.vehicles) return out;
-  const { iOp, iTy, iBat, iRg, iMu, iRd } = opsFields(opsDoc); const ops = opsDoc.ops || [], types = opsDoc.types || [], munis = opsDoc.munis || [];
+  const { iOp, iTy, iBat, iRg, iMu, iRd, iRl, iRf } = opsFields(opsDoc); const ops = opsDoc.ops || [], types = opsDoc.types || [], munis = opsDoc.munis || [];
   const ro = new Map();
   for (const v of opsDoc.vehicles) {
     const op = ops[v[iOp]], ty = types[v[iTy]] ?? 'unknown', ags = munis[v[iMu]];
     if (!ags || (keep && !keep(ags, op, ty))) continue;
     if (!ro.has(op)) ro.set(op, !!rangeOnly(op));
     const k = `${ags}|${op}|${ty}`; const e = out.get(k) || emptyEnergy();
-    addEnergy(e, v[iBat], v[iRg], { charge, range, rangeOnly: ro.get(op), rangeDerived: v[iRd] === 1 }); out.set(k, e);
+    addEnergy(e, v[iBat], v[iRg], { charge, range, rangeOnly: ro.get(op), rangeDerived: v[iRd] === 1, rangeLimit: v[iRl] ?? null, rangeFlat: v[iRf] === 1 }); out.set(k, e);
   }
   return out;
 }
@@ -808,7 +812,7 @@ export function availabilityRows(latest, { operator = 'all', type = 'all', minTo
  */
 export function readinessFromOps(opsDoc, { operator = 'all', type = 'all', charge = ENERGY_CHARGE, range = ENERGY_RANGE_KM, rangeOnly = (op) => RANGE_ONLY_OPS.includes(op) } = {}) {
   const out = new Map(); if (!opsDoc?.vehicles) return out;
-  const { iOp, iTy, iFl, iBat, iRg, iMu, iRd } = opsFields(opsDoc);
+  const { iOp, iTy, iFl, iBat, iRg, iMu, iRd, iRl, iRf } = opsFields(opsDoc);
   const ops = opsDoc.ops || [], types = opsDoc.types || [], munis = opsDoc.munis || [];
   const ro = new Map();
   for (const v of opsDoc.vehicles) {
@@ -817,7 +821,7 @@ export function readinessFromOps(opsDoc, { operator = 'all', type = 'all', charg
     if (!ro.has(op)) ro.set(op, !!rangeOnly(op));
     const o = out.get(ags) || { total: 0, known: 0, ready: 0, okEnergy: 0 }; o.total++;
     const bookable = !((v[iFl] || 0) & 3); // 1 = reserviert, 2 = gesperrt
-    const low = energyLow(v[iBat], v[iRg], { charge, range, rangeOnly: ro.get(op), rangeDerived: v[iRd] === 1 });
+    const low = energyLow(v[iBat], v[iRg], { charge, range, rangeOnly: ro.get(op), rangeDerived: v[iRd] === 1, rangeLimit: v[iRl] ?? null, rangeFlat: v[iRf] === 1 });
     if (low != null) { o.known++; if (!low) { o.okEnergy++; if (bookable) o.ready++; } }
     out.set(ags, o);
   }

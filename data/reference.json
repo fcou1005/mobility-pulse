@@ -164,6 +164,7 @@
       "quelle": "Abgeordnetenhaus Berlin, Vorgang h19-2915 (SenMVKU, Bericht vom 02.06.2026)",
       "url": "https://www.parlament-berlin.de/adosservice/19/Haupt/vorgang/h19-2915-v.pdf",
       "art": "genehmigt",
+      "artEn": "licensed",
       "hinweis": "genehmigte Elektrokleinstfahrzeuge (eKF), nicht zwingend auf der Straße"
     },
     {
@@ -175,6 +176,7 @@
       "quelle": "Stadtrat München, Dokument 9389374",
       "url": "https://risi.muenchen.de/risi/dokument/v/9389374",
       "art": "aktiv",
+      "artEn": "active",
       "hinweis": "„rund 21.000 E-Tretroller aktiv“"
     }
   ],
@@ -195,6 +197,7 @@
       "ort": "Berlin",
       "type": "scooter",
       "art": "erlaubt (Höchstzahl Innenstadt)",
+      "artEn": "permitted (maximum number in the city centre)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [
@@ -225,6 +228,7 @@
       "ort": "Hamburg",
       "type": "scooter",
       "art": "keine Obergrenze",
+      "artEn": "no fleet cap",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -249,6 +253,7 @@
       "ort": "München",
       "type": "scooter",
       "art": "keine Obergrenze (geplant)",
+      "artEn": "no fleet cap (planned)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -268,6 +273,7 @@
       "ort": "Köln",
       "type": "scooter",
       "art": "vereinbarte Reduzierung (Innenstadt)",
+      "artEn": "agreed reduction (city centre)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [
@@ -292,6 +298,7 @@
       "ort": "Köln",
       "type": "scooter",
       "art": "geplant",
+      "artEn": "planned",
       "gesamt": [
         9000,
         10000
@@ -314,6 +321,7 @@
       "ort": "Frankfurt am Main",
       "type": "scooter",
       "art": "Höchstzahl (Sondernutzungserlaubnis)",
+      "artEn": "maximum number (special use permit)",
       "gesamt": 10500,
       "jeAnbieter": 3500,
       "zonen": [
@@ -342,6 +350,7 @@
       "ort": "Stuttgart",
       "type": "scooter",
       "art": "Höchstzahl (Sondernutzungserlaubnis)",
+      "artEn": "maximum number (special use permit)",
       "gesamt": 6000,
       "jeAnbieter": 1500,
       "zonen": [
@@ -379,6 +388,7 @@
       "ort": "Düsseldorf",
       "type": "scooter",
       "art": "Höchstzahl (Stand 2022)",
+      "artEn": "maximum number (as of 2022)",
       "gesamt": 8400,
       "jeAnbieter": null,
       "zonen": [
@@ -416,6 +426,7 @@
       "ort": "Leipzig",
       "type": "scooter",
       "art": "Höchstzahl Pilotphase (abgelaufen)",
+      "artEn": "maximum number in the pilot phase (expired)",
       "gesamt": 840,
       "jeAnbieter": null,
       "zonen": [],
@@ -437,6 +448,7 @@
       "ort": "Dresden",
       "type": "scooter",
       "art": "Höchstzahl (Interessenbekundung)",
+      "artEn": "maximum number (call for expressions of interest)",
       "gesamt": 2500,
       "jeAnbieter": 833,
       "zonen": [
@@ -475,6 +487,7 @@
       "ort": "Dresden",
       "type": "bike",
       "art": "Höchstzahl (Interessenbekundung)",
+      "artEn": "maximum number (call for expressions of interest)",
       "gesamt": 3000,
       "jeAnbieter": null,
       "zonen": [],
@@ -496,6 +509,7 @@
       "ort": "Hannover",
       "type": "scooter",
       "art": "geplant",
+      "artEn": "planned",
       "gesamt": 6000,
       "jeAnbieter": null,
       "zonen": [
@@ -524,6 +538,7 @@
       "ort": "Nürnberg",
       "type": "scooter",
       "art": "Höchstzahl (Sondernutzungsvertrag)",
+      "artEn": "maximum number (special use contract)",
       "gesamt": 4000,
       "jeAnbieter": 800,
       "zonen": [
@@ -557,6 +572,7 @@
       "ort": "Bremen",
       "type": "scooter",
       "art": "Höchstzahl (Sondernutzungskonzept)",
+      "artEn": "maximum number (special use concept)",
       "gesamt": 2700,
       "jeAnbieter": 1350,
       "zonen": [
@@ -591,6 +607,7 @@
       "ort": "Essen",
       "type": "scooter",
       "art": "nicht gefunden",
+      "artEn": "not found",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -609,6 +626,7 @@
       "ort": "Dortmund",
       "type": "scooter",
       "art": "Höchstzahl je Anbieter (Innenstadt, Stand 2022)",
+      "artEn": "maximum number per operator (city centre, as of 2022)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [
@@ -635,6 +653,7 @@
       "ort": "Bonn",
       "type": "scooter",
       "art": "keine Obergrenze (in Quelle)",
+      "artEn": "no fleet cap (in the source)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -653,6 +672,7 @@
       "ort": "Münster",
       "type": "scooter",
       "art": "keine Obergrenze (Stand 2021)",
+      "artEn": "no fleet cap (as of 2021)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -675,6 +695,7 @@
       "ort": "Mannheim",
       "type": "scooter",
       "art": "zugelassen",
+      "artEn": "approved",
       "gesamt": 2000,
       "jeAnbieter": null,
       "zonen": [],
@@ -693,6 +714,7 @@
       "ort": "Karlsruhe",
       "type": "scooter",
       "art": "Höchstzahl je Anbieter (öffentlich-rechtlicher Vertrag)",
+      "artEn": "maximum number per operator (public-law contract)",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [
@@ -719,6 +741,7 @@
       "ort": "Freiburg im Breisgau",
       "type": "scooter",
       "art": "nicht gefunden",
+      "artEn": "not found",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -737,6 +760,7 @@
       "ort": "Augsburg",
       "type": "scooter",
       "art": "nicht gefunden",
+      "artEn": "not found",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -755,6 +779,7 @@
       "ort": "Heidelberg",
       "type": "scooter",
       "art": "Höchstzahl (Auswahlverfahren)",
+      "artEn": "maximum number (selection procedure)",
       "gesamt": 1200,
       "jeAnbieter": 400,
       "zonen": [],
@@ -776,6 +801,7 @@
       "ort": "Ulm",
       "type": "scooter",
       "art": "nicht gefunden",
+      "artEn": "not found",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -794,6 +820,7 @@
       "ort": "Tübingen",
       "type": "scooter",
       "art": "nicht gefunden",
+      "artEn": "not found",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -812,6 +839,7 @@
       "ort": "Wiesbaden",
       "type": "scooter",
       "art": "keine Obergrenze",
+      "artEn": "no fleet cap",
       "gesamt": null,
       "jeAnbieter": null,
       "zonen": [],
@@ -836,6 +864,7 @@
       "ort": "Mainz",
       "type": "scooter",
       "art": "Höchstzahl (Sondernutzungskonzept)",
+      "artEn": "maximum number (special use concept)",
       "gesamt": 1200,
       "jeAnbieter": null,
       "zonen": [
@@ -859,6 +888,7 @@
       "ort": "Aachen",
       "type": "scooter",
       "art": "Vorschlag der Verwaltung",
+      "artEn": "proposal by the city administration",
       "gesamt": 2250,
       "jeAnbieter": null,
       "zonen": [

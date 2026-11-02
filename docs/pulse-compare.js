@@ -2,8 +2,8 @@
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: ops/<Land>.json, dekodiert mit pulse-ops.js decodeFleet
 // ({ vehicles: [{ lat, lon, operator, type, reserved, disabled, battery, rangeKm, idleMin, ags }], stations: [{ lat, lon, operator, name, bookable, docks, capacity, ags, physical, virtual }] }).
 // physical ist der physische Bestand an der Station (physicalAvailable, Fahrzeuge), kein Merkmal der Station; virtuell/physisch: isVirtualStation.
-import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mvyuri2c';
-import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mvyuri2c';
+import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mvyx0klq';
+import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mvyx0klq';
 
 export const RADII = [25, 50, 100];          // Meter: Station gilt als geteilt, wenn eine Station eines anderen Anbieters so nah liegt
 export const DEFAULT_RADIUS = 50;
@@ -12,9 +12,10 @@ const RANGE_ONLY = new Set(RANGE_ONLY_OPS);
 /**
  * Energie niedrig je Fahrzeug, dieselbe Regel wie Dashboard und Disposition (lib/pulse-report.js energyLow): Ladestand < 20 % UND Reichweite
  * < 5 km, wo beides gemeldet ist; Reichweite aus dem Ladestand gerechnet (v.rangeDerived, ops-Feld „reichweiteAbgeleitet“, M-16) → nur der
- * Ladestand; Anbieter nur mit Reichweite (RANGE_ONLY_OPS) → nur die Reichweite. null = keine Energieangabe.
+ * Ladestand; Anbieter nur mit Reichweite (RANGE_ONLY_OPS) → nur die Reichweite. null = keine Energieangabe. Reichweiten-Schwelle der Quelle
+ * (v.rangeLimitKm, ops-Feld „reichweiteSchwelleKm“) → Reichweite < min(5 km, v.rangeLimitKm); konstante Reichweite (v.rangeFlat) zählt nicht.
  */
-export const vehicleEnergyLow = (v) => energyLow(v.battery, v.rangeKm, { charge: LOW_BATTERY, range: LOW_RANGE_KM, rangeOnly: RANGE_ONLY.has(v.operator), rangeDerived: !!v.rangeDerived });
+export const vehicleEnergyLow = (v) => energyLow(v.battery, v.rangeKm, { charge: LOW_BATTERY, range: LOW_RANGE_KM, rangeOnly: RANGE_ONLY.has(v.operator), rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat });
 
 const R_EARTH = 6371000, rad = Math.PI / 180;
 /** Abstand in Metern (gleichwinklige Näherung, genau genug unter 1 km) */

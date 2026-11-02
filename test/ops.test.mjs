@@ -36,12 +36,15 @@ assert(sp.spots[0].cell === cellAt(0, 0), 'Rang 1 = Zelle mit höchster Nachfrag
 let minD = Infinity; for (let a = 0; a < sp.spots.length; a++) for (let b = a + 1; b < sp.spots.length; b++) minD = Math.min(minD, O.dist(sp.spots[a], sp.spots[b]));
 assert(minD >= 400, `Mindestabstand eingehalten (${Math.round(minD)} m)`);
 assert(sp.spots.every(s => s.stability >= 0 && s.stability <= 1), 'Stabilität 0…1');
-// Zentrum Band Mittag: 12 Starts, 10 Enden in 3 h, Anteil 0,5 → Starts 2/h, Enden 1,67/h, Netto 0,33/h; Bedarf = 0,33 × 3 h + 2 × 1 h = 3
+// Zentrum Band Mittag: 12 Starts, 10 Enden in 3 h, Anteil 0,5. Gemeinde: Σ Starts 132, Σ Enden 102 (jede Zelle Enden ≈ 0,8 × Starts) →
+// Ausgleich k = 132 ÷ 102: der gleichmäßige Überschuss an Starts ist kein Abfluss der Zelle (M-10). Netto = (12 − 10k) ÷ 3 h × 0,5 < 0 → Bedarf = Grundbestand 2
 {
-  const s = sp.spots[0];
-  assert(s.starts === 12 && s.ends === 10 && s.hours === 3 && s.startsPerHourOp === 2 && s.endsPerHourOp === 1.67 && s.outPerHourOp === 0.33, `Spot 1: Starts/Enden gezählt (12/10 in 3 h), Anbieter ${s.startsPerHourOp}/${s.endsPerHourOp}/${s.outPerHourOp} je h`);
-  assert(s.base === 2 && s.drain === 1 && s.needRaw === 3 && s.target === 3, `Bedarf = Netto-Abfluss × Horizont + Grundbestand = ${s.drain} + ${s.base} = ${s.needRaw} → ${s.target}`);
-  assert(Math.abs(s.outSeOp - Math.sqrt(22) / 3 * 0.5) < 0.006, `Standardfehler Netto ${s.outSeOp} = √(12 + 10) ÷ 3 h × 0,5`);
+  const s = sp.spots[0], k = 132 / 102;
+  assert(s.starts === 12 && s.ends === 10 && s.hours === 3 && s.startsPerHourOp === 2 && s.balanceK === +k.toFixed(3) && s.outPerHourRaw === +(2 / 3).toFixed(2), `Spot 1: Starts/Enden gezählt (12/10 in 3 h), ohne Ausgleich Netto ${s.outPerHourRaw}/h (Markt), Ausgleich k = ${s.balanceK}`);
+  assert(s.endsPerHourOp === +(10 * k / 3 * 0.5).toFixed(2) && s.outPerHourOp === +((12 - 10 * k) / 3 * 0.5).toFixed(2), `Spot 1 ausgeglichen (Anbieter): Enden ${s.endsPerHourOp}/h, Netto ${s.outPerHourOp}/h`);
+  assert(s.base === 2 && s.drain === 0 && s.needRaw === 2 && s.target === 2, `Bedarf = Netto-Abfluss × Horizont + Grundbestand = ${s.drain} + ${s.base} = ${s.needRaw} → ${s.target}`);
+  assert(Math.abs(s.outSeOp - Math.sqrt(12 + k * k * 10) / 3 * 0.5) < 0.006, `Standardfehler Netto ${s.outSeOp} = √(12 + k² · 10) ÷ 3 h × 0,5`);
+  assert(s.outLowOp === 0 && s.factors.outflow === 0 && s.outLoOp < s.outPerHourOp && s.outHiOp > s.outPerHourOp, `Untergrenze max(0, Netto − 2·SE) = ${s.outLowOp}, Spanne ${s.outLoOp} … ${s.outHiOp}`);
 }
 assert(sp.activeFactors.join() === 'outflow,demand', 'ohne ÖPNV/Abstellflächen zwei Faktoren aktiv: Netto-Abfluss, Nachfrage');
 assert(sp.perturbations === 4 && sp.prelim === true && sp.hours === 3, 'Sensitivität: 2 Faktoren × ±20 % = 4 Varianten; 3 Messstunden → vorläufig');
@@ -302,9 +305,10 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   put(cA, 60, 60); // 20 Starts/h, 20 Enden/h: ausgeglichen
   put(cB, 30, 0);  // 10 Starts/h, keine Rückkehr: Abfluss 10/h
   put(cC, 3, 15);  // Zufluss: 1 Start/h, 5 Enden/h
+  put(cellAt(-3, 3), 0, 18); // Senke ohne Starts (kein Kandidat): Σ Starts = Σ Enden = 93 → Ausgleich k = 1
   const doc = { day: '2026-11-01', bandMin: [0, 0, 180, 0, 0, 0], bandRuns: [0, 0, 9, 0, 0, 0], munis };
   const md = O.buildDemandModel([doc], AGS, 2);
-  assert(md.cells.get(cA).outPerHour === 0 && md.cells.get(cB).outPerHour === 10 && md.cells.get(cC).outPerHour === -4 && md.dayHours['2026-11-01'] === 3, 'Netto-Abfluss je Zelle = (Starts − Enden) ÷ Messstunden (0 / 10 / −4 je h)');
+  assert(md.balance.k === 1 && md.cells.get(cA).outPerHour === 0 && md.cells.get(cB).outPerHour === 10 && md.cells.get(cC).outPerHour === -4 && md.dayHours['2026-11-01'] === 3, 'Netto-Abfluss je Zelle = (Starts − Enden) ÷ Messstunden (0 / 10 / −4 je h), Gemeinde ausgeglichen (k = 1)');
   const r = O.scoreSpots(md, { topN: 3, minSpacingM: 100, share: 1, horizonH: 2 });
   const byCell = Object.fromEntries(r.spots.map(s => [s.cell, s]));
   assert(byCell[cB].rank === 1 && byCell[cA].rank === 2, `Rang 1 = Zelle mit Abfluss (Score ${byCell[cB].score}) vor ausgeglichener Zelle mit doppelter Nachfrage (${byCell[cA].score})`);
@@ -370,9 +374,9 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const csvA = O.spotsAnalysisCsv(sp.spots, plan.needs).split('\n');
   const head = csvA[0].split(';'), row = csvA[1].split(';'), at = (k) => row[head.indexOf(k)];
   assert(head.join() === O.SPOTS_ANALYSIS_FIELDS.join() && head.includes('netto_abfluss_je_h_anbieter') && head.includes('fehlmenge') && !head.includes('f_unterversorgung'), 'Analyse-CSV: Netto-Abfluss, Bedarf, Fehlmenge statt Unterversorgung');
-  assert(at('starts_markt') === '12' && at('enden_markt') === '10' && at('messstunden') === '3' && at('bedarf_fzg') === '3' && at('grundbestand') === '2' && at('abfluss_im_horizont') === '1', 'Analyse-CSV: Zahlen von Spot 1');
+  assert(at('starts_markt') === '12' && at('enden_markt') === '10' && at('messstunden') === '3' && at('bedarf_fzg') === '2' && at('grundbestand') === '2' && at('abfluss_im_horizont') === '0' && at('ausgleich_k') === String(sp.spots[0].balanceK) && at('netto_abfluss_untergrenze_je_h') === '0' && at('bootstrap_anteil') === String(sp.spots[0].bootShare), 'Analyse-CSV: Zahlen von Spot 1 (gezählte Enden, Ausgleich k, Untergrenze, Bootstrap-Anteil)');
   const en = O.spotsAnalysisCsv(sp.spots, plan.needs, { lang: 'en' }).split('\n'), hE = en[0].split(','), rE = en[1].split(','), atE = (k) => rE[hE.indexOf(k)];
-  assert(hE.length === head.length && hE.includes('net_outflow_per_h_operator') && hE.includes('shortfall') && atE('starts_market') === '12' && atE('need_veh') === '3' && ['stable', 'medium', 'uncertain'].includes(atE('stability')), 'Analyse-CSV englisch: Spaltennamen, gleiche Zahlen, Stabilität übersetzt');
+  assert(hE.length === head.length && hE.includes('net_outflow_per_h_operator') && hE.includes('shortfall') && hE.includes('balance_k') && hE.includes('bootstrap_share') && atE('starts_market') === '12' && atE('need_veh') === '2' && ['stable', 'medium', 'uncertain'].includes(atE('stability')), 'Analyse-CSV englisch: Spaltennamen, gleiche Zahlen, Stabilität übersetzt');
 }
 // --- CSV-Formelschutz
 {
@@ -504,4 +508,86 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   // Rechenzeit: 50 Stopps mit Priorität < 150 ms
   const big = inst(50); const t0 = performance.now(); O.orderTour([big], { start: D0, end: D0, weight: s => s.prio, lambda: 1 }); const ms = performance.now() - t0;
   assert(ms < 150, `Reihenfolge mit Priorität: 50 Stopps in ${ms.toFixed(0)} ms (< 150 ms)`);
+}
+// --- M-10: Netto-Abfluss je Gemeinde ausgeglichen, vorsichtige Untergrenze in der MCDA, Poisson-Bootstrap für „stabil“
+{
+  const mk = (cells, { below = null, min = 180, band = 2, day = '2026-11-02' } = {}) => {
+    const munis = { [AGS]: {} };
+    for (const [cell, st, en] of cells) { const c = new Array(22).fill(0); c[4 + band] = st; c[16 + band] = en; c[10 + band] = 9; c[0] = st; c[1] = en; munis[AGS][cell] = c; }
+    const bandMin = [0, 0, 0, 0, 0, 0], bandRuns = [0, 0, 0, 0, 0, 0]; bandMin[band] = min; bandRuns[band] = 9;
+    return { day, bandMin, bandRuns, munis, ...(below ? { below: { [AGS]: below } } : {}) };
+  };
+  const cells = (m) => [...m.cells.values()];
+  // 1) Ausgleich: 3 Zellen, Σ Enden = 1,2 × Σ Starts (Ausbringungen zählen als Enden) → Σ Netto = 0, Starts unverändert
+  const c3 = [[cellAt(0, 0), 20, 30], [cellAt(0, 2), 30, 30], [cellAt(2, 0), 10, 12]]; // Σ Starts 60, Σ Enden 72
+  const m3 = O.buildDemandModel([mk(c3)], AGS, 2);
+  const net = cells(m3).reduce((s, c) => s + c.outPerHour, 0), raw = cells(m3).reduce((s, c) => s + c.outPerHourRaw, 0);
+  assert(Math.abs(m3.balance.k - 60 / 72) < 1e-12 && Math.abs(net) < 1e-9 && Math.abs(raw + 4) < 1e-9 && m3.cells.get(cellAt(0, 0)).startsPerHour === 20 / 3,
+    `Ausgleich: Σ Enden = 1,2 × Σ Starts → Enden × k = ${m3.balance.k.toFixed(3)}, Σ Netto ${net.toFixed(9)}/h (ohne Ausgleich ${raw}/h), Starts unverändert`);
+  assert(m3.cells.get(cellAt(0, 2)).outPerHour > 0 && m3.cells.get(cellAt(0, 2)).outPerHourRaw === 0 && Math.abs(m3.cells.get(cellAt(0, 2)).endsPerHourBal - 30 * (60 / 72) / 3) < 1e-9,
+    'Ausgleich: Zelle mit 30 Starts / 30 Enden fließt nach dem Ausgleich ab (Enden × k), gezählte Enden bleiben sichtbar');
+  // 2) Unterdrückte Ereignisse (below) zählen in die Gemeindesumme, nicht in eine Zelle; andere Bänder zählen nicht
+  const bl = new Array(14).fill(0); bl[2] = 12; bl[1] = 99; bl[7] = 99; // Band 2: 12 Starts; Band 1 nicht gewählt
+  const mb = O.buildDemandModel([mk(c3, { below: bl })], AGS, 2);
+  const cellStarts = cells(mb).reduce((s, c) => s + c.starts, 0);
+  assert(mb.balance.belowStarts === 12 && mb.balance.belowEnds === 0 && mb.balance.totalStarts === 72 && mb.balance.k === 1 && mb.cells.size === 3 && cellStarts === 60,
+    'below: 12 unterdrückte Starts in der Gemeindesumme (k = 72 ÷ 72 = 1), keiner Zelle zugeordnet; Band 1 zählt nicht');
+  const netAll = cells(mb).reduce((s, c) => s + c.outPerHour, 0) + (mb.balance.belowStarts - mb.balance.k * mb.balance.belowEnds) / mb.hours;
+  assert(Math.abs(netAll) < 1e-9 && Math.abs(cells(mb).reduce((s, c) => s + c.outPerHour, 0) + 4) < 1e-9, 'Σ Netto über Zellen + below = 0 (Zellen allein −4/h, below +4/h)');
+  const only = O.buildDemandModel([mk(c3, { day: '2026-11-02' }), { day: '2026-11-03', bandMin: [0, 0, 180, 0, 0, 0], bandRuns: [0, 0, 9, 0, 0, 0], munis: {}, below: { [AGS]: bl } }], AGS, 2);
+  assert(only.hours === 6 && only.days === 2 && only.balance.belowStarts === 12, 'Tag, an dem alle Zellen der Gemeinde unterdrückt sind: Messstunden und below zählen (Raten nicht überschätzt)');
+  // 3) Untergrenze: 3 Starts und 1 Ende in 16 h → Netto 0,125/h ± 0,125 → Faktor 0; starker Abfluss (30/0) bleibt Faktor 1
+  const X = cellAt(0, 0), Y = cellAt(0, 2), Z = cellAt(2, 0), W = cellAt(-2, 0);
+  const m16 = O.buildDemandModel([mk([[X, 3, 1], [Y, 40, 42], [Z, 30, 0], [W, 0, 30]], { min: 960 })], AGS, 2); // Σ 73 / 73 → k = 1
+  const s16 = O.scoreSpots(m16, { topN: 3, minSpacingM: 100 }), sx = s16.spots.find(s => s.cell === X), sz = s16.spots.find(s => s.cell === Z);
+  assert(m16.balance.k === 1 && sx.outPerHour === 0.13 && sx.outSe === 0.13 && sx.outLow === 0 && sx.factors.outflow === 0 && sx.outLoOp < 0, `Untergrenze: 3 Starts / 1 Ende in 16 h → Netto ${sx.outPerHour} ± ${sx.outSe} /h, max(0, Netto − 2·SE) = 0 → Faktor 0 (ohne Untergrenze wäre er > 0)`);
+  assert(sz.outLow > 1 && sz.factors.outflow === 1 && sz.rank === 1, `Untergrenze: 30 Starts ohne Rückkehr in 16 h → ${sz.outPerHour} − 2 · ${sz.outSe} = ${sz.outLow} /h, Faktor 1, Rang 1`);
+  // 4) Poisson-Ziehung: Mittel und Varianz (Inversion λ < 10, PTRS λ ≥ 10)
+  for (const lam of [3, 50, 400]) { const r = O.rng32(7); let s = 0, s2 = 0; const N = 20000; for (let i = 0; i < N; i++) { const x = O.poisson(lam, r); s += x; s2 += x * x; } const mu = s / N, va = s2 / N - mu * mu;
+    assert(Math.abs(mu - lam) < 4 * Math.sqrt(lam / N) && Math.abs(va / lam - 1) < 0.05, `Poisson(${lam}): Mittel ${mu.toFixed(2)}, Varianz ${va.toFixed(1)}`); }
+  // 5) Bootstrap: wenige, ähnliche Zählungen → Rang hängt am Zufall der Zählung. Gewichts-Sensitivität sagt „stabil“ (alle Abflüsse 0, Rang nur nach
+  //    Nachfrage, ±20 % ändern die Reihenfolge nicht), der Bootstrap nicht. Eine Zelle mit 400 Starts bleibt in jeder Ziehung vorn.
+  const flat = [[cellAt(-3, -3), 400, 400], ...[8, 7, 7, 6, 6, 6, 5, 5, 5, 5].map((n, i) => [cellAt(-3 + 2 * (i % 4), -1 + 2 * Math.floor(i / 4)), n, n])];
+  const mf = O.buildDemandModel([mk(flat)], AGS, 2);
+  const b1 = O.scoreSpots(mf, { topN: 3, minSpacingM: 100 }), b2 = O.scoreSpots(O.buildDemandModel([mk(flat)], AGS, 2), { topN: 3, minSpacingM: 100 });
+  const weak = b1.spots.filter(s => s.bootShare < O.BOOT.minShare);
+  assert(b1.boot.draws === 200 && b1.boot.seed === O.BOOT.seed && JSON.stringify(b1.spots.map(s => [s.cell, s.bootShare])) === JSON.stringify(b2.spots.map(s => [s.cell, s.bootShare])),
+    `Bootstrap deterministisch (200 Ziehungen, fester Startwert): Anteile ${b1.spots.map(s => s.bootShare).join(' / ')} in beiden Läufen gleich`);
+  assert(b1.spots[0].starts === 400 && b1.spots[0].bootShare === 1 && b1.spots[0].stabilityLabel === 'stabil', 'Bootstrap: Zelle mit 400 Starts in allen Ziehungen vorn → stabil');
+  assert(weak.length >= 1 && weak.every(s => s.stabilityWeights === 1 && s.stabilityLabel === 'unsicher') && b1.uncertain === weak.length,
+    `unsicherer Spot wird nicht „stabil“: ${weak.map(s => `Rang ${s.rank} (${s.starts} Starts) in ${Math.round(s.bootShare * 100)} % der Ziehungen`).join(', ')} → unsicher, obwohl ±20 % Gewichte stabil`);
+  const nob = O.scoreSpots(mf, { topN: 3, minSpacingM: 100, bootDraws: 0 });
+  assert(nob.boot === null && nob.spots.every(s => s.bootShare === null && s.stabilityLabel === 'stabil'), 'ohne Bootstrap (bootDraws 0, Vorauswahl im Browser) nur die Gewichts-Sensitivität');
+  const other = O.scoreSpots(mf, { topN: 3, minSpacingM: 100, bootSeed: 1 });
+  assert(other.spots.every((s, i) => Math.abs(s.bootShare - b1.spots[i].bootShare) < 0.15), 'anderer Startwert: Anteile im Rahmen der Ziehungsschwankung (±0,15)');
+  // 6) Bedarf nutzt den ausgeglichenen Abfluss (Schätzwert), nicht die Untergrenze: X hat Abfluss > 0 → Bedarf mit Abfluss im Horizont
+  assert(sx.drain > 0 && sx.drain === +(sx.outPerHourOp * 3).toFixed(1), `Bedarf: ausgeglichener Abfluss ${sx.outPerHourOp}/h × 3 h = ${sx.drain} (Untergrenze nur in der Rangfolge)`);
+}
+// --- Akkutausch: Reichweiten-Schwelle relativ zur Quelle (Nutzerwunsch 02.11.2026): min(eingestellte Schwelle, v.rangeLimitKm)
+{
+  const o = { swapThreshold: 20, swapRangeKm: 5 };
+  // Lime über MobiData BW: Ladestand verworfen (Skala unplausibel), Reichweite höchstens ≈ 12–15 km → Schwelle der Quelle 2,4 km
+  assert(O.needsSwap({ battery: null, rangeKm: 4 }, o) === true && O.needsSwap({ battery: null, rangeKm: 4, rangeLimitKm: 2.4 }, o) === false && O.needsSwap({ battery: null, rangeKm: 2, rangeLimitKm: 2.4 }, o) === true,
+    'Schwelle der Quelle: 4 km bei Schwelle 2,4 km nicht tauschen (vorher < 5 km: tauschen), 2 km tauschen');
+  assert(O.needsSwap({ battery: null, rangeKm: 2, rangeLimitKm: 2.4 }, { swapThreshold: 20, swapRangeKm: 1.5 }) === false && O.swapRangeOf({ rangeLimitKm: 2.4 }, 1.5) === 1.5 && O.swapRangeOf({ rangeLimitKm: 2.4 }, 5) === 2.4 && O.swapRangeOf({ rangeLimitKm: null }, 5) === 5,
+    'eingestellter Wert kleiner als die Schwelle der Quelle: der kleinere gilt (min); ohne Schwelle der eingestellte Wert');
+  assert(O.needsSwap({ battery: 15, rangeKm: 3, rangeLimitKm: 2.4 }, o) === false && O.needsSwap({ battery: 15, rangeKm: 2, rangeLimitKm: 2.4 }, o) === true && O.needsSwap({ battery: 15, rangeKm: 12, rangeDerived: true, rangeLimitKm: 2.4 }, o) === true,
+    'UND-Regel und abgeleitete Reichweite (rangeDerived → nur Ladestand) bleiben');
+  const doc = { at: 1, types: ['scooter'], ops: ['Lime'], munis: [AGS], vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm',
+    vehicles: [[48.5, 9.05, 0, 0, 0, null, 4, 10, 0, 0, 2.4], [48.5, 9.051, 0, 0, 0, null, 2, 10, 0, 0, 2.4], [48.5, 9.052, 0, 0, 0, null, 4, 10, 0, 0, null], [48.5, 9.053, 0, 0, 0, null, 4, 10, 0, 0]] };
+  const fl = O.decodeFleet(doc);
+  assert(fl.vehicles[0].rangeLimitKm === 2.4 && fl.vehicles[2].rangeLimitKm === null && fl.vehicles[3].rangeLimitKm === null && fl.vehicles.filter(v => O.needsSwap(v)).length === 3 && O.fleetKpis(fl.vehicles).low === 3,
+    'decodeFleet: Feld 11 „reichweiteSchwelleKm“ → v.rangeLimitKm (null und ältere Dateien = Standard); 3 von 4 tauschbedürftig');
+  const pv = O.vehiclePrio('swap', { battery: null, rangeKm: 1.2, rangeLimitKm: 2.4, idleMin: 0 }, o);
+  assert(Math.abs(pv.prio - 0.7 * 0.5) < 1e-9, `Priorität: Energie-Lücke relativ zur Schwelle der Quelle (1 − 1,2 ÷ 2,4 = 0,5 → ${pv.prio})`);
+  const swl = O.planSwaps({ vehicles: fl.vehicles, model: m, depot, swapThreshold: 20, swapRangeKm: 5 });
+  assert(swl.below === 3, 'Akkutausch-Plan: Schwelle der Quelle angewandt (3 Fahrzeuge)');
+}
+// --- Konstante Reichweite der Quelle (v.rangeFlat): zählt für den Akkutausch nicht
+{
+  const o = { swapThreshold: 20, swapRangeKm: 5 };
+  assert(O.needsSwap({ battery: null, rangeKm: 1, rangeFlat: true }, o) === false && O.needsSwap({ battery: 10, rangeKm: 1, rangeFlat: true }, o) === true && O.needsSwap({ battery: 30, rangeKm: 1, rangeFlat: true }, o) === false && O.needsSwap({ battery: null, rangeKm: 1 }, o) === true,
+    'rangeFlat: ohne Ladestand kein Tausch (Platzhalter 1 km), mit Ladestand entscheidet er; ohne Kennzeichen wie bisher');
+  const pv = O.vehiclePrio('swap', { battery: 10, rangeKm: 0, rangeFlat: true, idleMin: 0 }, o);
+  assert(Math.abs(pv.prio - 0.7 * 0.5) < 1e-9 && O.rangeUsable({ rangeKm: 0, rangeFlat: true }) === false && O.rangeUsable({ rangeKm: 0 }) === true, 'Priorität: konstante Reichweite 0 km zählt nicht in die Energie-Lücke (nur Ladestand 10 % → 0,5)');
 }

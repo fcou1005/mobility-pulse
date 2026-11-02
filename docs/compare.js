@@ -2,10 +2,11 @@
 // einzigartig gegen geteilt, Überschneidung der Zellen, Karte mit Filter, Stationsliste mit CSV.
 // Eigenständig: renderCompare(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, setScope }; Leaflet (L) global.
 // Daten: ops/<Land>.json (letzter Sammler-Lauf), Rechenlogik in lib/pulse-compare.js. Werte aus Daten gehen durch ctx.esc.
-import * as P from './pulse-compare.js?v=mvyuri2c';
-import { decodeFleet } from './pulse-ops.js?v=mvyuri2c';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyuri2c';
-import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mvyuri2c';
+import * as P from './pulse-compare.js?v=mvyx0klq';
+import { decodeFleet } from './pulse-ops.js?v=mvyx0klq';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyx0klq';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mvyx0klq';
+import { mapKeys } from './mapkeys.js?v=mvyx0klq';
 
 const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
 const CACHE = new Map();
@@ -146,6 +147,7 @@ function drawMap(el, ctx, res, s) {
     langControls(s.map);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.map);
     s.layer = L.layerGroup().addTo(s.map); s.fitKey = null;
+    mapKeys(s.map); // Tastatur: N/P durch die Stationen im Ausschnitt (web/mapkeys.js)
   }
   s.layer.clearLayers();
   const renderer = L.canvas({ padding: 0.3 });

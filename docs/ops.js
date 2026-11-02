@@ -1,6 +1,7 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvyuri2c';
-import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyuri2c';
+import * as O from './pulse-ops.js?v=mvyx0klq';
+import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyx0klq';
+import { mapKeys } from './mapkeys.js?v=mvyx0klq';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -130,6 +131,8 @@ function ensureMap() {
   for (const k of ['demand', 'official', 'fleet', 'spots', 'groups', 'collect', ...RUN_KINDS, 'depot']) S.layers[k] = L.featureGroup().addTo(S.map);
   for (const k of ['demand', 'fleet']) S.layers[k].on('click', openShared); // Klicks der Canvas-Marker steigen zur Gruppe auf
   S.map.on('click', (e) => { if (!S.pickDepot || !S.plan) return; S.depot[S.plan.ags] = { lat: e.latlng.lat, lon: e.latlng.lng }; S.pickDepot = false; $('#ops-depot').classList.remove('primary'); computePlan(); });
+  // Tastatur (web/mapkeys.js): N/P zeigt auch das gemeinsame Popup der Canvas-Ebenen; im Depot-Modus setzt Enter das Depot in die Kartenmitte
+  mapKeys(S.map, { open: (l, ll) => (POP.has(l) ? (openShared({ layer: l, latlng: ll }), true) : false), centerClick: () => (S.pickDepot && S.plan ? t('maps.depotPlaced') : null), hintExtra: () => t('maps.hintDepot') });
 }
 
 export async function renderOps() {
@@ -341,7 +344,7 @@ async function computePlan() {
     const b = (await X.loadBoundaries(), st.boundaries?.features.find(f => f.properties.ags === ags)?.bbox) || null;
     const spacing = num('#ops-spacing', 220), topN = Math.min(60, num('#ops-n', 20)), horizonH = num('#ops-horizon', 3);
     status(t('ops.loadingZonesAndSurroundings'));
-    const pre = O.scoreSpots(model, { topN: Math.min(80, topN * 3), minSpacingM: spacing * 0.6 });
+    const pre = O.scoreSpots(model, { topN: Math.min(80, topN * 3), minSpacingM: spacing * 0.6, bootDraws: 0 }); // Vorauswahl für Overpass: ohne Bootstrap
     const useOsm = $('#ops-osm').checked;
     const [np, ctxDoc, official, groupRes, flowRes] = await Promise.all([
       loadNoPark(ags, op, b ? [b[0] - 0.02, b[1] - 0.02, b[2] + 0.02, b[3] + 0.02] : null),
@@ -456,6 +459,13 @@ function emptyPlan(why) {
 
 // ---------- Ausgabe ----------
 function tile(l, v, s, cls = '') { return `<div class="tile ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }
+// Reichweiten-Schwelle der Quelle (v.rangeLimitKm, lib/pulse-ops.js swapRangeOf): „5 (Quelle 2,4) km“, wenn eine Quelle der Flotte darunter liegt
+function rangeText(vehicles, setting) {
+  const lims = [...new Set((vehicles || []).map(v => v.rangeLimitKm).filter(x => x != null && x < setting))].sort((a, b) => a - b);
+  if (!lims.length) return { v: X.fmt(setting, setting % 1 ? 1 : 0), limited: false };
+  const l = lims.length > 1 ? `${X.fmt(lims[0], 1)}–${X.fmt(lims[lims.length - 1], 1)}` : X.fmt(lims[0], 1);
+  return { v: t('ops.srcLimitParen', { v: X.fmt(setting, setting % 1 ? 1 : 0), limit: l }), limited: true };
+}
 function renderTiles() {
   const p = S.plan, k = p.kpi, f = X.fmt;
   const need = p.rebalance.needs.reduce((s, n) => s + n.need, 0), target = p.spots.spots.reduce((s, x) => s + x.target, 0);
@@ -468,7 +478,7 @@ function renderTiles() {
     tile(t('ops.demand'), `${f(sph * p.share, 1)} /h`, t('ops.tripStartsMarketHNetOutflowH', { v0: p.band === 'day' ? t('ops.dailyMean') : bandLabel(p.band), sph: f(sph, 1), v2: f(drain * p.share, 1), length: f(drainCells.length), hours: f(p.model.hours, 1) })),
     tile(t('ops.spots'), `${f(p.spots.spots.length)}`, t('ops.needVehShortfall', { target: f(target), need: f(need), v2: p.spots.excluded ? ` · ${t('ops.cellsExcludedZones', { excluded: f(p.spots.excluded), v1: p.spots.excludedBy?.official ? t('ops.ofWhichNoParkingZonePerCity', { official: f(p.spots.excludedBy.official) }) : '' })}` : '' }), need > target * 0.5 ? 'warn' : ''),
     // Akku und Standzeit getrennt: jede Kachel warnt nur wegen ihres eigenen Werts (vorher „0“ in Warnfarbe wegen der Standzeit)
-    tile(t('ops.lowBatteryTile'), k.batteryKnown ? `${f(k.low)}` : t('common.na'), k.batteryKnown ? t('ops.lowBatterySub', { charge: num('#ops-swapthr', 20), range: num('#ops-swaprange', 5), known: f(k.batteryKnown) }) : t('ops.noChargeLevelInFeed'), k.batteryKnown && k.low / k.batteryKnown > 0.25 ? 'warn' : ''),
+    tile(t('ops.lowBatteryTile'), k.batteryKnown ? `${f(k.low)}` : t('common.na'), k.batteryKnown ? (() => { const rt = rangeText(p.fleet.vehicles, num('#ops-swaprange', 5)); return t('ops.lowBatterySub', { charge: num('#ops-swapthr', 20), range: rt.v, known: f(k.batteryKnown) }) + (rt.limited ? ` · ${t('ops.srcLimitRule', { share: Math.round(O.RANGE_LIMIT.share * 100), maxP95: O.RANGE_LIMIT.maxP95Km })}` : ''); })() : t('ops.noChargeLevelInFeed'), k.batteryKnown && k.low / k.batteryKnown > 0.25 ? 'warn' : ''),
     tile(t('ops.idleTile'), k.idleKnown ? `${f(k.idle24)}` : t('common.na'), k.idleKnown ? t('ops.idleSub', { share: `${f((k.idle24 / k.idleKnown) * 100)} %`, median: k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h' }) : '', k.idleKnown && k.idle24 / k.idleKnown > 0.3 ? 'warn' : ''),
     tile(t('ops.revenueDay'), p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? (prelim ? `${rv(p.econ.revDay * 0.7)}<small> ${t('ops.rangeTo')} ${rv(p.econ.revDay * 1.3)} €</small>` : `${f(p.econ.revDay)} €`) : '—', p.econ === undefined ? t('ops.loadingEstimate') : !p.econ ? t('ops.noTripDataForThisOperator') : t('ops.tripsVehDayUtilisationNet', { v0: prelim ? `${t('ops.preliminaryUnder3Measurement')} · ` : '', v1: p.econ.plausible ? '' : `${t('ops.tripCountImplausible')} · `, rvd: f(p.econ.rvd, 2), v3: p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %' }), `est${p.econ && !p.econ.plausible ? ' warn' : ''}`),
     tile(t('ops.runs'), `${f(runs.length)}`, t('ops.kmHOnDuty', { km: f(km, 1), v1: f(min / 60, 1), v2: Object.keys(S.routed).length ? t('ops.byRoad', { length: f(Object.keys(S.routed).length), length2: f(runs.length) }) : $('#ops-route')?.checked && !osrmDown() ? t('ops.roadRoutingInProgress') : t('ops.straightLine135') })),
@@ -531,7 +541,7 @@ function drawLayers(keys) {
     for (const c of p.model.cells.values()) {
       if (!(c.outPerHour > 0)) continue;
       withPop(L.rectangle([[c.lat - O.CELL_LAT / 2, c.lon - O.CELL_LON / 2], [c.lat + O.CELL_LAT / 2, c.lon + O.CELL_LON / 2]], { weight: 0, fillColor: tok('--accent'), fillOpacity: 0.08 + 0.5 * q(c.outPerHour), renderer: S.canvas.demand }),
-        () => t('ops.cellMarketMeasuredHoursNet', { cell: esc(c.cell), hours: f(p.model.hours, 1), v2: sgn(c.outPerHour), outSe: f(c.outSe, 2), starts: f(c.starts), startsPerHour: f(c.startsPerHour, 2), ends: f(c.ends), endsPerHour: f(c.endsPerHour, 2), supplyAvg: f(c.supplyAvg, 1), v9: fl ? t('ops.flowsOutIn', { days: f(fl.days), v1: fl.days === 1 ? t('ops.day') : t('ops.days2'), v2: f(c.flow?.out || 0), v3: f(c.flow?.in || 0) }) : '' })).addTo(Lx.demand);
+        () => t('ops.cellMarketMeasuredHoursNet', { cell: esc(c.cell), hours: f(p.model.hours, 1), v2: sgn(c.outPerHour), outSe: f(c.outSe, 2), starts: f(c.starts), startsPerHour: f(c.startsPerHour, 2), ends: f(c.ends), endsPerHour: f(c.endsPerHour, 2), supplyAvg: f(c.supplyAvg, 1), v9: t('ops.cellBalanceK', { k: f(p.model.balance?.k ?? 1, 3), endsBal: f(c.endsPerHourBal ?? c.endsPerHour, 2), low: f(c.outLow ?? 0, 2) }) + (fl ? t('ops.flowsOutIn', { days: f(fl.days), v1: fl.days === 1 ? t('ops.day') : t('ops.days2'), v2: f(c.flow?.out || 0), v3: f(c.flow?.in || 0) }) : '') })).addTo(Lx.demand);
     }
   }
   // Abstellverbotszonen der Stadt (Ausschluss), gestrichelt unter der Flotte; nicht anklickbar, Quelle und Lizenz in der Legende
@@ -555,7 +565,7 @@ function drawLayers(keys) {
       const n = needBy.get(s.cell);
       L.circle([s.lat, s.lon], { radius: 150, weight: 1, color: tok('--accent'), fill: false, dashArray: s.stabilityLabel === 'stabil' ? null : '4 4', interactive: false }).addTo(Lx.spots);
       S.spotMarkers.push([s, L.marker([s.lat, s.lon], { icon: L.divIcon({ className: `ops-spot${s.stabilityLabel === 'stabil' ? '' : ' weak'}`, html: `${s.rank}`, iconSize: [24, 24] }), title: spotTitle(s), keyboard: false })
-        .bindPopup(() => t('ops.spotNeedVehFleet150M', { rank: s.rank, v1: s.park ? ` · ${esc(parkLabel(s.park))}` : '', target: f(s.target), v3: f(n?.have), v4: f(n?.need), startsPerHourOp: f(s.startsPerHourOp, 2), endsPerHourOp: f(s.endsPerHourOp, 2), v7: sgn(s.outPerHourOp), hours: f(s.hours, 1), score: f(s.score, 2), v10: p.spots.prelim ? t('ops.preliminary') : (STAB[s.stabilityLabel] ?? s.stabilityLabel) })).addTo(Lx.spots)]);
+        .bindPopup(() => t('ops.spotNeedVehFleet150M', { rank: s.rank, v1: s.park ? ` · ${esc(parkLabel(s.park))}` : '', target: f(s.target), v3: f(n?.have), v4: f(n?.need), startsPerHourOp: f(s.startsPerHourOp, 2), endsPerHourOp: f(s.endsPerHourOp, 2), v7: `${sgn(s.outPerHourOp)} ± ${f(s.outSeOp, 2)}`, hours: f(s.hours, 1), score: f(s.score, 2), v10: `${p.spots.prelim ? t('ops.preliminary') : (STAB[s.stabilityLabel] ?? s.stabilityLabel)}${s.bootShare != null ? ` (${t('ops.bootShare', { share: f(s.bootShare * 100) })})` : ''}` })).addTo(Lx.spots)]);
     }
   }
   // Vermutete Anbieter-Spots und Einsammel-Orte (Gruppen-Ereignisse), Größe nach Anzahl, unter den eigenen Spots
@@ -657,7 +667,7 @@ function renderRuns() {
     (S.plan.fleet.vehicles.length ? '' : `<div class="note">${t('ops.stationBasedFleetNoFree')}</div>`) +
     block('rebalance', rb, t('ops.rebalancingMovesFromSurplus', { moves: f(rb.moves), surplus: f(rb.surplus), v2: rb.missing > 0 ? ` · ${t('ops.placesRemainOpenNoSurplus', { missing: f(rb.missing), v1: f(O.DEFAULTS.maxPickupM / 1000) })}` : '', v3: left(rb.unplanned) })) +
     (sb ? block('station', sb, t('ops.nearlyEmptyNearlyFullOf', { empty: f(sb.empty), full: f(sb.full), stations: f(sb.stations), moves: f(sb.moves), v4: left(sb.unplanned) })) : '') +
-    block('swap', sw, sw.below ? t('ops.vehiclesBelowChargeAndKm', { below: f(sw.below), v1: num('#ops-swapthr', 20), v2: num('#ops-swaprange', 5), v3: left(sw.unplanned) }) : t('ops.noVehicleBelowThresholdOrNo')) +
+    block('swap', sw, sw.below ? t('ops.vehiclesBelowChargeAndKm', { below: f(sw.below), v1: num('#ops-swapthr', 20), v2: rangeText(p.fleet.vehicles, num('#ops-swaprange', 5)).v, v3: left(sw.unplanned) }) : t('ops.noVehicleBelowThresholdOrNo')) +
     block('workshop', ws, ws.disabled ? t('ops.disabledVehiclesLongest', { disabled: f(ws.disabled), v1: left(ws.unplanned) }) : t('ops.noDisabledVehicles'));
   $('#ops-runs-sub').textContent = `${t('ops.runsForBundledByCityAreaAt', { op: p.op, hText })} · ${t('ops.orderBy', { level: prioName() })}`;
   markFocus();
@@ -683,6 +693,9 @@ function renderSpots() {
   $('#ops-spots-sub').innerHTML = esc(t('ops.candidateCellsFactorsNeedMax', { candidates: sp.candidates, v1: sp.activeFactors.map(k => AHP_L[k]).join(', '), H: f(H), baseH: f(sp.baseH), v4: f(p.share * 100), hours: f(p.model.hours, 1), days: f(p.model.days), v7: p.model.days === 1 ? t('ops.day') : t('ops.days'), v8: sp.rho != null ? ` · ${t('ops.rankCorrelationDemandNet', { rho: f(sp.rho, 2) })}` : '', flowNote, length: p.np.geoms.length, v11: p.np.mandatory.length ? ` ${t('ops.andMandatoryParking', { length: p.np.mandatory.length })}` : '', files: p.np.files, v13: p.np.files === 1 ? t('ops.zoneFeed') : t('ops.zoneFeeds'), v14: sp.excludedBy?.operator ? ` ${t('ops.cellsExcluded', { operator: sp.excludedBy.operator })}` : '', v15: p.osm ? ` · ${t('ops.osmParkingAreasStopPoints', { length: f(p.osm.parking.length), length2: f(p.osm.transit.length) })}` : '' })) +
     // amtliche Daten mit Quelle und Lizenz: Abstellflächen (Spot rastet ein), Abstellverbotszonen (Ausschluss, kein Gewicht)
     (p.official?.sources || []).map(({ ref, n }) => ` · ${refCite(ref)}: ${ref.kind === 'noPark' ? t('ops.noParkingZonesCellsExcluded', { n: f(n), v1: f(sp.excludedBy?.official || 0) }) : t('ops.officialParkingAreas2', { n: f(n) })}`).join('') +
+    // Ausgleich je Gemeinde (Σ Starts = Σ Enden, unterdrückte Ereignisse eingerechnet) und Bootstrap (M-10, lib/pulse-ops.js buildDemandModel, BOOT)
+    (sp.balance ? ` · ${esc(t('ops.balanceNote', { starts: f(sp.balance.totalStarts), belowStarts: f(sp.balance.belowStarts), ends: f(sp.balance.totalEnds), belowEnds: f(sp.balance.belowEnds), k: f(sp.balance.k, 3) }))}` : '') +
+    (sp.boot ? ` · ${esc(t('ops.bootNote', { stable: f(sp.stable), n: f(sp.spots.length), uncertain: f(sp.uncertain), draws: f(sp.boot.draws), share: f(sp.boot.minShare * 100) }))}` : '') +
     (prelim ? `<br><span class="warn-text">${t('ops.preliminaryNetOutflowAnd', { prelimH: f(D.prelimH), hours: f(p.model.hours, 1) })}</span>` : '');
   const bar = (x) => `<span class="bar" style="display:inline-block;width:38px;vertical-align:middle"><i style="width:${Math.round((x ?? 0) * 100)}%"></i></span>`;
   const F = { 'Δ': t('ops.netOutflowStartsEndsPerH'), N: t('ops.demandStartsH'), Ö: t('ops.publicTransportProximityStop'), A: t('ops.parkingAreaNearby') };
@@ -693,13 +706,13 @@ function renderSpots() {
     const place = s.park ? esc(parkLabel(s.park)) : t('ops.cellCentre');
     const main = s.rank > GEO_TOP ? place : `<span class="geo-main" translate="no" data-geo="${k}" data-fallback="${place}">${g ? esc(g) : g === null ? place : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span>`;
     return `<tr><td><span class="mono muted">${s.rank} ·</span> ${main}<div class="sub-line">${osm}${s.rank <= GEO_TOP ? ` · ${place}` : ''}</div></td>
-    <td class="n">${f(s.startsPerHourOp, 2)}<div class="sub-line">${t('ops.market', { startsPerHour: f(s.startsPerHour, 2) })}</div></td><td class="n">${f(s.endsPerHourOp, 2)}<div class="sub-line">${t('ops.market2', { endsPerHour: f(s.endsPerHour, 2) })}</div></td>
-    <td class="n"><b>${sgn(s.outPerHourOp)}</b><div class="sub-line">± ${f(s.outSeOp, 2)}${fl ? ` · ${t('ops.flowsOutIn2', { v0: f(s.flow?.out || 0), v1: f(s.flow?.in || 0) })}` : ''}</div></td>
+    <td class="n">${f(s.startsPerHourOp, 2)}<div class="sub-line">${t('ops.market', { startsPerHour: f(s.startsPerHour, 2) })}</div></td><td class="n">${f(s.endsPerHourOp, 2)}<div class="sub-line">${t('ops.endsCountedK', { counted: f(s.endsPerHour, 2), k: f(s.balanceK ?? 1, 2) })}</div></td>
+    <td class="n"><b>${sgn(s.outPerHourOp)}</b><div class="sub-line">${t('ops.outRange', { se: f(s.outSeOp, 2), lo: sgn(s.outLoOp ?? 0), hi: sgn(s.outHiOp ?? 0), low: f(s.outLowOp ?? 0, 2) })}${fl ? ` · ${t('ops.flowsOutIn2', { v0: f(s.flow?.out || 0), v1: f(s.flow?.in || 0) })}` : ''}</div></td>
     <td class="n">${f(s.hours, 1)} h<div class="sub-line">${t('ops.startsEnds', { starts: f(s.starts), ends: f(s.ends) })}</div></td>
     <td class="n"><b>${f(s.target)}</b><div class="sub-line">${formula(s)}</div></td><td class="n">${f(n?.have)}<div class="sub-line">${t('ops.avgMarket', { supplyAvg: f(s.supplyAvg, 1) })}</div></td><td class="n" style="color:var(--${n?.need ? 'warn' : 'muted'})"><b>${f(n?.need)}</b></td>
     <td class="n">${f(s.score, 2)}</td>
     <td class="small" style="white-space:nowrap">${fac(s.factors.outflow, 'Δ')} ${fac(s.factors.demand, 'N')}${sp.activeFactors.includes('transit') ? ` ${fac(s.factors.transit, 'Ö')}` : ''}${sp.activeFactors.includes('parking') ? ` ${fac(s.factors.parking, 'A')}` : ''}</td>
-    <td>${prelim ? `<span class="pill prelim" title="${t('ops.meaningfulOnlyFromMeasured', { prelimH: f(D.prelimH) })}">${t('ops.preliminary')}</span>` : `<span class="pill ${s.stabilityLabel === 'stabil' ? 'live' : s.stabilityLabel === 'mittel' ? 'delayed' : 'stale'}">${STAB[s.stabilityLabel] ?? s.stabilityLabel}</span>`}<div class="sub-line">${t('ops.ofVariants', { v0: f(s.stability * 100) })}</div></td></tr>`; }).join('') || `<tr><td colspan="${SPOT_COLS}" class="empty">${t('ops.noSpotsTooLittleDemand')}</td></tr>`;
+    <td>${prelim ? `<span class="pill prelim" title="${t('ops.meaningfulOnlyFromMeasured', { prelimH: f(D.prelimH) })}">${t('ops.preliminary')}</span>` : `<span class="pill ${s.stabilityLabel === 'stabil' ? 'live' : s.stabilityLabel === 'mittel' ? 'delayed' : 'stale'}">${STAB[s.stabilityLabel] ?? s.stabilityLabel}</span>`}<div class="sub-line">${t('ops.ofVariants', { v0: f(s.stability * 100) })}</div>${s.bootShare != null ? `<div class="sub-line">${t('ops.bootShare', { share: f(s.bootShare * 100) })}</div>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="${SPOT_COLS}" class="empty">${t('ops.noSpotsTooLittleDemand')}</td></tr>`;
   queueGeo(sp.spots.slice(0, GEO_TOP));
 }
 const osmLink = (lat, lon) => `<a href="https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lon.toFixed(5)}#map=18/${lat.toFixed(5)}/${lon.toFixed(5)}" target="_blank" rel="noopener" class="mono" title="${t('ops.openInOpenstreetmap')}">${lat.toFixed(5)}, ${lon.toFixed(5)}</a>`;
@@ -934,10 +947,12 @@ function renderMethod() {
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,44ch),1fr));gap:0 var(--s5);margin-top:var(--s2)">
   <section><h3>${t('ops.measuredDemandNetOutflow')}</h3><p>${t('ops.perCell250MAndTimeOfDayBand', { prelimH: D.prelimH })}</p>
   <h3>${t('ops.needFleetShortfall')}</h3><p>${t('ops.needMax0NetOutflowHHorizon', { horizonH: D.horizonH, baseH: D.baseH, minPerSpot: D.minPerSpot, maxPerSpot: D.maxPerSpot, spotRadiusM: D.spotRadiusM })}</p>
-  <h3>${t('ops.deploySpotsMcda')}</h3><p>${t('ops.factorsStandardisedTo0195th')}</p></section>
+  <h3>${t('ops.deploySpotsMcda')}</h3><p>${t('ops.factorsStandardisedTo0195th')}</p>
+  <h3>${t('ops.uncertaintyH')}</h3><p>${t('ops.uncertaintyText', { z: O.BOOT.z, draws: O.BOOT.draws, minShare: O.BOOT.minShare * 100 })}</p></section>
   <section><h3>${t('ops.weightsAhp')}</h3><div class="tbl"><table><thead><tr><th>AHP</th>${A.criteria.map(c => `<th class="n">${AHP_L[c]}</th>`).join('')}<th class="n">${t('ops.weight')}</th></tr></thead><tbody>${A.criteria.map((c, i) => `<tr><td>${AHP_L[c]}</td>${A.matrix[i].map(x => `<td class="n mono">${f(x)}</td>`).join('')}<td class="n mono"><b>${A.weights[c].toFixed(3)}</b></td></tr>`).join('')}</tbody></table></div>
   <p class="small">${t('ops.saatyScale1EquallyImportant3', { lambdaMax: X.fmt(A.lambdaMax, 3), cr: X.fmt(A.cr, 4) })}</p></section>
   <section><h3>${t('ops.runs')}</h3><p>${t('ops.rebalanceSurplusMeans', { minBatteryForMove: D.minBatteryForMove, v1: D.maxPickupM / 1000, swapThreshold: f(D.swapThreshold), swapRangeKm: f(D.swapRangeKm) })}</p>
+  <p>${t('ops.swapRangeRule', { share: Math.round(O.RANGE_LIMIT.share * 100), maxP95: O.RANGE_LIMIT.maxP95Km, minN: O.RANGE_LIMIT.minN, std: f(D.swapRangeKm) })}</p>
   <p>${t('ops.bundlingByAreaOpenJob', { v0: D.maxRunMin / 60 })}</p>
   <p>${t('ops.orderPerRunPrio', { levels: O.PRIO_LEVELS.map((l, i) => `${i} = λ ${X.fmt(l, l % 1 ? 1 : 0)}`).join(', '), exactMax: O.EXACT_MAX, osrmMax: OSRM_MAX, detour: X.fmt(D.detour, 2), speedKmh: D.speedKmh })}</p>
   <p>${t('ops.prioValues', { energyW: X.fmt(O.PRIO.energyW, 1), idleW: X.fmt(O.PRIO.idleW, 1), idleRefH: O.PRIO.idleRefH, longIdleH: O.PRIO.longIdleH, longIdleBonus: X.fmt(O.PRIO.longIdleBonus, 1), needRef: O.PRIO.needRef, emptyBonus: X.fmt(O.PRIO.emptyBonus, 1), fullStation: X.fmt(O.PRIO.fullStation, 1) })}</p></section>

@@ -223,4 +223,42 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
     'https://r/fbs.json': { last_updated: n, ttl: 60, version: '2.3', data: { bikes: [...Array(60)].map((_, i) => { const b = 20 + i; return { bike_id: 'v' + i, lat: 48.7 + i * 0.001, lon: 9.1, is_reserved: false, is_disabled: false, vehicle_type_id: 'v', current_fuel_percent: b, current_range_meters: b * 800, last_reported: n }; }) } } };
   const sv = await C.readGbfsSystem({ id: 'voi_t', url: 'https://r/gbfs.json', operator: 'Voi' }, async (u) => ({ ok: true, status: 200, json: F[u] }), { now });
   assert(sv.rangeCheck.derived && sv.vehicles.every(v => v.rangeDerived) && sv.checks.items.some(x => x.msg === C.RANGE_DERIVED_MSG), 'M-16: readGbfsSystem markiert v.rangeDerived und meldet den Befund');
+  assert(sv.rangeLimit.limitKm === null && sv.rangeLimit.p95Km >= 25 && sv.vehicles.every(v => v.rangeLimitKm === undefined) && !sv.checks.items.some(x => /^Reichweite klein/.test(x.msg)), 'Reichweiten-Schwelle: Voi-Muster (bis 63 km) → Standard, kein Hinweis');
+}
+// Reichweiten-Schwelle relativ zur Quelle (Nutzerwunsch 02.11.2026): 95. Perzentil < 25 km → 20 % davon, sonst Standard
+{
+  const R = (n, f) => [...Array(n)].map((_, i) => ({ rangeKm: f(i) }));
+  const lime = C.rangeLimitCheck(R(100, i => i * 0.15)); // 0–14,85 km wie Lime über MobiData BW
+  assert(lime.n === 100 && lime.p95Km === 14.1 && lime.limitKm === 2.8, `Lime-Muster (Reichweite ≤ 15 km): p95 ${lime.p95Km} km → Schwelle ${lime.limitKm} km (20 %)`);
+  assert(C.rangeLimitCheck(R(100, i => i * 0.4)).limitKm === null && C.rangeLimitCheck(R(100, i => i * 0.4)).p95Km === 37.6, 'p95 ≥ 25 km (Bolt, Dott, Voi) → Standard (null)');
+  assert(C.rangeLimitCheck(R(49, i => i * 0.15)).limitKm === null && C.rangeLimitCheck(R(100, () => 0)).limitKm === null && C.rangeLimitCheck([...R(60, i => i * 0.2), { rangeKm: null }, { rangeKm: NaN }]).n === 60,
+    'unter 50 Fahrzeugen, p95 = 0 (nextbike ohne Motor) → Standard; fehlende Reichweiten zählen nicht');
+  assert(C.RANGE_LIMIT.maxP95Km * C.RANGE_LIMIT.share === C.RANGE_LIMIT.stdKm && C.rangeLimitCheck(R(100, () => 24.9)).limitKm === 5, 'stetiger Übergang: 25 km × 20 % = 5 km (p95 knapp unter 25 km → ≈ 5 km)');
+  const n = Math.floor(now / 1000);
+  const F = { 'https://l/gbfs.json': { last_updated: n, ttl: 60, version: '2.3', data: { de: { feeds: [{ name: 'free_bike_status', url: 'https://l/fbs.json' }, { name: 'vehicle_types', url: 'https://l/vt.json' }] } } },
+    'https://l/vt.json': { last_updated: n, ttl: 60, version: '2.3', data: { vehicle_types: [{ vehicle_type_id: 'l', form_factor: 'scooter', propulsion_type: 'electric' }] } },
+    'https://l/fbs.json': { last_updated: n, ttl: 60, version: '2.3', data: { bikes: [...Array(60)].map((_, i) => ({ bike_id: 'l' + i, lat: 48.7 + i * 0.001, lon: 9.1, is_reserved: false, is_disabled: false, vehicle_type_id: 'l', current_range_meters: i * 250, last_reported: n })) } } };
+  const sl = await C.readGbfsSystem({ id: 'lime_t', url: 'https://l/gbfs.json', operator: 'Lime' }, async (u) => ({ ok: true, status: 200, json: F[u] }), { now });
+  const hint = sl.checks.items.find(x => /^Reichweite klein/.test(x.msg));
+  assert(sl.rangeLimit.p95Km === 14 && sl.rangeLimit.limitKm === 2.8 && sl.vehicles.every(v => v.rangeLimitKm === 2.8) && hint?.msg === C.rangeLimitMsg(sl.rangeLimit) && hint.msg.includes('2,8 km') && hint.n === 60,
+    `readGbfsSystem: v.rangeLimitKm je Fahrzeug, Hinweis in der Feed-Prüfung („${hint?.msg}“)`);
+}
+// Konstante Reichweite (Platzhalter): Donkey Bayern 1 km für alle, nextbike-E-Räder 0 km → für Energie und Akkutausch unbekannt
+{
+  const R = (n, f) => [...Array(n)].map((_, i) => ({ rangeKm: f(i) }));
+  const donkey = C.rangeFlatCheck(R(197, () => 1)), nb = C.rangeFlatCheck(R(128, i => (i < 126 ? 0 : 44)));
+  assert(donkey.flat && donkey.modeKm === 1 && donkey.modeShare === 1 && nb.flat && nb.modeKm === 0 && nb.modeShare > 0.95, `konstant: Donkey (197 × 1 km) und nextbike (126 von 128 × 0 km, ${Math.round(nb.modeShare * 100)} %) → flat`);
+  assert(!C.rangeFlatCheck(R(100, i => i * 0.15)).flat && !C.rangeFlatCheck(R(100, i => (i < 90 ? 0 : 40))).flat && C.rangeFlatCheck(R(100, i => 12 + (i % 2) * 0.05)).flat && !C.rangeFlatCheck(R(49, () => 1)).flat,
+    'nicht konstant: Lime-Muster, 90 % gleiche Werte mit großer Spanne; konstant: Spanne p5–p95 unter 0,1 km; unter 50 Fahrzeugen keine Prüfung');
+  const vs = R(60, () => 1).map(v => ({ ...v, batteryPct: null }));
+  const ac = C.applyRangeChecks(vs);
+  assert(ac.rangeFlat.flat && vs.every(v => v.rangeFlat === true && v.rangeKm === 1 && v.rangeLimitKm === undefined && !v.rangeDerived) && ac.rangeLimit.limitKm === null && ac.rangeCheck.n === 0,
+    'applyRangeChecks: konstante Quelle → v.rangeFlat (Rohwert bleibt), keine Schwelle und keine Ableitung aus dem Platzhalter');
+  const n = Math.floor(now / 1000);
+  const F = { 'https://d/gbfs.json': { last_updated: n, ttl: 60, version: '2.3', data: { de: { feeds: [{ name: 'free_bike_status', url: 'https://d/fbs.json' }, { name: 'vehicle_types', url: 'https://d/vt.json' }] } } },
+    'https://d/vt.json': { last_updated: n, ttl: 60, version: '2.3', data: { vehicle_types: [{ vehicle_type_id: 'e', form_factor: 'bicycle', propulsion_type: 'electric_assist' }] } },
+    'https://d/fbs.json': { last_updated: n, ttl: 60, version: '2.3', data: { bikes: [...Array(60)].map((_, i) => ({ bike_id: 'd' + i, lat: 49.0 + i * 0.001, lon: 12.1, is_reserved: false, is_disabled: false, vehicle_type_id: 'e', current_fuel_percent: i % 15, current_range_meters: 1000, last_reported: n })) } } };
+  const sd = await C.readGbfsSystem({ id: 'donkey_t', url: 'https://d/gbfs.json', operator: 'Donkey' }, async (u) => ({ ok: true, status: 200, json: F[u] }), { now });
+  assert(sd.rangeFlat.flat && sd.batteryScale.suspect && sd.vehicles.every(v => v.rangeFlat && v.rangeKm === 1 && v.batteryPct === null) && sd.checks.items.some(x => x.msg === C.RANGE_FLAT_MSG) && sd.rangeLimit.limitKm === null,
+    'readGbfsSystem (Donkey-Muster: Ladestand 0–14 %, Reichweite 1 km): Ladestand verworfen, Reichweite konstant markiert, Befund in der Feed-Prüfung');
 }

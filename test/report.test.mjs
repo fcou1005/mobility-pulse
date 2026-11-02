@@ -608,3 +608,32 @@ assert(R.csvText('Flotte_Mittel', 'en') === 'Fleet_mean' && R.csvText('Flotte_Mi
   const old = O.decodeFleet({ ...ops, vehicles: ops.vehicles.map(v => v.slice(0, 9)) });
   assert(old.vehicles.every(v => v.rangeDerived === false) && !O.needsSwap(old.vehicles[0]), 'M-16: ältere ops-Dateien ohne Feld 10 → UND-Regel wie bisher');
 }
+// Reichweiten-Schwelle relativ zur Quelle: Reichweite < min(5 km, reichweiteSchwelleKm) – energyLow, energyFromOps, readinessFromOps wie needsSwap
+{
+  const O = await import('../lib/pulse-ops.js');
+  assert(R.energyLow(null, 4) === true && R.energyLow(null, 4, { rangeLimit: 2.4 }) === false && R.energyLow(null, 2, { rangeLimit: 2.4 }) === true && R.energyLow(10, 4, { rangeLimit: 2.4 }) === false && R.energyLow(10, 4, { rangeLimit: 8 }) === true && R.energyLow(15, 12, { rangeDerived: true, rangeLimit: 2 }) === true,
+    'energyLow: Schwelle der Quelle (4 km bei 2,4 km nicht niedrig, 2 km niedrig), min mit der eingestellten Schwelle (8 km → 5 km), UND-Regel und rangeDerived bleiben');
+  const F = 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm';
+  const veh = [...Array(10)].map((_, i) => [48.78, 9.18, 0, 0, i === 9 ? 2 : 0, null, i * 0.5, 10, 0, 0, 2.4]); // Reichweite 0–4,5 km, Schwelle 2,4 km; letztes gesperrt
+  const ops = { at: 1, types: ['scooter'], ops: ['Lime'], munis: ['08111000'], vehicleFields: F, vehicles: [...veh, [48.78, 9.18, 0, 0, 0, null, 3, 10, 0, 0, null]], stations: [] };
+  const e = R.energyFromOps(ops).get('08111000|Lime|scooter'), rd = R.readinessFromOps(ops).get('08111000');
+  const swap = O.decodeFleet(ops).vehicles.filter(v => O.needsSwap(v)).length;
+  assert(e.known === 11 && e.low === 6 && e.rangeOnly === 11 && e.rangeOnlyLow === 6 && rd.okEnergy === 5 && rd.ready === 4 && swap === 6,
+    `energyFromOps/readinessFromOps: Feld 11 „reichweiteSchwelleKm“ (0–2 km unter 2,4 km niedrig = 5, 3 km ohne Schwelle unter 5 km = 1 → ${e.low}; 2,5–4,5 km nicht), Disposition gleich (${swap} Tausch)`);
+  const old = { ...ops, vehicleFields: F.replace(',reichweiteSchwelleKm', ''), vehicles: ops.vehicles.map(v => v.slice(0, 10)) };
+  assert(R.energyFromOps(old).get('08111000|Lime|scooter').low === 11 && O.decodeFleet(old).vehicles.every(v => v.rangeLimitKm === null), 'ältere ops-Dateien ohne Feld 11 → Standardschwelle 5 km');
+}
+// Konstante Reichweite (Feld 12 „reichweiteKonstant“): Reichweite unbekannt – ohne Ladestand Energie unbekannt (nicht niedrig), mit Ladestand entscheidet er
+{
+  const O = await import('../lib/pulse-ops.js');
+  assert(R.energyLow(null, 1, { rangeFlat: true }) === null && R.energyLow(10, 1, { rangeFlat: true }) === true && R.energyLow(30, 1, { rangeFlat: true }) === false && R.energyLow(null, 1) === true,
+    'energyLow rangeFlat: ohne Ladestand unbekannt (statt niedrig), mit Ladestand nur dieser');
+  const F = 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant';
+  // Zeilen wie der Sammler sie schreibt: Felder am Ende ohne Wert entfallen, explizites null nur vor einem späteren Wert
+  const ops = { at: 1, types: ['ebike'], ops: ['Donkey', 'nextbike'], munis: ['09362000'], vehicleFields: F, stations: [],
+    vehicles: [[49.0, 12.1, 0, 0, 0, null, 1, 10, 0, 0, null, 1], [49.0, 12.1, 0, 0, 0, null, 1, 10, 0, 0, null, 1], [49.0, 12.1, 1, 0, 0, 12, 0, 10, 0, 0, null, 1], [49.0, 12.1, 1, 0, 0, 40, 0, 10, 0, 0, null, 1], [49.0, 12.1, 1, 0, 0, null, 3, 10, 0, 0]] };
+  const e = R.energyFromOps(ops, { rangeOnly: () => false }), d = e.get('09362000|Donkey|ebike'), nb = e.get('09362000|nextbike|ebike'), rd = R.readinessFromOps(ops, { rangeOnly: () => false }).get('09362000');
+  const fl = O.decodeFleet(ops).vehicles;
+  assert(d.known === 0 && d.low === 0 && nb.known === 3 && nb.low === 2 && rd.known === 3 && rd.okEnergy === 1 && fl.filter(v => O.needsSwap(v)).length === 2 && fl[0].rangeFlat && !fl[4].rangeFlat && O.fleetKpis(fl).batteryKnown === 3,
+    'Feld 12: Donkey (1 km konstant, kein Ladestand) → Energie unbekannt, kein Tausch; nextbike 0 km konstant → Ladestand entscheidet (12 % niedrig, 40 % nicht); Zeile ohne Feld 11/12 normal (3 km niedrig)');
+}

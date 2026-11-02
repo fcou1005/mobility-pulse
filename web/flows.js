@@ -5,6 +5,7 @@
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
 import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js';
+import { mapKeys } from './mapkeys.js';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -177,6 +178,7 @@ function ensureMap(S) {
   S.map = L.map(S.q('map'), { zoomControl: true, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, inertia: !still }).setView([51.1, 10.4], 6);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('flows.openstreetmapContributors') }).addTo(S.map);
   S.layer = L.layerGroup().addTo(S.map);
+  mapKeys(S.map); // Tastatur: N/P durch die Ströme im Ausschnitt, Hervorhebung wie beim Überfahren (web/mapkeys.js)
   S.hasMap = true;
 }
 

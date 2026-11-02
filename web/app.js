@@ -8,6 +8,7 @@ import * as Fl from './flows.js';
 import * as Cov from './coverage.js';
 import * as Cmp from './compare.js';
 import * as Sp from './spots.js';
+import { mapKeys } from './mapkeys.js';
 import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
@@ -497,9 +498,9 @@ function summarizeSnapshot(src, rec, snap, now) {
 }
 function snapshotToSystem(snap, rec) {
   const vehicles = (snap.vehicles || []).map(([lat, lon, type, flags, battery, range], i) => ({ rawId: `${rec.id}#${i}`, lat, lon, type, reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: battery, rangeKm: range, geoStatus: 'ok', geoOrigin: 'vehicle', reportedAt: snap.at, positionAgeMs: Date.now() - snap.at }));
-  // Reichweite aus dem Ladestand gerechnet (M-16, wie C.readGbfsSystem für Live-Feeds): dann zählt für Energie nur der Ladestand
-  const rc = C.rangeDerivedCheck?.(vehicles);
-  if (rc?.derived) { const ty = new Set(rc.derivedTypes); for (const v of vehicles) if (v.rangeKm != null && ty.has(v.vtId ?? '')) v.rangeDerived = true; }
+  // Reichweite wie C.readGbfsSystem für Live-Feeds (C.applyRangeChecks): konstant → unbekannt (v.rangeFlat), aus dem Ladestand gerechnet → nur der
+  // Ladestand (v.rangeDerived, M-16), kleine Skala → Schwelle der Quelle (v.rangeLimitKm); der Ladestand im Schnappschuss ist schon skalengeprüft
+  C.applyRangeChecks?.(vehicles);
   return {
     vehicles,
     stations: (snap.stations || []).map(([lat, lon, name, phys, bookable, docks, renting, returning], i) => ({ id: `${rec.id}#s${i}`, name, lat, lon, physicalAvailable: phys, bookable, docksAvailable: docks, renting: !!renting, returning: !!returning, installed: true, reportedAt: snap.at, typeHint: 'unknown' })),
@@ -666,7 +667,7 @@ function onLanguage() {
 }
 // Nach neuem Datenstand oder Filterwechsel: Kopf sofort, Ansichten als veraltet markieren, nur die aktive zeichnen
 // Berichtsmodul (web/report.js): bekommt die Helfer und Lader der Seite, teilt deren Cache
-const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells,
+const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells,
   setScope: (ags) => { const sel = $('#sel-scope'); if (![...sel.options].some(o => o.value === ags)) return; sel.value = ags; sel.dispatchEvent(new Event('change')); } });
 const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) return fn(el, rpCtx()); };
 VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
@@ -746,7 +747,7 @@ function renderAttribution() {
     foot.title = names.join('\n');
   }
   if (state.map?.attributionControl) {
-    const short = `Daten: ${[...names.slice(0, 4), names.length > 4 ? `+${names.length - 4}` : null, ...extra].filter(Boolean).map(esc).join(', ')}`;
+    const short = t('maps.attribData', { src: [...names.slice(0, 4), names.length > 4 ? `+${names.length - 4}` : null, ...extra].filter(Boolean).map(esc).join(', ') });
     if (state.mapAttrib) state.map.attributionControl.removeAttribution(state.mapAttrib);
     state.mapAttrib = short; state.map.attributionControl.addAttribution(short);
   }
@@ -820,7 +821,7 @@ const REDUCED = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function initMap() {
   const map = L.map('map', { preferCanvas: true, zoomControl: true, zoomAnimation: !REDUCED(), fadeAnimation: !REDUCED(), markerZoomAnimation: !REDUCED() }).setView([51.1, 10.4], 6);
   state.tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(map);
-  state.map = map;
+  state.map = map; mapKeys(map); // Tastatur: N/P durch die Objekte im Ausschnitt, Enter wie Klick (web/mapkeys.js)
   state.layers = { vehicles: L.layerGroup().addTo(map), stations: L.layerGroup().addTo(map), muni: L.layerGroup().addTo(map), wfs: L.layerGroup().addTo(map), supply: L.layerGroup().addTo(map), bubbles: L.layerGroup().addTo(map), grid: L.layerGroup().addTo(map), zones: L.layerGroup().addTo(map) };
   map.on('moveend', () => { if ($('#chk-wfs').checked) loadWfs(); });
 }
@@ -834,7 +835,8 @@ function livePoints() {
 state.fleet = new Map();
 function decodeFleetDoc(doc) {
   const at = doc?.at ?? null, pos = Date.now() - (at || Date.now());
-  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idle, m]) => ({ lat, lon, operator: doc.ops?.[op], type: doc.types?.[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: bat ?? null, rangeKm: range ?? null, idleMin: idle, ags: doc.munis?.[m], positionAgeMs: pos, geoOrigin: 'vehicle' })).filter(v => C.validLatLon(v.lat, v.lon));
+  // Felder 10–12 wie lib/pulse-ops.js decodeFleet: reichweiteAbgeleitet, reichweiteSchwelleKm, reichweiteKonstant (fehlend am Zeilenende = null)
+  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idle, m, rd, rl, rf]) => ({ lat, lon, operator: doc.ops?.[op], type: doc.types?.[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: bat ?? null, rangeKm: range ?? null, idleMin: idle, ags: doc.munis?.[m], positionAgeMs: pos, geoOrigin: 'vehicle', rangeDerived: rd === 1, rangeLimitKm: Number.isFinite(rl) ? rl : null, rangeFlat: rf === 1 })).filter(v => C.validLatLon(v.lat, v.lon));
   const stations = (doc?.stations || []).map(([lat, lon, op, name, bookable, docks, capacity, m, renting, returning, physical]) => ({ lat, lon, operator: doc.ops?.[op], name, bookable, docksAvailable: docks, capacity, ags: doc.munis?.[m], renting: !!renting, returning: !!returning, physicalAvailable: physical })).filter(s => C.validLatLon(s.lat, s.lon));
   return { at, vehicles, stations };
 }
@@ -897,7 +899,7 @@ function renderMap() {
       const cells = new Map();
       // Energie niedrig wie überall (energyLow): Grenzen des Live-Abrufs bzw. des Sammlers, je nachdem woher die Positionen stammen
       const lim = src === coll ? { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM } : { charge: state.thresholds.charge, range: state.thresholds.range };
-      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
+      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
       const max = Math.max(1, ...[...cells.values()].map(c => layerMode === 'energy' ? c.low : c.n));
       for (const c of cells.values()) {
         const val = layerMode === 'energy' ? c.low : c.n; if (!val) continue;
@@ -1020,7 +1022,7 @@ function liveEnergyGroups() {
   const lim = energyLimits(), key = `${state.live.at}|${lim.charge}|${lim.range}|${state.live.vehicles.length}`;
   if (liveEnergy?.key !== key) {
     const m = new Map();
-    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived }); m.set(k, e); }
+    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); m.set(k, e); }
     liveEnergy = { key, map: m };
   }
   return liveEnergy.map;
@@ -1347,7 +1349,7 @@ function renderCoverage() {
   // Lücken mit gleichem Anbieter und gleichem Text als eine Karte mit Städteliste (z. B. Ryde in zehn NRW-Städten)
   const gb = new Map(); for (const g of state.latest?.gaps || []) { const k = `${g.operator}|${g.note}`; (gb.get(k) || gb.set(k, []).get(k)).push(g); }
   $('#gaps').innerHTML = [...gb.values()].map(list => { const g = list[0]; const cities = [...new Set(list.map(x => x.city))].sort((a, b) => a.localeCompare(b, 'de')); const since = list.map(x => x.since).filter(Boolean).sort()[0] || g.since; const ok = list.filter(x => x.probeOk).length;
-    return `<div class="card info"><div class="k">${t('app.dataGap2')}</div><b>${esc(g.operator)} · ${cities.length > 1 ? esc(t('app.gapCities', { n: fmt(cities.length) })) : esc(g.city)}</b>${cities.length > 1 ? `<p translate="no">${esc(cities.join(', '))}</p>` : ''}<p>${esc(g.note)}</p><div class="foot">${cities.length > 1 ? t('app.gapGroupFoot', { since: esc(since), v1: timeText(Math.max(...list.map(x => x.checkedAt || 0)) || null), ok: fmt(ok), n: fmt(list.length) }) : t('app.sinceLastCheckedFeed', { since: esc(g.since), v1: timeText(g.checkedAt), v2: g.probeOk ? t('app.reachable') : t('app.notReachable', { v0: esc(g.probeStatus ?? '–') }) })}</div></div>`; }).join('') || `<div class="empty">${t('app.noKnownGapsAllKnownOperators')}</div>`;
+    return `<div class="card info"><div class="k">${t('app.dataGap2')}</div><b>${esc(g.operator)} · ${cities.length > 1 ? esc(t('app.gapCities', { n: fmt(cities.length) })) : esc(g.city)}</b>${cities.length > 1 ? `<p translate="no">${esc(cities.join(', '))}</p>` : ''}<p lang="de">${esc(g.note)}</p><div class="foot">${cities.length > 1 ? t('app.gapGroupFoot', { since: esc(since), v1: timeText(Math.max(...list.map(x => x.checkedAt || 0)) || null), ok: fmt(ok), n: fmt(list.length) }) : t('app.sinceLastCheckedFeed', { since: esc(g.since), v1: timeText(g.checkedAt), v2: g.probeOk ? t('app.reachable') : t('app.notReachable', { v0: esc(g.probeStatus ?? '–') }) })}</div></div>`; }).join('') || `<div class="empty">${t('app.noKnownGapsAllKnownOperators')}</div>`;
 }
 // Lange Tabellen: erst 100 Zeilen, je Klick 100 weitere; neuer Filter (Schlüssel) setzt auf 100 zurück
 const MORE = {};

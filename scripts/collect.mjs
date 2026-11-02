@@ -191,6 +191,11 @@ for (const { src, sys, probe, error } of results) {
   if (sys.batteryScale) rec.batteryScale = sys.batteryScale.suspect || sys.batteryScale.derived ? sys.batteryScale : { n: sys.batteryScale.n, p99: sys.batteryScale.p99, suspect: false };
   // Reichweite aus dem Ladestand gerechnet (C.rangeDerivedCheck, M-16): je Fahrzeugtyp km je 100 % und Spanne; derived → nur der Ladestand zählt
   if (sys.rangeCheck?.types?.length) rec.rangeCheck = sys.rangeCheck;
+  // Reichweiten-Schwelle relativ zur Quelle (C.rangeLimitCheck): rangeLimitKm = 20 % des 95. Perzentils, wenn dieses < 25 km (null = Standard 5 km);
+  // je Fahrzeug in ops/<Land>.json Feld 11 „reichweiteSchwelleKm“, Hinweis in der Feed-Prüfung (checks)
+  // Reichweite konstant (C.rangeFlatCheck, Platzhalter wie Donkey Bayern 1 km): für Energie/Akkutausch unbekannt, Feld 12 „reichweiteKonstant“, Befund in checks
+  if (sys.rangeFlat?.flat) rec.rangeFlat = sys.rangeFlat;
+  if (sys.rangeLimit) { rec.rangeLimitKm = sys.rangeLimit.limitKm; if (sys.rangeLimit.n) rec.rangeLimit = { ...sys.rangeLimit, maxP95Km: C.RANGE_LIMIT.maxP95Km, share: C.RANGE_LIMIT.share }; }
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
   if (goneHttp(sys.httpStatus)) rec.status = 'gone';
@@ -480,6 +485,8 @@ const groupsOut = {};
 for (const [k, v] of groups) groupsOut[k] = v;
 // Energie je Gruppe (Q-2): dieselbe Regel wie lib/pulse-report.js energyLow (Ladestand < 20 % UND Reichweite < 5 km, wo beides gemeldet; sonst die
 // gemeldete Angabe; Anbieter nur mit Reichweite über die Reichweite), Ladestand unplausibler Skala ist schon verworfen (C.batteryScaleCheck).
+// Reichweiten-Schwelle je Quelle: min(5 km, v.rangeLimitKm) (C.rangeLimitCheck: 20 % des 95. Perzentils, wenn dieses < 25 km); konstante Reichweite
+// der Quelle (v.rangeFlat, C.rangeFlatCheck) zählt nicht – ohne verwendbaren Ladestand ist die Energie dann unbekannt, nicht niedrig.
 // energyKnown = Fahrzeuge mit Energieangabe, energyLow = Energie niedrig, energyRangeOnly(Low) = davon nur über die Reichweite beurteilt,
 // ready = einsatzbereit (nicht gesperrt, nicht reserviert, Energieangabe vorhanden und nicht niedrig; wie R.readinessFromOps). Gesperrte zählen bei Energie mit.
 const rangeOnlyOps = new Set(R.RANGE_ONLY_OPS);
@@ -487,7 +494,7 @@ for (const r of sourceOut) if (r.operator && r.counts?.batteryNative === 0 && r.
 // Gruppen ohne Fahrzeug mit Energieangabe tragen die Felder nicht (latest.energy gesetzt = fehlendes Feld bedeutet 0)
 for (const v of dv.vehicles) {
   const st = groups.get(`${v.ags}|${v.operator}|${v.type}`); if (!st) continue;
-  const ro = rangeOnlyOps.has(v.operator), rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: rangeThreshold, rangeOnly: ro, rangeDerived: rd });
+  const ro = rangeOnlyOps.has(v.operator), rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: rangeThreshold, rangeOnly: ro, rangeDerived: rd, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat });
   if (low == null) continue;
   if (st.energyKnown == null) Object.assign(st, { energyKnown: 0, energyLow: 0, energyRangeOnly: 0, energyRangeOnlyLow: 0, ready: 0 });
   st.energyKnown++; if (low) st.energyLow++;
@@ -527,7 +534,9 @@ const latest = {
   counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
   dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size, mirrorSources: mirrorInfo.size },
   thresholds: { chargeThreshold, rangeThreshold },
-  energy: { version: 1, fields: ['energyKnown', 'energyLow', 'energyRangeOnly', 'energyRangeOnlyLow', 'ready'], rangeOnlyOps: [...rangeOnlyOps].sort() }, // Felder je groups-Eintrag (Q-2)
+  energy: { version: 1, fields: ['energyKnown', 'energyLow', 'energyRangeOnly', 'energyRangeOnlyLow', 'ready'], rangeOnlyOps: [...rangeOnlyOps].sort(), // Felder je groups-Eintrag (Q-2)
+    rangeLimit: { ...C.RANGE_LIMIT, rule: 'Reichweite < min(rangeThreshold, sources[].rangeLimitKm); rangeLimitKm = share × 95. Perzentil der Reichweite der Quelle, wenn dieses < maxP95Km (ab minN Fahrzeugen), sonst null' },
+    rangeFlat: { ...C.RANGE_FLAT, rule: 'Reichweite der Quelle konstant (Spanne p5–p95 < maxSpreadKm oder > maxModeShare gleiche Werte, ab minN Fahrzeugen): für Energie unbekannt (sources[].rangeFlat)' } },
   sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps, mirrors: mirrorsOut,
 };
 await mkdir(path.join(DATA, 'history'), { recursive: true });
@@ -855,14 +864,18 @@ try {
       const st = muniOut[v.ags]?.state; if (!st) continue; const o = S(st);
       const e = tr.state.v[vkey(v.operator, v.rawId)];
       const idleMin = e ? Math.round((now - e[8]) / 60e3) : null;
-      o.vehicles.push([+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0]);
+      // Feld 11 reichweiteSchwelleKm (null = Standard), Feld 12 reichweiteKonstant (1 = Reichweite der Quelle konstant); Felder am Zeilenende ohne
+      // Wert entfallen (Leser werten fehlende Felder als null), explizites null nur vor einem späteren Wert
+      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null];
+      while (row.length && row[row.length - 1] == null) row.pop();
+      o.vehicles.push(row);
     }
     for (const s of ds.stations) {
       const st = muniOut[s.ags]?.state; if (!st) continue; const o = S(st);
       o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0, s.isVirtual === true ? 1 : s.isVirtual === false ? 0 : null]);
     }
     let bytes = 0;
-    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
   }
   // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.

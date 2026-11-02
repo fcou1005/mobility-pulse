@@ -51,7 +51,9 @@ const extra = [
 // M-1: Spiegelpaar mit umgeschlüsselten Kennungen (direkt vs. Landesfeed als Manifest-Kind); M-6/M-2: Manifest mit Kind (Lime, Ladestand ≤ 35 %)
 extra.push({ id: 'rk_direct', name: 'RK direkt', operator: 'nextbike', api: 'gbfs', url: `${ex.base}/rk/a/gbfs.json`, directories: ['mobilitydata'], priority: 2 },
   { id: 'rk_land:source-rk', parent: 'rk_land', name: 'RK Land', operator: 'nextbike', api: 'gbfs', url: `${ex.base}/rk/b/gbfs.json`, directories: ['mobidrom_nrw'], priority: 2 },
-  { id: 'mf_test', name: 'Manifest Test', operator: 'Lime', api: 'gbfs', url: `${ex.base}/mf/manifest.json`, directories: ['mobidrom_nrw'], priority: 2 });
+  { id: 'mf_test', name: 'Manifest Test', operator: 'Lime', api: 'gbfs', url: `${ex.base}/mf/manifest.json`, directories: ['mobidrom_nrw'], priority: 2 },
+  { id: 'rl_test', name: 'Bird Test', operator: 'Bird', api: 'gbfs', url: `${ex.base}/rk/d/gbfs.json`, directories: ['mobilitydata'], priority: 2 }, // kleine Reichweiten-Skala (Schwelle der Quelle)
+  { id: 'rf_test', name: 'Donkey Test', operator: 'Donkey', api: 'gbfs', url: `${ex.base}/rk/e/gbfs.json`, directories: ['mobilitydata'], priority: 2 }); // Platzhalter-Reichweite 1 km
 const slow = [{ id: 'slow_test', name: 'Langsam', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/slow/gbfs.json`, directories: ['mobilitydata'] }, { id: 'big_test', name: 'Groß', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/big/gbfs.json`, directories: ['mobilitydata'] }];
 const auth_sources = { t: { host: new URL(ex.base).host, headers: { 'x-api-key': 'MP_TEST_KEY' }, env: ['MP_TEST_KEY'] } };
 await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, ...slow] }));
@@ -133,7 +135,29 @@ assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1
   const bIdx = JSON.parse(await readFile('test/out/boundaries/index.json', 'utf8')), bBW = JSON.parse(await readFile('test/out/boundaries/BW.json', 'utf8'));
   assert(bIdx.version === 1 && bIdx.states.BW.features === bBW.features.length && bBW.features.every(f => Array.isArray(f.bbox) && f.bbox.length === 4 && f.bbox[0] <= f.bbox[2]) && bBW.features.some(f => f.properties.ags === '08416041' && f.bbox.join() === '9,48.49,9.12,48.56') && existsSync('test/out/boundaries-active.json'),
     'Q-6: boundaries/<Land>.json mit bbox je Gemeinde, boundaries/index.json; boundaries-active.json bleibt');
-  assert(ops3.vehicleFields.endsWith(',gemeinde,reichweiteAbgeleitet') && ops3.vehicles.every(v => v.length === 10 && (v[9] === 0 || v[9] === 1)), 'M-16: ops/<Land>.json Fahrzeugfeld 10 „reichweiteAbgeleitet“ (1/0)');
+  assert(ops3.vehicleFields.endsWith(',gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant') && ops3.vehicleFieldsNote?.startsWith('Felder am Zeilenende ohne Wert entfallen') && ops3.vehicles.every(v => v.length >= 10 && v.length <= 12 && (v[9] === 0 || v[9] === 1) && v[v.length - 1] != null),
+    'M-16: ops/<Land>.json Fahrzeugfeld 10 „reichweiteAbgeleitet“ (1/0), Feld 11 „reichweiteSchwelleKm“, Feld 12 „reichweiteKonstant“; keine Zeile endet mit null');
+  {
+    const len = (op) => [...new Set(ops3.vehicles.filter(v => ops3.ops[v[2]] === op).map(v => v.length))].join();
+    const plain = ops3.vehicles.filter(v => !['Bird', 'Donkey'].includes(ops3.ops[v[2]]));
+    assert(plain.length > 0 && plain.every(v => v.length === 10) && len('Bird') === '11' && len('Donkey') === '12', `Zeilenlänge: ohne Schwelle/Kennzeichen 10 Felder (Nullen am Ende entfallen), Bird 11 (Schwelle), Donkey 12 (explizites null vor dem Kennzeichen)`);
+    const O3 = await import('../lib/pulse-ops.js');
+    const rf = S3('rf_test'), dv = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'Donkey'), gk = Object.keys(l3.groups).find(k => k.startsWith('08111000|Donkey|')), gD = l3.groups[gk];
+    const swapD = O3.decodeFleet(ops3).vehicles.filter(v => v.operator === 'Donkey' && O3.needsSwap(v)).length;
+    assert(rf?.rangeFlat?.flat && rf.rangeFlat.modeKm === 1 && rf.batteryScale?.suspect && rf.checks.items.some(i => i.msg.startsWith('Reichweite konstant')) && dv.length === 60 && dv.every(v => v[5] === null && v[6] === 1 && v[10] === null && v[11] === 1)
+      && gD?.energyKnown == null && gD.rangeKnown === 60 && gD.lowRange === 60 && swapD === 0 && l3.energy.rangeFlat?.maxModeShare === 0.95,
+      `konstante Reichweite (Donkey-Muster): sources[].rangeFlat, Befund in der Feed-Prüfung, ops-Feld 12; Energie unbekannt statt niedrig (energyKnown ${gD?.energyKnown ?? 'fehlt'}, roh lowRange ${gD?.lowRange}), ${swapD} Tausch`);
+  }
+  // Reichweiten-Schwelle relativ zur Quelle: Bird-Test (kein Ladestand, Reichweite 0–11,8 km, p95 11,2 km) → 2,2 km statt 5 km
+  {
+    const O3 = await import('../lib/pulse-ops.js');
+    const rl = S3('rl_test'), birdV = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'Bird'), gB = l3.groups['08111000|Bird|scooter'];
+    assert(rl?.rangeLimitKm === 2.2 && rl.rangeLimit?.p95Km === 11.2 && rl.rangeLimit.maxP95Km === 25 && rl.checks.items.some(i => i.msg.startsWith('Reichweite klein') && i.msg.includes('2,2 km')) && birdV.length === 60 && birdV.every(v => v[10] === 2.2) && ops3.vehicles.filter(v => ops3.ops[v[2]] !== 'Bird').every(v => v[10] == null),
+      `Reichweiten-Schwelle: sources[].rangeLimitKm ${rl?.rangeLimitKm} km (p95 ${rl?.rangeLimit?.p95Km} km), Hinweis in der Feed-Prüfung, ops-Feld 11 je Fahrzeug (andere Quellen ohne Wert)`);
+    const swapB = O3.decodeFleet(ops3).vehicles.filter(v => v.operator === 'Bird' && O3.needsSwap(v)).length;
+    assert(gB?.energyKnown === 60 && gB.energyLow === 11 && gB.lowRange === 25 && swapB === 11 && l3.energy.rangeLimit?.share === 0.2,
+      `Reichweiten-Schwelle: Energie niedrig in latest.json ${gB?.energyLow} (unter 2,2 km; unter 5 km wären es ${gB?.lowRange}), Disposition ${swapB} Tausch`);
+  }
   assert(ops3.stationFields.endsWith(',physisch,virtuell') && ops3.stations.every(r => r.length === 12 && [0, 1, null].includes(r[11])) && ops3.stations.some(r => r[11] === 1), 'ops/<Land>.json: Stationsfeld 12 „virtuell“ (1/0/null)');
 }
 // Lauf 4: normaler Lauf mit TRACK_DIR (Flag 1, keine Scheinereignisse), Tarifänderung, Quelle seit > 14 Tagen weg; Manifest fällt aus (M-6)

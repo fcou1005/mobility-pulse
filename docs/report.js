@@ -2,11 +2,12 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvyuri2c';
-import * as K from './pulse-calib.js?v=mvyuri2c';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyuri2c';
-import { decodeFleet } from './pulse-ops.js?v=mvyuri2c';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyuri2c';
+import * as R from './pulse-report.js?v=mvyx0klq';
+import * as K from './pulse-calib.js?v=mvyx0klq';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyx0klq';
+import { decodeFleet } from './pulse-ops.js?v=mvyx0klq';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyx0klq';
+import { mapKeys } from './mapkeys.js?v=mvyx0klq';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -26,9 +27,11 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const typeName = (tq) => TYPE[tq] || tq;
 
 // ---------- Laden (ein Download je Datei; Dateien des laufenden Tags mit Laufstempel, damit neue Sammler-Läufe ankommen) ----------
+// Bietet die Seite einen gemeinsamen Cache an (ctx.sharedCache, app.js leert ihn bei jedem neuen Lauf zusammen mit CACHE), laufen
+// Dateien des Datenstands ohne Stempel über ctx.getJson: dann teilen Bericht, Quellen und Leistung denselben Download (z. B. pricing.json)
 function fetchJson(ctx, file, fresh = false, base = ctx.CFG.DATA) {
   const at = ctx.state?.latest?.at || '';
-  const url = base + file + (fresh && at ? `?t=${at}` : '');
+  const url = base + file + (fresh && at && !(ctx.sharedCache && base === ctx.CFG.DATA) ? `?t=${at}` : '');
   if (!CACHE.has(url)) CACHE.set(url, Promise.resolve(ctx.getJson(url, { timeout: 60000 })).then(r => (r?.ok ? r.json : null), () => null));
   return CACHE.get(url);
 }
@@ -49,7 +52,14 @@ function cellsDoc(ctx, idx, day, land) {
   if (!land || !(idx.cellDays || []).includes(day)) return Promise.resolve(null);
   return ctx.loadCells ? ctx.loadCells(day, land) : fetchJson(ctx, `cells/${day}/${land}.json`, lastOf(idx.cellDays) === day);
 }
-const reference = (ctx) => fetchJson(ctx, 'reference.json', false, ctx.CFG.MAIN);
+// Art der Zahl („Höchstzahl (Sondernutzungserlaubnis)“): englische Fassung aus reference.json → artEn je Eintrag (lib/pulse-report.js reicht nur art weiter)
+const ART_EN = new Map();
+const reference = (ctx) => fetchJson(ctx, 'reference.json', false, ctx.CFG.MAIN).then((ref) => {
+  for (const e of [...(ref?.obergrenzen || []), ...(ref?.flotte || [])]) if (typeof e?.art === 'string' && typeof e.artEn === 'string') { ART_EN.set(`${e.ags}|${e.art}`, e.artEn); if (!ART_EN.has(e.art)) ART_EN.set(e.art, e.artEn); }
+  return ref;
+});
+// Englisch: artEn (sachlich übersetzt); Deutsch: wie in der Quelle, als Name/Zitat gekennzeichnet
+const artTxt = (esc, c) => { const en = lang() === 'en' ? ART_EN.get(`${c.ags}|${c.art}`) || ART_EN.get(c.art) : null; return en ? esc(en) : `<span translate="no">${esc(c.art)}</span>`; };
 const dailyDoc = (ctx) => fetchJson(ctx, 'history/daily.json', true);
 // Tageswerte für Flotte/Sperrquote: history/daily.json (verdichtet), sonst history/<Tag>.json
 const histFor = (ctx, hidx, daily, day) => { const h = R.histFromDaily(daily, day); return h ? Promise.resolve(h) : histDoc(ctx, hidx, day); };
@@ -128,6 +138,13 @@ a.pick-cell{white-space:nowrap}
 .rp-week .rl{font-size:12px;color:var(--fg-2);display:flex;align-items:center;justify-content:space-between;gap:4px;padding-right:6px;white-space:nowrap}
 .rp-week .rl small{color:var(--muted);font-family:var(--mono);font-size:10.5px}
 .rp-week .hl{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1;padding:0 0 4px}
+.rp-week .rl,.rp-week .rp-row:first-child>.hl:first-child{position:sticky;left:0;z-index:1;background:var(--panel)}
+.rp-weekwrap.rp-more-r{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent)}.rp-scrollhint{margin:var(--s1) 0 0;font-size:12px;color:var(--muted)}.rp-scrollhint[hidden]{display:none}
+@media (max-width:520px){.rp-week{grid-template-columns:60px repeat(24,minmax(15px,1fr))}}
+.rp-tilewrap{container-type:inline-size}
+.rp-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+@container (min-width:600px){.rp-tiles{grid-template-columns:repeat(var(--rp-cols,4),minmax(0,1fr))}}
+@container (max-width:599.98px){.rp-tiles>.tile:last-child:nth-child(odd){grid-column:1/-1}}
 .rp-legend{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);align-items:center;font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
 .rp-ramp{display:inline-flex;align-items:center;gap:2px}.rp-ramp>span{width:14px;height:10px;border-radius:2px;background:var(--rp-f)}
 .rp-ramp>em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--fg-2);margin:0 4px}
@@ -183,7 +200,7 @@ function injectStyle() {
   if (document.getElementById('rp-style')) return;
   const s = document.createElement('style'); s.id = 'rp-style'; s.textContent = CSS; document.head.appendChild(s);
 }
-function prep(el, ctx) { injectStyle(); el.classList.add('rp-root'); const s = st(el); s.ctx = ctx; return s; }
+function prep(el, ctx) { injectStyle(); bindJump(); el.classList.add('rp-root'); const s = st(el); s.ctx = ctx; return s; }
 
 // ---------- Bausteine ----------
 const head = (title, sub, right = '') => `<div class="panel-head"><div><h2>${title}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${right}</div>`;
@@ -214,6 +231,26 @@ function showTip(box, target, value, label) {
   tq.style.left = `${x}px`; tq.style.top = `${y}px`;
 }
 const hideTip = (box) => { const tq = box.querySelector(':scope > .rp-tip'); if (tq) tq.hidden = true; };
+// Link auf ein Panel einer anderen oder derselben Ansicht (<a href="#bericht" data-rp-jump="rp-caps">): Ansicht wechseln, warten bis das
+// Panel gezeichnet ist, dann hinscrollen und seine Überschrift fokussieren (Screenreader hören, wo sie gelandet sind)
+let jumpBound = false;
+function bindJump() {
+  if (jumpBound || typeof document === 'undefined') return; jumpBound = true;
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest?.('a[data-rp-jump]'); if (!a || e.button || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    const id = a.dataset.rpJump, view = (a.getAttribute('href') || '').slice(1); let n = 0;
+    if (view && location.hash !== `#${view}`) location.hash = `#${view}`;
+    const go = () => {
+      const p = document.getElementById(id), h = p?.querySelector('h2');
+      if ((!h || !p.closest('section.view.active') || p.classList.contains('rp-busy')) && n++ < 80) { setTimeout(go, 100); return; }
+      if (!p) return;
+      const tgt = h || p; tgt.tabIndex = -1;
+      p.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }); tgt.focus({ preventScroll: true });
+    };
+    setTimeout(go, 150);
+  });
+}
 function download(name, text, type = 'text/csv;charset=utf-8') {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], { type })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -417,7 +454,9 @@ function reportHtml(ctx, rep, meta, ref) {
     q.source === 'archiv' ? '' : tile(t('rep.disabledRate'), pctTxt(ctx, tq.disabledShare), t('rep.disabledVehiclesInFleetMean')),
     tile(t('rep.vehiclesPer1000Residents'), num(ctx, tq.per1000Fleet, 1), rep.pop ? t('rep.residents', { pop: fmt(rep.pop) }) : t('rep.populationMissing')),
     calTile(t('rep.tripsPer1000ResidentsAndDay'), C?.per1000Rides, C?.per1000Lo, C?.per1000Hi, 1, tq.per1000Rides, rep.pop ? t('rep.extrapolatedPre', { pre }) : t('rep.populationMissing')),
-  ].join('');
+  ].filter(Boolean);
+  // Spalten nach Anzahl (UI-17): 7 Kacheln → 4 + 3, 6 → 3 + 3, 5 → 3 + 2; keine Kachel allein in der letzten Zeile
+  const tileCols = tiles.length >= 5 ? Math.ceil(tiles.length / 2) : tiles.length;
   const per = meta.period && ['Quartal', 'Monat'].includes(meta.period.kind) ? `${esc(PKIND(meta.period.kind))} ${esc(meta.period.label)} · ` : '';
   const calMethod = client ? (C ? ` ${t('rep.eScooterTripsAreCalibratedTo')}` : '')
     : (C ? ` ${t('rep.calibrationMeasuredEScooter')}` : '');
@@ -426,7 +465,7 @@ function reportHtml(ctx, rep, meta, ref) {
       <p class="sub">${t('rep.periodDataAsOfCreated', { per, v1: dd(rep.from), v2: rep.to !== rep.from ? `–${dd(rep.to)}` : '', v3: plural(rep.days.length, t('rep.day'), t('rep.days')), ctx: filterText(ctx), v5: stamp(ctx.state.latest?.at), v6: stamp(Date.now()) })}</p></div>
       ${q.prelim ? `<span class="pill prelim" title="${t('rep.onlyFullMeasurementDaysFrom', { fullDays: q.fullDays, MIN_FULL_DAYS: R.MIN_FULL_DAYS })}">${t('rep.preliminary')}</span>` : `<span class="pill plain">${t('rep.reliable')}</span>`}</header>
     <section class="rp-sec"><h3>${t('rep.dataQuality')}</h3>${qualityBlock(ctx, rep, extra)}</section>
-    <section class="rp-sec"><h3>${t('rep.metrics')}</h3><div class="sub">${t('rep.structuredAfterListOfMetrics', { v0: C ? (client ? t('rep.eScooterTripsCalibratedTo2') : t('rep.tripMetricsCalibrated')) : '' })}</div><div class="tiles">${tiles}</div></section>
+    <section class="rp-sec"><h3>${t('rep.metrics')}</h3><div class="sub">${t('rep.structuredAfterListOfMetrics', { v0: C ? (client ? t('rep.eScooterTripsCalibratedTo2') : t('rep.tripMetricsCalibrated')) : '' })}</div><div class="rp-tilewrap"><div class="tiles rp-tiles" style="--rp-cols:${tileCols}">${tiles.join('')}</div></div></section>
     <section class="rp-sec"><h3>${t('rep.perOperatorAndVehicleType')}</h3><div class="sub">${t('rep.meanOverPeriodFleetWithRange')}</div>${groupTable(ctx, rep, meta.cal)}</section>
     <section class="rp-sec"><h3>${t('rep.dailyValues')}</h3><div class="sub">${t('rep.fleetPerDayObservationAnd')}</div>${dailyTable(ctx, rep, k, meta.calib?.limits)}</section>
     ${q.source === 'archiv' ? '' : cellsSection(ctx, rep, meta.s)}
@@ -589,10 +628,17 @@ function mountCellMaps(el, s) {
     const n = idx.get(`${Math.round(latlng.lat / R.CELL_LAT)}:${Math.round(latlng.lng / R.CELL_LON)}`); const c = n == null ? null : cs.grid[n];
     if (!c) { hide(); return; }
     for (const x of maps) { x.hi.setBounds(cellBounds(c)); x.hi.setStyle({ opacity: 1 }); if (x !== m) { const b = x.box.closest('.rp-chart'); if (b) hideTip(b); } }
-    const key = m.key, other = key === 'start' ? 'end' : 'start', v = (x) => (R.suppressed(x) ? `< ${R.MIN_COUNT}` : fmt(x));
-    const p = m.map.latLngToContainerPoint([c.lat + R.CELL_LAT / 2, c.lon]);
-    showTipAt(m.box.closest('.rp-chart'), p.x, p.y, `${v(c[key])} ${key === 'start' ? t('rep.tripStarts') : t('rep.tripEnds')}`, [t('rep.avgAvailablePerRun2', { v0: v(c[other]), v1: other === 'start' ? t('rep.tripStarts') : t('rep.tripEnds'), v2: c.presAvg == null ? '—' : fmt(c.presAvg, 1) }), t('rep.cell2', { v0: c.lat.toFixed(4), v1: c.lon.toFixed(4) })]);
+    const p = m.map.latLngToContainerPoint([c.lat + R.CELL_LAT / 2, c.lon]), tq = tipOf(m, c);
+    showTipAt(m.box.closest('.rp-chart'), p.x, p.y, tq.value, tq.lines);
   };
+  const tipOf = (m, c) => {
+    const key = m.key, other = key === 'start' ? 'end' : 'start', v = (x) => (R.suppressed(x) ? `< ${R.MIN_COUNT}` : fmt(x));
+    return { value: `${v(c[key])} ${key === 'start' ? t('rep.tripStarts') : t('rep.tripEnds')}`, lines: [t('rep.avgAvailablePerRun2', { v0: v(c[other]), v1: other === 'start' ? t('rep.tripStarts') : t('rep.tripEnds'), v2: c.presAvg == null ? '—' : fmt(c.presAvg, 1) }), t('rep.cell2', { v0: c.lat.toFixed(4), v1: c.lon.toFixed(4) })] };
+  };
+  // Tastatur (web/mapkeys.js): die Zellen sind nicht anklickbar (Canvas, interactive: false) – N/P geht über das Zellraster selbst,
+  // markiert die Zelle in beiden Karten und zeigt denselben Tooltip wie beim Überfahren; ein gemeinsamer Hinweis unter beiden Karten
+  const grid = el.querySelector('.rp-report [data-rp="cellmaps"]');
+  for (const m of maps) mapKeys(m.map, { hintAfter: grid || m.box, items: () => cs.grid.map(c => ({ key: c, latlng: [c.lat, c.lon], ring: false, show: () => show(m, L.latLng(c.lat, c.lon)), hide, text: () => { const tq = tipOf(m, c); return [tq.value, ...tq.lines].join('\n'); } })) });
   for (const m of maps) {
     m.map.on('mousemove', (e) => show(m, e.latlng)); m.map.on('click', (e) => show(m, e.latlng));
     m.map.on('mouseout movestart zoomstart', hide);
@@ -753,7 +799,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
     ? `<div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status === 'hint' ? 'near' : c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">${t('rep.of3', { limit: fmt(c.limit), v1: pctTxt(ctx, c.share, 0) })}</span></div></div>
     <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)}</div>`
     : `<div class="small">${t('rep.reported', { total: fmt(c.total), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.noTotalCapCapPerOperatorSee') : t('rep.noCityWideCap') })}</div>`;
-  return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · <span translate="no">${esc(c.art)}</span>` : ''}</span></h3>${badge(c.status)}</div>
+  return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · ${artTxt(esc, c)}` : ''}</span></h3>${badge(c.status)}</div>
     ${head}
     <div class="small muted">${t('rep.totalFleetCapOfficialSource', { limTxt, v1: c.perOperator != null ? ` · ${t('rep.perOperator', { perOperator: fmt(c.perOperator), v1: c.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' })}` : '', v2: hist ? ` · ${hist}` : '', v3: c.since && !c.previous ? ` · ${t('rep.validSince', { standTxt: esc(standTxt(c.since)) })}` : '', v4: c.stand ? ` · ${t('rep.asOf2', { standTxt: esc(standTxt(c.stand)) })}` : '', links, listTxt })}</div>
     ${c.hinweis ? `<div class="small muted">${`<span translate="no">${esc(c.hinweis)}</span>`}</div>` : ''}
@@ -765,7 +811,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
 // Einträge ohne Prüfung (nicht amtlich, „keine“): kompakte Tabelle mit Zahl laut Quelle und heutigem Bestand zur Einordnung
 function capInfoTable(ctx, list, title) {
   const { esc, fmt } = ctx; if (!list.length) return '';
-  const rows = list.map(c => `<tr><td><b>${esc(c.ort)}</b><div class="sub-line">${esc(typeName(c.type))}${c.art ? ` · <span translate="no">${esc(c.art)}</span>` : ''}</div></td><td>${badge(c.status)}<div class="sub-line">${esc(CAPSRC[c.sourceStatus] || c.sourceStatus)}${c.statusText && c.statusText !== R.CAP_SOURCE_STATUS[c.sourceStatus] ? ` – ${srcTxt(esc, c.statusText)}` : ''}</div></td>
+  const rows = list.map(c => `<tr><td><b>${esc(c.ort)}</b><div class="sub-line">${esc(typeName(c.type))}${c.art ? ` · ${artTxt(esc, c)}` : ''}</div></td><td>${badge(c.status)}<div class="sub-line">${esc(CAPSRC[c.sourceStatus] || c.sourceStatus)}${c.statusText && c.statusText !== R.CAP_SOURCE_STATUS[c.sourceStatus] ? ` – ${srcTxt(esc, c.statusText)}` : ''}</div></td>
     <td class="small">${c.sourceStatus === 'keine' ? '—' : capInfoTxt(ctx, c) || '—'}</td><td class="n">${fmt(c.total)}</td><td class="small">${safeLink(ctx, c.url, c.quelle || t('rep.source'))}${c.stand ? ` · ${esc(standTxt(c.stand))}` : ''}</td></tr>`).join('');
   return `<h3 style="font-size:13px;margin:var(--s4) 0 var(--s1)">${title}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>${t('rep.city')}</th><th>${t('rep.sourceStatus')}</th><th>${t('rep.figureAccordingToSource')}</th><th class="n">${t('rep.fleetToday')}</th><th>${t('rep.source')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -874,6 +920,7 @@ function zoneMap(el, s, zones, ctx) {
   if (!s.zmap) {
     s.zmap = L.map(box, { zoomControl: true, scrollWheelZoom: false, zoomAnimation: false, fadeAnimation: false });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.zmap);
+    mapKeys(s.zmap); // Tastatur: N/P durch die Teilgebiete im Ausschnitt (web/mapkeys.js)
   }
   const layers = zones.map((z, i) => L.polygon(z.polys.map(rs => rs.map(r => r.map(([x, y]) => [y, x]))), { color: i ? '#c2410c' : '#0f766e', weight: 2.5, dashArray: '7 6', fillOpacity: 0.06 })
     .bindTooltip(`<b>${ctx.esc(z.name)}</b><br>${t('rep.zwAssumed', { m: ctx.fmt(z.accuracyM || 0) })}`, { sticky: true }).addTo(s.zmap));
@@ -955,7 +1002,16 @@ function renderWeek(el) {
   const mid = hm.max / 2;
   const legend = `<div class="rp-legend"><span>${t('rep.perHour', { hm: fieldName(hm) })}</span><span class="rp-ramp"><em>0</em>${rampSpans()}<em>${ctx.fmt(hm.max, hm.max < 10 ? 1 : 0)}</em></span><span class="muted">${t('rep.middle', { mid: ctx.fmt(mid, mid < 10 ? 1 : 0) })}</span><span><i class="rp-sw na"></i>${t('rep.notMeasuredNoDayObserved', { HEAT_MIN_OBS: R.HEAT_MIN_OBS })}</span><span><i class="rp-sw rp-s0"></i>${t('rep.fewerThanPrivacy', { MIN_COUNT: R.MIN_COUNT, hm: fieldName(hm) })}</span></div>`;
   const note = `<div class="muted small" style="margin-top:var(--s2)">${t('rep.of168HoursMeasuredHoursIn', { measured: hm.measured, v1: plural(s.ndocs, t('rep.dailyFile'), t('rep.dailyFiles')), v2: hm.measured < 168 ? t('rep.greyCellsAreGapsIn') : '' })}</div>`;
-  el.innerHTML = s.title(btn) + (s.show.week ? weekTable(ctx, hm) : `<div class="rp-chart"><div class="rp-scroll">${weekGrid(ctx, hm)}</div></div>${legend}`) + note;
+  el.innerHTML = s.title(btn) + (s.show.week ? weekTable(ctx, hm) : `<div class="rp-chart"><div class="rp-scroll">${weekGrid(ctx, hm)}</div></div><p class="rp-scrollhint" hidden>${t('rep.weekScrollHint')}</p>${legend}`) + note;
+  // Telefon (UI-18): die 24 Stunden passen nicht ins Panel – Wochentage bleiben stehen, der rechte Rand blendet aus, solange rechts noch
+  // Stunden folgen, und ein Satz unter der Heatmap sagt es
+  const wrap = el.querySelector('.rp-weekwrap'); s.weekRo?.disconnect();
+  if (wrap) {
+    const hint = el.querySelector('.rp-scrollhint');
+    const upd = () => { const over = wrap.scrollWidth > wrap.clientWidth + 2; wrap.classList.toggle('rp-more-r', over && wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 2); if (hint) hint.hidden = !over; };
+    wrap.addEventListener('scroll', upd, { passive: true }); upd();
+    if (typeof ResizeObserver === 'function') { s.weekRo = new ResizeObserver(upd); s.weekRo.observe(wrap); }
+  }
 }
 
 // ======================================================================
@@ -966,7 +1022,7 @@ function valTxt(ctx, v) {
   if (v == null || v === '') return '–';
   if (typeof v === 'boolean') return v ? t('rep.yes') : t('rep.no');
   if (typeof v === 'number') return `${ctx.fmt(v, 2)}`;
-  if (Array.isArray(v)) return v.map(x => (x && typeof x === 'object' ? [x.rate != null ? `${ctx.fmt(+x.rate, 2)}` : '', x.interval > 1 ? `/${x.interval}` : '', x.start ? ` ab ${x.start}` : ''].join('') : String(x))).join(', ');
+  if (Array.isArray(v)) return v.map(x => (x && typeof x === 'object' ? [x.rate != null ? `${ctx.fmt(+x.rate, 2)}` : '', x.interval > 1 ? `/${x.interval}` : '', x.start ? ` ${t('rep.fromDate', { v0: x.start })}` : ''].join('') : String(x))).join(', ');
   if (typeof v === 'object') return JSON.stringify(v).slice(0, 80);
   return String(v);
 }
@@ -1091,6 +1147,9 @@ svg.rp-line circle.end{stroke:var(--panel);stroke-width:2}svg.rp-line circle.sel
 .rp-prof{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
 .rp-prof .card dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px var(--s3);font-size:12.5px}
 .rp-prof .card dt{color:var(--muted)}.rp-prof .card dd{margin:0;color:var(--fg)}
+details.rp-defs-d{margin:0 0 var(--s3)}details.rp-defs-d .rp-defs{margin:0}
+.rp-caplink{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;margin:var(--s4) 0 0}.rp-caplink>span{flex:1 1 44ch;min-width:0}.rp-caplink a{font-weight:500}
+a[data-rp-jump]{display:inline-flex;align-items:center;min-height:24px}
 `;
 function injectExtra() { if (document.getElementById('rp-style-2')) return; const s = document.createElement('style'); s.id = 'rp-style-2'; s.textContent = EXTRA_CSS + EXTRA_CSS_2; document.head.appendChild(s); }
 function prep2(el, ctx) { const s = prep(el, ctx); injectExtra(); return s; }
@@ -1208,6 +1267,7 @@ export async function renderAvailability(el, ctx) {
     el.addEventListener('change', async (e) => { if (e.target.dataset?.f === 'day') { s.day = e.target.value; s.histLoading = true; draw(); const h = await latestHist(s.ctx, s.day); s.hist = h.hist; s.histLoading = false; draw(); } });
     bindSort(el, s, AV_COLS_DEF(), draw); bindCity(el, ctx); bindLine(el, () => s.chart);
     el.addEventListener('click', (e) => { if (e.target.closest('button[data-rp="avtable"]')) { s.showTable = !s.showTable; draw(); } else if (e.target.closest('button[data-rp="avcsv"]')) availCsv(el); else if (e.target.closest('button[data-rp="capcsv"]')) capCsv(el); });
+    el.addEventListener('toggle', (e) => { if (e.target.matches?.('details.rp-defs-d')) s.defsOpen = e.target.open; }, true); // toggle steigt nicht auf
   });
   if (!state.latest) { el.innerHTML = head(t('rep.availabilityPerCity'), '') + emptyBox(t('rep.noDataSnapshotYet'), t('rep.tableAppearsAsSoonAs')); return; }
   const tok = ++s.tok;
@@ -1227,13 +1287,14 @@ function drawAvailability(el) {
   const s = st(el); const ctx = s.ctx; const { esc } = ctx; if (!ctx.state.latest) return;
   const d = availData(ctx, s); s.rows = d.rows;
   const th = ctx.state.latest.thresholds || {};
-  const defs = `<div class="rp-defs"><div>${t('rep.availabilityBookableReported')}</div>
+  // Definitionen eingeklappt wie „Methode“ in der Disposition (UI-25); offen bleibt, was der Nutzer geöffnet hat
+  const defs = `<details class="more rp-defs-d"${s.defsOpen ? ' open' : ''}><summary data-f="defs">${t('rep.definitions')}</summary><div class="rp-defs"><div>${t('rep.availabilityBookableReported')}</div>
     <div>${t('rep.readyToRideBookableAndEnergy', { v0: th.chargeThreshold ?? 20, v1: th.rangeThreshold ?? 5, join: esc(R.RANGE_ONLY_OPS.join(', ')), v3: s.opsStamp ? ` ${t('rep.energyAsOf', { v0: stamp(s.opsStamp) })}` : '' })}</div>
-    <div>${t('rep.dailyMeanMinimumAvailability', { v0: s.hist?.t?.length ? ` ${t('rep.pointsTimeRange', { n: s.hist.t.length, from: hhmm(s.hist.t[0]), to: hhmm(lastOf(s.hist.t)) })}` : '', v1: stamp(ctx.state.latest.at) })}</div></div>`;
+    <div>${t('rep.dailyMeanMinimumAvailability', { v0: s.hist?.t?.length ? ` ${t('rep.pointsTimeRange', { n: s.hist.t.length, from: hhmm(s.hist.t[0]), to: hhmm(lastOf(s.hist.t)) })}` : '', v1: stamp(ctx.state.latest.at) })}</div></div></details>`;
   const right = `<div class="rp-ctl rp-noprint"><button type="button" data-rp="avcsv" title="${t('rep.allRowsInFilter')}">↓ CSV</button></div>`;
   const focus = document.activeElement && el.contains(document.activeElement) ? (document.activeElement.dataset?.f || null) : null;
   el.innerHTML = head(t('rep.availabilityPerCity'), t('rep.bookableAndReadyToRide', { length: d.rows.length }), right)
-    + filterCtl(ctx, s) + defs + availTable(ctx, s, d) + capRateSection(ctx, s) + availChart(ctx, s);
+    + filterCtl(ctx, s) + defs + availTable(ctx, s, d) + capLink(ctx, s) + availChart(ctx, s);
   if (focus) el.querySelector(`[data-f="${focus}"]`)?.focus();
 }
 // ---------- Verfügbar ÷ erlaubt je Anbieter gegen die Obergrenzen ----------
@@ -1256,49 +1317,12 @@ function capInfoTxt(ctx, x) {
   if (z.length) parts.push(t('rep.onlyNotCheckableWithoutArea', { v0: z.length > 1 ? t('rep.subAreas') : t('rep.subArea'), v1: z.join('; ') }));
   return parts.join(' · ');
 }
-const capInfoLine = (ctx, x) => {
-  const why = x.sourceStatus === 'keine' ? t('rep.noFleetCapAccordingToSource') : !x.official ? t('rep.forInformationOnly', { v0: ctx.esc(CAPSRC[x.sourceStatus] || x.sourceStatus), v1: x.statusText && x.statusText !== R.CAP_SOURCE_STATUS[x.sourceStatus] ? ` (${srcTxt(ctx.esc, x.statusText)})` : '' }) : t('rep.officialButNoCityWideFigure');
-  const nums = x.sourceStatus === 'keine' ? '' : capInfoTxt(ctx, x);
-  return `<b>${ctx.esc(x.ort)}</b>${x.types?.[0] && x.types[0] !== 'scooter' ? ` (${ctx.esc(x.types.map(typeName).join(', '))})` : ''}: ${why}${nums ? ` · ${nums}` : ''}${x.url ? ` · ${safeLink(ctx, x.url, t('rep.source'))}` : ''}`;
-};
-function capRateSection(ctx, s) {
-  const { esc, fmt, state } = ctx;
-  const h3 = (sub, right = '') => `<div class="panel-head" style="margin-top:var(--s5)"><div><h3 style="margin:0;font-size:14px" id="rp-caprate-h">${t('rep.availableAllowedPerOperator')}</h3><div class="sub">${sub}</div></div>${right}</div>`;
-  if (s.ref === undefined) return h3(t('rep.loadingFleetCaps'));
-  if (!s.ref?.obergrenzen?.length) return h3(t('rep.noFleetCapsStoredReference'));
-  const ca = R.capAvailability(s.ref, state.latest, { hist: s.hist, operator: s.op, type: s.type, asOf: state.latest.at || Date.now() }); s.capRows = ca.rows;
-  const scope = state.scope && state.scope !== 'DE' ? state.scope : null;
-  const scopeName = scope ? state.latest.municipalities?.[scope]?.name || ctx.muniName?.(scope) || scope : null;
-  const capAgs = new Set((s.ref.obergrenzen || []).map(e => e.ags));
-  const notes = [];
-  if (scope && !capAgs.has(scope)) notes.push(t('rep.noFleetCapKnownCitiesWithout', { scopeName: esc(scopeName) }));
-  if (scope) for (const x of ca.info.filter(i => i.ags === scope)) notes.push(capInfoLine(ctx, x));
-  if (ca.skipped.length) notes.push(t('rep.noOfficialFleetCapIsStored', { typeName: esc(typeName(s.type)), join: esc([...new Set(ca.skipped.map(x => x.ort))].join(', ')), join2: esc([...new Set(ca.skipped.flatMap(x => x.types))].map(typeName).join(', ')) }));
-  const day = s.hist?.day || s.day; const tN = s.hist?.t?.length || 0;
-  const nCities = new Set(ca.rows.map(r => r.ags)).size;
-  const sub = t('rep.withCityWideFigureOnlyCapS', { v0: plural(ca.cities, t('rep.officialCap'), t('rep.officialCaps')), v1: nCities ? ` · ${t('rep.inFilter', { v0: plural(nCities, t('rep.city'), t('rep.cities')) })}` : '', v2: stamp(state.latest.at), v3: tN ? ` · ${t('rep.dailyMeanMinimumFrom', { v0: day ? dd(day) : '', tN: fmt(tN) })}` : '' });
-  const right = ca.rows.length ? `<div class="rp-ctl rp-noprint"><button type="button" data-rp="capcsv" title="${t('rep.allRowsInFilter')}">↓ CSV</button></div>` : '';
-  const defs = `<div class="rp-defs"><div>${t('rep.availableAllowedOperatorS')}</div>
-    <div>${t('rep.reportedAllowedAllReported', { v0: R.NEAR_CAP * 100, v1: DERIVED_TXT_DEF() })}</div>
-    <div>${t('rep.onlyOfficialCapsWithCityWide')}</div></div>`;
-  const noteHtml = notes.length ? `<div class="note small" role="note" style="margin:0 0 var(--s2)">${notes.join('<br>')}</div>` : '';
-  const others = scope ? [] : ca.info;
-  const otherHtml = others.length ? `<details class="rp-capinfo"><summary>${t('rep.furtherEntriesWithout', { length: others.length })}</summary><ul>${others.map(x => `<li>${capInfoLine(ctx, x)}</li>`).join('')}</ul></details>` : '';
-  if (!ca.rows.length) return h3(sub, right) + defs + noteHtml + (ca.skipped.length || (scope && notes.length) ? '' : emptyBox(t('rep.noVehiclesInFilter'), t('rep.setOperatorOrVehicleTypeTo'))) + otherHtml;
-  const byCity = new Map(); for (const r of ca.rows) { const k = `${r.ags}|${r.types.join(',')}`; if (!byCity.has(k)) byCity.set(k, []); byCity.get(k).push(r); }
-  const kindTxt = { operator: t('rep.perOperator3'), share: t('rep.shareOfTotal'), total: t('rep.total5'), unlicensed: '', none: t('rep.noFigure') };
-  const bodies = [...byCity.values()].sort((a, b) => a[0].ort.localeCompare(b[0].ort, 'de') || a[0].types[0].localeCompare(b[0].types[0])).map(list => {
-    const first = list[0]; const land = state.latest.municipalities?.[first.ags]?.state;
-    const zones = (first.districts || []).length ? `<div class="sub-line">${t('rep.withItsOwnCapNotCheckable', { v0: plural(first.districts.length, t('rep.subArea'), t('rep.subAreas')) })}</div>` : '';
-    const src = `${safeLink(ctx, first.url, first.quelle || t('rep.source'))}${first.stand ? ` · ${t('rep.asOf2', { standTxt: esc(standTxt(first.stand)) })}` : ''}${first.next ? ` · ${t('rep.fromDate', { v0: dd(first.next.from) })}: ${fmt(first.next.limit)}` : ''}`;
-    const ty = first.types[0] !== 'scooter' ? ` <span class="muted">· ${esc(first.types.map(typeName).join(', '))}</span>` : '';
-    return `<tbody${first.ags === scope ? ' class="rp-selg" aria-current="true"' : ''}>${list.map((r, i) => `<tr${r.op === '*' ? ' class="rp-sum"' : ''}>${i === 0 ? `<th scope="rowgroup" rowspan="${list.length}" class="rp-cityth">${cityCell(ctx, r.ags, r.ort, land)}${ty}<div class="sub-line">${src}</div>${zones}</th>` : ''}
-      <td>${r.op === '*' ? t('rep.allOperators3') : `<span class="op"><i style="background:${ctx.opColor(r.op)}"></i>${esc(r.op)}</span>`}${r.kind === 'unlicensed' ? `<div class="sub-line">${badge('unlicensed')}</div>` : ''}</td><td class="n">${fmt(r.total)}</td><td class="n">${fmt(r.available)}</td>
-      <td class="n">${r.limit != null ? fmt(r.limit) : '—'}<div class="sub-line">${kindTxt[r.kind] || ''}${r.derived ? `${kindTxt[r.kind] ? ' · ' : ''}${DERIVED_TXT_DEF()}` : ''}</div></td>
-      <td class="n">${rateCell(ctx, r.availRate, true, r.derived)}</td><td class="n">${rateCell(ctx, r.totalRate, false, r.derived)}</td>
-      <td class="n">${rateCell(ctx, r.dayMean, false, r.derived)}</td><td class="n">${rateCell(ctx, r.dayMin, false, r.derived)}${r.dayMinAt ? `<div class="sub-line">${t('rep.text3', { v0: hhmm(r.dayMinAt) })}</div>` : ''}</td></tr>`).join('')}</tbody>`;
-  }).join('');
-  return h3(sub, right) + defs + noteHtml + `<div class="tbl" tabindex="0" role="region" aria-labelledby="rp-caprate-h"><table class="rp-captable"><thead><tr><th scope="col">${t('rep.citySourceCapAsOf')}</th><th scope="col">${t('rep.operator2')}</th><th scope="col" class="n">${t('rep.reported2')}</th><th scope="col" class="n">${t('rep.bookable')}</th><th scope="col" class="n">${t('rep.allowed')}</th><th scope="col" class="n">${t('rep.availableAllowed')}</th><th scope="col" class="n">${t('rep.reportedAllowed')}</th><th scope="col" class="n">${t('rep.dailyMean')}</th><th scope="col" class="n">${t('rep.dailyMinimum')}</th></tr></thead>${bodies}</table></div>` + otherHtml;
+// Verfügbar ÷ erlaubt je Anbieter steht im Kommunal-Bericht (Obergrenzen-Wächter, Steckbrief): hier nur ein Satz mit Link und die CSV (UI-10)
+function capLink(ctx, s) {
+  if (s.ref === undefined) return `<p class="note small rp-caplink">${t('rep.loadingFleetCaps')}</p>`;
+  if (!s.ref?.obergrenzen?.length) return `<p class="note small rp-caplink">${t('rep.noFleetCapsStoredReference')}</p>`;
+  const ca = R.capAvailability(s.ref, ctx.state.latest, { hist: s.hist, operator: s.op, type: s.type, asOf: ctx.state.latest.at || Date.now() }); s.capRows = ca.rows;
+  return `<div class="note small rp-caplink"><span>${t('rep.capLinkNote', { v0: plural(ca.cities, t('rep.officialCap'), t('rep.officialCaps')) })}</span> <a href="#bericht" data-rp-jump="rp-caps">${t('rep.capLinkGo')}</a>${ca.rows.length ? `<button type="button" class="rp-noprint" data-rp="capcsv" title="${t('rep.allRowsInFilter')}">${t('rep.capCsv')}</button>` : ''}</div>`;
 }
 function capCsv(el) {
   const s = st(el); if (!s.capRows) return; const ctx = s.ctx;
@@ -1524,7 +1548,7 @@ export async function renderRegulationProfile(el, ctx) {
     const refs = p.refs.map(r => { const v = r.kind === 'fahrt' ? tripTxt(ctx, r) : fmt(r.wert, r.kind === 'rvd' ? 2 : 0);
       return `${({ rvd: t('rep.tripsPerVehAndDay'), flotte: fleetLabel(r), fahrt: t('rep.trip2'), fahrten: t('rep.trips') })[r.kind]} ${esc(typeName(r.type))}: ${v} <span class="muted">(${esc(r.zeitraum || r.stand || '')})</span> · ${src(r)}`; }).join('<br>') || `<span class="muted">${t('rep.none')}</span>`;
     return `<div class="card"><b>${esc(p.name)}${p.state ? ` <span class="muted">(${esc(p.state)})</span>` : ''}</b><div class="foot">AGS ${esc(p.ags)}${p.pop ? ` · ${t('rep.residents', { pop: fmt(p.pop) })}` : ''}</div>
-      <dl><dt>${t('rep.fleetCaps')}</dt><dd>${caps}</dd><dt>${t('rep.fees')}</dt><dd>${fees}</dd><dt>${t('rep.operatorsAccordingToData')}</dt><dd>${ops}</dd><dt>${t('rep.referenceValues')}</dt><dd>${refs}</dd><dt>${t('rep.accidents')}</dt><dd><span class="muted">${t('rep.noMapUnfallatlasDoesNotListE')}</span></dd></dl></div>`;
+      <dl><dt>${t('rep.fleetCaps')}</dt><dd>${caps}${p.caps.length ? `<div><a href="#bericht" data-rp-jump="rp-caps">${t('rep.capCheckLink')}</a></div>` : ''}</dd><dt>${t('rep.fees')}</dt><dd>${fees}</dd><dt>${t('rep.operatorsAccordingToData')}</dt><dd>${ops}</dd><dt>${t('rep.referenceValues')}</dt><dd>${refs}</dd><dt>${t('rep.accidents')}</dt><dd><span class="muted">${t('rep.noMapUnfallatlasDoesNotListE')}</span></dd></dl></div>`;
   };
   el.innerHTML = title + (profs.length ? `<div class="rp-prof">${profs.map(card).join('')}</div>` : emptyBox(t('rep.noRegulationDataStored'), t('rep.referenceJsonHasNoEntryFor')))
     + `<div class="muted small" style="margin-top:var(--s2)">${t('rep.onlyInformationStatedIn')}</div>`;

@@ -2,9 +2,10 @@
 // eines eigenen Anbieters: Übersicht mit Abgleich-Balken, Listen „Fehlt bei mir“, „Nur bei mir“, „Pflegebedarf“ mit Karte, Filter und Export.
 // Eigenständig: renderSpots(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, setScope, loadUsageIndex, loadCells, loadOnce };
 // Leaflet (L) global. Rechenlogik in lib/pulse-spots.js; Werte aus Daten gehen durch ctx.esc.
-import * as SP from './pulse-spots.js?v=mvyuri2c';
-import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js?v=mvyuri2c';
-import { t, dateFmt, fmtLocale } from './i18n.js?v=mvyuri2c';
+import * as SP from './pulse-spots.js?v=mvyx0klq';
+import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js?v=mvyx0klq';
+import { t, dateFmt, fmtLocale } from './i18n.js?v=mvyx0klq';
+import { mapKeys } from './mapkeys.js?v=mvyx0klq';
 
 const LISTS = ['missing', 'onlyMine', 'care'], ISSUES = ['zone', 'dup', 'empty'], DEMAND_DAYS = 7, LIMIT = 100, RANK_LABELS = 30;
 const CACHE = new Map();
@@ -57,6 +58,7 @@ const STYLE = `
 .sp-flag{display:inline-flex;gap:5px;align-items:center;font-size:12px;color:var(--fg-2);white-space:nowrap}.sp-flag i{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
 .sp-iss{display:flex;gap:6px;align-items:baseline;white-space:normal;min-width:26ch;max-width:46ch;font-size:12.5px;line-height:1.45}.sp-iss+.sp-iss{margin-top:2px}.sp-iss i{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none;transform:translateY(-1px)}
 .sp-root .tbl td.n .sub-line{white-space:nowrap}
+.sp-root .tbl tr.sp-sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}.sp-root .tbl tr.sp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .sp-rank span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--panel);color:var(--fg);box-shadow:0 0 0 1.5px var(--fg-2);font:600 10.5px/1 var(--sans);font-variant-numeric:tabular-nums}
 .leaflet-tooltip.sp-tip{background:var(--panel);color:var(--fg-2);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px 10px;font:12px/1.45 var(--sans);max-width:min(320px,72vw);white-space:normal}
 .leaflet-tooltip.sp-tip b{color:var(--fg)}
@@ -113,6 +115,8 @@ const listFmt = () => { try { return new Intl.ListFormat(fmtLocale(), { style: '
 const opCell = (ctx, op) => `<span class="sp-op" style="--c:${ctx.esc(ctx.opColor(op))}"><i></i>${ctx.esc(op)}</span>`;
 const coords = (x) => `${x.lat.toFixed(5)}, ${x.lon.toFixed(5)}`;
 const nameOf = (x) => x.label || t('spots.noName');
+// Spot-Namen aus dem Feed (Straßen, Plätze) sind Eigennamen: nicht übersetzen lassen
+const nameHtml = (esc, x) => (x.label ? `<span translate="no">${esc(x.label)}</span>` : esc(t('spots.noName')));
 
 /** Begründung „Fehlt bei mir“ als Satz (Tabelle, Karte, GeoJSON) */
 function whyMissing(ctx, x) {
@@ -211,7 +215,7 @@ function table(ctx, res, s, items) {
   if (!items.length) return `<div class="empty">${(s.list === 'missing' ? res.missing : s.list === 'onlyMine' ? res.onlyMine : res.care).length ? t('spots.emptyFiltered') : t(`spots.empty.${s.list}`, { own: esc(res.own), r: s.radius })}</div>`;
   const th = (l, tip, n) => `<th${n ? ' class="n"' : ''}>${tip ? `<abbr title="${esc(tip)}">${l}</abbr>` : l}</th>`;
   // Rang steht vor dem Namen (eine Spalte weniger; auf dem Telefon bleibt der Name als erste Spalte stehen)
-  const place = (x, key) => `<div class="sp-pl"><span class="sp-rk">${x.rank}</span><div><button type="button" class="sp-link${x.label ? '' : ' none'}" data-sp-focus="${key}" title="${t('spots.showOnMap')}">${esc(nameOf(x))}</button><div class="sub-line">${coords(x)}</div></div></div>`;
+  const place = (x, key) => `<div class="sp-pl"><span class="sp-rk">${x.rank}</span><div><button type="button" class="sp-link${x.label ? '' : ' none'}" data-sp-focus="${key}" title="${t('spots.showOnMap')}">${nameHtml(esc, x)}</button><div class="sub-line">${coords(x)}</div></div></div>`;
   const dem = (x) => (x.demand ? `${ctx.fmt(x.demand.startsPerHour, 2)}${x.demand.startsPerHour > 0 && (x.demand.pct ?? 0) >= 0.01 ? `<div class="sub-line">${t('spots.abovePct', { p: ctx.fmt((x.demand.pct ?? 0) * 100) })}</div>` : ''}` : '–');
   const quota = (x) => (x.emptyShare == null ? `<span class="sub-line">${t('spots.noQuota')}</span>` : `${pct(ctx, x.emptyShare)}<div class="sub-line">${x.permEmpty ? `<span class="sp-flag"><i aria-hidden="true"></i>${t('spots.permEmpty')}</span>` : t('spots.runsN', { n: ctx.fmt(x.runs) })}</div>`);
   const demTip = res.demand ? t('spots.colDemandTip', { days: ctx.fmt(res.demand.days), h: ctx.fmt(res.demand.hours) }) : t('spots.noDemandData');
@@ -221,7 +225,7 @@ function table(ctx, res, s, items) {
     head = th(t('spots.colPlace')) + th(t('spots.colOpsThere')) + th(t('spots.colDemand'), demTip, true) + th(t('spots.colOwnVeh'), t('spots.colOwnVehTip', { own: res.own, r: s.radius }), true)
       + th(t('spots.colNearOwn'), '', true) + th(t('spots.colScore'), t('spots.colScoreTip', { g: GROUP_MIN }), true) + th(t('spots.colWhy'));
     rows = shown.map(x => `<tr><td>${place(x, `missing:${x.rank}`)}</td><td><div class="sp-ops">${x.ops.map(o => `${opCell(ctx, o)}${x.byOp[o] > 1 ? ` <span class="muted">×${x.byOp[o]}</span>` : ''}`).join('')}</div></td>
-      <td class="n">${dem(x)}</td><td class="n">${num(ctx, x.ownVehicles)}</td><td class="n">${x.nearestOwn ? `${meters(ctx, x.nearestOwn.d)}${x.nearestOwn.label ? `<div class="sub-line">${esc(x.nearestOwn.label)}</div>` : ''}` : '–'}</td>
+      <td class="n">${dem(x)}</td><td class="n">${num(ctx, x.ownVehicles)}</td><td class="n">${x.nearestOwn ? `${meters(ctx, x.nearestOwn.d)}${x.nearestOwn.label ? `<div class="sub-line" translate="no">${esc(x.nearestOwn.label)}</div>` : ''}` : '–'}</td>
       <td class="n">${ctx.fmt(x.score, 2)}</td><td class="sp-why">${esc(whyMissing(ctx, x))}</td></tr>`).join('');
   } else if (s.list === 'onlyMine') {
     head = th(t('spots.colSpot')) + th(t('spots.colEmptyShare'), t('spots.colEmptyShareTip', { near: SP.STATION_NEAR_M }), true) + th(t('spots.colBookable'), '', true)
@@ -259,6 +263,7 @@ function drawMap(el, ctx, res, s, items) {
     s.map = L.map(box, { zoomControl: true, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, preferCanvas: true });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.map);
     s.layer = L.layerGroup().addTo(s.map); s.fitKey = null;
+    mapKeys(s.map); // Tastatur: N/P durch die Spots im Ausschnitt, Enter wählt den Spot wie ein Klick (web/mapkeys.js)
     // unsichtbar gezeichnet (Ansicht gewechselt): sobald der Kasten eine Größe hat, Größe nachziehen und einpassen
     if (typeof ResizeObserver === 'function') { s.ro = new ResizeObserver(() => { if (!s.map || !box.offsetWidth) return; s.map.invalidateSize(); if (s.pendingFit) { const b = s.pendingFit; s.pendingFit = null; s.map.fitBounds(b, { padding: [24, 24], maxZoom: 16, animate: false }); } }); s.ro.observe(box); }
   }
@@ -266,16 +271,17 @@ function drawMap(el, ctx, res, s, items) {
   const renderer = L.canvas({ padding: 0.3 }), esc = ctx.esc;
   const panel = cssVar('--panel', '#fff'), fg2 = cssVar('--fg-2', '#555'), muted = cssVar('--muted', '#888'), warn = cssVar('--warn', '#c90');
   const ownC = ctx.opColor(res.own), pts = [];
-  const add = (layer, key, html) => { if (html) layer.bindTooltip(html, { className: 'sp-tip', sticky: true }); layer.addTo(s.layer); if (key) s.marks.set(key, layer); return layer; };
+  // Listeneinträge (key): Klick bzw. Enter wählt den Spot wie „Auf Karte zeigen“ in der Liste (heranzoomen, Tooltip, Zeile markiert)
+  const add = (layer, key, html) => { if (html) layer.bindTooltip(html, { className: 'sp-tip', sticky: true }); layer.addTo(s.layer); if (key) { s.marks.set(key, layer); layer.on('click', () => focus(el, s, key)); } return layer; };
   const ownSpots = res.spots.filter(x => x.operator === res.own);
-  const ctxOwn = (skip) => { for (const o of ownSpots) { if (skip?.has(o.id)) continue; add(L.circleMarker([o.lat, o.lon], { renderer, radius: 3.5, color: ownC, weight: 1.5, fillColor: panel, fillOpacity: 1 }), null, `<b>${esc(nameOf(o))}</b><div>${esc(res.own)}</div>`); } };
+  const ctxOwn = (skip) => { for (const o of ownSpots) { if (skip?.has(o.id)) continue; add(L.circleMarker([o.lat, o.lon], { renderer, radius: 3.5, color: ownC, weight: 1.5, fillColor: panel, fillOpacity: 1 }), null, `<b>${nameHtml(esc, o)}</b><div>${esc(res.own)}</div>`); } };
   if (s.list === 'missing') {
     ctxOwn();
     for (const x of items) {
       const why = esc(whyMissing(ctx, x));
-      const html = `<b>${x.rank}. ${esc(nameOf(x))}</b><div>${why}</div>`;
+      const html = `<b>${x.rank}. ${nameHtml(esc, x)}</b><div>${why}</div>`;
       add(L.circle([x.lat, x.lon], { renderer, radius: s.radius, color: fg2, weight: 1, dashArray: '4 4', fillColor: fg2, fillOpacity: 0.07 }), `missing:${x.rank}`, html);
-      for (const m of x.members) { add(L.circleMarker([m.lat, m.lon], { renderer, radius: 5.5, color: panel, weight: 1.5, fillColor: ctx.opColor(m.operator), fillOpacity: 1 }), null, `<b>${esc(nameOf(m))}</b><div>${esc(m.operator)}${m.emptyShare != null ? ` · ${t('spots.emptyShareShort', { p: ctx.fmt(m.emptyShare * 100) })}` : ''}</div><div>${x.rank}. ${esc(nameOf(x))}</div>`); pts.push([m.lat, m.lon]); }
+      for (const m of x.members) { add(L.circleMarker([m.lat, m.lon], { renderer, radius: 5.5, color: panel, weight: 1.5, fillColor: ctx.opColor(m.operator), fillOpacity: 1 }), null, `<b>${nameHtml(esc, m)}</b><div>${esc(m.operator)}${m.emptyShare != null ? ` · ${t('spots.emptyShareShort', { p: ctx.fmt(m.emptyShare * 100) })}` : ''}</div><div>${x.rank}. ${nameHtml(esc, x)}</div>`); pts.push([m.lat, m.lon]); }
     }
     items.slice(0, RANK_LABELS).forEach(x => L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'sp-rank', html: `<span>${x.rank}</span>`, iconSize: [20, 20], iconAnchor: [10, 26] }), interactive: false, keyboard: false }).addTo(s.layer));
   } else if (s.list === 'onlyMine') {
@@ -284,7 +290,7 @@ function drawMap(el, ctx, res, s, items) {
     ctxOwn(shownIds);
     for (const x of items) {
       add(L.circleMarker([x.lat, x.lon], { renderer, radius: 6, color: x.permEmpty ? ownC : panel, weight: x.permEmpty ? 2.5 : 1.5, fillColor: x.permEmpty ? panel : ownC, fillOpacity: 1 }), `onlyMine:${x.rank}`,
-        `<b>${x.rank}. ${esc(nameOf(x))}</b><div>${esc(whyOnly(ctx, x))}</div>`);
+        `<b>${x.rank}. ${nameHtml(esc, x)}</b><div>${esc(whyOnly(ctx, x))}</div>`);
       pts.push([x.lat, x.lon]);
     }
   } else {
@@ -292,7 +298,7 @@ function drawMap(el, ctx, res, s, items) {
     ctxOwn(shownIds);
     for (const x of items) {
       for (const i of x.issues) if (i.k === 'dup') L.polyline([[x.lat, x.lon], [i.lat, i.lon]], { renderer, color: warn, weight: 2, dashArray: '3 3', interactive: false }).addTo(s.layer);
-      add(L.circleMarker([x.lat, x.lon], { renderer, radius: 6.5, color: warn, weight: 3, fillColor: ownC, fillOpacity: 1 }), `care:${x.rank}`, `<b>${x.rank}. ${esc(nameOf(x))}</b>${x.issues.map(i => `<div>${esc(issueText(ctx, i))}</div>`).join('')}`);
+      add(L.circleMarker([x.lat, x.lon], { renderer, radius: 6.5, color: warn, weight: 3, fillColor: ownC, fillOpacity: 1 }), `care:${x.rank}`, `<b>${x.rank}. ${nameHtml(esc, x)}</b>${x.issues.map(i => `<div>${esc(issueText(ctx, i))}</div>`).join('')}`);
       pts.push([x.lat, x.lon]);
     }
   }
@@ -319,6 +325,9 @@ function focus(el, s, key) {
   const ll = m.getLatLng(); s.map.setView(ll, Math.max(s.map.getZoom(), 17), { animate: !reduced() });
   m.openTooltip(ll);
   el.querySelector('[data-sp-map]')?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+  // gewählte Zeile in der Liste markieren (ohne zu scrollen: die Karte bleibt im Blick)
+  for (const tr of el.querySelectorAll('[data-sp-items] tr.sp-sel')) { tr.classList.remove('sp-sel'); tr.removeAttribute('aria-current'); }
+  const tr = el.querySelector(`[data-sp-items] [data-sp-focus="${CSS.escape(key)}"]`)?.closest('tr'); if (tr) { tr.classList.add('sp-sel'); tr.setAttribute('aria-current', 'true'); }
 }
 
 // ---------- Export ----------
