@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mvz5nwfe';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvz5nwfe';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mvz8kxpy';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvz8kxpy';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -1076,12 +1076,14 @@ export function planGeoJson(spots, runs, depot) {
   f.push({ type: 'Feature', properties: { kind: 'depot' }, geometry: { type: 'Point', coordinates: [depot.lon, depot.lat] } });
   return { type: 'FeatureCollection', features: f };
 }
-// ---------- Einsammelliste: Fahrzeuge im eigenen Abstellverbot (intern, kein Anbieter-Vergleich) ----------
+// ---------- Einsammelliste: Fahrzeuge im eigenen Abstellverbot oder ohne Station in einer Pflicht-Abstellzone (intern, kein Anbieter-Vergleich) ----------
 // Zonenart wie zoneConstraints: 'mpz' = Pflicht-Abstellzone (GBFS station_parking, ohne Durchfahrtsverbot: Abstellen an Stationen erlaubt),
 // 'ban' = Abstell- oder Fahrverbot (Fahrtende, ride_allowed aus GBFS 2.x oder Durchfahrt verboten), 'ok' = Fahren und Abstellen erlaubt
 // (Betriebsgebiet, Tempozone, Ausnahmefläche wie ein Mobility Hub in einer Verbotszone). Die Feeds 2.x melden ride_end_allowed nicht
 // (endAllowed null, Stand 02.11.2026 alle BW-Feeds), dort trägt ride_allowed die Regel.
-export const COLLECT = { buffers: [15, 25, 50], stationM: 25 };
+// mpzStationM: Pflicht-Abstellzone gilt als ohne Station erst ab 50 m zur nächsten eigenen Station (25 m Stationsabstand + 25 m GPS-Umfeld,
+// Entscheidung Felix 02.11.2026); stationSearchM: Suchradius für den Abstand zur nächsten Station in der Liste
+export const COLLECT = { buffers: [15, 25, 50], stationM: 25, mpzStationM: 50, stationSearchM: 1000 };
 export function zoneKind(rules = []) {
   if (rules.some(x => x.parking === true) && !rules.some(x => x.rideThrough === false)) return 'mpz';
   if (rules.some(x => x.endAllowed === false || x.rideAllowed === false || x.rideThrough === false)) return 'ban';
@@ -1098,20 +1100,23 @@ function geomAreaM2(g) {
   return s;
 }
 /**
- * Verfügbare Fahrzeuge (nicht gesperrt, nicht reserviert) von operator, die in einer EIGENEN Abstell- oder Fahrverbotszone stehen.
+ * Verfügbare Fahrzeuge (nicht gesperrt, nicht reserviert) von operator, die in EIGENEN Zonen falsch stehen, in zwei Arten (kind):
+ * 'ban' = Abstell- oder Fahrverbotszone. Ein Punkt ist „im Verbot“, wenn er in einer Verbotszone liegt, in keiner Pflicht-Abstellzone und
+ *   in keiner erlaubten Zone, die kleiner ist als die kleinste Verbotszone am Punkt (die genauere Zone gilt: Hub ja, Betriebsgebiet nein).
+ *   Roh = im Verbot und keine eigene Station ≤ stationM.
+ * 'mpz' = Pflicht-Abstellzone (station_parking: Abstellen nur an Stationen) ohne eigene Station ≤ mpzStationM; ebenso nicht in einer kleineren
+ *   erlaubten Zone. Station ≤ stationM = richtig abgestellt, stationM < Abstand ≤ mpzStationM = „knapp neben Station“ (nur gezählt).
+ * Robust je Puffer b: auch die 4 Punkte im Abstand b (N/O/S/W) liegen im Verbot bzw. in einer Pflicht-Abstellzone (Umfeld der Koordinate
+ * geprüft: GPS-Fehler, Fahrzeug am Zonenrand). Gelistet nur, wenn robust bei ALLEN Puffern.
  * fleet: { vehicles, stations } (decodeFleet; vom Aufrufer auf Gemeinde/Fahrzeugart eingegrenzt, Stationen dürfen das ganze Land sein).
  * zonesDoc: zones/<Datei>.json oder eine Liste davon; Dateien eines anderen Anbieters zählen nicht. Gleiche Zone aus zwei Quellen
  * (MobiData BW und Direktfeed, gleiche Umrandung und Fläche) zählt einmal.
- * Ein Punkt ist „im Verbot“, wenn er in einer eigenen Verbotszone liegt, in keiner eigenen Pflicht-Abstellzone und in keiner eigenen
- * erlaubten Zone, die kleiner ist als die kleinste Verbotszone am Punkt (die genauere Zone gilt: Hub in der Verbotszone ja, Betriebsgebiet nein).
- * Roh = Koordinate im Verbot und keine eigene Station ≤ stationM. Robust je Puffer b: auch die 4 Punkte im Abstand b (N/O/S/W) sind im Verbot
- * (Umfeld der Koordinate geprüft: GPS-Fehler, Fahrzeug knapp neben einer Abstellfläche). Gelistet nur, wenn robust bei ALLEN Puffern.
- * mpzNoStation (nur Transparenz, nicht gelistet): in einer Pflicht-Abstellzone ohne eigene Station ≤ stationM.
- * Rückgabe { operator, features, zones: { ban, mpz, ok }, buffers, stationM, counts: { available, inZone, mpz, allowed, station, raw,
- *   robust: { <b>: n }, listed, mpzNoStation }, list: [{ lat, lon, type, ags, zone: { id, name, noRide }, idleMin, idleCensored, battery,
- *   rangeKm, rangeFlat }] (Standzeit absteigend), zonesHit: [{ id, name, noRide, geometry, n }] }
+ * Rückgabe { operator, features, zones: { ban, mpz, ok }, buffers, stationM, mpzStationM, counts: { available, listed,
+ *   ban: { inZone, mpz, allowed, station, raw, robust: { <b>: n }, listed }, mpz: { inZone, allowed, station, near, raw, robust, listed } },
+ *   list: [{ kind, lat, lon, type, ags, zone: { id, name, noRide }, stationDistM (nächste eigene Station ≤ stationSearchM, sonst null), idleMin,
+ *   idleCensored, battery, rangeKm, rangeFlat }] (Standzeit absteigend), zonesHit: [{ kind, id, name, noRide, geometry, n }] }
  */
-export function parkingViolations(fleet, zonesDoc, { operator = null, buffers = COLLECT.buffers, stationM = COLLECT.stationM } = {}) {
+export function parkingViolations(fleet, zonesDoc, { operator = null, buffers = COLLECT.buffers, stationM = COLLECT.stationM, mpzStationM = COLLECT.mpzStationM } = {}) {
   const docs = (Array.isArray(zonesDoc) ? zonesDoc : [zonesDoc]).filter(d => d && (operator == null || d.operator == null || d.operator === operator));
   const vehicles = (fleet?.vehicles || []).filter(v => (operator == null || v.operator === operator) && isAvailable(v) && Number.isFinite(v.lat) && Number.isFinite(v.lon));
   const near = gridIndex((fleet?.stations || []).filter(s => (operator == null || s.operator === operator) && Number.isFinite(s.lat) && Number.isFinite(s.lon)));
@@ -1129,43 +1134,61 @@ export function parkingViolations(fleet, zonesDoc, { operator = null, buffers = 
     zones[kind].push({ g, b, area, id: `${d.sourceId ?? di}#${i}`, name: f.properties?.name || null, noRide: rules.some(x => x.rideThrough === false) });
   }));
   const inside = (z, lat, lon) => lon >= z.b[0] && lon <= z.b[2] && lat >= z.b[1] && lat <= z.b[3] && geomContains(z.g, lat, lon);
+  const smallest = (list, lat, lon) => { let m = null; for (const z of list) if ((!m || z.area < m.area) && inside(z, lat, lon)) m = z; return m; };
+  const freed = (z, lat, lon) => zones.ok.some(o => o.area < z.area && inside(o, lat, lon)); // kleinere erlaubte Zone gilt
   const at = (lat, lon) => {
-    let ban = null; for (const z of zones.ban) if ((!ban || z.area < ban.area) && inside(z, lat, lon)) ban = z;
+    const ban = smallest(zones.ban, lat, lon);
     if (!ban) return { why: 'none' };
     if (zones.mpz.some(z => inside(z, lat, lon))) return { why: 'mpz', ban };
-    if (zones.ok.some(z => z.area < ban.area && inside(z, lat, lon))) return { why: 'allowed', ban };
-    return { why: 'ban', ban };
+    return freed(ban, lat, lon) ? { why: 'allowed', ban } : { why: 'ban', ban };
   };
-  const counts = { available: vehicles.length, inZone: 0, mpz: 0, allowed: 0, station: 0, raw: 0, robust: Object.fromEntries(buffers.map(b => [b, 0])), listed: 0, mpzNoStation: 0 };
-  const list = [], hit = new Map();
-  for (const v of vehicles) {
-    const stationNear = () => near(v, stationM).length > 0;
-    if (zones.mpz.length && zones.mpz.some(z => inside(z, v.lat, v.lon)) && !stationNear()) counts.mpzNoStation++;
-    const a = at(v.lat, v.lon); if (a.why === 'none') continue;
-    counts.inZone++;
-    if (a.why !== 'ban') { counts[a.why]++; continue; }
-    if (stationNear()) { counts.station++; continue; }
-    counts.raw++;
+  const mpzAt = (lat, lon) => { const m = smallest(zones.mpz, lat, lon); return !m ? { why: 'none' } : freed(m, lat, lon) ? { why: 'allowed', mpz: m } : { why: 'mpz', mpz: m }; };
+  const robustAll = (v, test, rob) => {
     let all = true;
     for (const b of buffers) {
       const dLat = b / 111320, dLon = b / (111320 * Math.cos(v.lat * Math.PI / 180));
-      const ok = [[dLat, 0], [-dLat, 0], [0, dLon], [0, -dLon]].every(([x, y]) => at(v.lat + x, v.lon + y).why === 'ban');
-      if (ok) counts.robust[b]++; else all = false;
+      if ([[dLat, 0], [-dLat, 0], [0, dLon], [0, -dLon]].every(([x, y]) => test(v.lat + x, v.lon + y))) rob[b]++; else all = false;
     }
-    if (!all) continue;
-    counts.listed++;
-    const z = a.ban; let h = hit.get(z); if (!h) hit.set(z, (h = { id: z.id, name: z.name, noRide: z.noRide, geometry: z.g, n: 0 })); h.n++;
-    list.push({ lat: v.lat, lon: v.lon, type: v.type, ags: v.ags ?? null, zone: { id: z.id, name: z.name, noRide: z.noRide }, idleMin: v.idleMin ?? null, idleCensored: v.idleCensored ?? null, battery: v.battery ?? null, rangeKm: v.rangeKm ?? null, rangeFlat: !!v.rangeFlat });
+    return all;
+  };
+  const nearest = (v) => { let d = null; for (const s of near(v, COLLECT.stationSearchM)) { const x = haversineM(v.lat, v.lon, s.lat, s.lon); if (d == null || x < d) d = x; } return d; };
+  const rob0 = () => Object.fromEntries(buffers.map(b => [b, 0]));
+  const counts = { available: vehicles.length, listed: 0, ban: { inZone: 0, mpz: 0, allowed: 0, station: 0, raw: 0, robust: rob0(), listed: 0 }, mpz: { inZone: 0, allowed: 0, station: 0, near: 0, raw: 0, robust: rob0(), listed: 0 } };
+  const list = [], hit = new Map();
+  const add = (kind, v, z, d) => {
+    counts.listed++; counts[kind].listed++;
+    let h = hit.get(z); if (!h) hit.set(z, (h = { kind, id: z.id, name: z.name, noRide: z.noRide, geometry: z.g, n: 0 })); h.n++;
+    list.push({ kind, lat: v.lat, lon: v.lon, type: v.type, ags: v.ags ?? null, zone: { id: z.id, name: z.name, noRide: z.noRide }, stationDistM: d == null ? null : Math.round(d),
+      idleMin: v.idleMin ?? null, idleCensored: v.idleCensored ?? null, battery: v.battery ?? null, rangeKm: v.rangeKm ?? null, rangeFlat: !!v.rangeFlat });
+  };
+  for (const v of vehicles) {
+    let dist; const dSt = () => (dist === undefined ? (dist = nearest(v)) : dist), within = (m) => dSt() != null && dSt() <= m;
+    const a = at(v.lat, v.lon);
+    if (a.why !== 'none') {
+      const c = counts.ban; c.inZone++;
+      if (a.why !== 'ban') c[a.why]++;
+      else if (within(stationM)) c.station++;
+      else { c.raw++; if (robustAll(v, (la, lo) => at(la, lo).why === 'ban', c.robust)) add('ban', v, a.ban, dSt()); }
+      if (a.why === 'ban') continue; // im Verbot heißt: in keiner Pflicht-Abstellzone
+    }
+    const m = mpzAt(v.lat, v.lon); if (m.why === 'none') continue;
+    const c = counts.mpz; c.inZone++;
+    if (m.why === 'allowed') c.allowed++;
+    else if (within(stationM)) c.station++;
+    else if (within(mpzStationM)) c.near++;
+    else { c.raw++; if (robustAll(v, (la, lo) => mpzAt(la, lo).why === 'mpz', c.robust)) add('mpz', v, m.mpz, dSt()); }
   }
   list.sort((a, b) => (b.idleMin ?? -1) - (a.idleMin ?? -1) || a.lat - b.lat || a.lon - b.lon);
-  return { operator, features, zones: { ban: zones.ban.length, mpz: zones.mpz.length, ok: zones.ok.length }, buffers: [...buffers], stationM, counts, list, zonesHit: [...hit.values()] };
+  return { operator, features, zones: { ban: zones.ban.length, mpz: zones.mpz.length, ok: zones.ok.length }, buffers: [...buffers], stationM, mpzStationM, counts, list, zonesHit: [...hit.values()] };
 }
 // Einsammelliste als CSV (Formel-Schutz über csvCell): Deutsch mit Semikolon, Englisch mit Komma und englischen Spaltennamen
-export const COLLECT_CSV_FIELDS = ['rang', 'anbieter', 'lat', 'lon', 'zone_id', 'zone_name', 'zonenart', 'standzeit_min', 'standzeit_mindestens', 'akku_prozent', 'reichweite_km', 'fahrzeugart'];
-const COLLECT_CSV_EN = { rang: 'rank', anbieter: 'operator', zonenart: 'zone_kind', standzeit_min: 'idle_min', standzeit_mindestens: 'idle_at_least', akku_prozent: 'battery_pct', reichweite_km: 'range_km', fahrzeugart: 'vehicle_type' };
+// art = Art des Befunds (Abstellverbot | Pflicht-Abstellzone ohne Station), zonenart = Regel der Zone, station_abstand_m = nächste eigene Station
+export const COLLECT_CSV_FIELDS = ['rang', 'anbieter', 'art', 'lat', 'lon', 'zone_id', 'zone_name', 'zonenart', 'station_abstand_m', 'standzeit_min', 'standzeit_mindestens', 'akku_prozent', 'reichweite_km', 'fahrzeugart'];
+const COLLECT_CSV_EN = { rang: 'rank', anbieter: 'operator', art: 'kind', zonenart: 'zone_kind', station_abstand_m: 'station_distance_m', standzeit_min: 'idle_min', standzeit_mindestens: 'idle_at_least', akku_prozent: 'battery_pct', reichweite_km: 'range_km', fahrzeugart: 'vehicle_type' };
 export function violationsCsv(res, { lang = 'de' } = {}) {
-  const en = lang === 'en';
-  const rows = (res?.list || []).map((v, i) => [i + 1, res.operator, v.lat.toFixed(6), v.lon.toFixed(6), v.zone.id, v.zone.name ?? '', v.zone.noRide ? (en ? 'no-riding zone' : 'Fahrverbot') : (en ? 'no-parking zone' : 'Abstellverbot'),
+  const en = lang === 'en', mpz = (v) => v.kind === 'mpz';
+  const rows = (res?.list || []).map((v, i) => [i + 1, res.operator, mpz(v) ? (en ? 'mandatory parking zone without station' : 'Pflicht-Abstellzone ohne Station') : (en ? 'no-parking zone' : 'Abstellverbot'), v.lat.toFixed(6), v.lon.toFixed(6), v.zone.id, v.zone.name ?? '',
+    mpz(v) ? (en ? 'mandatory parking zone' : 'Pflicht-Abstellzone') : v.zone.noRide ? (en ? 'no-riding zone' : 'Fahrverbot') : (en ? 'no-parking zone' : 'Abstellverbot'), v.stationDistM ?? null,
     v.idleMin, v.idleCensored == null ? '' : v.idleCensored ? 1 : 0, v.battery, v.rangeKm, v.type]);
   return en ? csvRows([COLLECT_CSV_FIELDS.map(h => COLLECT_CSV_EN[h] ?? h), ...rows], ',') : csvRows([COLLECT_CSV_FIELDS, ...rows]);
 }

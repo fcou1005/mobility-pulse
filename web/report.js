@@ -180,7 +180,7 @@ img.rp-cellmap-img{display:block;width:100%;height:auto;border-radius:var(--r-sm
 .rp-cellnote{margin:0 0 var(--s2)}
 .rp-status{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--fg);white-space:nowrap}
 .rp-status i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font:700 10px/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none}
-.rp-status.ok i{background:var(--ok)}.rp-status.near i{background:var(--warn)}.rp-status.over i{background:var(--bad)}
+.rp-status.ok i{background:var(--ok)}.rp-status.near i{background:var(--warn)}.rp-status.over i,.rp-status.below i{background:var(--bad)}
 .rp-status.unchecked i,.rp-status.unknown i,.rp-status.none i,.rp-status.unlicensed i,.rp-status.info i,.rp-status.hint i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
 details.rp-capinfo{margin-top:var(--s3);font-size:12.5px;color:var(--fg-2)}details.rp-capinfo summary{cursor:pointer;color:var(--fg);font-weight:500}details.rp-capinfo ul{margin:var(--s2) 0 0;padding-left:1.2em;display:grid;gap:4px}
 .rp-meter{position:relative;height:8px;border-radius:4px;background:color-mix(in srgb,var(--rp-c,var(--accent)) 20%,var(--panel-2));min-width:80px}
@@ -224,8 +224,8 @@ const tile = (l, v, s) => `<div class="tile"><div class="l">${l}</div><div class
 const emptyBox = (b, tq) => `<div class="empty"><b>${b}</b>${tq}</div>`;
 // Beschreibungen aus data/reference.json (Teilgebiete, Hinweise, Art der Zahl) stehen wie in der Quelle: als Name/Zitat gekennzeichnet
 const srcTxt = (esc, s) => `<span translate="no">${esc(s)}</span>`;
-const STATUS_DEF = () => ({ ok: ['✓', 'ok'], near: ['!', t('rep.nearStatus')], over: ['✕', t('rep.over')], unchecked: ['?', t('rep.notCheckable')], unknown: ['–', t('rep.noLimit')], hint: ['i', t('rep.noteCalculatedFigure')], info: ['i', t('rep.informationOnly')], none: ['–', t('rep.noLimitAccordingToSource')], unlicensed: ['–', t('rep.notLicensedAccordingToSource')] });
-const badge = (s) => `<span class="rp-status ${s}"><i aria-hidden="true">${STATUS_DEF()[s][0]}</i>${STATUS_DEF()[s][1]}</span>`;
+const STATUS_DEF = () => ({ ok: ['✓', 'ok'], near: ['!', t('rep.nearStatus')], over: ['✕', t('rep.over')], below: ['✕', t('zv.below')], hintUpper: ['i', t('zv.hintUpper')], unchecked: ['?', t('rep.notCheckable')], unknown: ['–', t('rep.noLimit')], hint: ['i', t('rep.noteCalculatedFigure')], info: ['i', t('rep.informationOnly')], none: ['–', t('rep.noLimitAccordingToSource')], unlicensed: ['–', t('rep.notLicensedAccordingToSource')] });
+const badge = (s) => `<span class="rp-status ${s === 'hintUpper' ? 'hint' : s}"><i aria-hidden="true">${STATUS_DEF()[s][0]}</i>${STATUS_DEF()[s][1]}</span>`, badge0 = badge;
 const safeLink = (ctx, url, label) => (/^https?:\/\//i.test(String(url || '')) ? `<a href="${ctx.esc(url)}" target="_blank" rel="noopener">${ctx.esc(label)}</a>` : ctx.esc(label));
 const rampSpans = (from = 1, to = 8) => Array.from({ length: to - from + 1 }, (_, i) => `<span class="rp-s${from + i}"></span>`).join('');
 const pctTxt = (ctx, v, d = 1) => (v == null ? '—' : `${ctx.fmt(v * 100, d)} %`);
@@ -802,12 +802,16 @@ function violationsBlock(ctx, c, v, s) {
   return h + `<div class="sub small muted" style="margin-bottom:var(--s1)">${t('rep.durationSumOfFetchIntervals', { v0: plural(days, t('rep.day'), t('rep.days')), btn })}</div>` + table + hist;
 }
 // Teilgebiet mit vermuteter Abgrenzung (zone-watch.json): Statuszeile und je Anbieter Bestand gegen die Grenze
+// Grenze eines Teilgebiets als Text: gesamt, je Anbieter, Anteil an der Flotte (anteilMax/anteilMin)
+const zoneLimitTxt = (ctx, d) => [d.limit != null ? t('rep.total3', { limit: ctx.fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: ctx.fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null,
+  d.shareMax != null ? t('zv.shareMax', { p: pctTxt(ctx, d.shareMax, 0) }) : null, d.shareMin != null ? t('zv.shareMin', { p: pctTxt(ctx, d.shareMin, 0) }) : null].filter(Boolean).join(' · ') || '—';
 function zoneCheckRows(ctx, d) {
-  const { fmt, esc, opColor } = ctx, k = d.check;
-  const zoneNum = [d.limit != null ? t('rep.total3', { limit: fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(' · ') || '—';
-  const rows = k.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.now)}</td><td class="n">${o.limit != null ? fmt(o.limit) : '—'}</td><td style="min-width:120px">${o.limit != null ? meter(ctx, o.now, o.limit, o.status === 'hint' ? 'near' : o.status) : '<span class="muted small">—</span>'}</td><td class="n">${o.todayMax != null ? fmt(o.todayMax) : '–'}</td><td class="n">${o.max30 != null ? fmt(o.max30) : '–'}</td><td class="n">${o.daysOver != null ? `${fmt(o.daysOver)} <span class="muted small">${t('rep.capZoneDaysOf', { n: fmt(o.daysLogged) })}</span>` : '–'}</td><td>${badge(o.status)}</td></tr>`).join('');
-  const sub = `<div class="tbl" style="margin-top:var(--s1)"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.capZoneNow')}</th><th class="n">${t('rep.cap')}</th><th>${t('rep.utilisation')}</th><th class="n">${t('rep.capZoneTodayMax')}</th><th class="n">${t('rep.capZoneMax30')}</th><th class="n">${t('rep.capZoneDaysOver')}</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  return `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum}</td><td>${badge(d.status)}</td><td class="small muted">${t('rep.capZoneChecked', { m: fmt(k.accuracyM || 0), at: stamp(k.at) })}${d.hinweis ? ` · ${srcTxt(esc, d.hinweis)}` : ''}</td></tr><tr class="rp-zonesub"><td colspan="4">${sub}</td></tr>`;
+  const { fmt, esc, opColor } = ctx, k = d.check, shareCol = k.shareMax != null || k.shareMin != null;
+  const badge = (s) => badge0(k.superset && s === 'hint' ? 'hintUpper' : s); // umfassender Umriss: Hinweis = Bestand ist Obergrenze
+  const shareCell = (o) => (o.fleetShare == null ? '<span class="muted">–</span>' : `${pctTxt(ctx, o.fleetShare, 0)}<div class="sub-line">${t('zv.ofFleet', { n: fmt(o.now), f: fmt(o.fleet) })}</div>`);
+  const rows = k.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.now)}</td><td class="n">${o.limit != null ? fmt(o.limit) : '—'}</td><td style="min-width:120px">${o.limit != null ? meter(ctx, o.now, o.limit, ((s) => (s === 'hint' ? 'near' : s))(o.countStatus || o.status)) : '<span class="muted small">—</span>'}</td>${shareCol ? `<td class="n">${shareCell(o)}</td>` : ''}<td class="n">${o.todayMax != null ? fmt(o.todayMax) : '–'}</td><td class="n">${o.max30 != null ? fmt(o.max30) : '–'}</td><td class="n">${o.daysOver != null ? `${fmt(o.daysOver)} <span class="muted small">${t('rep.capZoneDaysOf', { n: fmt(o.daysLogged) })}</span>` : '–'}</td><td>${badge(o.status)}</td></tr>`).join('');
+  const sub = `<div class="tbl" style="margin-top:var(--s1)"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.capZoneNow')}</th><th class="n">${t('rep.cap')}</th><th>${t('rep.utilisation')}</th>${shareCol ? `<th class="n">${t('zv.fleetShare')}</th>` : ''}<th class="n">${t('rep.capZoneTodayMax')}</th><th class="n">${t('rep.capZoneMax30')}</th><th class="n">${t('rep.capZoneDaysOver')}</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneLimitTxt(ctx, d)}</td><td>${badge(d.status)}</td><td class="small muted">${t('rep.capZoneChecked', { m: fmt(k.accuracyM || 0), at: stamp(k.at) })}${k.rest ? ` · ${t('zv.rest')}` : ''}${k.superset ? ` · ${t('zv.superset')}` : ''}${k.live ? ` · ${t('zv.live')}` : ''}${d.hinweis ? ` · ${srcTxt(esc, d.hinweis)}` : ''}</td></tr><tr class="rp-zonesub"><td colspan="4">${sub}</td></tr>`;
 }
 function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const { fmt, esc, opColor } = ctx;
@@ -824,8 +828,8 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const shareLbl = (o) => { const v = rate(o, 'share'); return v == null ? '' : `<div class="sub-line"><b>${rateTxt(ctx, v)}</b>${overMark(v, derivedOf(o))}${own(o) ? '' : ` ${t('rep.shareOfTotalCap')}`}</div>`; };
   const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) + shareLbl(o) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>${shareLbl(o)}`);
   const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${fmt(o.available)}</td><td class="n">${limCell(o)}</td><td style="min-width:120px">${meterCell(o)}</td><td class="n">${rateCell(ctx, rate(o, 'availShare'), false, derivedOf(o))}${shareNote(o)}</td><td>${badge(o.licensed === false ? 'unlicensed' : own(o) ? o.status : 'unknown')}</td></tr>`).join('');
-  const zoneNum = (d) => [d.limit != null ? t('rep.total3', { limit: fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(' · ') || '—';
-  const districts = c.districts.map(d => d.check ? zoneCheckRows(ctx, d) : `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)} · ` : '' })}</td></tr>`).join('');
+  const zoneNum = (d) => zoneLimitTxt(ctx, d);
+  const districts = c.districts.map(d => d.check ? zoneCheckRows(ctx, d) : `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${d.watch ? `${t('zv.noRuns')}${d.hinweis ? ` · ${srcTxt(esc, d.hinweis)}` : ''}` : t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)} · ` : '' })}</td></tr>`).join('');
   const per1000 = pop ? (c.total / pop) * 1000 : null;
   const pre = rep?.quality.prelim ? ` · ${t('rep.preliminary')}` : '';
   const links = [safeLink(ctx, c.url, c.quelle || t('rep.source')), ...(c.links || []).map((l, i) => safeLink(ctx, l.url, l.quelle || t('rep.source2', { v0: i + 2 })))].join(' · ');
@@ -879,10 +883,10 @@ export async function renderCaps(el, ctx) {
     s.viol = log ? R.capsViolations(log, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() }) : null;
     const violFor = (c) => (log ? s.viol.find(v => v.ags === R.capLogKey(c)) || null : undefined); // je Gemeinde und Art
     const repFor = (ags, ty) => (docs.length ? R.municipalReport({ docs, ags, pop: state.latest.municipalities?.[ags]?.pop || null, type: ty, latestGroups: state.latest.groups }) : null);
-    const defn = `<p class="note small" style="margin:var(--s3) 0 0">${t('rep.fleetAllEScootersReportedBy', { v0: R.NEAR_CAP * 100, v1: DERIVED_TXT_DEF() })}</p>`;
+    const defn = `<p class="note small" style="margin:var(--s3) 0 0">${t('zv.capsDefn', { v0: R.NEAR_CAP * 100, v1: DERIVED_TXT_DEF() })}</p>`;
     let body = '';
     // geprüft wird nur, was amtlich ist; amtliche Einträge nur mit Teilgebiets-Grenzen als Block mit „nicht prüfbar“, der Rest kompakt zur Information
-    const checked = caps.filter(c => c.official && (c.hasRate || (state.scope && state.scope !== 'DE'))), rest = caps.filter(c => !checked.includes(c));
+    const checked = caps.filter(c => c.official && (c.hasRate || c.districts.some(d => d.check) || (state.scope && state.scope !== 'DE'))), rest = caps.filter(c => !checked.includes(c));
     if (caps.length) body = checked.map(c => capBlock(ctx, c, repFor(c.ags, c.type), state.latest.municipalities?.[c.ags]?.pop || null, violFor(c), s)).join('')
       + capInfoTable(ctx, rest, state.scope && state.scope !== 'DE' ? t('rep.furtherEntriesWithoutCheck') : t('rep.furtherEntriesWithoutCheck2', { length: rest.length }));
     else {
@@ -939,14 +943,20 @@ function weekTable(ctx, hm) {
 async function zoneData(ctx) {
   const [log, zdoc] = await Promise.all([fetchJson(ctx, 'zone-watch.json', true), fetchJson(ctx, 'zonen-vermutet.json', false, ctx.CFG.MAIN)]);
   const zones = zdoc ? R.parseZoneWatch(JSON.stringify(zdoc)) : [];
-  if (log?.zones?.length) return { log, zones };
-  if (!zones.length) return { log: null, zones };
-  const lands = [...new Set(zones.map(z => ctx.state.latest?.municipalities?.[z.ags]?.state).filter(Boolean))];
+  // Umrisse, die das Protokoll (noch) nicht kennt (neu in data/zonen-vermutet.json), live nachzählen; Rest-Zonen brauchen alle Umrisse ihrer Gemeinde
+  // nur für die gewählte Gemeinde (Deutschland-Ansicht ohne Nachzählen: sonst Bestand aller Länder laden, bis der Sammler die Zonen protokolliert)
+  const scope = ctx.state.scope || 'DE', inLog = (z) => (log?.zones || []).some(x => x.id === z.id && !x.retired);
+  const missing = scope === 'DE' && log?.zones?.length ? [] : zones.filter(z => !inLog(z) && (scope === 'DE' || z.ags === scope));
+  if (!missing.length) return { log: log?.zones?.length ? log : null, zones };
+  const lands = [...new Set(missing.map(z => ctx.state.latest?.municipalities?.[z.ags]?.state).filter(Boolean))];
   const fleets = (await Promise.all(lands.map(l => fetchJson(ctx, `ops/${l}.json`, true)))).filter(Boolean).map(decodeFleet);
-  if (!fleets.length) return { log: null, zones };
+  if (!fleets.length) return { log: log?.zones?.length ? log : null, zones };
   const at = Math.max(...fleets.map(f => f.at || 0)) || ctx.state.latest?.at || Date.now();
-  const live = R.zoneLogUpdate(null, zones, R.zoneCounts(zones, fleets.flatMap(f => f.vehicles)), { at });
-  return { log: { ...live, live: true }, zones };
+  const agsSet = new Set(missing.map(z => z.ags)), ids = new Set(missing.map(z => z.id));
+  const counts = new Map([...R.zoneCounts(zones.filter(z => agsSet.has(z.ags)), fleets.flatMap(f => f.vehicles))].filter(([k]) => ids.has(k.split('|')[0])));
+  const live = R.zoneLogUpdate(null, missing, counts, { at });
+  if (!log?.zones?.length) return { log: { ...live, zones: live.zones.map(z => ({ ...z, live: true })), live: true }, zones };
+  return { log: { ...log, zones: [...log.zones, ...live.zones.map(z => ({ ...z, live: true }))], runs: [...(log.runs || []), ...live.runs], daily: [...(log.daily || []), ...live.daily] }, zones };
 }
 // kleine Karte der vermuteten Umrisse (gestrichelt), Leaflet global
 function zoneMap(el, s, zones, ctx) {
@@ -957,7 +967,8 @@ function zoneMap(el, s, zones, ctx) {
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.zmap);
     mapKeys(s.zmap); // Tastatur: N/P durch die Teilgebiete im Ausschnitt (web/mapkeys.js)
   }
-  const layers = zones.map((z, i) => L.polygon(z.polys.map(rs => rs.map(r => r.map(([x, y]) => [y, x]))), { color: i ? '#c2410c' : '#0f766e', weight: 2.5, dashArray: '7 6', fillOpacity: 0.06 })
+  const pal = ['#0f766e', '#c2410c', '#6d28d9', '#a16207', '#be185d', '#1d4ed8'];
+  const layers = zones.filter(z => z.polys?.length).map((z, i) => L.polygon(z.polys.map(rs => rs.map(r => r.map(([x, y]) => [y, x]))), { color: pal[i % pal.length], weight: 2.5, dashArray: '7 6', fillOpacity: 0.06 })
     .bindTooltip(`<b>${ctx.esc(z.name)}</b><br>${t('rep.zwAssumed', { m: ctx.fmt(z.accuracyM || 0) })}`, { sticky: true }).addTo(s.zmap));
   s.zmap.fitBounds(L.featureGroup(layers).getBounds(), { padding: [12, 12] });
   setTimeout(() => s.zmap?.invalidateSize(), 0);
@@ -984,12 +995,12 @@ export async function renderZoneWatch(el, ctx) {
     const trend = z.rows.some(r => (r.series || []).filter(([, v]) => Number.isFinite(v)).length >= 2); // Tagesmaximum-Verlauf erst ab 2 Tagen
     const rows = z.rows.map(r => `<tr${r.op === '*' ? ' class="rp-sum"' : ''}><td>${opCell(r.op)}</td><td class="n">${num(r.now)}${r.avail != null && r.avail !== r.now ? `<div class="sub-line">${t('rep.zwAvail', { v: esc(fmt(r.avail)) })}</div>` : ''}</td>
       <td class="n">${r.todayMin == null ? '<span class="muted">–</span>' : `${esc(fmt(r.todayMin))}–${esc(fmt(r.todayMax))}`}</td><td class="n">${num(r.mean7)}</td><td class="n">${num(r.max30)}</td>${trend ? `<td>${sparkline(ctx, r.series)}</td>` : ''}</tr>`).join('');
-    const city = z.ags ? (ctx.muniName?.(z.ags) || z.ags) : '';
+    const city0 = z.ags ? (ctx.muniName?.(z.ags) || z.ags) : '', city = city0 && !z.name.startsWith(city0) ? city0 : ''; // „Köln Innenstadt · Köln“ vermeiden
     return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th>${trend ? `<th>${t('rep.zwTrend')}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
   }).join('');
-  const shown = shapes.filter(z => zones.some(x => x.id === z.id));
+  const shown = shapes.filter(z => !z.rest && zones.some(x => x.id === z.id));
   s.zmap?.remove(); s.zmap = null;
-  el.innerHTML = head(t('rep.zwTitle'), t('rep.zwSub', { at: stamp(zones[0].at || log.updatedAt) })) + (log.live ? `<div class="note small" style="margin-bottom:var(--s2)">${t('rep.zwLive')}</div>` : '')
+  el.innerHTML = head(t('rep.zwTitle'), t('rep.zwSub', { at: stamp(zones[0].at || log.updatedAt) })) + (log.live || zones.some(z => z.live) ? `<div class="note small" style="margin-bottom:var(--s2)">${t('rep.zwLive')}</div>` : '')
     + (shown.length ? `<div class="rp-zonemap" role="region" aria-label="${t('rep.zwMapAria')}"></div>` : '') + blocks + `<p class="note small" style="margin:var(--s3) 0 0">${t('rep.zwNote', { days: log.days || R.ZONE_LOG_DAYS })}</p>`;
   zoneMap(el, s, shown, ctx);
 }
@@ -1353,7 +1364,11 @@ function capInfoTxt(ctx, x) {
   const parts = [];
   const g = numsTxt(ctx, x.info?.gesamt), j = numsTxt(ctx, x.info?.jeAnbieter);
   if (g) parts.push(t('rep.total4', { g })); if (j) parts.push(t('rep.perOperator2', { j }));
-  const z = (x.districts || []).filter(d => d.limit != null || d.perOperator != null).map(d => `${srcTxt(ctx.esc, d.label)} ${[d.limit != null ? ctx.fmt(d.limit) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: ctx.fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(', ')}`);
+  const lim = (d) => `${srcTxt(ctx.esc, d.label)} ${[d.limit != null ? ctx.fmt(d.limit) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: ctx.fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(', ')}`;
+  const ds = (x.districts || []).filter(d => d.limit != null || d.perOperator != null);
+  // mit vermuteter Abgrenzung gezählt (Zonen-Beobachtung): Zahl der Quelle und heutiger Bestand im Teilgebiet, ohne Prüfung
+  const zc = ds.filter(d => d.check).map(d => `${lim(d)} (${t('zv.nowInArea', { n: ctx.fmt(d.check.total) })})`), z = ds.filter(d => !d.check).map(lim);
+  if (zc.length) parts.push(t('zv.subAreasCounted', { v1: zc.join('; ') }));
   if (z.length) parts.push(t('rep.onlyNotCheckableWithoutArea', { v0: z.length > 1 ? t('rep.subAreas') : t('rep.subArea'), v1: z.join('; ') }));
   return parts.join(' · ');
 }

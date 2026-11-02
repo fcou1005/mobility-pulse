@@ -1,8 +1,8 @@
 // Mobility Pulse — Abdeckung: Städte laut Anbieter-Website gegen Feeds mit Fahrzeugen, stille Feeds, nicht offene Feeds und fehlende Feeds.
 // Eigenständiges Modul; app.js übergibt ctx = { state, CFG, esc, getJson, setScope }. Daten: coverage.json (Sammler, lib/pulse-coverage.js).
 // Alle Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel cov.*), Zahlen und Daten über i18n.js.
-import { t, has, lang, numFmt, dateFmt } from './i18n.js?v=mvz5nwfe';
-import { csvCell } from './pulse-ops.js?v=mvz5nwfe';
+import { t, has, lang, numFmt, dateFmt } from './i18n.js?v=mvz8kxpy';
+import { csvCell } from './pulse-ops.js?v=mvz8kxpy';
 
 const CAT = (c) => (has(`cov.cat.${c}`) ? t(`cov.cat.${c}`) : c);
 const SHORT = (c) => t(`cov.short.${c}`);
@@ -90,6 +90,7 @@ function noteCell(r, cov, esc) {
   if (r.partOf) out.push(t('cov.partOf', { c: esc(r.partOf) }));
   if (r.gap?.note != null && cov.notes?.[r.gap.note]) out.push(esc(cov.notes[r.gap.note]) + (r.gap.assumed ? ` ${t('cov.assumed')}` : ''));
   if (r.guessed) out.push(t('cov.guessed'));
+  if (r.named) out.push(t('cov.namedNoData', { f: esc(r.named) }));
   if (r.probes) out.push(t('cov.probes'));
   if (r.claimAmbiguous) out.push(t('cov.ambiguous', { n: r.claimAmbiguous }));
   if (r.unresolved) out.push(t('cov.unresolved'));

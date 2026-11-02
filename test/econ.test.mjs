@@ -228,8 +228,12 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
   const real = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url), 'utf8'));
   const rr = K.rideAssumption(real, 'scooter'), kr = K.methodFactor(real, meas, { day: '2026-11-01' });
   assert(rr.calibrated && rr.n === 5 && near(rr.min, 7.12, 1e-9) && kr.quarter === 'Q4/2025' && real.umsatz?.[0]?.wert === 3.64 && real.fahrt.find(e => e.ags === '08121000').minMittel === 8.7, 'reference.json: fünf Berliner Quartale (Ø 7,1 Min.), Referenzquartal Q4/2025, Voi 3,64 €, Heilbronn Mittel 8,7 Min.');
-  // Z3b: eingecheckt ist k gesperrt (Freigabe null) – auch mit 7 vollen Regelstand-Tagen und voller Beobachtung
-  { const kz = K.methodFactor(real, { ...meas, rule: '2026-11-02a', ruleFullDays: 7, obsMin: 2880 }); assert(real.kalibrierung && real.kalibrierung.freigabe === null && !kz.applied && kz.status === 'locked' && kz.release === null, 'reference.json: kalibrierung.freigabe = null → k gesperrt'); }
+  // Z3b: eingecheckt ist k für Regelstand 2026-11-02a freigegeben (Felix, 02.11.2026): wirkt erst mit 7 vollen Tagen dieses Regelstands,
+  // nicht für einen anderen Regelstand und nicht mit weniger Tagen
+  { const kz = K.methodFactor(real, { ...meas, rule: '2026-11-02a', ruleFullDays: 7, obsMin: 2880 }), k3 = K.methodFactor(real, { ...meas, rule: '2026-11-02a', ruleFullDays: 3, obsMin: 2880 }),
+      ko = K.methodFactor(real, { ...meas, rule: '2026-11-01b', ruleFullDays: 7, obsMin: 2880 });
+    assert(real.kalibrierung?.freigabe?.regelstand === '2026-11-02a' && kz.applied && kz.release?.regelstand === '2026-11-02a' && !k3.applied && k3.status !== 'applied' && !ko.applied && ko.status !== 'applied',
+      'reference.json: Freigabe 2026-11-02a → k erst mit 7 vollen Tagen dieses Regelstands; 3 Tage bzw. anderer Regelstand → nicht angewandt'); }
   // Düsseldorf (SMM-CPI 2025) und Voi FY2025 je Fahrt als Plausibilitätsprobe, nicht als Schätzer
   {
     const du = real.rvd.find(e => e.ags === '05111000'), vr = real.umsatz.find(e => e.einheit === '€ je Fahrt');
@@ -273,7 +277,7 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
         'Datenstand: Dott Berlin Kennungswechsel je Fahrt, Lime Frankfurt periodisch, Lime Stuttgart (lime_bw) stabil, Voi je Fahrt');
       const br = R.municipalReport({ docs, hists: H, ags: K.BERLIN, type: 'scooter', rvdLimit: limits });
       const c = K.calibration(real, { berlinReport: br, groups: latest.groups, kinds });
-      assert(!c.k.applied && c.k.status === 'locked' && c.k.statusText === 'gesperrt: Freigabe fehlt' && c.k.refKind === 'perTrip' && br.quality.rule === '2026-11-01b' && br.quality.ruleFullDays === 0,
+      assert(!c.k.applied && c.k.status !== 'applied' && c.k.refKind === 'perTrip' && br.quality.rule === '2026-11-01b' && br.quality.ruleFullDays === 0,
         `Datenstand: kein k (gesperrt, Regelstand ${br.quality.rule}, ${br.quality.ruleFullDays} volle Regelstand-Tage; k wäre ${c.k.k?.toFixed(2)})`);
       const rel = { ...real, kalibrierung: { freigabe: { regelstand: br.quality.rule, datum: '2026-11-09' } } }, m = K.measuredFromReport(br, kinds);
       const k7 = K.methodFactor(rel, { ...m, ruleFullDays: 7, obsMin: m.possibleMin }), kp = K.methodFactor(rel, m);

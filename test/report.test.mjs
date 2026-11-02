@@ -561,8 +561,21 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
   const pub = R.parseZoneWatch(readFileSync(new URL('../data/zonen-vermutet.json', import.meta.url), 'utf8'));
   const ref = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url), 'utf8'));
   const stg = ref.obergrenzen.find(e => e.ags === '08111000'), watch = stg.zonen.map(z => z.beobachtung).filter(Boolean);
-  assert(pub.length === 2 && pub.every(z => z.assumed && z.ags === '08111000' && z.description?.includes('Vermutet') && z.accuracyM > 0 && z.polys[0][0].length < 60) && watch.every(w => pub.some(z => z.id === w)) && watch.length === 2,
-    'data/zonen-vermutet.json: zwei vermutete, grob vereinfachte Stuttgarter Teilgebiete; reference.json ordnet beide zu');
+  assert(pub.filter(z => z.ags === '08111000').length === 2 && pub.every(z => z.assumed && /^\d{8}$/.test(z.ags) && z.description?.includes('Vermutet') && z.accuracyM > 0 && (z.rest ? !z.polys.length : z.polys.every(p => p.every(r => r.length < 120)))) && watch.every(w => pub.some(z => z.id === w)) && watch.length === 2,
+    'data/zonen-vermutet.json: vermutete, grob vereinfachte Teilgebiete (je Ring < 120 Punkte, Rest ohne Umriss); Stuttgart: zwei, reference.json ordnet beide zu');
+  // jede Zuordnung beobachtung → Zone derselben Gemeinde; jede Zone wird genutzt
+  const refWatch = ref.obergrenzen.flatMap(e => (e.zonen || []).filter(z => z.beobachtung).map(z => [e.ags, z.beobachtung]));
+  assert(refWatch.length >= 15 && refWatch.every(([a, w]) => pub.some(z => z.id === w && z.ags === a)) && pub.every(z => refWatch.some(([, w]) => w === z.id)),
+    `reference.json: ${refWatch.length} Teilgebiete mit vermuteter Abgrenzung, alle in data/zonen-vermutet.json mit gleicher Gemeinde, keine Zone ohne Zuordnung`);
+  const inZ = (id, lon, lat) => R.zoneContains(pub.find(z => z.id === id), lon, lat);
+  assert(inZ('karlsruhe-kerngebiet-1', 8.4037, 49.0094) && !inZ('karlsruhe-kerngebiet-1', 8.4044, 49.0137) && !inZ('karlsruhe-kerngebiet-1', 8.4745, 48.9995) && inZ('karlsruhe-kerngebiet-2-durlach', 8.4745, 48.9995) && !inZ('karlsruhe-kerngebiet-2-durlach', 8.4037, 49.0094),
+    'Karlsruhe: Marktplatz in Kerngebiet 1, Schloss nicht; Marktplatz Durlach in Kerngebiet 2');
+  assert(inZ('dresden-gebiet-1', 13.7383, 51.0505) && !inZ('dresden-gebiet-2', 13.7383, 51.0505) && inZ('dresden-gebiet-2', 13.7270, 51.0290) && !inZ('dresden-gebiet-3', 13.7270, 51.0290) && pub.find(z => z.id === 'dresden-gebiet-4')?.rest,
+    'Dresden: Altmarkt in Gebiet 1 (nicht im Ring Gebiet 2), TU-Campus in Gebiet 2 (Loch des Rings Gebiet 3 ausgenommen), Gebiet 4 = Rest');
+  assert(inZ('koeln-innenstadt', 6.9583, 50.9413) && !inZ('koeln-innenstadt', 6.8850, 50.9180) && inZ('berlin-innerhalb-s-bahn-ring', 13.4132, 52.5219) && !inZ('berlin-innerhalb-s-bahn-ring', 13.2000, 52.5350)
+    && inZ('frankfurt-zentraler-innenstadtbereich', 8.6821, 50.1106) && inZ('mainz-innenstadt', 8.2740, 49.9990) && inZ('bremen-nord', 8.6280, 53.1700) && !inZ('bremen-nord', 8.8070, 53.0758)
+    && inZ('dortmund-innenstadtbezirke-und-phoenix-see', 7.4590, 51.5178) && inZ('dortmund-innenstadtbezirke-und-phoenix-see', 7.5110, 51.4900) && inZ('duesseldorf-zone-1', 6.7800, 51.2240) && inZ('duesseldorf-zone-2', 6.7740, 51.2050) && !inZ('duesseldorf-zone-1', 6.7740, 51.2050),
+    'Stichproben: Kölner Dom, Alexanderplatz, Römer, Mainzer Dom, Vegesack, Dortmund Hbf und PHOENIX See, Königsallee in Zone 1, Bilk in Zone 2 – Müngersdorf, Spandau, Bremer Marktplatz nicht');
   assert(pub.find(z => z.id === 'zentrale-innenstadt') && R.zoneContains(pub.find(z => z.id === 'zentrale-innenstadt'), 9.1793, 48.7784) && R.zoneContains(pub.find(z => z.id === 'innenstadtbezirke'), 9.1793, 48.7784) && !R.zoneContains(pub.find(z => z.id === 'innenstadtbezirke'), 9.12, 48.70),
     'Schlossplatz liegt in beiden Teilgebieten, Vaihingen in keinem');
   const sq = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
@@ -577,6 +590,53 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
     && !d1.check.operators.some(o => o.op === 'RegioRad') && d1.status === 'near' && d2.status === 'unchecked' && !d2.check,
     'Teilgebiet mit Zuordnung: je Anbieter jetzt gegen 100 (nahe), Tagesmaximum 120 → 1 Tag über Grenze, nur Arten der Obergrenze; ohne Zuordnung weiter nicht prüfbar');
   assert(R.capsCheck({ obergrenzen: [{ ags: '08111000', ort: 'S', type: 'scooter', jeAnbieter: 10, zonen: [{ name: 'x', jeAnbieter: 1, beobachtung: 'fehlt' }], status: 'amtlich' }] }, {}, { zoneWatch: log })[0].districts[0].status === 'unchecked', 'Zuordnung auf unbekannte Zone: nicht prüfbar');
+}
+// ---------- zweite Stadt: Rest-Gebiet (Düsseldorf), Anteils-Regeln (Dresden), Karlsruhe aus dem Repo ----------
+{
+  const sq = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+  const D = '05111000';
+  const zs = R.parseZoneWatch(JSON.stringify({ type: 'FeatureCollection', features: [
+    { type: 'Feature', properties: { name: 'Düsseldorf Zone 1', ags: D, vermutet: true, genauigkeit_m: 150 }, geometry: { type: 'Polygon', coordinates: [sq(6.77, 51.22, 6.79, 51.23)] } },
+    { type: 'Feature', properties: { name: 'Düsseldorf Zone 2', ags: D, vermutet: true, genauigkeit_m: 200 }, geometry: { type: 'Polygon', coordinates: [sq(6.75, 51.20, 6.81, 51.25), sq(6.77, 51.22, 6.79, 51.23)] } },
+    { type: 'Feature', properties: { name: 'Düsseldorf übriges Stadtgebiet', ags: D, rest: true, vermutet: true, genauigkeit_m: 200 }, geometry: null },
+    { type: 'Feature', properties: { name: 'kaputt', rest: true }, geometry: null }] }));
+  const rest = zs.find(z => z.id === 'duesseldorf-uebriges-stadtgebiet');
+  assert(zs.length === 3 && rest?.rest && rest.polys.length === 0 && rest.bbox === null && !R.zoneContains(rest, 6.6, 51.3), 'Rest-Zone ohne Umriss mit Gemeinde gelesen; Rest ohne Gemeinde verworfen; zoneContains nie für Rest');
+  const veh = [
+    { lat: 51.225, lon: 6.78, operator: 'Lime', type: 'scooter', ags: D }, { lat: 51.21, lon: 6.76, operator: 'Lime', type: 'scooter', ags: D },
+    { lat: 51.30, lon: 6.85, operator: 'Lime', type: 'scooter', ags: D }, { lat: 51.31, lon: 6.86, operator: 'Lime', type: 'scooter', ags: D, disabled: true },
+    { lat: 51.30, lon: 6.85, operator: 'Voi', type: 'scooter', ags: '05158004' }, { lat: 51.30, lon: 6.85, operator: 'Bolt', type: 'scooter' },
+  ];
+  const c = R.zoneCounts(zs, veh);
+  assert(c.get('duesseldorf-zone-1|Lime|scooter')?.join() === '1,1' && c.get('duesseldorf-zone-2|Lime|scooter')?.join() === '1,1' && c.get('duesseldorf-uebriges-stadtgebiet|Lime|scooter')?.join() === '2,1' && ![...c.keys()].some(k => /Voi|Bolt/.test(k)),
+    'Rest = Fahrzeuge der Gemeinde außerhalb aller Umrisse der Gemeinde (Loch von Zone 2 = Zone 1); andere Gemeinde und ohne Gemeinde nicht');
+  const t1 = T('2026-11-02T10:00:00');
+  const log = R.zoneLogUpdate(null, zs, new Map([['duesseldorf-zone-1|Lime|scooter', [700, 690]], ['duesseldorf-zone-1|Bolt|scooter', [1200, 1200]], ['duesseldorf-uebriges-stadtgebiet|Lime|scooter', [900, 880]]]), { at: t1 });
+  assert(log.zones.find(z => z.id === 'duesseldorf-uebriges-stadtgebiet')?.rest === true && !JSON.stringify(log).includes('6.77'), 'zone-watch.json: Rest-Zone gekennzeichnet, keine Koordinaten');
+  const entry = { ags: D, ort: 'Düsseldorf', type: 'scooter', gesamt: 8400, zonen: [{ name: 'Zone 1', gesamt: 1800, beobachtung: 'duesseldorf-zone-1' }, { name: 'übriges Stadtgebiet', gesamt: 1700, beobachtung: 'duesseldorf-uebriges-stadtgebiet' }] };
+  const amt = R.capsCheck({ obergrenzen: [{ ...entry, status: 'amtlich' }] }, {}, { zoneWatch: log, ags: D })[0], ung = R.capsCheck({ obergrenzen: [{ ...entry, status: 'ungeprüft' }] }, {}, { zoneWatch: log, ags: D })[0];
+  assert(amt.districts[0].check.total === 1900 && amt.districts[0].status === 'over' && amt.districts[1].check.total === 900 && amt.districts[1].status === 'ok' && amt.districts[1].check.rest
+    && ung.districts[0].status === 'info' && ung.districts[0].check.operators.every(o => o.status === 'info' && o.limit == null),
+    'Düsseldorf: Zone 1 1.900 > 1.800 (über Grenze), Rest 900 ≤ 1.700; ungeprüfte Quelle: nur gezählt (Status Information)');
+  // Anteile an der Flotte (Dresden Nr. 6.4): Gebiet 1 max. 30 %, Gebiet 3 mind. 25 %
+  const S = '14612000';
+  const dz = R.parseZoneWatch(JSON.stringify({ type: 'FeatureCollection', features: [
+    { type: 'Feature', properties: { name: 'Dresden Gebiet 1', ags: S, vermutet: true, genauigkeit_m: 150 }, geometry: { type: 'Polygon', coordinates: [sq(13.72, 51.04, 13.76, 51.07)] } },
+    { type: 'Feature', properties: { name: 'Dresden Gebiet 3', ags: S, vermutet: true, genauigkeit_m: 150 }, geometry: { type: 'Polygon', coordinates: [sq(13.60, 50.95, 13.90, 51.15), sq(13.70, 51.02, 13.78, 51.09)] } }] }));
+  const dlog = R.zoneLogUpdate(null, dz, new Map([['dresden-gebiet-1|Voi|scooter', [270, 260]], ['dresden-gebiet-1|Bolt|scooter', [230, 230]], ['dresden-gebiet-1|Dott|scooter', [100, 100]], ['dresden-gebiet-3|Voi|scooter', [300, 290]], ['dresden-gebiet-3|Bolt|scooter', [100, 100]]]), { at: t1 });
+  const dref = { obergrenzen: [{ ags: S, ort: 'Dresden', type: 'scooter', gesamt: 2500, jeAnbieter: 833, jeAnbieterAbgeleitet: true, status: 'amtlich', zonen: [{ name: 'Gebiet 1', jeAnbieter: 250, jeAnbieterAbgeleitet: true, anteilMax: 0.3, beobachtung: 'dresden-gebiet-1' }, { name: 'Gebiet 3', anteilMin: 25, beobachtung: 'dresden-gebiet-3' }] }] };
+  const dc = R.capsCheck(dref, { [`${S}|Voi|scooter`]: { total: 800 }, [`${S}|Bolt|scooter`]: { total: 800 }, [`${S}|Dott|scooter`]: { total: 400 } }, { zoneWatch: dlog, ags: S })[0];
+  const g1 = dc.districts[0].check, g3 = dc.districts[1].check, op = (k, o) => k.operators.find(x => x.op === o);
+  assert(dc.districts[0].shareMax === 0.3 && dc.districts[1].shareMin === 0.25 && op(g1, 'Voi').fleetShare === 270 / 800 && op(g1, 'Voi').shareStatus === 'over' && op(g1, 'Voi').status === 'over' && op(g1, 'Voi').countStatus === 'hint'
+    && op(g1, 'Bolt').shareStatus === 'near' && op(g1, 'Dott').shareStatus === 'ok' && op(g1, 'Dott').status === 'ok' && dc.districts[0].status === 'over'
+    && op(g3, 'Voi').shareStatus === 'ok' && op(g3, 'Bolt').shareStatus === 'below' && op(g3, 'Dott')?.now === 0 && op(g3, 'Dott').shareStatus === 'below' && dc.districts[1].status === 'below',
+    'Dresden: Anteil je Anbieter am eigenen Bestand – Voi 34 % > 30 % (über, Zählgrenze gerechnet nur Hinweis), Bolt 29 % nahe, Dott 25 % ok; Gebiet 3 (25 als Prozent gelesen): Bolt 12,5 % und Dott ohne Fahrzeug unter Mindestanteil');
+  // umfassender Umriss (Dortmund: Bezirke größer als „dicht bebaute Bereiche“): Bestand ist Obergrenze → über der Grenze nur Hinweis
+  const oz = R.parseZoneWatch(JSON.stringify({ type: 'Feature', properties: { name: 'Dortmund Innenstadt', ags: '05913000', vermutet: true, umfassend: true, genauigkeit_m: 600 }, geometry: { type: 'Polygon', coordinates: [sq(7.39, 51.48, 7.53, 51.56)] } }));
+  const olog = R.zoneLogUpdate(null, oz, new Map([['dortmund-innenstadt|Lime|scooter', [1353, 1300]], ['dortmund-innenstadt|Voi|scooter', [120, 120]]]), { at: t1 });
+  const od = R.capsCheck({ obergrenzen: [{ ags: '05913000', ort: 'Dortmund', type: 'scooter', status: 'amtlich', zonen: [{ name: 'Innenstadtbezirke', jeAnbieter: 300, beobachtung: 'dortmund-innenstadt' }] }] }, {}, { zoneWatch: olog, ags: '05913000' })[0].districts[0];
+  assert(oz[0].superset && olog.zones[0].superset && od.check.superset && od.check.operators.find(o => o.op === 'Lime').status === 'hint' && od.check.operators.find(o => o.op === 'Voi').status === 'ok' && od.status === 'hint',
+    'umfassender Umriss: Lime 1.353 > 300 nur Hinweis (Bestand ist Obergrenze), Voi 120 ok');
 }
 // M-20: Zeitumstellung – Heatmap und Tagesgang beziehen Stunde 2 am 25.10. (120 Min.) auf 60 Min.; Stichtage in Ortszeit (Sommer +02:00)
 {

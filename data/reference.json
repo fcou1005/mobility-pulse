@@ -3,7 +3,7 @@
   "updatedAt": "2026-11-02",
   "kalibrierung": {
     "_hinweis": "Freigabe durch Felix: regelstand = METHOD_VERSION (lib/pulse-track.js, Teil vor „@“ in events runs[k][3]), ab dem k gelten darf; null = gesperrt. Format { \"regelstand\": \"2026-11-02a\", \"datum\": \"YYYY-MM-DD\" }. k wirkt erst, wenn der Regelstand der Berliner Messung gleich ist und 7 volle Messtage mit ihm vorliegen, und nur auf E-Scooter derselben Kennungsart wie Dott Berlin (lib/pulse-calib.js).",
-    "freigabe": null
+    "freigabe": { "regelstand": "2026-11-02a", "datum": "2026-11-02", "von": "Felix" }
   },
   "rvd": [
     {
@@ -232,7 +232,8 @@
           "name": "Innenstadt (innerhalb S-Bahn-Ring)",
           "gesamt": 19000,
           "jeAnbieter": 4750,
-          "jeAnbieterAbgeleitet": true
+          "jeAnbieterAbgeleitet": true,
+          "beobachtung": "berlin-innerhalb-s-bahn-ring"
         }
       ],
       "anbieterZahl": 5,
@@ -248,7 +249,8 @@
       "hinweis": "„Seit dem 01.01.2024 sind in der Innenstadt 19.000 eKF erlaubt“, gleichmäßig auf vier in der Innenstadt tätige Unternehmen; 4.750 = 19.000 ÷ 4 (gerechnet). Werte je Anbieter veröffentlicht der Senat nicht (Geschäftsgeheimnis). Fünf Unternehmen insgesamt; die Antwort nennt Bolt, LimeBike und TIER (DOTT) nur im Zusammenhang mit Sicherheitsmaßnahmen. Außerhalb des S-Bahn-Rings keine Grenze genannt. Weitere Reduzierung angekündigt, ohne Zahl.",
       "quelle2": "Land Berlin, Meldung vom 09.11.2023",
       "url2": "https://www.berlin.de/aktuelles/8548735-958090-anzahl-vonescootern-wird-reduziert.html",
-      "status": "amtlich"
+      "status": "amtlich",
+      "zonenHinweis": "Teilgebiet wird gegen eine vermutete Abgrenzung geprüft (data/zonen-vermutet.json, entlang der Ringbahn vereinfacht, nicht amtlich)."
     },
     {
       "ags": "02000000",
@@ -308,7 +310,8 @@
           "name": "Innenstadt",
           "gesamt": 4500,
           "jeAnbieter": 650,
-          "hinweis": "„knapp über 4.500“, je Anbieter „rund 650“"
+          "hinweis": "„knapp über 4.500“, je Anbieter „rund 650“",
+          "beobachtung": "koeln-innenstadt"
         }
       ],
       "anbieterZahl": 7,
@@ -317,8 +320,9 @@
       "stand": "2021-09-01",
       "quelle": "Stadt Köln, Pressemitteilung vom 01.09.2021",
       "url": "https://www.stadt-koeln.de/politik-und-verwaltung/presse/mitteilungen/23779/index.html",
-      "hinweis": "35 % weniger als zuvor >7.000 in der Innenstadt; Stadt wollte 50 %. Stadtweit keine Zahl genannt.",
-      "status": "amtlich"
+      "hinweis": "35 % weniger als zuvor >7.000 in der Innenstadt; Stadt wollte 50 %. Stadtweit keine Zahl genannt. Die Mitteilung grenzt „Innenstadt“ nicht ab; vermutet: Stadtbezirk Innenstadt.",
+      "status": "amtlich",
+      "zonenHinweis": "Teilgebiet wird gegen eine vermutete Abgrenzung geprüft (data/zonen-vermutet.json: Stadtbezirk Innenstadt aus OpenStreetMap, vereinfacht, nicht amtlich)."
     },
     {
       "ags": "05315000",
@@ -354,7 +358,8 @@
       "zonen": [
         {
           "name": "zentraler Innenstadtbereich",
-          "gesamt": 2400
+          "gesamt": 2400,
+          "beobachtung": "frankfurt-zentraler-innenstadtbereich"
         }
       ],
       "anbieterZahl": 3,
@@ -367,10 +372,11 @@
       "stand": "2026-07-03",
       "quelle": "traffiQ, Pressemitteilung 26.02.2026; hessenschau, 03.07.2026",
       "url": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2026/traffiQ_2026-040_Auswahlverfahren-E-Scooter.pdf",
-      "hinweis": "Vorher 12.000 stadtweit (ab Oktober 2025 mit Bolt, Dott, Lime, Voi, RideMovi, Ryde). Stadt nannte die drei Ausgewählten nicht; Lime, Voi und Bolt bestätigten laut hessenschau ihre Erlaubnis. Abgrenzung der Innenstadtzone nicht beschrieben.",
+      "hinweis": "Vorher 12.000 stadtweit (ab Oktober 2025 mit Bolt, Dott, Lime, Voi, RideMovi, Ryde). Stadt nannte die drei Ausgewählten nicht; Lime, Voi und Bolt bestätigten laut hessenschau ihre Erlaubnis. Abgrenzung der Innenstadtzone nicht beschrieben (auch nicht in traffiQ 2025-122 und 2026-113; dort Abstellzone „Innenstadt innerhalb des Anlagenrings“ und Bahnhofsviertel); vermutet: Altstadt, Innenstadt und Bahnhofsviertel.",
       "url2": "https://www.hessenschau.de/wirtschaft/nur-noch-drei-e-scooter-verleiher-in-frankfurt-v2,scooter-frankfurt-verleiher-100.html",
       "url3": "https://www.traffiq.de/fileadmin/user_upload/pdfs/Presse/2025/traffiQ_2025-122_SNE_E-Scooter_ab_Oktober.pdf",
-      "status": "amtlich"
+      "status": "amtlich",
+      "zonenHinweis": "Teilgebiet wird gegen eine vermutete Abgrenzung geprüft (data/zonen-vermutet.json: Stadtteile Altstadt, Innenstadt, Bahnhofsviertel aus OpenStreetMap, nicht amtlich – die Stadt beschreibt den Bereich nicht)."
     },
     {
       "ags": "08111000",
@@ -421,15 +427,18 @@
       "zonen": [
         {
           "name": "Zone 1: Altstadt, Carlstadt, Stadtmitte",
-          "gesamt": 1800
+          "gesamt": 1800,
+          "beobachtung": "duesseldorf-zone-1"
         },
         {
-          "name": "Zone 2: 13 Stadtteile (u. a. Pempelfort, Golzheim, Derendorf, Bilk, Oberkassel)",
-          "gesamt": 4900
+          "name": "Zone 2: 13 Stadtteile (Pempelfort, Golzheim, Derendorf, Mörsenbroich, Düsseltal, Flingern-Nord, Flingern-Süd, Oberbilk, Friedrichstadt, Unterbilk, Bilk, Niederkassel, Oberkassel)",
+          "gesamt": 4900,
+          "beobachtung": "duesseldorf-zone-2"
         },
         {
           "name": "übriges Stadtgebiet",
-          "gesamt": 1700
+          "gesamt": 1700,
+          "beobachtung": "duesseldorf-uebriges-stadtgebiet"
         }
       ],
       "anbieterZahl": 5,
@@ -444,7 +453,10 @@
       "stand": "2022-02-22",
       "quelle": "Ddorf-Aktuell, 22.02.2022",
       "url": "https://www.ddorf-aktuell.de/2022/02/22/duesseldorf-entwickelt-system-fuer-mehr-ordnung-bei-e-scootern/",
-      "hinweis": "Reduzierung von 12.700 auf 8.400. Aktueller Stand nicht geprüft: duesseldorf.de sperrt WebFetch (robots.txt). Quelle ist Lokalpresse.",
+      "hinweis": "Reduzierung von 12.700 auf 8.400; Zonen und Stadtteile nur laut Lokalpresse (2022). Stadt Düsseldorf, Pressedienst 18.01.2024: „Die erlaubte Obergrenze für E-Scooter und Co. liegt bei 8.400 Fahrzeugen“, vier Anbieter (Tier, Lime, Voi, Bolt), Vergabeverfahren auf drei geplant – Zonenwerte dort nicht genannt, Stand nach der Vergabe nicht geprüft.",
+      "quelle2": "Landeshauptstadt Düsseldorf, Pressedienst 18.01.2024",
+      "url2": "https://www.duesseldorf.de/medienportal/pressedienst-einzelansicht/pld/staerkere-regulierung-von-e-scootern-in-duesseldorf",
+      "zonenHinweis": "Teilgebiete werden gegen vermutete Abgrenzungen gezählt (data/zonen-vermutet.json: Stadtteile aus OpenStreetMap, übriges Stadtgebiet = Rest der Gemeinde, nicht amtlich); ohne amtliche Zonenwerte nur zur Information.",
       "status": "ungeprüft",
       "statusText": "Stand 2022, Aktualität nicht bestätigt"
     },
@@ -482,20 +494,30 @@
         {
           "name": "Gebiet 1",
           "jeAnbieter": 250,
-          "hinweis": "max. 30 % der Flotte"
+          "jeAnbieterAbgeleitet": true,
+          "anteilMax": 0.3,
+          "hinweis": "max. 30 % der Flotte",
+          "beobachtung": "dresden-gebiet-1"
         },
         {
           "name": "Gebiet 2",
           "jeAnbieter": 290,
-          "hinweis": "max. 35 % der Flotte"
+          "jeAnbieterAbgeleitet": true,
+          "anteilMax": 0.35,
+          "hinweis": "max. 35 % der Flotte",
+          "beobachtung": "dresden-gebiet-2"
         },
         {
           "name": "Gebiet 3",
-          "hinweis": "mind. 25 % der Flotte"
+          "anteilMin": 0.25,
+          "hinweis": "mind. 25 % der Flotte",
+          "beobachtung": "dresden-gebiet-3"
         },
         {
           "name": "Gebiet 4",
-          "hinweis": "mind. 10 % der Flotte"
+          "anteilMin": 0.1,
+          "hinweis": "mind. 10 % der Flotte (übriges Stadtgebiet)",
+          "beobachtung": "dresden-gebiet-4"
         }
       ],
       "anbieterZahl": 3,
@@ -504,10 +526,13 @@
       "stand": "2025-05-06",
       "quelle": "Landeshauptstadt Dresden, Interessenbekundungsverfahren E-Scooter vom 06.05.2025 (Nr. 2.1, 2.2, 6.4)",
       "url": "https://www.dresden.de/media/pdf/Strassenbau/Sharing_2025-05-06_Interessenbekundung_E-Scooter.pdf",
-      "hinweis": "Bis zu drei Erlaubnisse für drei Jahre, Auswahl bis 30.06.2025. Die Gebietswerte (250/290) passen zu 30 %/35 % von 833, gelten also vermutlich je Anbieter (Lesart, nicht ausdrücklich so genannt). Gebietsgrenzen in einer nicht gelesenen Anlage. Ausgewählte Anbieter nicht geprüft.",
+      "hinweis": "Bis zu drei Erlaubnisse für drei Jahre, Auswahl bis 30.06.2025. Die Gebietswerte (250/290) passen zu 30 %/35 % von 833, gelten also vermutlich je Anbieter (Lesart, nicht ausdrücklich so genannt). Die Anteile (Nr. 6.4: Gebiet 1 max. 30 %, 2 max. 35 %, 3 mind. 25 %, 4 mind. 10 % der Gesamtflotte) werden je Anbieter gegen seinen Bestand in Dresden geprüft. Gebietsgrenzen: Anlage „Betriebsgebiete“ der Interessenbekundung nicht veröffentlicht; Umrisse aus der Karte „Anlage 1: Betriebsgebiete“ der Kooperationsvereinbarung (dresden.de, Gebiet 1 Innenstadt, 2 Kernstadt, 3 erweiterte Kernstadt, übriges Stadtgebiet) – dass die Anlage 2025 gleich ist, ist eine Annahme. Ausgewählte Anbieter nicht geprüft.",
+      "quelle2": "Landeshauptstadt Dresden, Kooperationsvereinbarung E-Scooter-Sharing, Anlage 1: Betriebsgebiete (Karte)",
+      "url2": "https://www.dresden.de/media/pdf/stadtplanung/verkehr/E-Scooter_Betriebsgebiete.pdf",
       "jeAnbieterAbgeleitet": true,
       "statusText": "833 je Anbieter gerechnet (2.500 ÷ 3 Erlaubnisse)",
-      "status": "amtlich"
+      "status": "amtlich",
+      "zonenHinweis": "Teilgebiete werden gegen vermutete Abgrenzungen geprüft (data/zonen-vermutet.json, aus der Karte der Betriebsgebiete abgezeichnet, nicht amtlich); Gebiet 4 = übriges Stadtgebiet."
     },
     {
       "ags": "14612000",
@@ -616,7 +641,8 @@
         {
           "name": "Bremen-Nord",
           "gesamt": 700,
-          "jeAnbieter": 350
+          "jeAnbieter": 350,
+          "beobachtung": "bremen-nord"
         }
       ],
       "anbieterZahl": 2,
@@ -626,8 +652,9 @@
       "quelle": "Senat der Freien Hansestadt Bremen, Vorlage „Anpassung Sondernutzungskonzept“ zur Sitzung 15.10.2024",
       "url": "https://www.rathaus.bremen.de/sixcms/media.php/13/top%2012_20241015_Anpassung_Sondernutzungskonzept_nach_Landesstrassengesetz.pdf",
       "gesamtAbgeleitet": true,
-      "hinweis": "Gesamt 2.700 = Summe der Zonen (gerechnet); Muster-Erlaubnis: 1.350 je Anbieter, davon bis 500 in der Kernstadtzone, Laufzeit drei Jahre ab 01.05.2025. Anbieter im Dokument nicht genannt.",
-      "status": "amtlich"
+      "hinweis": "Gesamt 2.700 = Summe der Zonen (gerechnet); Muster-Erlaubnis: 1.350 je Anbieter, davon bis 500 in der Kernstadtzone, Laufzeit drei Jahre ab 01.05.2025. Anbieter im Dokument nicht genannt. Kernstadtzone und erweitertes Gebiet sind im Dokument nicht abgegrenzt (keine Karte, „in vorab mit dem Ordnungsamt abgestimmten Zonen“) und bleiben nicht prüfbar; Bremen-Nord = Stadtbezirk Nord (vermutet).",
+      "status": "amtlich",
+      "zonenHinweis": "Bremen-Nord wird gegen eine vermutete Abgrenzung geprüft (data/zonen-vermutet.json: Stadtbezirk Bremen-Nord aus OpenStreetMap, nicht amtlich)."
     },
     {
       "ags": "05113000",
@@ -659,7 +686,8 @@
       "zonen": [
         {
           "name": "Innenstadtbezirke und PHOENIX See",
-          "jeAnbieter": 300
+          "jeAnbieter": 300,
+          "beobachtung": "dortmund-innenstadtbezirke-und-phoenix-see"
         },
         {
           "name": "Außenbezirke",
@@ -672,8 +700,9 @@
       "stand": "2022-03-01",
       "quelle": "Stadt Dortmund, Drucksache Nr. 23331-22 vom 01.03.2022",
       "url": "https://rathaus.dortmund.de/dosys/gremrech.nsf/0/343D9EF333B05EFEC12587F9004F0534/$FILE/VorlageVG%2323331-22.doc.pdf",
-      "hinweis": "Damals ca. 3.500 E-Roller insgesamt (Bestand, keine Grenze). Ratsbeschluss für 31.03.2022 vorgesehen; aktueller Stand nicht geprüft (dortmund.de sperrt WebFetch).",
-      "status": "amtlich"
+      "hinweis": "Damals ca. 3.500 E-Roller insgesamt (Bestand, keine Grenze). Ratsbeschluss für 31.03.2022 vorgesehen; aktueller Stand nicht geprüft (dortmund.de sperrt WebFetch). Gebiet laut Drucksache: „in den dicht bebauten Bereichen der Innenstadtbezirke sowie am PHOENIX See“ (300 je Verleihfirma zusammen), ohne Karte im Text.",
+      "status": "amtlich",
+      "zonenHinweis": "Teilgebiet wird gegen eine vermutete Abgrenzung geprüft (data/zonen-vermutet.json: Stadtbezirke Innenstadt-West, -Nord, -Ost und 250 m um den PHOENIX See aus OpenStreetMap, nicht amtlich; die „dicht bebauten Bereiche“ sind kleiner)."
     },
     {
       "ags": "05314000",
@@ -747,11 +776,13 @@
       "zonen": [
         {
           "name": "Kerngebiet 1 (innenstadtnah)",
-          "jeAnbieter": 300
+          "jeAnbieter": 300,
+          "beobachtung": "karlsruhe-kerngebiet-1"
         },
         {
           "name": "Kerngebiet 2 (Durlach)",
-          "jeAnbieter": 100
+          "jeAnbieter": 100,
+          "beobachtung": "karlsruhe-kerngebiet-2-durlach"
         }
       ],
       "anbieterZahl": 3,
@@ -760,8 +791,12 @@
       "stand": "2024-10-22",
       "quelle": "Stadt Karlsruhe, Informationsvorlage 2024/0969 (Gemeinderat 22.10.2024)",
       "url": "https://web1.karlsruhe.de/ris/oparl/bodies/0001/downloadfiles/a/00660540.pdf",
-      "hinweis": "Max. 5 Fahrzeuge je Abstellort; insgesamt ca. 3.900 Fahrzeuge verteilt (Bestand, keine Grenze). Vertrag bis 31.10.2024, Verlängerung um mind. ein Jahr geplant; neuerer Stand nicht geprüft.",
-      "status": "amtlich"
+      "hinweis": "Max. 5 Fahrzeuge je Abstellort; insgesamt ca. 3.900 Fahrzeuge verteilt (Bestand, keine Grenze). Vereinbarung (Anlage): „Die maximale Anzahl der Fahrzeuge bezieht sich nur auf die Kernzonen.“ Eine Gesamtzahl je Anbieter (z. B. 665) steht in keiner gelesenen amtlichen Quelle (Vorlagen 2023/1022, 2024/0969 mit Anlagen, Niederschrift 22.10.2024; Suche 02.11.2026) – nicht eingetragen. Vertrag bis 31.10.2024; die Vereinbarung in der Anlage gilt bis 31.10.2025; neuerer Stand nicht geprüft.",
+      "quelle2": "Stadt Karlsruhe, Anlage zur Vorlage 2024/0969: Vereinbarung E-Tretroller (Kerngebiete, Hinweise)",
+      "url2": "https://web1.karlsruhe.de/ris/oparl/bodies/0001/downloadfiles/a/00660541.pdf",
+      "url3": "https://web1.karlsruhe.de/ris/oparl/bodies/0001/downloadfiles/a/00660542.pdf",
+      "status": "amtlich",
+      "zonenHinweis": "Teilgebiete werden gegen vermutete Abgrenzungen geprüft (data/zonen-vermutet.json, aus dem Übersichtsplan der Stadt abgezeichnet, nicht amtlich)."
     },
     {
       "ags": "08311000",
@@ -897,18 +932,21 @@
       "zonen": [
         {
           "name": "Innenstadt",
-          "gesamt": 300
+          "gesamt": 300,
+          "beobachtung": "mainz-innenstadt"
         }
       ],
       "anbieterZahl": null,
       "anbieter": [],
       "seit": null,
-      "stand": null,
-      "quelle": "Stadt Mainz, Sondernutzungskonzept für E-Tretroller-Vermietsysteme",
-      "url": "https://www.mainz.de/newsdesk/publications/Mainz/181010100000354890.php.media/354891/Sondernutzungskonzept-E-Tretroller.pdf",
-      "hinweis": "Bei mehreren Anbietern gleichmäßig aufgeteilt; Erlaubnis 24 Monate. Dokument ohne Datum (Stand vermutlich 2019/2020); aktuelle Richtlinie (https://www.mainz.de/verzeichnisse/ortsrecht/sondernutzung-e-tretroller-vermietsystem-richtline.php.media/993285/richtlinie-sondernutzung-e-tretroller-vermietsysteme.pdf) nicht gelesen.",
-      "status": "ungeprüft",
-      "statusText": "Sondernutzungskonzept ohne Datum"
+      "stand": "2025-06-25",
+      "quelle": "Stadt Mainz, Richtlinie Sondernutzung E-Tretroller-Vermietsysteme (Stadtrat 25.06.2025)",
+      "url": "https://www.mainz.de/verzeichnisse/ortsrecht/sondernutzung-e-tretroller-vermietsystem-richtline.php.media/993285/richtlinie-sondernutzung-e-tretroller-vermietsysteme.pdf",
+      "hinweis": "Nr. 5.1: „höchstens 1.200 E-Tretroller“; Nr. 5.2: höchstens vier Betreiber gleichzeitig; Nr. 5.5: gleichmäßig auf alle Erlaubnisinhaber aufgeteilt (Zahl je Anbieter hängt von der Zahl der Erlaubnisse ab, nicht genannt). Nr. 6.1/6.2: Innenstadt „umfasst im Wesentlichen die Stadtteile Altstadt und Neustadt“ (Umgrenzung in Anlage 1), auf deren Abstellflächen insgesamt höchstens 300. Erlaubnis 24 Monate. Älteres Sondernutzungskonzept (ohne Datum) als zweite Quelle.",
+      "quelle2": "Stadt Mainz, Sondernutzungskonzept für E-Tretroller-Vermietsysteme (ohne Datum)",
+      "url2": "https://www.mainz.de/newsdesk/publications/Mainz/181010100000354890.php.media/354891/Sondernutzungskonzept-E-Tretroller.pdf",
+      "zonenHinweis": "Teilgebiet wird gegen eine vermutete Abgrenzung geprüft (data/zonen-vermutet.json: Stadtteile Altstadt und Neustadt aus OpenStreetMap, nicht amtlich).",
+      "status": "amtlich"
     },
     {
       "ags": "05334002",
@@ -930,9 +968,11 @@
       "stand": "2025-08-14",
       "quelle": "Stadt Aachen, Vorlage FB 68/0250/WP18 (25.07.2025, Fassung 14.08.2025)",
       "url": "https://ratsinfo.aachen.de/public/wicket/resource/org.apache.wicket.Application/doc1428743.pdf",
-      "hinweis": "„zunächst eine gesamtstädtische Obergrenze von 2.250 E-Tretrollern vorgeschlagen“; Entscheidung Mobilitätsausschuss 04.09.2025 – Beschluss nicht geprüft.",
+      "hinweis": "„zunächst eine gesamtstädtische Obergrenze von 2.250 E-Tretrollern vorgeschlagen“; laut Niederschrift MA/61/WP18 (Mobilitätsausschuss 04.09.2025, Fassung 07.10.2025) „ungeändert beschlossen“ (Sharing-Leitlinien). Zonen „orientiert an der Sondernutzungssatzung“ (Karte Anlage 1, Kontingente Anlage 3): Ratsinfo liefert die Anlagen nicht ohne Sitzungsansicht, Werte und Abgrenzung daher nicht gelesen – keine vermutete Abgrenzung. Frühere Leitlinien: Zone 1 (Innenstadt) 300 bzw. 100 je Anbieter, 2: 900/300, 3: 600/200, 4 (Außenbezirke) 450/150 – mit der Vorlage geändert.",
+      "url2": "https://ratsinfo.aachen.de/public/wicket/resource/org.apache.wicket.Application/doc1422164.pdf",
+      "quelle2": "Stadt Aachen, Niederschrift Mobilitätsausschuss 04.09.2025",
       "status": "geplant",
-      "statusText": "Vorschlag der Verwaltung"
+      "statusText": "Leitlinien beschlossen 04.09.2025; Zonenwerte (Anlage 3) nicht gelesen"
     }
   ],
   "gebuehren": [
