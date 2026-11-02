@@ -1,16 +1,16 @@
-import * as C from './pulse-core.js?v=mvyywh5o';
-import * as Ops from './ops.js?v=mvyywh5o';
-import * as E from './pulse-econ.js?v=mvyywh5o';
-import * as K from './pulse-calib.js?v=mvyywh5o';
-import * as Rp from './report.js?v=mvyywh5o';
-import * as R from './pulse-report.js?v=mvyywh5o';
-import * as Fl from './flows.js?v=mvyywh5o';
-import * as Cov from './coverage.js?v=mvyywh5o';
-import * as Cmp from './compare.js?v=mvyywh5o';
-import * as Sp from './spots.js?v=mvyywh5o';
-import { mapKeys } from './mapkeys.js?v=mvyywh5o';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mvyywh5o';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvyywh5o';
+import * as C from './pulse-core.js?v=mvz5nwfe';
+import * as Ops from './ops.js?v=mvz5nwfe';
+import * as E from './pulse-econ.js?v=mvz5nwfe';
+import * as K from './pulse-calib.js?v=mvz5nwfe';
+import * as Rp from './report.js?v=mvz5nwfe';
+import * as R from './pulse-report.js?v=mvz5nwfe';
+import * as Fl from './flows.js?v=mvz5nwfe';
+import * as Cov from './coverage.js?v=mvz5nwfe';
+import * as Cmp from './compare.js?v=mvz5nwfe';
+import * as Sp from './spots.js?v=mvz5nwfe';
+import { mapKeys } from './mapkeys.js?v=mvz5nwfe';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mvz5nwfe';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvz5nwfe';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -194,9 +194,10 @@ const clearNotice = (id) => $(`#notice [data-id="${id}"]`)?.remove();
 const latestUrl = (status) => (status?.at ? `${CFG.DATA}latest.json?t=${encodeURIComponent(status.at)}` : fresh('latest.json'));
 async function loadBase() {
   const pSrc = cached('sources.json', 25000), pHist = cached('history/index.json', 25000);
+  const pCal = cached('calendar.json', 25000).then(r => { state.calendar = r.json?.version === 1 ? r.json : null; }); // Tagtyp-Kalender (Sammler, OpenHolidays); fehlt er: lokale Feiertagsrechnung
   const status = await getJson(fresh('status.json'));
   const [latest, sources, hist] = await Promise.all([getJson(latestUrl(status.json)), pSrc, pHist]);
-  state.status = status.json; state.latest = latest.json; state.histIndex = hist.json;
+  state.status = status.json; state.latest = latest.json; state.histIndex = hist.json; await pCal;
   if (!latest.ok) FAILED.set('latest.json', latest.status || latest.error); // für die Leerzeilen der Tabellen
   state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
   const standTxt = state.status?.at ? new Date(state.status.at).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }) : '';
@@ -257,13 +258,14 @@ let dailyReq = null;
 const loadDaily = () => dailyReq ??= cached('history/daily.json', 60000).then(r => r.ok && r.json?.days && r.json?.series ? r.json : null);
 // Reihen je „Gemeinde|Anbieter“ einmal je Datei indizieren (daily.json, history/<Tag>.json; Schlüssel Gemeinde|Anbieter|Art): Signale fragen je Paar
 // nach, und ein Durchlauf über alle Reihen je Paar war quadratisch (Deutschland: 723 Paare × 1.400 Reihen)
-const SER_IX = new WeakMap();
+const SER_IX = new WeakMap(), SER_KEY = new WeakMap(); // SER_KEY: Reihe → Schlüssel Gemeinde|Anbieter|Art (Bruchmarken)
 function seriesOf(doc, ags, op) {
   let m = SER_IX.get(doc);
-  if (!m) { m = new Map(); for (const [k, ser] of Object.entries(doc?.series || {})) { const j = k.indexOf('|', k.indexOf('|') + 1); const key = j < 0 ? k : k.slice(0, j); (m.get(key) || m.set(key, []).get(key)).push(ser); } SER_IX.set(doc, m); }
+  if (!m) { m = new Map(); for (const [k, ser] of Object.entries(doc?.series || {})) { const j = k.indexOf('|', k.indexOf('|') + 1); const key = j < 0 ? k : k.slice(0, j); (m.get(key) || m.set(key, []).get(key)).push(ser); if (ser && typeof ser === 'object') SER_KEY.set(ser, k); } SER_IX.set(doc, m); }
   return m.get(`${ags}|${op}`) || [];
 }
-// Mittel je Gemeinde|Anbieter über die vorigen Tage (ohne den gezeigten Tag): Anteil gesperrt und Anteil Energie niedrig am Bestand
+// Mittel je Gemeinde|Anbieter über die vorigen Tage (ohne den gezeigten Tag): Anteil gesperrt und Anteil Energie niedrig am Bestand.
+// Bruchmarke (daily.json → breaks, Zählregel geändert): Tage vor dem Bruch zählen für diese Reihe nicht im Mittel.
 function dailyBaseline(daily, ags, op, excludeDay) {
   if (!daily) return null;
   const fi = Object.fromEntries((daily.fields || []).map((f, i) => [f, i]));
@@ -272,7 +274,8 @@ function dailyBaseline(daily, ags, op, excludeDay) {
   if (!days.length) return null;
   let total = 0, disabled = 0, low = 0, stations = 0, emptyDock = 0, n = 0;
   for (const ser of seriesOf(daily, ags, op)) {
-    for (const d of days) { const v = ser[d]; if (!v) continue; n++; total += v[fi.total] || 0; disabled += v[fi.disabled] || 0; low += v[fi.lowBattery] || 0; if (fi.stations != null) { stations += v[fi.stations] || 0; emptyDock += v[fi.stationsEmptyDock ?? fi.stationsEmpty] || 0; } }
+    const bd = daily.breaks?.[SER_KEY.get(ser)] || '';
+    for (const d of days) { const v = ser[d]; if (!v || d < bd) continue; n++; total += v[fi.total] || 0; disabled += v[fi.disabled] || 0; low += v[fi.lowBattery] || 0; if (fi.stations != null) { stations += v[fi.stations] || 0; emptyDock += v[fi.stationsEmptyDock ?? fi.stationsEmpty] || 0; } }
   }
   if (!n || !total) return null;
   return { days: days.length, disabled: disabled / total, low: low / total, emptyDock: stations ? emptyDock / stations : null };
@@ -585,7 +588,8 @@ function placeSeg() {
   seg.classList.add('ready');
 }
 // Gebiet, Anbieter, Fahrzeugart (und Kundenansicht) in der URL halten: ?scope=…&op=…&type=…#ansicht
-function syncUrl() {
+// push: neuer Verlaufseintrag (Wechsel von Gebiet, Anbieter, Art – „Zurück“ macht ihn rückgängig); sonst wird der aktuelle Eintrag ersetzt
+function syncUrl(push = false) {
   if (!urlReady) return;
   const q = new URLSearchParams(location.search);
   const inOps = currentView === 'ops';
@@ -595,15 +599,17 @@ function syncUrl() {
   put('scope', state.scope); put('op', op); put('type', ty); put('kunde', isClient() ? '1' : null); put('lang', lang() === 'de' ? null : lang());
   if (!CFG.DATA_OK) q.delete('data'); // abgelehntes ?data= nicht weitergeben
   const s = q.toString().replace(/%2F/g, '/');
-  try { history.replaceState(history.state, '', `${location.pathname}${s ? `?${s}` : ''}#${currentView}`); } catch { /* file:// o. Ä. */ }
+  const url = `${location.pathname}${s ? `?${s}` : ''}#${currentView}`;
+  try { if (push && url !== `${location.pathname}${location.search}${location.hash}`) history.pushState(null, '', url); else history.replaceState(history.state, '', url); } catch { /* file:// o. Ä. */ }
 }
-function applyUrlParams() {
+// Deep-Link (q = Start-URL) bzw. Zurück/Vorwärts (back: fehlende Parameter heißen Standard – Deutschland, alle Anbieter, alle Arten)
+function applyUrlParams(q = QS, back = false) {
   const has = (sel, v) => v != null && [...$(sel).options].some(o => o.value === v);
-  const sc = QS.get('scope');
+  const sc = q.get('scope') ?? (back ? 'DE' : null);
   if (has('#sel-scope', sc)) { state.scope = sc; $('#sel-scope').value = sc; }
-  else if (sc && sc !== 'DE' && state.latest) notice(() => t('app.areaFromLinkIsNotInCurrent', { sc: esc(sc) }), 'warn', 'scope'); // ohne Datenstand ist der Schlüssel nicht prüfbar (Meldung dazu: nolatest)
+  else if (!back && sc && sc !== 'DE' && state.latest) notice(() => t('app.areaFromLinkIsNotInCurrent', { sc: esc(sc) }), 'warn', 'scope'); // ohne Datenstand ist der Schlüssel nicht prüfbar (Meldung dazu: nolatest)
   populateOperators();
-  const op = QS.get('op'), ty = QS.get('type');
+  const op = q.get('op') ?? (back ? 'all' : null), ty = q.get('type') ?? (back ? 'all' : null);
   if (resolveView(location.hash.slice(1)) === 'ops') applyOpsParams({ op, type: ty });
   else {
     if (has('#sel-operator', op)) { state.operator = op; $('#sel-operator').value = op; }
@@ -835,8 +841,8 @@ function livePoints() {
 state.fleet = new Map();
 function decodeFleetDoc(doc) {
   const at = doc?.at ?? null, pos = Date.now() - (at || Date.now());
-  // Felder 10–12 wie lib/pulse-ops.js decodeFleet: reichweiteAbgeleitet, reichweiteSchwelleKm, reichweiteKonstant (fehlend am Zeilenende = null)
-  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idle, m, rd, rl, rf]) => ({ lat, lon, operator: doc.ops?.[op], type: doc.types?.[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: bat ?? null, rangeKm: range ?? null, idleMin: idle, ags: doc.munis?.[m], positionAgeMs: pos, geoOrigin: 'vehicle', rangeDerived: rd === 1, rangeLimitKm: Number.isFinite(rl) ? rl : null, rangeFlat: rf === 1 })).filter(v => C.validLatLon(v.lat, v.lon));
+  // Felder 10–13 wie lib/pulse-ops.js decodeFleet: reichweiteAbgeleitet, reichweiteSchwelleKm, reichweiteKonstant, standzeitMindestens (fehlend am Zeilenende = null)
+  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idle, m, rd, rl, rf, ic]) => ({ lat, lon, operator: doc.ops?.[op], type: doc.types?.[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: bat ?? null, rangeKm: range ?? null, idleMin: idle, idleCensored: ic === 1, ags: doc.munis?.[m], positionAgeMs: pos, geoOrigin: 'vehicle', rangeDerived: rd === 1, rangeLimitKm: Number.isFinite(rl) ? rl : null, rangeFlat: rf === 1 })).filter(v => C.validLatLon(v.lat, v.lon));
   const stations = (doc?.stations || []).map(([lat, lon, op, name, bookable, docks, capacity, m, renting, returning, physical]) => ({ lat, lon, operator: doc.ops?.[op], name, bookable, docksAvailable: docks, capacity, ags: doc.munis?.[m], renting: !!renting, returning: !!returning, physicalAvailable: physical })).filter(s => C.validLatLon(s.lat, s.lon));
   return { at, vehicles, stations };
 }
@@ -883,7 +889,7 @@ function renderMap() {
         const v = vehicles[i]; drawn++;
         const col = v.disabled ? DISABLED_COL : opColor(v.operator), dim = state.mapFocus && state.mapFocus !== v.operator; // Legende: ein Anbieter hervorgehoben
         L.circleMarker([v.lat, v.lon], { radius: 4.5, weight: 2, color: bg, fillColor: col, fillOpacity: dim ? .12 : v.disabled ? .7 : .95, opacity: dim ? .2 : 1 })
-          .bindPopup(`<b>${esc(v.operator)}</b> · ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? ` · ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? ` · ${t('app.idleFor', { v0: durText(v.idleMin * 60e3) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : ` · ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? ` · ${t('app.idReused')}` : ''}${src === coll ? ` · ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
+          .bindPopup(`<b>${esc(v.operator)}</b> · ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? ` · ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? ` · ${t(v.idleCensored ? 'trk.idleForAtLeast' : 'app.idleFor', { v0: durText(v.idleMin * 60e3) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : ` · ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? ` · ${t('app.idReused')}` : ''}${src === coll ? ` · ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
       }
       if ($('#chk-stations').checked) for (const s of stations) {
         // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt. Leer = gestrichelter Rand ohne Füllung (Form statt
@@ -895,7 +901,7 @@ function renderMap() {
       // Anbieterfarben stehen einmal, nach Bestand sortiert, in #map-legend-ops (renderOpLegend); hier nur Zustände und Formen
       legend.push(`<span><i class="dot" style="background:${DISABLED_COL}"></i>${t('app.disabled3')}</span>`, `<span><i class="sq"></i>${t('app.station')}</span>`, `<span><i class="sq" style="border-style:dashed;background:transparent"></i>${t('app.stationEmptyNoVehicleM', { v0: C.STATION_NEAR_M ?? 50 })}</span>`, `<span class="muted">${t('app.vehiclesDrawn', { drawn: fmt(drawn), length: fmt(vehicles.length), v2: step > 1 ? ` ${t('app.thinnedOut')}` : '' })}</span>`);
     } else {
-      // Rasterzellen ca. 500 m
+      // grobes Raster 0,0045° × 0,007° ≈ 500 × 500 m (Text: i18n FIXED.CELL500)
       const cells = new Map();
       // Energie niedrig wie überall (energyLow): Grenzen des Live-Abrufs bzw. des Sammlers, je nachdem woher die Positionen stammen
       const lim = src === coll ? { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM } : { charge: state.thresholds.charge, range: state.thresholds.range };
@@ -907,7 +913,7 @@ function renderMap() {
         L.rectangle([[c.lat - .00225, c.lon - .0035], [c.lat + .00225, c.lon + .0035]], { weight: 0, fillColor: layerMode === 'energy' ? tok('--warn') : tok('--accent'), fillOpacity: a })
           .bindPopup(layerMode === 'energy' ? t('app.vehiclesWithLowEnergyCharge', { low: fmt(c.low), charge: fmt(lim.charge), range: fmt(lim.range), known: fmt(c.known) }) : t('app.availableVehiclesInThisCell', { n: fmt(c.n) })).addTo(L_.grid);
       }
-      legend.push(`<span>${t('app.perDarkerMoreMax', { v0: layerMode === 'energy' ? t('app.lowEnergyChargeAndRangeKm', { charge: fmt(lim.charge), range: fmt(lim.range) }) : t('app.availableVehicles'), v1: cl('~500-m-Zelle', t('app.areaOfAbout500500M')), max: fmt(max) })}</span>`);
+      legend.push(`<span>${t('app.perDarkerMoreMax', { v0: layerMode === 'energy' ? t('app.lowEnergyChargeAndRangeKm', { charge: fmt(lim.charge), range: fmt(lim.range) }) : t('app.availableVehicles'), v1: cl(t('app.cellCoarse'), t('app.areaOfAbout500500M')), max: fmt(max) })}</span>`);
     }
     if (src === coll) legend.push(`<span class="muted">${cl(t('app.collectorSnapshotFetchLive', { v0: timeText(coll.at) }), t('app.asOf3', { v0: timeText(coll.at) }))}</span>`);
   } else {
@@ -1263,6 +1269,12 @@ function computeSignalsNow() {
       if (n && prev >= 20 && Math.abs(cur - prev) / prev >= 0.3) out.push({ cat: 'jump', sev: 'warn', w: Math.abs(cur - prev), n: `${cur > prev ? '+' : ''}${fmt(cur - prev)}`, short: t('app.sigShortJump', { op, ags: place(ags) }), title: t('app.fleetWithinHour', { op, ags: place(ags), v2: cur > prev ? '+' : '', v3: fmt(cur - prev) }), text: t('app.availableOverLastThree', { prev: fmt(prev), cur: fmt(cur) }), foot: t('app.collectorHistory') });
     }
   }
+  // Ampel der Ereignisregeln je Gruppe (latest.json → eventChecks, letzter vollständiger Tag): gelb und rot als Datenhinweis
+  for (const [k, v] of Object.entries(state.latest?.eventChecks?.groups || {})) {
+    if (v?.level !== 'warn' && v?.level !== 'bad' || !groupInScope(k)) continue; const [ags, op, ty] = k.split('|');
+    out.push({ cat: 'data', sev: v.level, w: v.checks?.rides || 1, n: null, icon: true, short: t('mb.sigShort', { op, ags: place(ags) }), title: t('mb.sigTitle', { op, ty: TYPE[ty] || ty, ags: place(ags), lv: v.level === 'bad' ? t('mb.red') : t('mb.yellow') }),
+      text: `${Rp.mbChecksText(v.checks)}. ${v.level === 'bad' ? t('mb.sigRed') : t('mb.sigYellow')}`, foot: t('mb.sigFoot', { day: state.latest.eventChecks.day || '–' }) });
+  }
   out.push(...groupSignals());
   const sevW = { bad: 3, warn: 2, info: 1 };
   return out.sort((a, b) => sevW[b.sev] - sevW[a.sev] || b.w - a.w);
@@ -1486,15 +1498,26 @@ const groupInScope = (k) => { const [ags, op, ty] = k.split('|'); if (ags === 'D
 const sum = (a) => a.reduce((x, y) => x + y, 0);
 const durText = (ms) => ms == null || !Number.isFinite(ms) ? '—' : ms < 3600e3 ? t('app.min', { v0: fmt(ms / 60e3) }) : t('app.h', { v0: fmt(ms / 3600e3, 1) });
 
+// Vorauswahl Nutzung (und Umsatz der Disposition): letzter voller Messtag (≥ R.FULL_DAY_HOURS Stunden mit ≥ R.FULL_HOUR_MIN Min. Beobachtung,
+// wie Bericht und Tagesgang-Profil), sonst der letzte abgeschlossene Tag. Der laufende Tag (Tag des jüngsten Sammler-Laufs) bleibt wählbar.
+const runningDay = (days) => { const d = days[days.length - 1]; return d && state.latest?.at && BERLIN_DAY.format(state.latest.at) === d ? d : null; };
+const partialHour = () => String(hourOf(state.latest.at)).padStart(2, '0'); // Ereignisse des laufenden Tages reichen bis zum Beginn dieser Stunde
+async function defaultUsageDay(days) {
+  const run = runningDay(days), cand = days.slice(-7).filter(d => d !== run).reverse();
+  for (const d of cand) { const doc = await loadEvents(d); if (doc && R.hourQuality(doc.runs, doc.gapHours).full) return d; }
+  return cand[0] || days[days.length - 1];
+}
 async function renderUsage() {
   const idx = await loadUsageIndex();
   const days = idx.days || [];
   const box = $('#usage-tiles');
   renderArchive().catch(() => {});
   if (!days.length) { renderIdle(days).catch(() => {}); renderQuota().catch(() => {}); box.innerHTML = ''; $('#usage-note').textContent = t('app.noEventDataYetCollectorNeeds'); $('#chart-usage').innerHTML = `<div class="empty">${t('app.noMovementsMeasuredYetThey')}</div>`; $('#tbl-usage tbody').innerHTML = `<tr><td colspan="6" class="empty">${t('app.noDataYetMovementsAppear')}</td></tr>`; $('#tbl-usage-more tbody').innerHTML = `<tr><td colspan="7" class="empty">${t('app.noDataYet2')}</td></tr>`; return; }
-  const day = state.usage.day && days.includes(state.usage.day) ? state.usage.day : days[days.length - 1];
+  const day = state.usage.day && days.includes(state.usage.day) ? state.usage.day : await defaultUsageDay(days);
   state.usage.day = day;
-  setChips($('#usage-days'), 'data-uday', days.slice(-7).map(d => { const note = dayNote(d); return `<button class="chip ${d === day ? 'on' : ''}${note ? ' special' : ''}" aria-pressed="${d === day}" data-uday="${esc(d)}"${note ? ` title="${esc(note)}"` : ''}>${esc(d.slice(8))}.${esc(d.slice(5, 7))}.${note ? '<span aria-hidden="true"> ✱</span>' : ''}</button>`; }).join(''));
+  // laufender Tag: „02.11. bis 08 Uhr“ (Ereignisse nur aus abgeschlossenen Stunden)
+  const run = runningDay(days), runH = run ? partialHour() : null;
+  setChips($('#usage-days'), 'data-uday', days.slice(-7).map(d => { const note = dayNote(d), dm = `${esc(d.slice(8))}.${esc(d.slice(5, 7))}.`, tip = [d === run ? t('app.usagePartialDayTip', { h: runH }) : '', note || ''].filter(Boolean).join(' · '); return `<button class="chip ${d === day ? 'on' : ''}${note ? ' special' : ''}" aria-pressed="${d === day}" data-uday="${esc(d)}"${tip ? ` title="${esc(tip)}"` : ''}>${d === run ? t('app.usageDayUntil', { d: dm, h: runH }) : dm}${note ? '<span aria-hidden="true"> ✱</span>' : ''}</button>`; }).join(''));
   const doc = await loadEvents(day);
   // Standzeiten (idle.json) und Stationsquote (stations-quota.json) hängen nicht an der Ereignisdatei: auch ohne sie zeichnen
   renderIdle(days).catch(e => console.error('Standzeiten', e)); renderQuota().catch(e => console.error('Stationsquote', e));
@@ -1522,34 +1545,42 @@ async function renderUsage() {
   // Eine Fahrten-Definition: gemessene Fahrtbeginne im Beobachtungszeitraum (Hochrechnung und RVD stehen unter Umsatz & Kennzahlen)
   const starts = sum(tot.start), ends = sum(tot.end), reloc = sum(tot.reloc), swaps = sum(tot.swap), pickups = sum(tot.pickup);
   box.innerHTML = [
-    tile(t('app.tripsMeasured'), fmt(starts), t('app.inOfObservationTripEnds', { observedMs: durText(observedMs), ends: fmt(ends), v2: gapH ? ` · ${t('app.excludingHAfterMeasurement', { gapH })}` : '' })),
+    tile(t('app.tripsMeasured'), fmt(starts), (day === run ? `${t('app.usagePartialDay', { h: runH })} · ` : '') + t('app.inOfObservationTripEnds', { observedMs: durText(observedMs), ends: fmt(ends), v2: gapH ? ` · ${t('app.excludingHAfterMeasurement', { gapH })}` : '' })),
     tile(abbr(t('app.rebalancing'), 'reloc'), fmt(reloc), t('app.sameIdMoved150MDidNot')),
-    tile(t('app.batterySwaps'), fmt(swaps), tot.swapWaitN ? t('app.avgBelow20UntilSwap', { v0: durText(tot.swapWaitSum / tot.swapWaitN) }) : t('app.jumpFrom40To85AtSameSpot')),
+    tile(t('app.batterySwaps'), fmt(swaps), tot.swapWaitN ? t('app.avgBelow20UntilSwap', { v0: atLeast(tot.swapWaitCens, durText(tot.swapWaitSum / tot.swapWaitN)) }) + (tot.swapWaitCens ? ` · ${t('trk.censoredOf', { n: fmt(tot.swapWaitCens), of: fmt(tot.swapWaitN) })}` : '') : t('app.jumpFrom40To85AtSameSpot')),
     tile(abbr(t('app.pickups'), 'pickup'), fmt(pickups), t('app.disabledOrNearlyEmpty2')),
-    tile(t('app.disabledDuration'), tot.disDurN ? durText(tot.disDurSum / tot.disDurN) : '—', t('app.vehiclesReleasedAgain', { sum: fmt(sum(tot.disOff)) })),
+    tile(t('app.disabledDuration'), tot.disDurN ? atLeast(tot.disDurCens, durText(tot.disDurSum / tot.disDurN)) : '—', t('app.vehiclesReleasedAgain', { sum: fmt(sum(tot.disOff)) }) + (tot.disDurCens ? ` · ${t('trk.censoredOf', { n: fmt(tot.disDurCens), of: fmt(tot.disDurN) })}` : '')),
   ].join('');
   // Tagesgang: eigene Filter im Panel (Vorgabe aus den globalen Filtern); Änderung zeichnet nur das Diagramm neu
   let weather = null;
   if ($('#chk-weather').checked) weather = await loadWeather(day);
   state.usage.chartData = { doc, weather, runs, mask };
-  usageChartOptions(doc); renderUsageChart();
+  usageChartOptions(doc); renderUsageChart(); renderMbMatrix();
   // Tabelle je Anbieter: sechs Standardspalten, der Rest unter „Weitere Spalten“
   const list = [...byOp].sort((a, b) => sum(b[1].start) - sum(a[1].start));
   const opCell = (name) => `<td><span class="op"><i style="background:${opColor(name)}"></i>${esc(name)}</span></td>`;
   $('#tbl-usage tbody').innerHTML = list.map(([name, a]) => `<tr>${opCell(name)}<td class="n">${fmt(sum(a.start))}</td><td class="n">${fmt(sum(a.end))}</td><td class="n">${fmt(sum(a.reloc))}</td><td class="n">${fmt(sum(a.swap))}</td><td class="n">${fmt(sum(a.pickup))}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">${t('app.noEventsInFilterSetOperator')}</td></tr>`;
   $('#tbl-usage-more tbody').innerHTML = list.map(([name, a]) => { const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mk = modes.includes('stable') ? 'stable' : modes.includes('rotating') ? 'rotating' : 'open', mode = { stable: t('app.stableIds'), rotating: t('app.rotatingIds'), open: t('app.open') }[mk];
-    return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mk === 'stable' ? t('app.durationDistanceMeasurable') : mk === 'rotating' ? t('app.startDestinationCountsOnly') : t('app.tooFewRunsYet')}</div></td></tr>`; }).join('') || `<tr><td colspan="7" class="empty">${t('app.noEventsInFilter')}</td></tr>`;
+    return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? atLeast(a.swapWaitCens, durText(a.swapWaitSum / a.swapWaitN)) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? atLeast(a.disDurCens, durText(a.disDurSum / a.disDurN)) : '—'}</td><td class="small">${mode}<div class="sub-line">${mk === 'stable' ? t('app.durationDistanceMeasurable') : mk === 'rotating' ? t('app.startDestinationCountsOnly') : t('app.tooFewRunsYet')}</div></td></tr>`; }).join('') || `<tr><td colspan="7" class="empty">${t('app.noEventsInFilter')}</td></tr>`;
   renderCellsTable(day); if (!isClient()) renderEcon(day, doc).catch(e => console.error('Umsatz', e)); // Kalibrierung steht nur unter Datenvertrauen › Quellen
 }
 // Standzeiten der verfügbaren Fahrzeuge (idle.json, Sammler-Stand), unabhängig vom gewählten Tag
 async function renderIdle(days) {
   const idle = await loadOnce('idle', 'idle.json');
   if (!idle) { $('#idle-bars').innerHTML = `<div class="empty">${esc(failedText('idle.json'))}</div>`; return; }
-  const ib = [0, 0, 0, 0, 0]; let in_ = 0;
-  for (const [k, a] of Object.entries(idle.groups || {})) { if (!groupInScope(k)) continue; for (let i = 0; i < 5; i++) ib[i] += a[i]; in_ += a[5]; }
-  const labels = (idle.buckets || ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage']).map(tx); // Beschriftungen aus idle.json (Sammler, deutsch)
-  const imax = Math.max(1, ...ib);
-  $('#idle-bars').innerHTML = in_ ? labels.map((l, i) => `<div class="hbar"><span>${esc(l)}</span><div class="bar"><i style="width:${(ib[i] / imax) * 100}%;background:${i >= 3 ? 'var(--warn)' : 'var(--accent)'}"></i></div><span class="n mono">${pctf(ib[i], in_)}</span></div>`).join('') + `<div class="muted small" style="margin-top:6px">${t('app.availableVehiclesAsOfTime', { in_: fmt(in_), v1: timeText(idle.at), join: esc((days[0] || '').split('-').reverse().join('.')) })}</div>` : `<div class="empty">${t('app.noIdleTimesInFilterSet')}</div>`;
+  // Klassen aus idle.json (ab 02.11.2026 sechs mit „> 72 h“, die Summe steht dahinter); censored = davon Mindestwerte (seit Beginn der Verfolgung unbewegt, Z6)
+  const labels0 = idle.buckets || ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'], nb = labels0.length;
+  const ib = new Array(nb).fill(0), ic = new Array(nb).fill(0); let in_ = 0;
+  for (const [k, a] of Object.entries(idle.groups || {})) { if (!groupInScope(k)) continue; for (let i = 0; i < nb; i++) ib[i] += a[i] || 0; in_ += a[nb] || 0; const c = idle.censored?.[k]; if (c) for (let i = 0; i < nb; i++) ic[i] += c[i] || 0; }
+  const labels = labels0.map(l => l === '2–3 Tage' ? t('trk.idle23d') : l === '> 72 h' ? t('trk.idle72h') : tx(l)); // Beschriftungen aus idle.json (Sammler, deutsch)
+  const imax = Math.max(1, ...ib), cn = ic.reduce((a, b) => a + b, 0);
+  // Anteil der Mindestwerte hell am Ende des Balkens
+  const bg = (i) => { const col = i >= 3 ? 'var(--warn)' : 'var(--accent)', cs = ib[i] ? ic[i] / ib[i] : 0, p = ((1 - cs) * 100).toFixed(1); return cs ? `linear-gradient(90deg,${col} ${p}%,color-mix(in srgb,${col} 35%,transparent) ${p}%)` : col; };
+  const dt2 = (ms) => dateTimeText(ms, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), ts = idle.trackStart;
+  // Quellen ohne Standzeit (Z5) im Gebiet und für den Anbieter der Auswahl
+  const unus = (idle.unusable || []).filter(id => { const r = (state.latest?.sources || []).find(x => x.id === id); return r && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)) && (state.operator === 'all' || r.operator === state.operator); });
+  const cnote = ts ? `<div class="muted small" style="margin-top:4px">${t('trk.idleMeasurable', { start: dt2(ts), d48: dt2(ts + 48 * 3600e3), d72: dt2(ts + 72 * 3600e3), share: pctf(cn, in_) })}</div>` : '';
+  $('#idle-bars').innerHTML = in_ ? labels.map((l, i) => `<div class="hbar"${ic[i] ? ` title="${esc(t('trk.idleClassCensored', { share: pctf(ic[i], ib[i]) }))}"` : ''}><span>${esc(l)}</span><div class="bar"><i style="width:${(ib[i] / imax) * 100}%;background:${bg(i)}"></i></div><span class="n mono">${pctf(ib[i], in_)}</span></div>`).join('') + `<div class="muted small" style="margin-top:6px">${t('app.availableVehiclesAsOfTime', { in_: fmt(in_), v1: timeText(idle.at), join: esc((days[0] || '').split('-').reverse().join('.')) })}</div>${cnote}${unus.length ? `<div class="muted small" style="margin-top:4px">${t('trk.idleUnusableNote', { n: fmt(unus.length) })}</div>` : ''}` : `<div class="empty">${t('app.noIdleTimesInFilterSet')}</div>`;
 }
 // Tagesgang-Filter: Anbieter und Arten mit Ereignissen im Gebiet am Tag; eigene Wahl bleibt, bis sich oben Gebiet, Anbieter oder Art ändern
 const inArea = (ags) => ags !== 'DE' && (state.scope === 'DE' || ags === state.scope);
@@ -1594,17 +1625,22 @@ function econOpts() {
   const m = +$('#econ-min')?.value;
   return { rideMin: Number.isFinite(m) && m > 0 ? m : null, realization: Math.min(1, Math.max(0.1, (+$('#econ-real')?.value || 85) / 100)), net: $('#econ-net') ? $('#econ-net').checked : true };
 }
-async function econProfile() {
-  if (state.usage.profile) return state.usage.profile;
-  const idx = await loadUsageIndex(); const days = (idx.days || []).slice(-8, -1); // abgeschlossene Tage
-  state.usage.profile = E.hourProfile(await Promise.all(days.map(loadEvents)));
-  return state.usage.profile;
+// Tagesgang je Tagtyp des gewählten Tags im Land des Gebiets (lib/pulse-econ.js dayType, calendar.json): geladen werden nur volle Tage
+// desselben Typs laut Messbasis (latest.json → measure, die jüngsten 7); ohne Messbasis die letzten 7 abgeschlossenen Tage wie bisher
+async function econProfile(day) {
+  const land = state.scope === 'DE' ? null : scopeState(), cal = state.calendar || null, ty = E.dayType(day, land, cal), key = `${ty}|${land}|${state.latest?.at}`;
+  const P = (econProfile.cache ??= new Map()); if (P.has(key)) return (state.usage.profile = P.get(key)); // state.usage.profile: zuletzt genutzte Kurve (Disposition)
+  const idx = await loadUsageIndex(); const all = (idx.days || []).slice(0, -1); // abgeschlossene Tage
+  const md = state.latest?.measure?.version === 1 ? state.latest.measure.days || {} : null;
+  const pick = md ? all.filter(d => md[d]?.full && E.dayType(d, land, cal) === ty).slice(-7) : all.slice(-7);
+  const prof = E.hourProfile(await Promise.all(pick.map(loadEvents)), { dayType: ty, land, calendar: cal });
+  P.set(key, prof); return (state.usage.profile = prof);
 }
 // Kennzahlen je Gruppe (Gemeinde|Anbieter|Art) eines Tages; Ergebnis je Schlüssel.
 // Je Gruppe: m = gemessen (Ø Fahrt aus der Kalibrierung: E-Scooter Berliner Quartalswerte, sonst Annahme), cal = × Faktor (pulse-calib factorFor:
 // eigene Korrektur übersteuert, sonst k für E-Scooter), lo/hi = Spanne des Faktors; die Gruppe selbst trägt die Werte des gewählten Modus.
 async function econGroups(day, keep) {
-  const [doc, pricing, hist, prof, calib] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile(), getCalib()]);
+  const [doc, pricing, hist, prof, calib] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile(day), getCalib()]);
   if (!doc) return null;
   // Fahrzeugminuten nur nutzen, wenn alle Läufe des Tages sie gezählt haben (Umstellungstag: Ø Bestand aus dem Verlauf)
   // Stunden ohne Messung oder mit Lücken-Lauf (> 45 Min. Pause, Flag 0) fallen aus Beobachtungszeit, Fahrten und Fahrzeugminuten: keine Hochrechnung aus Lücken
@@ -1625,7 +1661,7 @@ async function econGroups(day, keep) {
     // Messung über der Plausibilitätsgrenze (Überzählung): nicht kalibrieren, nicht in Summen
     const chk = K.checkMeasured(E.kpis({ g: maskG(g), obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, assume, realization: o.realization, net: o.net, hourMin: doc.hourMin || null }), ty, calib?.limits);
     const m = chk.kpi;
-    const fac = K.factorFor(ty, { manual: calibFor(op), k: calib?.k, mode: 'kal', suspended: chk.suspended });
+    const fac = K.factorFor(ty, { manual: calibFor(op), k: calib?.k, mode: 'kal', suspended: chk.suspended, kind: calib?.kinds?.[k] ?? null }); // k nur für die Kennungsart der Berliner Referenz
     // kalibrierte Fahrten je Fahrzeug und Tag höchstens bis zur Plausibilitätsgrenze der Art (lib/pulse-calib.js cappedFactor)
     const lim = { limit: calib?.limits?.[ty] ?? null };
     const cal = K.applyFactor(m, fac.f, lim);
@@ -1633,9 +1669,9 @@ async function econGroups(day, keep) {
   }
   return { out, doc, obsMin, profile: prof, gapH: mask.gap.filter(Boolean).length, calib };
 }
-// für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter Tag, Werte des gewählten Modus)
+// für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter voller Tag wie die Vorauswahl der Nutzung, Werte des gewählten Modus)
 async function econFor(ags, op, type) {
-  const idx = await loadUsageIndex(); const day = (idx.days || []).slice(-1)[0]; if (!day) return null;
+  const idx = await loadUsageIndex(); if (!idx.days?.length) return null; const day = await defaultUsageDay(idx.days);
   const r = await econGroups(day, (k) => { const [a, o, tq] = k.split('|'); return a === ags && o === op && (type === 'all' || tq === type); });
   return r ? E.combine([...r.out.values()]) : null;
 }
@@ -1644,10 +1680,22 @@ const getCalib = () => Rp.loadCalibration(rpCtx());
 const MODE_KEY = 'mp-calib-mode';
 function calibMode() { try { return localStorage.getItem(MODE_KEY) === 'mess' ? 'mess' : 'kal'; } catch { return 'kal'; } }
 function setCalibMode(m) { try { localStorage.setItem(MODE_KEY, m === 'mess' ? 'mess' : 'kal'); } catch { /* privates Fenster: Standard „kalibriert“ */ } }
-function syncCalibToggle() { const m = calibMode(); $$('#econ-mode button[data-cmode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cmode === m))); }
+// Schalter zeigt den wirksamen Zustand (B3): „kalibriert“ gedrückt nur, wenn ein Faktor tatsächlich wirkt (k angewandt oder eigene Korrektur);
+// sonst gesperrt (aria-disabled, Klick ohne Wirkung), Zustand im Knopftext („gesperrt“, „vorläufig“ …), Grund per aria-describedby (#econ-calib-state).
+function syncCalibToggle(st = null) {
+  const m = calibMode(), eff = st ? st.effective : true;
+  $$('#econ-mode button[data-cmode]').forEach(b => {
+    const kalB = b.dataset.cmode === 'kal';
+    b.setAttribute('aria-pressed', String(kalB ? m === 'kal' && eff : m === 'mess' || !eff));
+    if (!kalB || !st) return;
+    const lock = eff ? '' : st.label;
+    b.textContent = lock ? `${t('html.calibrated')} · ${lock}` : t('html.calibrated');
+    if (lock) { b.setAttribute('aria-disabled', 'true'); b.setAttribute('aria-describedby', 'econ-calib-state'); } else { b.removeAttribute('aria-disabled'); b.removeAttribute('aria-describedby'); }
+  });
+}
 async function renderEcon(day) {
   const r = await econGroups(day, groupInScope);
-  syncCalibToggle();
+  syncCalibToggle(r ? null : { effective: false, label: t('cal.btnOff') });
   if (!r) { $('#econ-tiles').innerHTML = ''; $('#econ-excl').innerHTML = ''; $('#econ-calib').innerHTML = ''; $('#econ-badge').textContent = t('app.estimate'); $('#tbl-econ tbody').innerHTML = emptyRow(6, t('app.noEventDataForThisDay'), t('app.chooseAnotherDay')); $('#tbl-econ-more tbody').innerHTML = emptyRow(7, t('app.noEventDataForThisDay'), t('app.chooseAnotherDay')); return; }
   const kal = calibMode() === 'kal', k = r.calib?.k, sc = r.calib?.assume?.scooter;
   const byName = new Map();
@@ -1660,8 +1708,15 @@ async function renderEcon(day) {
   const good = rows.filter(x => x.c.plausible);
   const T = { cm: E.combine(good.map(x => x.cm)), cc: E.combine(good.map(x => x.cc)), lo: E.combine(good.map(x => x.lo)), hi: E.combine(good.map(x => x.hi)) };
   const tot = kal ? T.cc : T.cm;
+  // Wirksamer Faktor (B3): k angewandt und für eine Zeile passend (Kennungsart) bzw. eigene Korrektur; sonst gemessen mit Zustand von k
+  const facs = rows.flatMap(x => x.list.map(y => y.fac)), anyK = facs.some(f => f.source === 'kalibriert'), anyCorr = facs.some(f => f.source === 'Korrektur');
+  const skipOps = [...new Set(rows.filter(x => x.list.some(y => y.fac.skip)).map(x => `${x.op} (${K.kindText(x.list.find(y => y.fac.skip).fac.kind, lang())})`))];
+  const kShort = !k ? t('cal.btnOff') : k.applied ? (anyK ? '' : t('cal.btnNoEffect')) : { locked: t('cal.btnLocked'), prelim: t('cal.btnPrelim') }[k.status] || t('cal.btnOff');
+  const effective = kal && (anyK || anyCorr);
+  syncCalibToggle({ effective: anyK || anyCorr, label: kShort });
+  const facTag = effective ? (anyK ? t('cal.tileK', { k: fmt(k.k, 2) }) : t('cal.tileCorr')) : t('cal.tileNoK', { v0: kal && kShort ? ` (k ${kShort})` : '' });
   const cov = Math.max(0, ...rows.map(x => x.c.coverage || 0));
-  const o = econOpts(); const euro = (v, d = 0) => v == null ? '—' : `${fmt(v, d)} €`;
+  const o = econOpts(); const euro = (v, d = 0) => v == null ? '—' : `${fmt(v, d)} €`;
   // Reifegrad: Läufe und Messbeginn am Panel; unter 3 vollen Messtagen Hochrechnungen nur als Spanne
   const idx = await loadUsageIndex(); const first = (idx.days || [])[0]; const runsN = (r.doc.runs || []).length;
   const dd = (d) => d ? dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.slice(0, 10)}T12:00:00Z`)) : '–';
@@ -1680,16 +1735,21 @@ async function renderEcon(day) {
   };
   // Tabellenzelle: Hauptwert, darunter Spanne und Vergleichswert je eine Zeile (schmale Spalten)
   const cell = (p, bold = false) => `${bold ? '<b>' : ''}${p.main}${bold ? '</b>' : ''}${(p.lines || []).map(l => `<div class="sub-line">${l}</div>`).join('')}`;
-  const tsub = (p, base) => [p.sub, base].filter(Boolean).join(' · ');
+  const tsub = (p, base) => [p.sub, base, facTag].filter(Boolean).join(' · '); // Fahrten-Kacheln nennen, ob ein Faktor drin ist (B3)
   $('#econ-tiles').classList.toggle('prelim', prelim);
-  const pR = pair(T, 'ridesDay'), pV = pair(T, 'rvd', { d: 2 }), pU = pair(T, 'utilization', { d: 1, unit: ' %', scale: 100 }), pD = pair(T, 'revDay', { unit: ' €' }), pF = pair(T, 'revPerVehicleDay', { d: 2, unit: ' €' });
+  // Einheiten mit geschütztem Leerzeichen: Spanne „a–b €“ bricht nie zwischen Zahl und Einheit
+  const pR = pair(T, 'ridesDay'), pV = pair(T, 'rvd', { d: 2 }), pU = pair(T, 'utilization', { d: 1, unit: ' %', scale: 100 }), pD = pair(T, 'revDay', { unit: ' €' }), pF = pair(T, 'revPerVehicleDay', { d: 2, unit: ' €' });
+  // „Fahrten je Tag“ mit Basis (gewählter Tag, mit Faktor oder gemessen); der Kommunal-Bericht nennt dort „Ø n Tage“
+  const run = runningDay(idx.days || []), dayLbl = `${day.slice(8)}.${day.slice(5, 7)}.`;
   $('#econ-tiles').innerHTML = tot ? [
-    tile(t('app.tripsDay'), pR.main, tsub(pR, t('app.fromMeasuredOfDailyProfile', { rides: fmt(T.cm.rides), v1: fmt(cov * 100) }))),
+    tile(t('app.tripsDay', { d: day === run ? t('app.usageDayUntil', { d: dayLbl, h: partialHour() }) : dayLbl }), pR.main, [facTag, pR.sub, t('app.fromMeasuredOfDailyProfile', { rides: fmt(T.cm.rides), v1: fmt(cov * 100) })].filter(Boolean).join(' · ')),
     tile(abbr(t('app.tripsVehDay'), 'rvd'), pV.main, tsub(pV, t('app.avgVehiclesOnStreet', { fleet: fmt(tot.fleet) }))),
     tile(abbr(t('app.utilisation'), 'util'), pU.main, tsub(pU, t('app.timeOnTripsAvgMinPerTrip', { avgMin: fmt(tot.avgMin, 1) }))),
     tile(t('app.revenueDay', { v0: o.net ? t('common.net') : t('common.gross') }), pD.main, tsub(pD, t('app.listPricesOfFeeds', { v0: abbr(t('app.realisation'), 'real'), v1: fmt(o.realization * 100) }))),
     tile(t('app.revenueVehDay'), pF.main, tsub(pF, t('app.perTrip', { v0: euro(tot.perRide, 2) }))),
   ].join('') : `<div class="empty" style="grid-column:1/-1">${t('app.noReliableRowInFilterAllRows')}</div>`;
+  // Reifegrad an den Hochrechnungen (Fahrten/Tag, je Fahrzeug, Auslastung, Umsatz): Tagtyp des gewählten Tags, Tagesgang dieses Typs
+  { const land = state.scope === 'DE' ? null : scopeState(); Rp.mbTiles($('#econ-tiles'), Rp.mbBadge(Rp.mbBase(state, { land }), 'full3', { dayType: E.dayType(day, land, state.calendar), curve: t('mb.curve', { v: `${esc(tx(r.profile.source))} (${Rp.mbTypeName(r.profile.dayType || 'W')})` }) })); }
   // Unplausible Zeilen sind aus den Summen raus – sichtbar machen
   const bad = [...rows.filter(x => !x.c.plausible), ...rows.flatMap(x => (x.dropped || []).map(d => ({ ...x, c: d.m, where: muniName(d.ags) })))]; const names = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}${x.where ? ` ${x.where}` : ''}`);
   const ex = $('#econ-excl'); ex.innerHTML = bad.length ? `${t('app.totalsWithout', { join: esc(names.slice(0, 4).join(', ')), v1: names.length > 4 ? ` ${t('app.andMore', { v0: names.length - 4 })}` : '' })} <span class="muted">${t('app.notReliable')}</span>` : '';
@@ -1701,7 +1761,7 @@ async function renderEcon(day) {
   const nameCell = (x) => { const c = x.c; const dr = x.dropped || []; return `<td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${esc(TYPE[x.ty] || x.ty)}${state.scope === 'DE' ? ` · ${x.list.length} ${x.list.length === 1 ? t('app.municipality') : t('app.municipalities2')}` : ''}</div>${!c.plausible ? `<span class="pill excl-tag">${t('app.notInTotal')}</span>` : ''}${c.flags.length ? `<div class="sub-line warn-text flag-line">${esc(flagText(c.flags[0]))}</div>` : ''}${dr.length ? `<div class="sub-line warn-text flag-line">${t('app.without', { join: esc(dr.slice(0, 3).map(d => muniName(d.ags)).join(', ')), v1: dr.length > 3 ? ` +${dr.length - 3}` : '', v2: esc(flagText(dr[0].m.flags[0]) || t('app.implausible')) })}</div>` : ''}</td>`; };
   $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.cm;
     return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
-      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${kal && x.fac.source === 'ausgesetzt' ? t('app.notCalibrated') : kal && facTxt(x) ? esc(facTxt(x)) : c.rot ? `${fmt(c.rot)} ${abbr(t('app.idRotation'), 'rot')}` : ''}</div></td>
+      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${kal && x.fac.source === 'ausgesetzt' ? t('app.notCalibrated') : kal && x.fac.skip ? esc(t('cal.notKind', { v0: K.kindText(x.fac.kind, lang()) })) : kal && facTxt(x) ? esc(facTxt(x)) : c.rot ? `${fmt(c.rot)} ${abbr(t('app.idRotation'), 'rot')}` : ''}</div></td>
       <td class="n">${cell(pair(x, 'ridesDay'))}</td><td class="n">${cell(pair(x, 'rvd', { d: 2 }), true)}</td><td class="n">${cell(pair(x, 'revDay', { unit: ' €' }), true)}</td></tr>`; }).join('') || emptyRow(6, t('app.noTripsInFilter'), t('app.setOperatorOrVehicleTypeTo'));
   $('#tbl-econ-more tbody').innerHTML = rows.map(x => { const c = x.cm; const fac = calibFor(x.op);
     return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
@@ -1711,9 +1771,9 @@ async function renderEcon(day) {
       <td class="n">${euro(c.perRide, 2)}</td><td class="n">${cell(pair(x, 'revPerVehicleDay', { d: 2, unit: ' €' }))}</td></tr>`; }).join('') || emptyRow(7, t('app.noTripsInFilter'), t('app.setOperatorOrVehicleTypeTo'));
   // Kalibrierung in zwei Zeilen; Einzelheiten im Panel „Kalibrierung“
   const calOps = Object.keys(cal);
-  const kTxt = k?.applied ? `${t('app.eScooterTrips', { k: fmt(k.k, 2) })} <span class="muted">${t('app.range2', { kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2) })}</span> ${t('app.officialBerlinMeasuredBerlin', { quarter: esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(k.measured.rvd, 2), v3: abbr(t('app.tripsVehDay2'), 'rvd') })} <span class="muted">(${esc(k.source)})</span>${k.prelim ? ` <span class="pill prelim badge" title="${esc(k.prelimWhy.join(', '))}">${t('app.preliminary')}</span>` : ''}${k.single ? ` <span class="muted">· ${t('app.onlyOneOperator')}</span>` : ''}` : t('app.tripsNotCalibrated', { v0: esc(k?.reason || t('app.referenceValuesNotLoadable')) });
+  const kTxt = k?.applied ? `${t('app.eScooterTrips', { k: fmt(k.k, 2) })} <span class="muted">${t('app.range2', { kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2) })}</span> ${t('app.officialBerlinMeasuredBerlin', { quarter: esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(k.measured.rvd, 2), v3: abbr(t('app.tripsVehDay2'), 'rvd') })} <span class="muted">(${esc(k.source)})</span>${k.prelim ? ` <span class="pill prelim badge" title="${esc(k.prelimWhy.join(', '))}">${t('app.preliminary')}</span>` : ''}${k.single ? ` <span class="muted">· ${t('app.onlyOneOperator')}</span>` : ''} · ${esc(k.statusText || '')}${k.onlyKind ? ` · <span class="muted">${esc(k.onlyKind)}</span>` : ''}${skipOps.length ? ` · ${t('cal.skipped', { v0: esc(skipOps.join(', ')) })}` : ''}` : t('app.tripsNotCalibrated', { v0: esc(k?.reason || t('app.referenceValuesNotLoadable')) });
   const aTxt = sc?.calibrated ? t('app.avgEScooterTripMinInsteadOf', { min: fmt(sc.min, 1), min2: fmt(sc.previous.min), from: esc(sc.from), to: esc(sc.to) }) : t('app.avgEScooterTripMinAssumption', { v0: fmt(sc?.min ?? 12) });
-  $('#econ-calib').innerHTML = `<div><b>${kal ? t('app.calibrated4') : t('app.measured4')}</b> · ${kTxt}</div><div>${t('app.bikesEBikesCargoBikes', { aTxt, v1: r.calib?.limits?.scooter ? ` · ${t('app.aboveTripsVehDayCalibration', { scooter: fmt(r.calib.limits.scooter, 2) })}` : '', v2: calOps.length ? ` · ${t('app.correctionOverriddenFor', { join: esc(calOps.join(', ')) })}` : '' })} · <span class="muted">${t('app.derivationInCalibrationPanel')}</span></div>`;
+  $('#econ-calib').innerHTML = `<div id="econ-calib-state"><b>${effective ? t('app.calibrated4') : t('app.measured4')}</b> · ${kTxt}</div><div>${t('app.bikesEBikesCargoBikes', { aTxt, v1: r.calib?.limits?.scooter ? ` · ${t('app.aboveTripsVehDayCalibration', { scooter: fmt(r.calib.limits.scooter, 2) })}` : '', v2: calOps.length ? ` · ${t('app.correctionOverriddenFor', { join: esc(calOps.join(', ')) })}` : '' })} · <span class="muted">${t('app.derivationInCalibrationPanel')}</span></div>`;
   const excludedN = rows.length - good.length;
   // sichtbar bleibt der erste Satz (was als Fahrt zählt), die Methodik steht aufklappbar darunter
   const noteHtml = t('app.tripsDisappearedAvailable', { v0: abbr(t('app.idRotation'), 'rot'), source: esc(tx(r.profile.source)), v2: prelim ? t('app.measuredValuesUnder3Full') : '', v3: o.rideMin ? t('app.defaultMin', { rideMin: fmt(o.rideMin) }) : t('app.measuredWhereIdsAreStable20', { v0: sc?.calibrated ? t('app.minFromBerlinQuarterlyValues', { min: fmt(sc.min, 1) }) : t('app.n12Min') }), v4: o.net ? `${t('app.excluding19Vat')} ` : '', v5: abbr(t('app.realisationRate'), 'real'), v6: r.gapH ? ` ${t('app.afterMeasurementGapOver45Min', { gapH: r.gapH, v1: r.gapH === 1 ? t('app.hour') : t('app.hours') })}` : '', v7: excludedN ? ` ${t('app.withImplausibleTripCountAre', { excludedN, v1: excludedN === 1 ? t('app.row') : t('app.rows2') })}` : '', v8: calOps.length ? ` ${t('app.activeFor', { join: esc(calOps.join(', ')) })}` : '' });
@@ -1724,12 +1784,13 @@ async function renderEcon(day) {
 // ---------- Kalibrierung: Referenzwerte (data/reference.json, Branch main) gegen die eigene Messung, Regeln in lib/pulse-calib.js ----------
 // Voi: Umsatz je Fahrzeug und Tag (gemessen, netto × Realisierung) über die Tage der Kalibrierung, Flotte-Tage gewichtet
 async function voiRevenue(days) {
-  let rev = 0, fleet = 0, n = 0;
+  let rev = 0, fleet = 0, n = 0, rides = 0;
   for (const d of days || []) {
     const r = await econGroups(d, (key) => { const [a, op, tq] = key.split('|'); return a !== 'DE' && op === 'Voi' && tq === 'scooter'; }); if (!r) continue;
-    const c = E.combine([...r.out.values()].map(x => x.m).filter(x => x.plausible)); if (c?.revDay != null && c.fleet > 0) { rev += c.revDay; fleet += c.fleet; n++; }
+    const c = E.combine([...r.out.values()].map(x => x.m).filter(x => x.plausible)); if (c?.revDay != null && c.fleet > 0) { rev += c.revDay; fleet += c.fleet; rides += c.ridesDay || 0; n++; }
   }
-  return fleet > 0 ? { revPerVehicleDay: rev / fleet, days: n } : null;
+  // Umsatz je Fahrt (Vergleich mit Voi FY2025 1,54 €): vom Faktor unabhängig, weil Umsatz und Fahrten gleich skalieren
+  return fleet > 0 ? { revPerVehicleDay: rev / fleet, revPerRide: rides > 0 ? rev / rides : null, days: n } : null;
 }
 async function renderCalibPanel() {
   const els = ['calib-panel', 'calib-src'].map(id => document.getElementById(id)).filter(Boolean); if (!els.length) return;
@@ -1737,7 +1798,7 @@ async function renderCalibPanel() {
   const calib = await getCalib(); const k = calib.k, a = calib.assume?.scooter, ref = calib.ref;
   if (!ref) { for (const el of els) el.innerHTML = head + `<div class="empty">${t('app.referenceValuesNotLoadable2')}</div>`; return; }
   const voi = await voiRevenue(calib.days).catch(() => null);
-  const checks = K.plausibilityChecks(ref, { ...calib.own, voi: { ...(calib.own?.voi || {}), revPerVehicleDay: voi?.revPerVehicleDay ?? null } }, k, lang());
+  const checks = K.plausibilityChecks(ref, { ...calib.own, voi: { ...(calib.own?.voi || {}), revPerVehicleDay: voi?.revPerVehicleDay ?? null, revPerRide: voi?.revPerRide ?? null } }, k, lang());
   const src = (e) => (e?.url ? link(e.url, `${esc(e.quelle || t('app.source3'))} ↗`) : esc(e?.quelle || '—'));
   const dd = (d) => d ? dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.slice(0, 10)}T12:00:00Z`)) : '–';
   const f2 = (v) => fmt(v, 2);
@@ -1751,12 +1812,14 @@ async function renderCalibPanel() {
   if (kr) rows.push([`${t('app.tripsPerVehAndDayEScooter')}<div class="sub-line">${t('app.berlin', { v0: esc(k?.applied ? `${k.quarter} (${k.rule})` : kr.zeitraum) })}</div>`, `<b>${f2(kr.wert)}</b>${k?.refMin != null ? `<div class="sub-line">${t('app.quarters', { v0: f2(k.refMin), v1: f2(k.refMax) })}</div>` : ''}`, src(kr),
     k?.measured?.rvd ? `${f2(k.measured.rvd)}<div class="sub-line">${t('app.ofHoursObserved', { v0: esc(k.source || ''), v1: dd(k.measured.from), v2: dd(k.measured.to), days: k.measured.days, v4: k.measured.days === 1 ? t('app.day2') : t('app.days2'), v5: fmt(k.obsShare * 100) })}</div>${(k.measured.excluded || []).length ? `<div class="sub-line">${t('app.excludedOvercount', { join: esc(k.measured.excluded.map(x => `${x.op} ${f2(x.rvd)}`).join(', ')) })}</div>` : ''}` : '—',
     k?.applied ? `k = <b>${f2(k.k)}</b><div class="sub-line">${f2(k.kLow)}–${f2(k.kHigh)}</div>` : '—',
-    k?.applied ? t('app.eScooterTripsNationwide', { v0: f2(k.k), calibLabel: esc(Rp.calibLabel(k)), v2: f2(calib.limits?.scooter), v3: k.prelim ? `<div class="sub-line">${t('app.preliminary2', { join: esc(k.prelimWhy.join(', ')) })}</div>` : '', v4: k.single ? `<div class="sub-line">${t('app.limitation', { single: esc(k.single) })}</div>` : '' }) : t('app.noCalibration', { v0: esc(k?.reason || '') })]);
+    k?.applied ? t('app.eScooterTripsNationwide', { v0: f2(k.k), calibLabel: esc(Rp.calibLabel(k)), v2: f2(calib.limits?.scooter), v3: k.prelim ? `<div class="sub-line">${t('app.preliminary2', { join: esc(k.prelimWhy.join(', ')) })}</div>` : '', v4: (k.single ? `<div class="sub-line">${t('app.limitation', { single: esc(k.single) })}</div>` : '') + `<div class="sub-line">${esc(k.statusText || '')}${k.onlyKind ? ` · ${esc(k.onlyKind)}` : ''}</div>` }) : t('app.noCalibration', { v0: esc(k?.reason || '') })]);
   // 3. Abdeckung (+ Hochrechnung nur hier)
   for (const c of calib.coverage || []) {
-    const rv = calib.own?.byAgs?.[c.ags]?.rvd; const rvdCal = k?.applied && rv != null && !(rv > (calib.limits?.scooter ?? Infinity)) ? rv * k.k : null;
+    // k nur bei angewandtem k und Kennungsart der Stadt wie die Referenz, höchstens bis zur Grenze (K.calibratedRvd); sonst gemessen mit Hinweis
+    const ob = calib.own?.byAgs?.[c.ags]; const cr = K.calibratedRvd(ob?.rvd, k, { kind: ob?.kind ?? null, limit: calib.limits?.scooter ?? null }); const rvdCal = cr.rvd;
+    const crNote = cr.skip === 'kind' ? `<div class="sub-line">${esc(t('cal.notKind', { v0: K.kindText(cr.kind, lang()) }))}</div>` : cr.skip === 'suspended' ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : cr.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '';
     rows.push([`${t('app.eScooters', { v0: esc(c.label[0].toUpperCase() + c.label.slice(1)) })}<div class="sub-line">${esc(c.ort)}, ${c.stand ? t('app.asOf3', { v0: dd(c.stand) }) : ''}</div>`, `<b>${c.art === 'aktiv' ? `${t('app.approx')} ` : ''}${fmt(c.official)}</b><div class="sub-line">${esc(c.label)}</div>`, src(c), `${fmt(c.ours)}<div class="sub-line">${t('app.inOpenFeeds', { v0: c.operators.length ? ` (${esc(c.operators.map(o => o.op).join(', '))})` : '' })}</div>`, `<b>${fmt(c.share * 100, 1)} %</b>`,
-      `${esc(c.shareLabel)}${rvdCal != null ? `<div class="sub-line">${t('app.extrapolationOnlyHereTrips', { rvdCal: f2(rvdCal), official: fmt(c.official), sig2: fmt(sig2(rvdCal * c.official)), v3: c.art === 'genehmigt' ? ` ${t('app.ofLicensedFleetHenceUpper')}` : ` ${t('app.ofActiveFleet')}` })}</div>` : ''}`]);
+      `${esc(c.shareLabel)}${rvdCal != null ? `<div class="sub-line">${t('app.extrapolationOnlyHereTrips', { rvdCal: f2(rvdCal), official: fmt(c.official), sig2: fmt(sig2(rvdCal * c.official)), v3: c.art === 'genehmigt' ? ` ${t('app.ofLicensedFleetHenceUpper')}` : ` ${t('app.ofActiveFleet')}` })}</div>` : ''}${crNote}`]);
   }
   // 4. Prüfwerte ohne Faktor
   for (const x of checks) {
@@ -1767,9 +1830,10 @@ async function renderCalibPanel() {
       ratio == null ? '—' : `${f2(ratio)}<div class="sub-line">${t('app.reference', { v0: x.ratioCal != null ? t('app.calibrated6') : t('app.measured3') })}</div>`, x.suspended ? t('app.measurementAbove15Largest', { v0: f2(calib.limits?.scooter) }) : x.kind === 'Untergrenze' ? t('app.checkNoFactorLowerBound') : t('app.comparisonNoFactor')]);
   }
   const rules = `<ol class="calib-rules small"><li>${t('app.tripDurationAvgEScooterTrip', { v0: a?.calibrated ? ` (${fmt(a.min, 1)} Min., ${f2(a.km)} km)` : '' })}</li>
-    <li>${t('app.methodFactorKOfficialTrips', { CALIB_DAYS: Rp.CALIB_DAYS })}</li>
+    <li>${t('cal.methodFactorK', { CALIB_DAYS: Rp.CALIB_DAYS, minDays: K.CALIB.minDays })}</li>
     <li>${t('app.plausibilityIfOperatorS', { v0: calib.limits?.scooter ? f2(calib.limits.scooter) : '–', overFactor: fmt(K.CALIB.overFactor, 1), v2: k?.source ? ` (${esc(k.source)})` : '', v3: k?.single ? t('app.onlyOneOperatorOthersMay') : '' })}</li>
     <li>${t('app.preliminaryBelowMeasurement', { minDays: K.CALIB.minDays, v1: K.CALIB.minObsShare * 100, kMin: fmt(K.CALIB.kMin, 1), kMax: fmt(K.CALIB.kMax) })}</li>
+    <li>${t('cal.ruleRelease', { minDays: K.CALIB.minDays, v1: esc(k?.statusText || '–'), v2: esc(k?.refKindText || K.kindText('unknown', lang())) })}</li>
     <li>${t('app.coverageAndCheckOwnEScooters')}</li></ol>`;
   const table = `<div class="tbl" tabindex="0" role="region" aria-label="${t('app.calibrationReferenceValues')}"><table class="calib-tbl"><thead><tr><th>${t('app.reference2')}</th><th class="n">${t('app.value')}</th><th>${t('app.source3')}</th><th class="n">${t('app.ourMeasurement')}</th><th class="n">${t('app.ratio')}</th><th>${t('app.effect')}</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="small">${r[2]}</td><td class="n">${r[3]}</td><td class="n">${r[4]}</td><td class="small">${r[5]}</td></tr>`).join('')}</tbody></table></div>`;
   const foot = `<div class="muted small" style="margin-top:var(--s2)">${t('app.measurementPeriodVoiRevenue', { v0: calib.days.length ? `${dd(calib.days[0])}–${dd(calib.days[calib.days.length - 1])}` : '–', v1: econOpts().net ? t('common.net') : t('common.gross'), v2: fmt(econOpts().realization * 100), v3: esc(ref.updatedAt || '–') })}</div>`;
@@ -1794,8 +1858,10 @@ async function renderArchive() {
   const n = state.usage.archiveDays; const first = /^\d{4}-\d{2}-\d{2}$/.test(idx.firstDay || '') ? idx.firstDay : null; const m0 = months[0];
   el.textContent = `· ${t('app.archiveSince', { v0: first ? new Date(`${first}T12:00:00`).toLocaleDateString(fmtLocale(), { day: 'numeric', month: 'long', year: 'numeric' }) : new Date(+m0.slice(0, 4), +m0.slice(5, 7) - 1, 1).toLocaleDateString(fmtLocale(), { month: 'long', year: 'numeric' }), n: fmt(n), v2: n === 1 ? t('app.day2') : t('app.days2') })}`;
 }
-function T_empty() { return { start: new Array(24).fill(0), end: new Array(24).fill(0), reloc: new Array(24).fill(0), swap: new Array(24).fill(0), pickup: new Array(24).fill(0), disOn: new Array(24).fill(0), disOff: new Array(24).fill(0), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 }; }
-function T_add(a, g, ok = null) { for (const f of ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff']) for (let i = 0; i < 24; i++) if (!ok || ok[i]) a[f][i] += g[f]?.[i] || 0; for (const f of ['swapWaitSum', 'swapWaitN', 'disDurSum', 'disDurN', 'tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN']) a[f] += g[f] || 0; }
+function T_empty() { return { start: new Array(24).fill(0), end: new Array(24).fill(0), reloc: new Array(24).fill(0), swap: new Array(24).fill(0), pickup: new Array(24).fill(0), disOn: new Array(24).fill(0), disOff: new Array(24).fill(0), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0, swapWaitCens: 0, disDurCens: 0 }; }
+// swapWaitCens/disDurCens (ab 02.11.2026): davon Mindestwerte (unter 20 % bzw. gesperrt seit erster Sichtung zu Beginn der Verfolgung, Z6) → Anzeige „≥“
+function T_add(a, g, ok = null) { for (const f of ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff']) for (let i = 0; i < 24; i++) if (!ok || ok[i]) a[f][i] += g[f]?.[i] || 0; for (const f of ['swapWaitSum', 'swapWaitN', 'disDurSum', 'disDurN', 'tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN', 'swapWaitCens', 'disDurCens']) a[f] += g[f] || 0; }
+const atLeast = (cens, text) => cens > 0 ? `≥ ${text}` : text; // Mittel mit zensierten Werten ist ein Mindestwert
 async function loadWeather(day) {
   const c = state.scope === 'DE' ? [51.16, 10.45] : muniCenters().get(state.scope); if (!c) return null;
   const key = `${day}|${c[0].toFixed(2)},${c[1].toFixed(2)}`;
@@ -1849,23 +1915,44 @@ function hourChart(series, weather, runs, mask = null, holiday = null, W = 900) 
   for (let h = 0; h < 24; h++) { const lines = m.ok[h] ? series.filter(s => s.values[h] != null).sort((a, b) => b.values[h] - a.values[h]).map(s => `${s.name} ${fmt(s.values[h])}`) : [m.gap[h] ? t('app.afterMeasurementGapNot') : t('app.notMeasured')]; if (weather && weather.temp[h] != null) lines.push(`${fmt(weather.temp[h])} °C · ${fmt(weather.rain[h] || 0, 1)} mm`); hits += `<rect class="hit" x="${(x(h) - cw / 2).toFixed(1)}" y="${P.t}" width="${cw.toFixed(1)}" height="${H - P.t - 8}"><title>${t('app.text3', { h, v1: h + 1, join: esc(lines.join('\n')) })}</title></rect>`; }
   return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.tripStartsPerHourGreyNot', { v0: holiday ? `; ${esc(holiday)}` : '' })}. ${esc(seriesSummary(series))}">${g}${wx}${paths}${hits}</svg>`;
 }
-// Feiertage lokal berechnet (kein Abruf): Ostern nach Gauß/Meeus, dazu feste und bewegliche Feiertage je Bundesland
-const easter = (y) => { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return Date.UTC(y, mo - 1, da); };
-const ALL_DE = ['BW', 'BY', 'BE', 'BB', 'HB', 'HH', 'HE', 'MV', 'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH'];
+// Feiertage: lokal gerechnet (lib/pulse-econ.js localHolidays, Ostern nach Gauß/Meeus); wo calendar.json (OpenHolidays) den Tag abdeckt,
+// gilt je Land der Kalender – Länder mit Feiertag laut Kalender ohne lokalen Namen erscheinen als „Feiertag“
+const HOL_NAME = { newYear: () => t('app.newYearSDay'), epiphany: () => t('app.epiphany'), womensDay: () => t('app.womenSDay'), goodFriday: () => t('app.goodFriday'), easterSunday: () => t('app.easterSunday'),
+  easterMonday: () => t('app.easterMonday'), labourDay: () => t('app.labourDay'), ascension: () => t('app.ascensionDay'), whitSunday: () => t('app.whitSunday'), whitMonday: () => t('app.whitMonday'),
+  corpusChristi: () => t('app.corpusChristi'), assumption: () => t('app.assumptionDay'), childrensDay: () => t('app.worldChildrenSDay'), unity: () => t('app.germanUnityDay'), reformation: () => t('app.reformationDay'),
+  allSaints: () => t('app.allSaintsDay'), repentance: () => t('app.dayOfRepentanceAndPrayer'), christmas: () => t('app.christmasDay'), boxingDay: () => t('app.boxingDay') };
 function holidaysOf(day) {
-  const y = +day.slice(0, 4), E = easter(y), dd = (ms) => new Date(ms).toISOString().slice(0, 10), fx = (md) => `${y}-${md}`, off = (n) => dd(E + n * 86400e3);
-  const bub = dd(Date.UTC(y, 10, 22) - ((new Date(Date.UTC(y, 10, 22)).getUTCDay() + 4) % 7) * 86400e3); // Mittwoch vor dem 23. November
-  return [
-    [fx('01-01'), t('app.newYearSDay'), ALL_DE], [fx('01-06'), t('app.epiphany'), ['BW', 'BY', 'ST']], [fx('03-08'), t('app.womenSDay'), ['BE', 'MV']],
-    [off(-2), t('app.goodFriday'), ALL_DE], [off(0), t('app.easterSunday'), ['BB']], [off(1), t('app.easterMonday'), ALL_DE], [fx('05-01'), t('app.labourDay'), ALL_DE],
-    [off(39), t('app.ascensionDay'), ALL_DE], [off(49), t('app.whitSunday'), ['BB']], [off(50), t('app.whitMonday'), ALL_DE], [off(60), t('app.corpusChristi'), ['BW', 'BY', 'HE', 'NW', 'RP', 'SL']],
-    [fx('08-15'), t('app.assumptionDay'), ['SL', 'BY*']], [fx('09-20'), t('app.worldChildrenSDay'), ['TH']], [fx('10-03'), t('app.germanUnityDay'), ALL_DE],
-    [fx('10-31'), t('app.reformationDay'), ['BB', 'HB', 'HH', 'MV', 'NI', 'SN', 'ST', 'SH', 'TH']], [fx('11-01'), t('app.allSaintsDay'), ['BW', 'BY', 'NW', 'RP', 'SL']],
-    [bub, t('app.dayOfRepentanceAndPrayer'), ['SN']], [fx('12-25'), t('app.christmasDay'), ALL_DE], [fx('12-26'), t('app.boxingDay'), ALL_DE],
-  ].filter(([d]) => d === day);
+  const loc = E.localHolidays(day).map(h => [day, HOL_NAME[h.id]?.() || h.id, h.lands]);
+  if (!E.calendarCovers(state.calendar, day)) return loc;
+  const H = new Set(E.calendarLands(state.calendar, day, 'H'));
+  const out = loc.map(([d, n, lands]) => [d, n, lands.filter(l => l.endsWith('*') || H.has(l))]).filter(x => x[2].length);
+  const rest = [...H].filter(l => !out.some(x => x[2].includes(l)));
+  if (rest.length) out.push([day, t('mb.publicHoliday'), rest]);
+  return out;
+}
+// Schulferien laut Kalender (Tagtyp F, nur Mo–Fr): im Land des Gebiets bzw. Zahl der Länder
+function schoolNote(day) {
+  const L = E.calendarLands(state.calendar, day, 'F'); if (!L.length) return null;
+  const st = state.scope === 'DE' ? null : scopeState();
+  return st ? (L.includes(st) ? t('mb.schoolHolidaysIn', { st }) : null) : t('mb.schoolHolidaysStates', { n: L.length });
+}
+// Messbasis unter dem Tagesgang: Matrix Stunde × Tagtyp mit Messminuten (latest.json → measure, Tagtyp im Land des Gebiets), damit sichtbar
+// ist, welche Stunden an welchen Tagtypen gemessen sind. Nicht gemessen = Zeichen „·“ (nicht nur Farbe), Minuten im Text für Screenreader.
+function renderMbMatrix() {
+  let box = $('#mb-matrix');
+  if (!box) { const lg = $('#usage-legend'); if (!lg) return; lg.insertAdjacentHTML('afterend', '<div id="mb-matrix" class="mb-matrix"></div>'); box = $('#mb-matrix'); }
+  const land = state.scope === 'DE' ? null : scopeState(), b = Rp.mbBase(state, { land });
+  const lvl = (m) => (m <= 0 ? 0 : m < 50 ? 1 : m < 120 ? 2 : m < 240 ? 3 : 4), hh = (h) => String(h).padStart(2, '0');
+  const head = `<tr><th scope="col"><span class="vh">${t('mb.dayType')}</span></th>${Array.from({ length: 24 }, (_, h) => `<th scope="col" class="mb-hh">${h % 3 === 0 ? hh(h) : `<span class="vh">${hh(h)}</span>`}</th>`).join('')}<th scope="col" class="n">${t('mb.sum')}</th></tr>`;
+  const rows = E.DAY_TYPES.map(k => `<tr><th scope="row" title="${esc(Rp.mbTypeName(k))}">${k}<span class="vh"> ${esc(Rp.mbTypeName(k))}</span></th>${b.matrix[k].map((m, h) => `<td class="mb-c mb-l${lvl(m)}" title="${esc(t('mb.cellTitle', { type: Rp.mbTypeName(k), h: hh(h), h2: hh((h + 1) % 24), m: fmt(m) }))}">${m > 0 ? `<span class="vh">${fmt(m)}</span>` : '<span aria-hidden="true">·</span><span class="vh">0</span>'}</td>`).join('')}<td class="n mono">${fmt(b.byType[k], 1)}&nbsp;h<div class="sub-line">${t(b.days[k] === 1 ? 'mb.nDay' : 'mb.nDays', { n: b.days[k] })}</div></td></tr>`).join('');
+  const never = Array.from({ length: 24 }, (_, h) => h).filter(h => E.DAY_TYPES.every(k => !b.matrix[k][h]));
+  box.innerHTML = `<div class="mb-mh"><b>${t('mb.matrixTitle')}</b> <span class="muted">${t('mb.matrixSub', { h: fmt(b.hours, 1), never: never.length ? never.map(hh).join(', ') : '–' })}</span></div>
+    <div class="tbl" tabindex="0" role="region" aria-label="${t('mb.matrixAria')}"><table class="mb-mx"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
+    <div class="legend mb-leg"><span>${E.DAY_TYPES.map(k => `${k} ${esc(Rp.mbTypeName(k))}`).join(' · ')}</span><span><span aria-hidden="true">·</span> ${t('mb.lv0')}</span>${[1, 2, 3, 4].map(l => `<span><i class="sq mb-c mb-l${l}"></i>${t(`mb.lv${l}`)}</span>`).join('')}</div>`;
 }
 // Text für den gewählten Tag und das Gebiet: Feiertag im Land der Gemeinde, deutschlandweit mit Zahl der Länder; sonst Sonntag
-function dayNote(day) {
+function dayNote(day) { const a = dayNoteHol(day), f = /^\d{4}-\d{2}-\d{2}$/.test(day || '') ? schoolNote(day) : null; return a && f ? `${a} · ${f}` : a || f; }
+function dayNoteHol(day) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return null;
   const st = state.scope === 'DE' ? null : scopeState();
   const hits = holidaysOf(day).map(([, name, lands]) => ({ name, lands: lands.map(l => l.replace('*', '')), part: lands.some(l => l.endsWith('*') && (!st || l.startsWith(st))) })).filter(h => !st || h.lands.includes(st));
@@ -1954,7 +2041,7 @@ async function renderIdleLayer() {
   const L_ = state.layers; L_.grid.clearLayers();
   const d = await loadOnce('idleLong', 'idle-long.json'); if (!d) return;
   const pts = d.points.filter(p => (state.scope === 'DE' || p.ags === state.scope) && (state.operator === 'all' || p.op === state.operator) && (state.type === 'all' || p.ty === state.type));
-  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: fmt(p.hours), v3: p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '' })).addTo(L_.grid);
+  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: p.censored ? `≥ ${fmt(p.hours)}` : fmt(p.hours), v3: (p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '') + (p.censored ? ` · ${t('trk.sinceTrackStart')}` : '') })).addTo(L_.grid);
   $('#map-legend').innerHTML = `<span><i class="dot" style="background:var(--warn)"></i>${t('app.availableButNotMovedForMore')}</span><span class="muted">${t('app.shownAsOf', { length: fmt(pts.length), v1: d.total > d.points.length ? ` ${t('app.thinnedOutPerMunicipality', { total: fmt(d.total) })}` : '', v2: timeText(d.at) })}</span>`;
 }
 // Welche Farbe gehört zu welchem Anbieter: immer unter der Karte, sortiert nach verfügbaren Fahrzeugen im Gebiet
@@ -2006,10 +2093,14 @@ async function renderPricing() {
   for (const src of list) for (const pl of src.plans) { const key = `${src.operator}|${pl.name}|${pl.unlock}|${pl.perMin[0]?.rate}`; if (seen.has(key)) continue; seen.add(key); rows.push({ op: src.operator, pl, src }); }
   rows.sort((a, b) => a.op.localeCompare(b.op) || (a.pl.unlock ?? 0) - (b.pl.unlock ?? 0));
   const money = (v, cur) => v == null ? '—' : esc(`${fmt(v, 2)} ${cur || '€'}`.replace(' EUR', ' €')); // Währung kommt aus dem Feed
-  // Feed-Kennungen („LMG:PricingPlan:…“, „…-plan“) sind kein Tarifname: dann der erste Satz der Beschreibung bzw. „Tarif n“, die Kennung klein darunter
+  // Feed-Kennungen („LMG:PricingPlan:…“, „plan-scooter-EUR“) sind kein Tarifname: Fahrzeugart aus der Kennung („Tarif E-Scooter“), sonst der
+  // erste Satz der Beschreibung (Satzende, nicht der Punkt in „0.99“), sonst „Tarif n“; die Kennung steht nur im title der Zelle
   const looksId = (s) => /^[A-Z]{2,}:|PricingPlan|-plan$|^plan-|^[\w-]{24,}$/i.test(s || '');
-  const nth = new Map(); const planName = (op, pl) => { const raw = pl.name || pl.id || ''; if (!looksId(raw)) return { label: raw, id: '' }; const d = String(pl.desc || '').split(/[.;\n]/)[0].trim(); const n = (nth.get(op) || 0) + 1; nth.set(op, n); return { label: d && d.length <= 60 ? d : t('app.tariffN', { n }), id: raw }; };
-  tb.innerHTML = rows.slice(0, 60).map(({ op, pl, src }) => { const nm = planName(op, pl); return `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>${state.scope === 'DE' ? `<div class="sub-line">${esc(src.sourceId)}</div>` : ''}</td><td translate="no">${esc(nm.label)}${nm.id ? `<div class="sub-line mono">${esc(nm.id)}</div>` : ''}</td><td class="n">${money(pl.unlock, pl.currency)}</td><td class="n">${pl.perMin.length ? pl.perMin.map(x => `${money(x.rate, pl.currency)}${x.interval && x.interval !== 1 ? ` ${t('app.perMin', { interval: x.interval })}` : ''}${x.start ? ` ${t('app.fromMin', { start: x.start })}` : ''}`).join('<br>') : '—'}</td><td class="n">${pl.perKm.length ? pl.perKm.map(x => money(x.rate, pl.currency)).join('<br>') : '—'}</td><td class="small" translate="no">${esc(pl.desc || '')}${pl.surge ? ` · ${t('app.dynamic')}` : ''}</td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">${t('app.noPricesForThisFilterNot')}</td></tr>`;
+  const idType = (s) => { const m = /(e-?bike|cargo|scooter|bike)/i.exec(s || ''); if (!m) return null; const k = m[1].toLowerCase().replace('-', ''); return k === 'bike' ? t('app.tariffBike') : TYPE[k] || null; }; // „bike“ sagt nicht, ob mit Motor
+  // Hinweis ausblenden, wenn er nur den Tarifnamen wiederholt
+  const same = (a, b) => { const n = (s) => String(s || '').trim().replace(/[.\s]+$/, '').toLowerCase(); return n(a) === n(b); };
+  const nth = new Map(); const planName = (op, pl) => { const raw = pl.name || pl.id || ''; if (!looksId(raw)) return { label: raw, id: pl.id || '' }; const ty = idType(`${pl.name || ''} ${pl.id || ''}`); if (ty) return { label: t('app.tariffType', { type: ty }), id: raw }; const d = String(pl.desc || '').split(/[.;](?=\s|$)|[\n]/)[0].trim(); const n = (nth.get(op) || 0) + 1; nth.set(op, n); return { label: d && d.length <= 60 ? d : t('app.tariffN', { n }), id: raw }; };
+  tb.innerHTML = rows.slice(0, 60).map(({ op, pl, src }) => { const nm = planName(op, pl); return `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>${state.scope === 'DE' ? `<div class="sub-line">${esc(src.sourceId)}</div>` : ''}</td><td translate="no"${nm.id ? ` title="${esc(nm.id)}"` : ''}>${esc(nm.label)}</td><td class="n">${money(pl.unlock, pl.currency)}</td><td class="n">${pl.perMin.length ? pl.perMin.map(x => `${money(x.rate, pl.currency)}${x.interval && x.interval !== 1 ? ` ${t('app.perMin', { interval: x.interval })}` : ''}${x.start ? ` ${t('app.fromMin', { start: x.start })}` : ''}`).join('<br>') : '—'}</td><td class="n">${pl.perKm.length ? pl.perKm.map(x => money(x.rate, pl.currency)).join('<br>') : '—'}</td><td class="small" translate="no">${same(pl.desc, nm.label) ? '' : esc(pl.desc || '')}${pl.surge ? ` · ${t('app.dynamic')}` : ''}</td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">${t('app.noPricesForThisFilterNot')}</td></tr>`;
   $('#pricing-note').textContent = rows.length > 60 ? t('app.moreTariffsChooseAreaOr', { v0: rows.length - 60 }) : t('app.tariffsAsOf', { length: rows.length, v1: timeText(p.at) });
 }
 async function renderShareChart() {
@@ -2018,8 +2109,12 @@ async function renderShareChart() {
   const daily = await loadDaily();
   if (daily) {
     const fi = (daily.fields || []).indexOf('available'), days = (daily.days || []).slice(-7);
-    const perDay = days.map(d => { const m = new Map(); for (const [k, ser] of Object.entries(daily.series)) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || !op) continue; if (state.scope !== 'DE' && ags !== state.scope) continue; if (state.type !== 'all' && ty !== state.type) continue; const v = ser[d]; if (!v || v[fi] == null) continue; m.set(op, (m.get(op) || 0) + v[fi]); } return m.size ? m : null; });
-    if (days.length && fi >= 0) return drawShare(box, days, perDay);
+    // Bruchmarken (breaks): Tage vor einem Zählregel-Wechsel nicht zeigen, wenn die betroffenen Reihen ≥ 5 % des Bestands im Ausschnitt tragen
+    const brk = daily.breaks || {}, cut = new Set(), brkOps = new Set(), brkDays = new Set();
+    const perDay = days.map(d => { const m = new Map(); let aff = 0, all = 0; const ops = new Set(), bds = new Set(); for (const [k, ser] of Object.entries(daily.series)) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || !op) continue; if (state.scope !== 'DE' && ags !== state.scope) continue; if (state.type !== 'all' && ty !== state.type) continue; const v = ser[d]; if (!v || v[fi] == null) continue; m.set(op, (m.get(op) || 0) + v[fi]); all += v[fi]; if (brk[k] > d) { aff += v[fi]; ops.add(op); bds.add(brk[k]); } }
+      if (all > 0 && aff / all >= 0.05) { cut.add(d); ops.forEach(o => brkOps.add(o)); bds.forEach(b => brkDays.add(b)); return null; } return m.size ? m : null; });
+    const note = cut.size ? t('cal.shareBreak', { v0: [...brkDays].sort().map(b => `${b.slice(8)}.${b.slice(5, 7)}.`).join(', '), v1: esc([...brkOps].join(', ')) }) : '';
+    if (days.length && fi >= 0) return drawShare(box, days, perDay, note);
   }
   const days = (idx?.days || []).slice(-7);
   if (!days.length) { box.innerHTML = `<div class="empty">${t('app.noHistoryYetItStartsWith')}</div>`; return; }
@@ -2027,18 +2122,23 @@ async function renderShareChart() {
   for (const d of days) { const h = await loadHistory(d); if (!h) { perDay.push(null); continue; } const byOp = new Map(); for (const [k, ser] of Object.entries(h.series)) { const [ags, op, ty] = k.split('|'); if (ags === 'DE') continue; if (state.scope !== 'DE' && ags !== state.scope) continue; if (state.type !== 'all' && ty !== state.type) continue; const v = ser.available.filter(x => x != null); if (!v.length) continue; byOp.set(op, (byOp.get(op) || 0) + v.reduce((a, b) => a + b, 0) / v.length); } perDay.push(byOp); }
   drawShare(box, days, perDay);
 }
-function drawShare(box, days, perDay) {
+function drawShare(box, days, perDay, note = '') {
   const ops = [...new Set(perDay.flatMap(m => m ? [...m.keys()] : []))];
   const totals = perDay.map(m => m ? [...m.values()].reduce((a, b) => a + b, 0) : 0);
-  const series = ops.map(op => ({ name: op, color: opColor(op), values: perDay.map((m, i) => m && totals[i] ? ((m.get(op) || 0) / totals[i]) * 100 : null) })).sort((a, b) => (b.values.at(-1) || 0) - (a.values.at(-1) || 0)).slice(0, 8);
+  // Reihen, die an keinem Tag einen Anteil haben (z. B. Zeus 0,0 %), weder als Linie noch in der Legende
+  const series = ops.map(op => ({ name: op, color: opColor(op), values: perDay.map((m, i) => m && totals[i] ? ((m.get(op) || 0) / totals[i]) * 100 : null) })).filter(s => s.values.some(v => v > 0)).sort((a, b) => (b.values.at(-1) || 0) - (a.values.at(-1) || 0)).slice(0, 8);
+  // Titel aus den Daten: so viele Tage, wie Werte haben (statt fest „7 Tage“)
+  const nDays = perDay.filter(Boolean).length; $('#share-days').textContent = nDays ? ` · ${nDays} ${nDays === 1 ? t('rep.day') : t('rep.days')}` : '';
   const W = chartWidth(box, () => renderShareChart()), H = W < 520 ? 190 : 220, P = { l: 48, r: 16, t: 12, b: 26 };
-  const x = (i) => P.l + (i / Math.max(1, days.length - 1)) * (W - P.l - P.r), y = (v) => P.t + (1 - v / 100) * (H - P.t - P.b);
-  let g = ''; for (let k = 0; k <= 4; k++) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(k * 25)}" y2="${y(k * 25)}"/><text x="${P.l - 6}" y="${y(k * 25) + 3}" text-anchor="end">${k * 25} %</text>`;
+  // y-Achse 0 bis aufgerundetes Maximum (Anteile liegen meist unter 30 %; 0–100 % drückte die Unterschiede platt)
+  const mx = Math.max(0, ...series.flatMap(s => s.values.filter(v => v != null))), step = [1, 2, 5, 10, 20, 25].find(s => mx / s <= 5) || 25, top = Math.min(100, Math.max(step, Math.ceil(mx / step - 1e-9) * step));
+  const x = (i) => P.l + (i / Math.max(1, days.length - 1)) * (W - P.l - P.r), y = (v) => P.t + (1 - v / top) * (H - P.t - P.b);
+  let g = ''; for (let v = 0; v <= top + 1e-9; v += step) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 3}" text-anchor="end">${fmt(v)} %</text>`;
   const every = (W - P.l - P.r) / Math.max(1, days.length - 1) < 44 ? 2 : 1; // schmal: jeder zweite Tag beschriftet
   days.forEach((d, i) => { if (i % every && i !== days.length - 1) return; g += `<text x="${x(i)}" y="${H - 8}" text-anchor="${days.length > 1 && i === 0 ? 'start' : i === days.length - 1 && days.length > 1 ? 'end' : 'middle'}">${d.slice(8)}.${d.slice(5, 7)}.</text>`; });
   const paths = series.map(s => { let d = '', open = false; s.values.forEach((v, i) => { if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>` + s.values.map((v, i) => v == null ? '' : `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="${s.color}"/>`).join(''); }).join('');
   box.innerHTML = `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.shareOfRecordedVehicles')}. ${seriesSummary(series, (v) => `${fmt(v, 1)} %`)}`)}">${g}${paths}</svg>`;
-  $('#share-legend').innerHTML = series.map(s => `<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)} <span class="mono">${s.values.at(-1) == null ? '—' : fmt(s.values.at(-1), 1) + ' %'}</span></span>`).join('');
+  $('#share-legend').innerHTML = series.map(s => `<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)} <span class="mono">${s.values.at(-1) == null ? '—' : fmt(s.values.at(-1), 1) + ' %'}</span></span>`).join('') + (note ? `<span class="muted small">${note}</span>` : '');
 }
 
 // ---------- Konsistenz ----------
@@ -2193,18 +2293,38 @@ function bind() {
   // Gebietswahl: Grenzen lädt erst der Live-Abruf (Ortszuordnung) bzw. die Grenz-Ebene; die Karte zeigt bis dahin die Sammler-Positionen
   // Pfeiltasten auf der geschlossenen Liste lösen je Schritt „change“ aus: per Tastatur erst nach 400 ms Ruhe wechseln (Enter sofort),
   // sonst startet jeder Schritt einen Gebietswechsel samt Live-Abruf aller Feeds
-  const applyScope = (v) => { if (v === state.scope) return; state.scope = v; state.live = null; state.supply = null; pendingLive = false; clearNotice('scope'); if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; populateOperators(); syncUrl(); renderAll(); autoLive(); };
+  const resetScope = (v) => { state.scope = v; state.live = null; state.supply = null; pendingLive = false; clearNotice('scope'); if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; };
+  const applyScope = (v) => { if (v === state.scope) return; resetScope(v); populateOperators(); syncUrl(true); renderAll(); autoLive(); };
   let scopeT = null, scopeByKey = false;
   $('#sel-scope').addEventListener('keydown', (e) => { if (e.key === 'Enter' && scopeT) { clearTimeout(scopeT); scopeT = null; applyScope(e.target.value); return; } if (/^(Arrow|Page)|^(Home|End)$/.test(e.key) || e.key.length === 1) scopeByKey = true; });
   $('#sel-scope').addEventListener('change', (e) => { clearTimeout(scopeT); scopeT = null; const v = e.target.value; if (scopeByKey) { scopeByKey = false; scopeT = setTimeout(() => { scopeT = null; applyScope(v); }, 400); } else applyScope(v); });
-  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; syncUrl(); renderAll(); });
-  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; syncUrl(); renderAll(); });
+  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; syncUrl(true); renderAll(); });
+  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; syncUrl(true); renderAll(); });
+  // Zurück/Vorwärts: Gebiet, Anbieter, Art, Kundenansicht, Sprache und Ansicht aus der Adresszeile übernehmen, ohne automatischen Live-Abruf
+  // (sonst startet jeder Schritt durch den Verlauf einen Abruf aller Feeds). Erst den Zustand setzen, dann zeichnen: setClient/setLang
+  // schreiben die URL des gerade betretenen Eintrags (replaceState) und dürfen dabei keinen alten Stand hineinschreiben.
+  window.addEventListener('popstate', () => {
+    if (!urlReady) return;
+    const q = new URLSearchParams(location.search), view = location.hash.slice(1), before = `${state.scope}|${state.operator}|${state.type}|${opsFleet() || ''}|${$('#ops-type').value}`;
+    clearTimeout(scopeT); scopeT = null; scopeByKey = false; pendingLive = false;
+    const sc = q.get('scope') || 'DE';
+    if (sc !== state.scope && [...$('#sel-scope').options].some(o => o.value === sc)) resetScope(sc);
+    applyUrlParams(q, true);
+    // Sprache nur, wenn der Eintrag sie nennt (ohne ?lang= bleibt die gemerkte Wahl – so zeigt auch Neuladen dieselbe Sprache)
+    const client = q.get('kunde') === '1', lg = q.get('lang');
+    if (client !== isClient()) setClient(client);
+    if (lg && lg !== lang()) { setLang(lg, { persist: false }); renderLangSwitch(); }
+    // geänderte Filter: alle Ansichten veraltet, setView zeichnet die Zielansicht genau einmal (nach setClient/setLang: deren Zwischenstand
+    // mit der alten Ansicht im Eintrag wird hier wieder überschrieben)
+    if (dataReady && before !== `${state.scope}|${state.operator}|${state.type}|${opsFleet() || ''}|${$('#ops-type').value}`) { safe(renderHeader); for (const v of VIEWS) dirty.add(v); }
+    setView(view);
+  });
   $('#btn-share').addEventListener('click', copyLink);
   $('#btn-client').addEventListener('click', () => setClient(!isClient()));
   $('#econ-panel').addEventListener('change', (e) => { const i = e.target.closest('input.calib'); if (!i) return; setCalib(i.dataset.op, parseFloat(String(i.value).replace(',', '.'))); renderEcon(state.usage.day); });
   // Umschalter „kalibriert / gemessen“ (Standard kalibriert, im Browser gemerkt)
   $('#econ-panel').addEventListener('click', (e) => {
-    const b = e.target.closest('#econ-mode button[data-cmode]'); if (!b) return;
+    const b = e.target.closest('#econ-mode button[data-cmode]'); if (!b || b.getAttribute('aria-disabled') === 'true') return; // gesperrt: kein Faktor wirksam (B3)
     setCalibMode(b.dataset.cmode); renderEcon(state.usage.day);
   });
   window.addEventListener('resize', () => placeSeg());

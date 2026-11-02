@@ -2,12 +2,13 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvyywh5o';
-import * as K from './pulse-calib.js?v=mvyywh5o';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyywh5o';
-import { decodeFleet } from './pulse-ops.js?v=mvyywh5o';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyywh5o';
-import { mapKeys } from './mapkeys.js?v=mvyywh5o';
+import * as R from './pulse-report.js?v=mvz5nwfe';
+import * as K from './pulse-calib.js?v=mvz5nwfe';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvz5nwfe';
+import { decodeFleet } from './pulse-ops.js?v=mvz5nwfe';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvz5nwfe';
+import { mapKeys } from './mapkeys.js?v=mvz5nwfe';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mvz5nwfe';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -83,15 +84,30 @@ export function loadCalibration(ctx) {
     const D = ok.map(x => x[0]), H = Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]]));
     const latest = ctx.state?.latest || null; const limits = K.rvdLimits(ref);
     // k nur aus plausiblen Berliner Anbietern; Vergleichswerte Deutschland/Voi ohne Überzählungen; Gemeinden (Frankfurt) roh, damit die Prüfung sie zeigt
-    const berlinReport = D.length ? R.municipalReport({ docs: D, hists: H, ags: K.BERLIN, type: 'scooter', latestGroups: null, rvdLimit: limits }) : null;
-    const all = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0, rvdLimit: limits }) : { rows: [] };
-    const raw = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0 }) : { rows: [] };
-    const voi = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', operator: 'Voi', minFleet: 0, rvdLimit: limits }) : { rows: [] };
-    const byAgs = Object.fromEntries(raw.rows.map(r => [r.ags, { rvd: r.rvd, fleet: r.fleet, ridesDay: r.ridesDay }]));
-    const own = { national: natRvd(all.rows), voi: natRvd(voi.rows), byAgs };
-    const c = K.calibration(ref, { berlinReport: berlinReport && berlinReport.groups.length ? berlinReport : null, groups: latest?.groups, own, lang: lang() });
-    return { ...c, ref, own, days: ok.map(x => x[1]), berlinReport };
-  })().catch(e => { console.error('Kalibrierung', e); return { assume: K.rideAssumptions(null, lang()), limits: {}, k: { applied: false, reason: t('rep.calibrationCannotBeComputed') }, coverage: [], checks: [], ref: null, own: {}, days: [], hasReference: false }; }));
+    // Bruchmarken (daily.json → breaks) und Kennungsart je Gruppe (Z3c); ab 7 vollen Regelstand-Tagen misst k nur Tage mit diesem Regelstand
+    const breaks = daily?.breaks || null, kinds = K.groupKinds(D, latest?.sources || []);
+    const bRep = (docs) => (docs.length ? R.municipalReport({ docs, hists: H, ags: K.BERLIN, type: 'scooter', latestGroups: null, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : null); // Ampel rot: nicht in k
+    let berlinReport = bRep(D); const bq = berlinReport?.quality;
+    if (bq?.rule && bq.ruleFullDays >= K.CALIB.minDays) { const same = D.filter(d => R.docRule(d) === bq.rule); if (same.length && same.length < D.length) berlinReport = bRep(same); }
+    // Bruchmarken auch in der Rohzeile (raw): Tage vor dem Regelwechsel sind falsch gezählt, keine Plausibilitätsprüfung
+    const all = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : { rows: [] };
+    const raw = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0, breaks }) : { rows: [] };
+    const voi = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', operator: 'Voi', minFleet: 0, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : { rows: [] };
+    // Kennungsart der E-Scooter je Gemeinde, bundesweit und Voi: k nur bei derselben Art wie die Berliner Referenz
+    const kindsOf = (pred) => K.commonKind(Object.entries(kinds).filter(([key]) => { const [a, op, ty] = key.split('|'); return ty === 'scooter' && pred(a, op); }).map(([, v]) => v));
+    const byAgs = Object.fromEntries(raw.rows.map(r => [r.ags, { rvd: r.rvd, fleet: r.fleet, ridesDay: r.ridesDay, kind: kindsOf((a) => a === r.ags) }]));
+    const own = { national: { ...natRvd(all.rows), kind: kindsOf(() => true) }, voi: { ...natRvd(voi.rows), kind: kindsOf((a, op) => op === 'Voi') }, byAgs };
+    const c = K.calibration(ref, { berlinReport: berlinReport && berlinReport.groups.length ? berlinReport : null, groups: latest?.groups, own, lang: lang(), kinds });
+    // Plausibilitätsprobe je Stadt (reference.rvd mit ags, alle Arten, z. B. Düsseldorf): Kommunal-Bericht mit Bruchmarken, kalibriert wie der Bericht
+    own.byAgsAll = {};
+    for (const e of (ref?.rvd || []).filter(x => x.ags && x.ags !== K.BERLIN && x.type === 'all')) {
+      const rp = D.length ? R.municipalReport({ docs: D, hists: H, ags: e.ags, pop: latest?.municipalities?.[e.ags]?.pop || null, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : null; if (!rp) continue;
+      const cr = K.calibrateReport(rp, c.k, { limits, kinds }), ct = cr.applied ? cr.totals : null;
+      own.byAgsAll[e.ags] = { rvd: rp.totals.rvd, per1000Fleet: rp.totals.per1000Fleet, per1000Rides: rp.totals.per1000Rides, rvdCal: ct?.rvd ?? null, per1000RidesCal: ct?.per1000Rides ?? null, breaks: rp.quality.breaks };
+    }
+    c.checks = K.plausibilityChecks(ref, own, c.k, lang());
+    return { ...c, ref, own, days: ok.map(x => x[1]), berlinReport, breaks };
+  })().catch(e => { console.error('Kalibrierung', e); return { assume: K.rideAssumptions(null, lang()), limits: {}, k: { applied: false, status: 'off', statusText: t('rep.calibrationCannotBeComputed'), reason: t('rep.calibrationCannotBeComputed') }, kinds: {}, coverage: [], checks: [], ref: null, own: {}, days: [], hasReference: false }; }));
   return CALIB_CACHE.get(key);
 }
 // Kurzbeschreibung des Faktors für Notizen und CSV, z. B. „Berlin Q4/2025 · vorläufig“
@@ -123,7 +139,7 @@ const CSS = `
 .rp-qual>div{min-width:0}
 .rp-grid2{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
 .rp-report .tbl{max-height:none}
-.rp-root td .sub-line{white-space:normal}
+.rp-root td .sub-line{white-space:normal}.rp-root td .sub-line.nw{white-space:nowrap}
 .rp-root tfoot td{font-weight:600;border-top:1px solid var(--line-2);border-bottom:0}
 a.pick-cell{white-space:nowrap}
 .rp-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0;flex:none}
@@ -212,7 +228,7 @@ const STATUS_DEF = () => ({ ok: ['✓', 'ok'], near: ['!', t('rep.nearStatus')],
 const badge = (s) => `<span class="rp-status ${s}"><i aria-hidden="true">${STATUS_DEF()[s][0]}</i>${STATUS_DEF()[s][1]}</span>`;
 const safeLink = (ctx, url, label) => (/^https?:\/\//i.test(String(url || '')) ? `<a href="${ctx.esc(url)}" target="_blank" rel="noopener">${ctx.esc(label)}</a>` : ctx.esc(label));
 const rampSpans = (from = 1, to = 8) => Array.from({ length: to - from + 1 }, (_, i) => `<span class="rp-s${from + i}"></span>`).join('');
-const pctTxt = (ctx, v, d = 1) => (v == null ? '—' : `${ctx.fmt(v * 100, d)} %`);
+const pctTxt = (ctx, v, d = 1) => (v == null ? '—' : `${ctx.fmt(v * 100, d)} %`);
 const num = (ctx, v, d = 0) => (v == null || !Number.isFinite(v) ? '—' : ctx.fmt(v, d));
 const cnt = (ctx, v) => (R.suppressed(v) ? `&lt; ${R.MIN_COUNT}` : num(ctx, v)); // Fahrten-Zählung mit Datenschutz-Schwelle
 const kmTxt = (ctx, v) => (v == null ? null : `${ctx.fmt(v, 2)} km`);
@@ -312,7 +328,7 @@ function scooterAgg(rep, cal = null) {
 // Fahrt-Referenz als Text: Spanne, Median, Mittel je km und Minuten
 const fd = (ctx, x) => num(ctx, x, Math.abs(x * 10 - Math.round(x * 10)) > 1e-9 ? 2 : 1);
 function tripTxt(ctx, r) {
-  const one = (unit, mean, med, lo, hi) => [lo != null && hi != null ? `${fd(ctx, lo)}–${fd(ctx, hi)} ${unit}` : null, med != null ? t('rep.median', { v0: fd(ctx, med), unit }) : null, mean != null ? `Ø ${fd(ctx, mean)} ${unit}` : null].filter(Boolean).join(', ');
+  const one = (unit, mean, med, lo, hi) => [lo != null && hi != null ? `${fd(ctx, lo)}–${fd(ctx, hi)} ${unit}` : null, med != null ? t('rep.median', { v0: fd(ctx, med), unit }) : null, mean != null ? `Ø ${fd(ctx, mean)} ${unit}` : null].filter(Boolean).join(', ');
   return [one('km', r.kmMittel, r.kmMedian, r.kmMin, r.kmMax), one(t('rep.min2'), r.minMittel, r.minMedian, r.minMin, r.minMax)].filter(Boolean).join(' · ');
 }
 // Flotte laut Quelle: Berlin genehmigt (Abgeordnetenhaus), München aktiv (Stadtrat: keine Genehmigungspflicht)
@@ -322,7 +338,16 @@ function referenceRows(ctx, ref, rep, cal = null) {
   const own = scooterAgg(rep, cal); const rows = []; const client = isClient();
   const src = (r) => safeLink(ctx, r.url, r.quelle || t('rep.source'));
   const ownRvd = (r) => { if (r.type !== 'scooter' || own?.rvd == null) return '—'; if (client) return num(ctx, own.rvdCal ?? own.rvd, 2); return `${num(ctx, own.rvd, 2)}${own.rvdCal != null ? `<div class="sub-line">${t('rep.calibrated', { ctx: num(ctx, own.rvdCal, 2) })}</div>` : ''}`; };
-  for (const r of (ref.rvd || []).filter(x => x.ags === rep.ags)) rows.push([t('rep.tripsPerVehiclePerDay', { typeName: ctx.esc(typeName(r.type)) }), num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), ownRvd(r)]);
+  // Stadtwerte über alle Arten (Düsseldorf, SMM-CPI): eigene Summen nur ohne Anbieter-/Artfilter vergleichbar; Hinweis „Jahresmittel, alle Arten, MDS“
+  const allOk = ctx.state.operator === 'all' && ctx.state.type === 'all', tq = rep.totals, ct = cal?.applied ? cal.totals : null;
+  const ownAll = (v, vc, d) => (!allOk || v == null ? '—' : client ? num(ctx, vc ?? v, d) : `${num(ctx, v, d)}${vc != null ? `<div class="sub-line">${t('rep.calibrated', { ctx: num(ctx, vc, d) })}</div>` : ''}`);
+  const tyName = (r) => (r.type === 'all' ? t('rep.allVehicleTypes') : typeName(r.type));
+  for (const r of (ref.rvd || []).filter(x => x.ags === rep.ags)) {
+    const hint = r.type === 'all' && r.hinweis ? `<div class="sub-line"><span translate="no">${ctx.esc(r.hinweis)}</span></div>` : '';
+    rows.push([t('rep.tripsPerVehiclePerDay', { typeName: ctx.esc(tyName(r)) }) + hint, num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), r.type === 'all' ? ownAll(tq.rvd, ct?.rvd, 2) : ownRvd(r)]);
+    if (r.type === 'all' && r.flotteJe1000 != null) rows.push([`${t('rep.vehiclesPer1000Residents')} · ${ctx.esc(tyName(r))}`, num(ctx, r.flotteJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Fleet, null, 1)]);
+    if (r.type === 'all' && r.fahrtenJe1000 != null) rows.push([`${t('rep.tripsPer1000ResidentsAndDay')} · ${ctx.esc(tyName(r))}`, num(ctx, r.fahrtenJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Rides, ct?.per1000Rides, 1)]);
+  }
   for (const r of (ref.fahrt || []).filter(x => x.ags === rep.ags)) rows.push([t('rep.trip', { typeName: ctx.esc(typeName(r.type)) }), tripTxt(ctx, r), ctx.esc(r.zeitraum || ''), src(r), [kmTxt(ctx, own?.avgKm), minTxt(ctx, own?.avgMin)].filter(Boolean).join(' · ') || t('rep.notMeasurable')]);
   for (const r of (ref.flotte || []).filter(x => x.ags === rep.ags)) rows.push([`${fleetLabel(r)} · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert), r.stand ? dd(r.stand) : '', src(r), own ? `${t('rep.inOpenFeeds', { ctx: num(ctx, own.fleet) })}<div class="sub-line">${pctTxt(ctx, own.fleet / r.wert, 1)} ${r.art === 'genehmigt' ? t('rep.ofLicensedFleetLowerBoundOf') : r.art === 'aktiv' ? t('rep.ofActiveFleet') : t('rep.ofFleetAccordingToSource')}</div>` : '—']);
   for (const r of (ref.fahrten || []).filter(x => x.ags === rep.ags)) rows.push([t('rep.tripsPerYear', { typeName: ctx.esc(typeName(r.type)) }), num(ctx, r.wert), ctx.esc(r.zeitraum || ''), src(r), '—']);
@@ -332,12 +357,14 @@ function referenceRows(ctx, ref, rep, cal = null) {
 }
 const meta_lim = (calib) => calib?.limits?.scooter ?? null;
 // Kalibrierung in einem Satz (Kundenansicht ohne Methodikbegriffe)
-function calibText(ctx, calib) {
+// Zustand (Z3): gesperrt / vorläufig / angewandt mit Freigabedatum; Gruppen anderer Kennungsart (cal.skipped) bleiben gemessen
+function calibText(ctx, calib, cal = null) {
   const k = calib?.k; const { fmt } = ctx;
   if (isClient()) return k?.applied ? t('rep.eScooterTripsCalibratedTo', { v0: safeLink(ctx, k.ref.url, k.ref.quelle || t('rep.source')) }) : t('rep.notCalibrated');
   if (!k?.applied) return t('rep.notCalibrated2', { v0: ctx.esc(k?.reason || t('rep.noReference')) });
   const m = k.measured;
-  return t('rep.eScooterTripsRangeOfficial', { k: fmt(k.k, 2), kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2), quarter: ctx.esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(m.rvd, 2), source: ctx.esc(k.source), v7: plural(m.days, t('rep.day'), t('rep.days')), v8: pctTxt(ctx, k.obsShare, 0), v9: dd(m.from), v10: dd(m.to), rule: ctx.esc(k.rule), v12: k.prelim ? ` · ${t('rep.preliminary2')} <span class="muted">(${ctx.esc(k.prelimWhy.join(', '))})</span>` : '', v13: k.single ? ` · <span class="muted">${t('rep.limitation', { single: ctx.esc(k.single) })}</span>` : '', v14: m.excluded?.length ? ` · <span class="muted">${t('rep.excludedOvercount', { join: ctx.esc(m.excluded.map(x => x.op).join(', ')) })}</span>` : '', meta_lim: fmt(meta_lim(calib), 2), v16: safeLink(ctx, k.ref.url, k.ref.quelle || t('rep.source')) });
+  const skip = cal?.skipped?.length ? ` · ${t('cal.skipped', { v0: ctx.esc([...new Set(cal.skipped.map(x => `${x.op} (${K.kindText(x.kind, lang())})`))].join(', ')) })}` : '';
+  return `${ctx.esc(k.statusText || '')} · ${ctx.esc(k.onlyKind || '')}${skip} · ` + t('rep.eScooterTripsRangeOfficial', { k: fmt(k.k, 2), kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2), quarter: ctx.esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(m.rvd, 2), source: ctx.esc(k.source), v7: plural(m.days, t('rep.day'), t('rep.days')), v8: pctTxt(ctx, k.obsShare, 0), v9: dd(m.from), v10: dd(m.to), rule: ctx.esc(k.rule), v12: k.prelim ? ` · ${t('rep.preliminary2')} <span class="muted">(${ctx.esc(k.prelimWhy.join(', '))})</span>` : '', v13: k.single ? ` · <span class="muted">${t('rep.limitation', { single: ctx.esc(k.single) })}</span>` : '', v14: m.excluded?.length ? ` · <span class="muted">${t('rep.excludedOvercount', { join: ctx.esc(m.excluded.map(x => x.op).join(', ')) })}</span>` : '', meta_lim: fmt(meta_lim(calib), 2), v16: safeLink(ctx, k.ref.url, k.ref.quelle || t('rep.source')) });
 }
 function qualityBlock(ctx, rep, extra) {
   const q = rep.quality, { fmt, esc } = ctx; const arch = q.source === 'archiv';
@@ -352,12 +379,14 @@ function qualityBlock(ctx, rep, extra) {
     [t('rep.durationAndDistance'), arch ? t('rep.notContainedInArchive') : t('rep.onlyWithStableVehicleIdsAnd', { MIN_TRIPS_MEASURED: R.MIN_TRIPS_MEASURED, v1: q.taintedDays.length ? t('rep.leftOutGapCounted', { v0: q.taintedDays.map(d => dm(d)).join(', ') }) : '' })],
     ...(q.incompleteGroups?.length ? [[t('rep.incompleteGroups'), t('rep.incompleteGroupsTxt', { v0: esc(q.incompleteGroups.map(k => k.replace('|', ' ')).join(', ')) })]] : []),
     ...(q.mixedRuleDays?.length ? [[t('rep.ruleVersions'), t('rep.mixedRuleDays', { v0: q.mixedRuleDays.map(d => dm(d.day)).join(', ') })]] : []),
+    // Bruchmarken (Z2): je Tag die betroffenen Reihen; Tage davor zählen für sie nicht, am Bruchtag nur Stunden mit dem neuen Regelstand
+    ...(q.breaks?.length ? [[t('cal.breaksTitle'), [...new Set(q.breaks.map(b => b.day))].sort().map(d => t(arch ? 'cal.breakTxtArch' : 'cal.breakTxt', { day: dd(d), v1: esc(q.breaks.filter(b => b.day === d).map(b => `${b.key.split('|')[0]} ${typeName(b.key.split('|')[1])}`).join(', ')) })).join(' · ')]] : []),
     ...extra,
   ];
   return `<dl class="rp-qual${q.prelim ? ' prelim' : ''}">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
 }
 // Wert mit Spanne darunter (kalibriert)
-const withSpan = (ctx, v, lo, hi, d = 0, bold = false) => `${bold ? '<b>' : ''}${num(ctx, v, d)}${bold ? '</b>' : ''}${lo != null && hi != null && Math.abs(hi - lo) > 1e-9 ? `<div class="sub-line">${num(ctx, lo, d)}–${num(ctx, hi, d)}</div>` : ''}`;
+const withSpan = (ctx, v, lo, hi, d = 0, bold = false) => `${bold ? '<b>' : ''}${num(ctx, v, d)}${bold ? '</b>' : ''}${lo != null && hi != null && Math.abs(hi - lo) > 1e-9 ? `<div class="sub-line nw">${num(ctx, lo, d)}–${num(ctx, hi, d)}</div>` : ''}`;
 function groupTable(ctx, rep, cal = null) {
   const { esc, opColor } = ctx; const tq = rep.totals; const client = isClient(); const C = cal?.applied ? cal : null;
   const notMeasurable = `<span class="muted" title="${t('rep.idsChangeWithEveryTripOr')}">${t('rep.notMeasurable')}</span>`;
@@ -366,9 +395,9 @@ function groupTable(ctx, rep, cal = null) {
   const rdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.ridesDay, c.lo, c.hi) : num(ctx, g.ridesDay); };
   const rvdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : `<b>${num(ctx, g.rvd, 2)}</b>`; };
   const calCol = C && !client;
-  const calCell = (g) => { const c = cOf(g); return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) + (c.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '') : `<span class="muted" title="${t('rep.onlyEScootersAreCalibrated')}">—</span>`; };
-  const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? ` · ${t('rep.currentFleetOnly')}` : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(tx(g.flags[0]))}</div>` : ''}</td>
-    <td class="n">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, g.rides)}</td>`}<td class="n">${rdCell(g)}</td><td class="n">${rvdCell(g)}</td>${calCol ? `<td class="n">${calCell(g)}</td>` : ''}
+  const calCell = (g) => { const c = cOf(g); const sk = C?.groups.get(g.key)?.skipKind; if (sk) return `<span class="muted">${t('cal.notKind', { v0: esc(K.kindText(sk, lang())) })}</span>`; return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) + (c.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '') : `<span class="muted" title="${t('rep.onlyEScootersAreCalibrated')}">—</span>`; };
+  const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? ` · ${t('rep.currentFleetOnly')}` : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(mbFlagText(g.flags))}</div>` : ''}</td>
+    <td class="n">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line nw">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, g.rides)}</td>`}<td class="n">${rdCell(g)}</td><td class="n">${rvdCell(g)}</td>${calCol ? `<td class="n">${calCell(g)}</td>` : ''}
     <td class="n">${g.avgMin != null ? t('rep.atMost', { v0: minTxt(ctx, g.avgMin) }) : notMeasurable}</td><td class="n">${kmTxt(ctx, g.avgKm) || notMeasurable}</td><td class="n">${pctTxt(ctx, g.disabledShare)}${g.disabledSource === 'aktuell' ? `<div class="sub-line">${t('rep.current')}</div>` : ''}</td><td class="n">${num(ctx, g.per1000Fleet, 2)}</td></tr>`).join('');
   const ct = C?.totals; const cols = 9 + (calCol ? 1 : 0) - (client ? 1 : 0);
   const footRd = client && ct ? withSpan(ctx, ct.ridesDay, ct.lo, ct.hi) : num(ctx, tq.ridesDay), footRvd = client && ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : num(ctx, tq.rvd, 2);
@@ -376,10 +405,11 @@ function groupTable(ctx, rep, cal = null) {
     <tbody>${rows || `<tr><td colspan="${cols}" class="empty">${t('rep.noVehiclesInFilterSet')}</td></tr>`}</tbody>
     ${rep.groups.length > 1 ? `<tfoot><tr><td>${t('rep.total', { v0: tq.excluded.length ? `<div class="sub-line">${t('rep.tripsWithoutImplausible', { join: esc(tq.excluded.map(k => k.replace('|', ' ')).join(', ')) })}</div>` : '' })}</td><td class="n">${num(ctx, tq.fleet)}</td>${client ? '' : `<td class="n">${num(ctx, tq.rides)}</td>`}<td class="n">${footRd}</td><td class="n">${footRvd}</td>${calCol ? `<td class="n">${ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : '—'}</td>` : ''}<td></td><td></td><td class="n">${pctTxt(ctx, tq.disabledShare)}</td><td class="n">${num(ctx, tq.per1000Fleet, 2)}</td></tr></tfoot>` : ''}</table></div>`;
 }
-function dailyTable(ctx, rep, k = null, limits = null) {
+function dailyTable(ctx, rep, k = null, limits = null, cal = null) {
   const { esc } = ctx; const client = isClient();
   // kalibriert je Tag: E-Scooter-Fahrten × k (höchstens bis zur Plausibilitätsgrenze je Gruppe), andere Arten gemessen, ÷ beobachteter Anteil
-  const calDay = (d) => { if (!k?.applied || !(d.coverage > 0)) return null; let r = 0, any = false; for (const [key, v] of Object.entries(d.byGroup)) { const sc = key.split('|')[1] === 'scooter'; if (sc && v.rides) any = true; const f = sc ? K.cappedFactor(k.k, v.fleet > 0 ? (v.rides || 0) / d.coverage / v.fleet : null, limits?.scooter ?? null).f : 1; r += (v.rides || 0) * f; } return any ? r / d.coverage : null; };
+  const kOk = (key) => !cal || !!cal.groups.get(key)?.calibrated; // Kennungsart wie die Referenz (calibrateReport), sonst gemessen
+  const calDay = (d) => { if (!k?.applied || !(d.coverage > 0)) return null; let r = 0, any = false; for (const [key, v] of Object.entries(d.byGroup)) { const sc = key.split('|')[1] === 'scooter' && kOk(key); if (sc && v.rides) any = true; const f = sc ? K.cappedFactor(k.k, v.fleet > 0 ? (v.rides || 0) / d.coverage / v.fleet : null, limits?.scooter ?? null).f : 1; r += (v.rides || 0) * f; } return any ? r / d.coverage : null; };
   const rows = rep.daily.map(d => {
     const byOp = new Map(); for (const [key, v] of Object.entries(d.byGroup)) { const op = key.split('|')[0]; byOp.set(op, (byOp.get(op) || 0) + (v.fleet || 0)); }
     const ops = [...byOp].filter(([, v]) => v >= 0.5).sort((a, b) => b[1] - a[1]).map(([o, v]) => `${esc(o)} ${num(ctx, v)}`).join(' · '); // Anbieter mit gerundet 0 Fahrzeugen nicht als „Zeus 0“
@@ -441,15 +471,20 @@ function reportHtml(ctx, rep, meta, ref) {
   if (gaps.length) extra.push([t('rep.operatorsWithoutOpenFeed'), gaps.map(g => `${esc(g.operator)}${g.since ? ` ${t('rep.since', { v0: dd(g.since) })}` : ''}`).join(', ') + ` <span class="muted">${t('rep.missingFromAllFigures')}</span>`]);
   if (meta.missing.length) extra.push([q.source === 'archiv' ? t('rep.daysWithoutArchiveValues') : t('rep.dailyFilesMissing'), meta.missing.length > 8 ? `${plural(meta.missing.length, t('rep.day'), t('rep.days'))} (${meta.missing.slice(0, 4).map(dd).join(', ')} …)` : meta.missing.map(dd).join(', ')]);
   if (q.source === 'archiv') extra.push([t('rep.period'), t('rep.extendsBeyond30DaysOfDaily', { kind: esc(PKIND(meta.period.kind)), label: esc(meta.period.label) })]);
-  if (meta.calib && rep.groups.some(g => g.ty === 'scooter')) extra.push([t('rep.calibration'), calibText(ctx, meta.calib)]);
+  if (meta.calib && rep.groups.some(g => g.ty === 'scooter')) extra.push([t('rep.calibration'), calibText(ctx, meta.calib, meta.cal)]);
   // Kennzahlen mit Fahrten: kalibriert (E-Scooter × k) mit Spanne, gemessen daneben; Kundenansicht nur kalibriert
-  const calTile = (label, v, lo, hi, d, measured, sub) => (C && v != null
+  const calTile0 = (label, v, lo, hi, d, measured, sub) => (C && v != null
     ? tile(label, num(ctx, v, d), t('rep.range', { v0: client ? '' : `${t('rep.measured', { ctx: num(ctx, measured, d) })} · `, ctx: num(ctx, lo, d), ctx2: num(ctx, hi, d), v3: client ? t('rep.calibratedToOfficialBerlin') : t('rep.eScootersCalibrated3', { calibLabel: esc(calibLabel(k)) }), v4: client ? '' : pre }))
     : tile(label, num(ctx, measured, d), sub));
+  // Reifegrad an den Fahrten-Kennzahlen (Messbasis der Tage des Berichts, Tagtyp der meisten Tage, Regelstand wie quality.rule)
+  const mbLand = ctx.state.latest?.municipalities?.[rep.ags]?.state || null, mbB = mbBase(ctx.state, { land: mbLand, days: rep.days, rule: typeof q.rule === 'string' ? q.rule : undefined });
+  const mbRep = mbBadge(mbB, 'full3', { dayType: mbMainType(rep.days, mbLand, ctx.state.calendar), curve: q.profileSource ? t('mb.curve', { v: esc(tx(q.profileSource)) }) : null });
+  const calTile = (...a) => mbInTile(calTile0(...a), mbRep);
   const tiles = [
     tile(t('rep.avgFleet'), num(ctx, tq.fleet), t('rep.vehiclesInFeedInclDisabled', { v0: plural(rep.groups.length, t('rep.opTypeOne'), t('rep.opTypeMany')) })),
     client ? '' : tile(t('rep.tripsMeasured'), num(ctx, tq.rides), t('rep.inHOfObservation', { v0: fmt(q.obsMin / 60, 1), v1: q.source === 'archiv' ? '' : ` ${t('rep.withoutGapHours')}` })),
-    calTile(t('rep.tripsPerDay'), C?.ridesDay, C?.lo, C?.hi, 0, tq.ridesDay, t('rep.extrapolatedVia', { v0: q.source === 'archiv' ? t('rep.observedShareOfDay') : t('rep.dailyProfile'), pre })),
+    // Basis im Titel: Mittel über die Tage des Zeitraums (Nutzung › Umsatz nennt dort den einzelnen Tag)
+    calTile(t('rep.tripsPerDay', { days: plural(rep.days.length, t('rep.day'), t('rep.days')) }), C?.ridesDay, C?.lo, C?.hi, 0, tq.ridesDay, t('rep.extrapolatedVia', { v0: q.source === 'archiv' ? t('rep.observedShareOfDay') : t('rep.dailyProfile'), pre })),
     calTile(t('rep.tripsPerVehiclePerDay2'), C?.rvd, C?.rvdLo, C?.rvdHi, 2, tq.rvd, t('rep.tripsDayAvgFleet', { pre })),
     q.source === 'archiv' ? '' : tile(t('rep.disabledRate'), pctTxt(ctx, tq.disabledShare), t('rep.disabledVehiclesInFleetMean')),
     tile(t('rep.vehiclesPer1000Residents'), num(ctx, tq.per1000Fleet, 1), rep.pop ? t('rep.residents', { pop: fmt(rep.pop) }) : t('rep.populationMissing')),
@@ -467,7 +502,7 @@ function reportHtml(ctx, rep, meta, ref) {
     <section class="rp-sec"><h3>${t('rep.dataQuality')}</h3>${qualityBlock(ctx, rep, extra)}</section>
     <section class="rp-sec"><h3>${t('rep.metrics')}</h3><div class="sub">${t('rep.structuredAfterListOfMetrics', { v0: C ? (client ? t('rep.eScooterTripsCalibratedTo2') : t('rep.tripMetricsCalibrated')) : '' })}</div><div class="rp-tilewrap"><div class="tiles rp-tiles" style="--rp-cols:${tileCols}">${tiles.join('')}</div></div></section>
     <section class="rp-sec"><h3>${t('rep.perOperatorAndVehicleType')}</h3><div class="sub">${t('rep.meanOverPeriodFleetWithRange')}</div>${groupTable(ctx, rep, meta.cal)}</section>
-    <section class="rp-sec"><h3>${t('rep.dailyValues')}</h3><div class="sub">${t('rep.fleetPerDayObservationAnd')}</div>${dailyTable(ctx, rep, k, meta.calib?.limits)}</section>
+    <section class="rp-sec"><h3>${t('rep.dailyValues')}</h3><div class="sub">${t('rep.fleetPerDayObservationAnd')}</div>${dailyTable(ctx, rep, k, meta.calib?.limits, meta.cal)}</section>
     ${q.source === 'archiv' ? '' : cellsSection(ctx, rep, meta.s)}
     ${referenceRows(ctx, ref, rep, meta.cal)}
     <footer class="rp-sec small muted"><h3>${t('rep.method')}</h3><p style="margin:0 0 var(--s1)">${t('rep.basisIsOperatorsOpenLive')}</p><p style="margin:0">${t('rep.tripsPerDayAreMeasuredTrips', { calMethod, v1: esc(ctx.CFG.REPO || '') })}</p></footer>
@@ -516,9 +551,9 @@ export async function renderReport(el, ctx) {
     let rep, missing, ref;
     const calibP = loadCalibration(ctx); const limits = (await calibP).limits || null; if (tok !== s.tok) return;
     if (useArchive) {
-      const [{ archive, fields }, r] = await Promise.all([archiveFor(ctx, days), reference(ctx)]); ref = r;
+      const [{ archive, fields }, r, daily] = await Promise.all([archiveFor(ctx, days), reference(ctx), dailyDoc(ctx).catch(() => null)]); ref = r;
       if (tok !== s.tok) return;
-      rep = R.archiveReport({ archive, fields, ags, pop: m.pop || null, operator: state.operator, type: state.type, days, rvdLimit: limits });
+      rep = R.archiveReport({ archive, fields, ags, pop: m.pop || null, operator: state.operator, type: state.type, days, rvdLimit: limits, eventChecks: state.latest.eventChecks, breaks: daily?.breaks || null });
       missing = days.filter(d => !archive[d]);
     } else {
       const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
@@ -528,11 +563,11 @@ export async function renderReport(el, ctx) {
       if (tok !== s.tok) return;
       const cells = {}, cellRuns = {};
       days.forEach((d, i) => { const c = cdocs[i]; if (c?.munis) { cells[d] = c.munis[ags] || {}; cellRuns[d] = sum(c.bandRuns) || (docs[i]?.runs || []).length; } });
-      rep = R.municipalReport({ docs: docs.filter(Boolean), hists: Object.fromEntries(days.map((d, i) => [d, hists[i]]).filter(x => x[1])), cells, cellRuns, ags, pop: m.pop || null, operator: state.operator, type: state.type, latestGroups: state.latest.groups, rvdLimit: limits });
+      rep = R.municipalReport({ docs: docs.filter(Boolean), hists: Object.fromEntries(days.map((d, i) => [d, hists[i]]).filter(x => x[1])), cells, cellRuns, ags, pop: m.pop || null, operator: state.operator, type: state.type, latestGroups: state.latest.groups, rvdLimit: limits, eventChecks: state.latest.eventChecks, breaks: daily?.breaks || null });
       missing = days.filter((d, i) => !docs[i]);
     }
     const calib = await calibP; if (tok !== s.tok) return;
-    const cal = K.calibrateReport(rep, calib.k, { limits: calib.limits });
+    const cal = K.calibrateReport(rep, calib.k, { limits: calib.limits, kinds: calib.kinds }); // k nur für die Kennungsart der Berliner Referenz
     const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive };
     s.rep = rep; s.meta = meta;
     put(head(t('rep.municipalReport2'), t('rep.printableReportPer2', { name: esc(name) }), reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref));
@@ -1062,6 +1097,7 @@ export function renderFeedChecks(el, ctx) {
     <td class="small">${c.findings.slice(0, 3).map(f => `<div>${f.level === 'error' ? t('rep.error') : t('rep.warning')}: ${esc(tx(f.text)).slice(0, 160)}</div>`).join('') || `<span class="muted">${t('rep.noFindings')}</span>`}${Math.max(c.findings.length, c.errors + c.warnings) > 3 ? `<div class="muted">${t('rep.more', { v0: Math.max(c.findings.length, c.errors + c.warnings) - 3 })}</div>` : ''}</td></tr>`).join('');
   el.innerHTML = title + `<div class="muted small" style="margin-bottom:var(--s2)">${t('rep.checkedWithoutFindingsWith', { v0: plural(checked.length, t('rep.source'), t('rep.sources')), ok, length: checked.filter(x => x.c.errors).length })}</div>
     <div class="tbl"><table><thead><tr><th>${t('rep.source')}</th><th class="n">${t('rep.error')}</th><th class="n">${t('rep.warnings')}</th><th>${t('rep.firstFindings')}</th></tr></thead><tbody>${rows}</tbody></table></div>${checked.length > 300 ? `<div class="muted small">${t('rep.moreSourcesNarrowArea', { v0: checked.length - 300 })}</div>` : ''}`;
+  el.insertAdjacentHTML('beforeend', mbAmpelHtml(ctx)); // Ampel der Ereignisregeln je Gruppe (Messbasis)
 }
 
 // ======================================================================
@@ -1186,13 +1222,17 @@ function availTable(ctx, s, d) {
     <td class="n">${pctCell(ctx, r.dayMean)}</td><td class="n">${pctCell(ctx, r.dayMin)}${r.dayMinAt ? `<div class="sub-line">${hhmm(r.dayMinAt)}</div>` : ''}</td></tr>`).join('');
   return `<div class="tbl"><table>${sortHead(AV_COLS_DEF(), s.sort)}<tbody>${body || `<tr><td colspan="${AV_COLS_DEF().length}" class="empty">${t('rep.noCityInFilterLowerMinimum')}</td></tr>`}</tbody></table></div>${moreBtn(show.length, d.rows.length)}`;
 }
-// Liniendiagramm: eine Achse 0–100 %, Farbe je Anbieter, Lücken > 45 Min. als Unterbrechung, Direktbeschriftung am Ende
+// Liniendiagramm: eine Achse bis 100 %, Farbe je Anbieter, Lücken > 45 Min. als Unterbrechung, Direktbeschriftung am Ende.
+// y-Achse auf den Datenbereich (Linie, kein Balken: Untergrenze darf über 0 liegen): 5 Punkte unter dem kleinsten Wert, auf die Teilung
+// abgerundet (Werte 97–100 % → Achse 90–100 %); Achsentitel nennt die Größe, die unterste Marke den Beginn
 function lineChart(ctx, tq, series, { W = 900, H = 280 } = {}) {
-  const P = { l: 46, r: 132, t: 14, b: 30 };
+  const P = { l: 46, r: 132, t: 22, b: 30 };
   const HOUR = 3600e3; const t0 = Math.floor(tq[0] / HOUR) * HOUR, t1 = Math.max(t0 + HOUR, Math.ceil(tq[tq.length - 1] / HOUR) * HOUR);
-  const x = (v) => P.l + ((v - t0) / (t1 - t0)) * (W - P.l - P.r), y = (v) => P.t + (1 - v) * (H - P.t - P.b);
-  let g = '';
-  for (const v of [0, 0.25, 0.5, 0.75, 1]) g += `<line class="${v === 0 ? 'base' : 'grid'}" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 3.5}" text-anchor="end">${v * 100} %</text>`;
+  const vals = series.flatMap(s => s.values.filter(v => v != null)), lo0 = vals.length ? Math.max(0, Math.min(...vals) - 0.05) : 0;
+  const yStep = [0.01, 0.02, 0.05, 0.1, 0.25].find(s => (1 - lo0) / s <= 4) || 0.25, lo = Math.floor(lo0 / yStep + 1e-9) * yStep;
+  const x = (v) => P.l + ((v - t0) / (t1 - t0)) * (W - P.l - P.r), y = (v) => P.t + (1 - (v - lo) / (1 - lo)) * (H - P.t - P.b);
+  let g = `<text x="2" y="${P.t - 10}">${t('rep.availAxis')}</text>`;
+  for (let k = 0, v = lo; v <= 1 + 1e-9; k++, v = lo + k * yStep) g += `<line class="${k === 0 ? 'base' : 'grid'}" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 3.5}" text-anchor="end">${ctx.fmt(v * 100, Math.abs(v * 100 - Math.round(v * 100)) > 1e-6 ? 1 : 0)} %</text>`;
   const span = (t1 - t0) / HOUR; const step = [1, 2, 3, 4, 6, 12].find(s => span / s <= 8) || 24;
   for (let tt = t0; tt <= t1; tt += step * HOUR) g += `<text x="${x(tt)}" y="${H - 8}" text-anchor="middle">${hhmm(tt)}</text>`;
   const lines = series.map((s) => {
@@ -1342,13 +1382,14 @@ async function rankingInputs(ctx) {
   const [docs, hs] = await Promise.all([Promise.all(days.map(d => eventsDoc(ctx, idx, d))), Promise.all(days.map(d => histFor(ctx, hidx, daily, d)))]);
   const ok = docs.map((d, i) => [d, days[i], hs[i]]).filter(([d]) => d);
   const limits = (await loadCalibration(ctx)).limits || null;
-  return { docs: ok.map(x => x[0]), hists: Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]])), limits };
+  return { docs: ok.map(x => x[0]), hists: Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]])), limits, breaks: daily?.breaks || null }; // breaks: Bruchmarken (daily.json)
 }
 function rankingFor(ctx, inp, type, operator = 'all') {
   const rvdLimit = inp.limits || null; // Überzählung (über der Kalibrier-Grenze) zählt wie bisher nur bei der Flotte
   const k = `${ctx.state.latest?.at}|${inp.docs.map(d => d.day).join(',')}|${type}|${operator}|${JSON.stringify(rvdLimit)}`;
-  if (!RANK_CACHE.has(k)) { const cur = R.cityRanking(inp.docs, inp.hists, ctx.state.latest, { type, operator, minFleet: 0, rvdLimit }); const per = R.rankingPeriods(inp.docs); let prev = null;
-    if (!per.reason) { const a = R.cityRanking(per.cur, inp.hists, ctx.state.latest, { type, operator, minFleet: 0, rvdLimit }), b = R.cityRanking(per.prev, inp.hists, ctx.state.latest, { type, operator, minFleet: 0, rvdLimit }); prev = { n: per.n, cur: new Map(a.rows.map(r => [r.key, r])), prev: new Map(b.rows.map(r => [r.key, r])), from: per.prev[0].day, to: lastOf(per.prev).day, curFrom: per.cur[0].day, curTo: lastOf(per.cur).day }; }
+  const o = { type, operator, minFleet: 0, rvdLimit, eventChecks: ctx.state.latest?.eventChecks, breaks: inp.breaks || null };
+  if (!RANK_CACHE.has(k)) { const cur = R.cityRanking(inp.docs, inp.hists, ctx.state.latest, o); const per = R.rankingPeriods(inp.docs); let prev = null;
+    if (!per.reason) { const a = R.cityRanking(per.cur, inp.hists, ctx.state.latest, o), b = R.cityRanking(per.prev, inp.hists, ctx.state.latest, o); prev = { n: per.n, cur: new Map(a.rows.map(r => [r.key, r])), prev: new Map(b.rows.map(r => [r.key, r])), from: per.prev[0].day, to: lastOf(per.prev).day, curFrom: per.cur[0].day, curTo: lastOf(per.cur).day }; }
     RANK_CACHE.set(k, { ...cur, prev, reason: per.reason || null }); }
   return RANK_CACHE.get(k);
 }
@@ -1389,7 +1430,7 @@ function drawRanking(el) {
   // Quartalsvergleich (Archiv) vor dem Wochenvergleich
   let qcmp = null;
   if (s.rq) {
-    const A = (ds) => new Map(R.cityRankingArchive(s.rq.archive, state.latest, { fields: s.rq.fields, type: s.type, operator: s.op, days: ds, rvdLimit: s.inp.limits }).rows.map(r => [r.key, r]));
+    const A = (ds) => new Map(R.cityRankingArchive(s.rq.archive, state.latest, { fields: s.rq.fields, type: s.type, operator: s.op, days: ds, rvdLimit: s.inp.limits, breaks: s.inp.breaks || null, eventChecks: state.latest?.eventChecks }).rows.map(r => [r.key, r]));
     const ck = `${s.rq.cur}|${s.type}|${s.op}`; if (s.qcmpKey !== ck) { s.qcmp = { cur: A(s.rq.curDays), prev: A(s.rq.prevDays) }; s.qcmpKey = ck; } qcmp = s.qcmp;
     for (const r of rows) { const a = qcmp.cur.get(r.key), b = qcmp.prev.get(r.key); r.delta = a?.rvd != null && b?.rvd != null ? a.rvd - b.rvd : null; }
   }
@@ -1484,7 +1525,7 @@ svg.rp-scatter .pts circle.on{stroke:var(--fg);stroke-width:2.5}
 // ======================================================================
 // 10. Gebührenrechner (Sondernutzungsgebühr)
 // ======================================================================
-const euro = (ctx, v) => (v == null ? '—' : `${ctx.fmt(v)} €`);
+const euro = (ctx, v) => (v == null ? '—' : `${ctx.fmt(v)} €`);
 const span = (ctx, a, b) => (a == null ? '—' : a === b ? euro(ctx, a) : `${ctx.fmt(a)}–${euro(ctx, b)}`);
 /**
  * Gebührenrechner: gezählte Fahrzeuge × Gebührensatz je Gemeinde aus reference.json → gebuehren (nur Sätze mit Quelle);
@@ -1584,4 +1625,73 @@ export async function renderHotspotStability(el, ctx) {
       + `<div class="note small" style="margin-top:var(--s3)">${t('rep.measureAsInValidationBy', { v0: thin ? t('rep.caseHere') : t('rep.under20Hours') })}</div>`;
   } catch (e) { console.error('Hotspots', e); if (tok === s.tok) el.innerHTML = title + emptyBox(t('rep.notComputable'), t('rep.cellFilesNotLoadable')); }
   finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
+}
+
+// ======================================================================
+// Messbasis: Reifegrad je Kennzahl (research Nr. 15) und Ampel der Ereignisregeln (datamine Nr. 18)
+// ======================================================================
+const mbEsc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const mbNum = (v, d = 0) => (v == null || !Number.isFinite(+v) ? '–' : new Intl.NumberFormat(fmtLocale(), { maximumFractionDigits: d, minimumFractionDigits: d }).format(v));
+const mbPct = (v) => (v == null ? '–' : `${mbNum(v * 100, 0)} %`);
+export const mbTypeName = (k) => t(`mb.type${k}`);
+/**
+ * Messbasis für Abzeichen und Matrix (lib/pulse-econ.js measureBase): latest.json → measure.days (Sammler), bei älterem Datenstand aus den
+ * schon geladenen Tagesdateien (state.usage.docs). land: Land des Gebiets (null = Deutschland), days: nur diese Tage, rule: Regelstand.
+ */
+export function mbBase(state, { land = null, days = null, rule = undefined } = {}) {
+  let md = state?.latest?.measure?.version === 1 ? state.latest.measure.days || {} : null;
+  if (!md) { md = {}; for (const d of Object.values(state?.usage?.docs || {})) if (d?.day) md[d.day] = mbMeasureDay(d); }
+  if (days) { const keep = new Set(days); md = Object.fromEntries(Object.entries(md).filter(([d]) => keep.has(d))); }
+  return mbMeasureBase(md, { land, calendar: state?.calendar || null, ...(rule !== undefined ? { rule } : {}) });
+}
+/** Häufigster Tagtyp einer Tagesliste (Gleichstand: W vor F, S, H) */
+export function mbMainType(days, land = null, calendar = null) {
+  const n = {}; for (const d of days || []) { const k = mbDayType(d, land, calendar); if (k) n[k] = (n[k] || 0) + 1; }
+  return MB_TYPES.reduce((a, k) => ((n[k] || 0) > (n[a] || 0) ? k : a), 'W');
+}
+/**
+ * Abzeichen an einer Kennzahl mit Rate oder Trend: Stufe als Zeichen und Wort (nicht nur Farbe), „Basis x h · Tagtypen W/S/H · Regelstand v“;
+ * der vollständige Satz steht für Screenreader im Text und als Tooltip. need: 'full3' | 'weeks2' | 'weeks4' (lib/pulse-econ.js MATURITY).
+ */
+export function mbBadge(base, need = 'full3', { dayType = null, curve = null } = {}) {
+  if (!base) return '';
+  const m = mbMaturity(base, need, { dayType });
+  const stage = m.met ? t('mb.met') : t('mb.prelim');
+  const types = base.types.length ? base.types.join('/') : '–', rule = base.rule || '–';
+  const needTxt = m.want ? t(`mb.need.${need}`, { want: m.want, have: m.have, type: m.dayType ? mbTypeName(m.dayType) : '' }) : t('mb.need.now');
+  const byType = base.types.map(k => `${mbTypeName(k)} ${mbNum(base.byType[k], 1)} h`).join(', ') || '–';
+  const full = t('mb.aria', { stage, need: needTxt, h: mbNum(base.hours, 1), byType, rule }) + (curve ? ` ${curve}` : '');
+  return `<span class="mb-badge ${m.met ? 'mb-ok' : 'mb-wait'}" title="${mbEsc(full)}"><span aria-hidden="true"><span class="mb-ico"></span><b>${stage}</b>${m.met ? '' : ` ${m.have}/${m.want}`}<span class="mb-meta"> · ${t('mb.base', { h: mbNum(base.hours, 1) })} · ${t('mb.types', { v: types })} · ${t('mb.rule', { v: mbEsc(rule) })}</span></span><span class="vh">${mbEsc(full)}</span></span>`;
+}
+/** Abzeichen in die Unterzeile einer Kachel (HTML aus tile()) bzw. aller Kacheln eines Containers setzen */
+export const mbInTile = (html, badge) => (badge ? String(html).replace(/<\/div><\/div>\s*$/, `<div class="mb-line">${badge}</div></div></div>`) : html);
+export function mbTiles(box, badge) { if (!box || !badge) return; for (const s of box.querySelectorAll('.tile .s')) s.insertAdjacentHTML('beforeend', `<div class="mb-line">${badge}</div>`); }
+/** Regelstände eines Tags (eventChecks.dayRules, "" = ohne Angabe) als Text */
+const mbRules = (rs) => (Array.isArray(rs) && rs.length ? rs.map(r => r || t('mb.ck.noRule')).join(' + ') : t('mb.ck.noRule'));
+/** Befunde der Ampel einer Gruppe als Text (latest.json → eventChecks.groups[k].checks) */
+export function mbChecksText(c) {
+  if (!c) return '';
+  const T0 = { pickup: () => t('mb.ck.pickup', { share: mbPct(c.pickupShare), r: mbNum(c.r, 2) }), se: () => t('mb.ck.se', { v: mbNum(c.se, 2) }), swap0: () => t('mb.ck.swap0', { rides: mbNum(c.rides) }),
+    hide: () => t('mb.ck.hide', { share: mbPct(c.hideShare) }), idle: () => t('mb.ck.idle', { share: mbPct(c.idleUnusable) }), batteryFloor: () => t('mb.ck.floor', { v: mbNum(c.batteryFloor) }),
+    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
+  return (c.flags || []).map(f => (T0[f] ? T0[f]() : f)).join(' · ');
+}
+export const mbLevel = (lv) => (lv === 'bad' ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${t('mb.red')}</span>` : lv === 'warn' ? `<span class="rp-status near"><i aria-hidden="true">!</i>${t('mb.yellow')}</span>` : `<span class="rp-status ok"><i aria-hidden="true">✓</i>${t('mb.green')}</span>`);
+/** Flag-Text im Bericht: Ampel rot vor anderen Flags (Grund für den Ausschluss) */
+const mbFlagText = (flags) => (flags.includes(R.AMPEL_RED) ? t('mb.flagRed') : tx(flags[0]));
+/** Ampel je Gruppe für die Feed-Prüfung (Gebiet und Anbieter wie oben; gelb und rot zuerst, höchstens 60 Zeilen) */
+function mbAmpelHtml(ctx) {
+  const { state, esc } = ctx; const ec = state.latest?.eventChecks;
+  const h = `<h3 class="mb-h">${t('mb.ampelTitle', { day: ec?.day ? dd(ec.day) : '–' })}</h3>`;
+  if (!ec?.groups) return h + `<div class="muted small">${t('mb.ampelNone')}</div>`;
+  const W0 = { bad: 2, warn: 1 };
+  const rows = Object.entries(ec.groups).filter(([k]) => { const [a, op] = k.split('|'); return (!state.scope || state.scope === 'DE' || a === state.scope) && (state.operator === 'all' || op === state.operator); })
+    .sort((a, b) => (W0[b[1].level] || 0) - (W0[a[1].level] || 0) || (b[1].checks?.rides || 0) - (a[1].checks?.rides || 0));
+  const shown = rows.filter(([, v]) => v.level !== 'ok').slice(0, 60), n = (lv) => rows.filter(([, v]) => v.level === lv).length, R0 = ec.rules || {};
+  const body = shown.map(([k, v]) => { const [a, op, ty] = k.split('|'); const c = v.checks || {};
+    return `<tr><td><span class="op"><i style="background:${ctx.opColor(op)}"></i>${esc(op)}</span><div class="sub-line">${esc(typeName(ty))} · ${esc(ctx.muniName(a))}</div></td><td>${mbLevel(v.level)}</td><td class="n">${mbNum(c.rides)}</td><td class="n">${mbPct(c.pickupShare)}<div class="sub-line">r ${mbNum(c.r, 2)}</div></td><td class="n">${mbNum(c.se, 2)}</td><td class="n">${mbNum(c.swapsPer100, 1)}</td><td class="small">${esc(mbChecksText(c))}</td></tr>`; }).join('');
+  const rules = t('mb.ampelRules', { pw: mbPct(R0.pickupWarn ?? 0.1), pb: mbPct(R0.pickupBad ?? 0.2), r: mbNum(R0.pickupR ?? 0.5, 1), lo: mbNum(R0.seWarn?.[0] ?? 0.7, 1), hi: mbNum(R0.seWarn?.[1] ?? 1.3, 1), sw: mbNum(R0.swapZeroRides ?? 300), min: mbNum(R0.minRides ?? 50) });
+  const old = ec.ruleCurrent === false ? ` ${t('mb.ampelOldRule', { rule: esc(mbRules(ec.dayRules)), now: esc(ec.ruleNow || '–'), n: rows.filter(([, v]) => v.was === 'bad').length })}` : '';
+  return h + `<div class="muted small" style="margin-bottom:var(--s2)">${t('mb.ampelSummary', { red: n('bad'), yellow: n('warn'), ok: n('ok') })}${old} ${rules}</div>`
+    + (body ? `<div class="tbl" tabindex="0" role="region" aria-label="${t('mb.ampelAria')}"><table><thead><tr><th>${t('rep.operator2')}</th><th>${t('mb.ampel')}</th><th class="n">${t('mb.rides')}</th><th class="n">${t('mb.pickupShare')}</th><th class="n">${t('mb.se')}</th><th class="n">${t('mb.swaps100')}</th><th>${t('mb.findings')}</th></tr></thead><tbody>${body}</tbody></table></div>` : `<div class="muted small">${t('mb.ampelAllOk')}</div>`);
 }

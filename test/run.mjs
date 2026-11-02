@@ -8,7 +8,7 @@ import * as T from '../lib/pulse-track.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -34,9 +34,10 @@ const cons = JSON.parse(await readFile('test/out/consistency.json', 'utf8'));
 assert(cons.systems.length === 1 && cons.systems[0].verdict === 'consistent' && cons.systems[0].idOverlap === 1, 'Konsistenz: identischer Alternativ-Feed = consistent');
 assert(Array.isArray(cons.pairs), 'Quellenpaare vorhanden (Fixture zu klein für Paare)');
 const idle = JSON.parse(await readFile('test/out/idle.json', 'utf8'));
-assert(idle.groups['08416041|Bolt|scooter']?.[5] === 1, 'Standzeiten aggregiert');
+assert(idle.groups['08416041|Bolt|scooter']?.[6] === 1 && idle.version === 2 && idle.buckets.at(-1) === '> 72 h' && Number.isFinite(idle.trackStart) && idle.censored && Array.isArray(idle.unusable), 'Standzeiten aggregiert (6 Klassen mit > 72 h, Summe an Stelle 7, Mindestwerte je Klasse, Verfolgungsbeginn; Z5/Z6)');
 assert(d.municipalities['08416041']?.c?.length === 2 && Math.abs(d.municipalities['08416041'].c[0] - 48.525) < 1e-6, 'Gemeinde-Mittelpunkt c = [lat, lon]');
 assert(d.sources.find(s => s.id === 'bolt_test').checks?.label?.includes('Basisprüfung') && d.sources.find(s => s.id === 'bolt_test').licenseId === 'CC-BY-4.0', 'Quelle mit Basisprüfung und Lizenz-ID');
+assert(!existsSync('test/out/calendar.json') && d.measure?.version === 1 && !d.eventChecks, 'Kalender offline abgeschaltet (CALENDAR_URL leer, keine calendar.json); Messbasis vorhanden, ohne vollständigen Tag keine Ampel');
 
 // ---------- Läufe 3–5: privater Track-Zustand (TRACK_DIR), Zusatzquellen ----------
 const ex = await startExtra();
@@ -58,6 +59,8 @@ const slow = [{ id: 'slow_test', name: 'Langsam', operator: 'Zeus', api: 'gbfs',
 const auth_sources = { t: { host: new URL(ex.base).host, headers: { 'x-api-key': 'MP_TEST_KEY' }, env: ['MP_TEST_KEY'] } };
 await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, ...slow] }));
 await writeFile(path.join(tmp, 's4.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra] }));
+// nur Lauf 4: 250 neue E-Scooter (Zeus Stuttgart) → Standzeit unbrauchbar (Z5), Befund muss in die Ampel (eventChecks nach der Verfolgung)
+await writeFile(path.join(tmp, 's4i.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, { id: 'zi_test', name: 'Zeus Test', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/rk/z/gbfs.json`, directories: ['mobilitydata'], priority: 2 }] }));
 // Obergrenze für die Testgemeinde (Bolt-E-Scooter), damit der Sammler caps-log.json schreibt
 await writeFile(path.join(tmp, 'ref.json'), JSON.stringify({ obergrenzen: [{ ags: '08416041', ort: 'Tübingen (Test)', type: 'scooter', gesamt: 1, jeAnbieter: 5, quelle: 'Test', url: 'https://example.org' }] }));
 // Städte laut Anbieter (Abdeckung): Bolt nennt Tübingen und Stuttgart, Dott „Tubingen“ (englische Umschrift)
@@ -105,6 +108,7 @@ assert(p3.checks && p3.checks.items.length <= 5 && Number.isInteger(p3.checks.er
 // M8/M18: Archiv-Index mit Tagen, Tagesmittel, Stationsquote mit Spalte virtual
 const ai = JSON.parse(await readFile('test/out/archive/index.json', 'utf8'));
 const dl = JSON.parse(await readFile('test/out/history/daily.json', 'utf8'));
+assert(dl.breaks && typeof dl.breaks === 'object' && !Array.isArray(dl.breaks) && Object.values(dl.breaks).every(d => /^\d{4}-\d{2}-\d{2}$/.test(d)), `history/daily.json: breaks (Bruchmarken je Reihe, Z2; ${Object.keys(dl.breaks || {}).length} Reihen)`);
 const sq3 = JSON.parse(await readFile('test/out/stations-quota.json', 'utf8'));
 assert(ai.days >= 1 && /^\d{4}-\d{2}-\d{2}$/.test(ai.firstDay) && dl.fields.join() === 'available,total,disabled,lowBattery,stations,stationsEmptyDock,runs' && dl.series['08416041|Bolt|scooter'], 'archive/index.json days/firstDay, history/daily.json');
 assert(sq3.fields[8] === 'virtual' && sq3.stations.some(x => x[8] === 1), 'Stationsquote: Spalte virtual');
@@ -135,12 +139,15 @@ assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1
   const bIdx = JSON.parse(await readFile('test/out/boundaries/index.json', 'utf8')), bBW = JSON.parse(await readFile('test/out/boundaries/BW.json', 'utf8'));
   assert(bIdx.version === 1 && bIdx.states.BW.features === bBW.features.length && bBW.features.every(f => Array.isArray(f.bbox) && f.bbox.length === 4 && f.bbox[0] <= f.bbox[2]) && bBW.features.some(f => f.properties.ags === '08416041' && f.bbox.join() === '9,48.49,9.12,48.56') && existsSync('test/out/boundaries-active.json'),
     'Q-6: boundaries/<Land>.json mit bbox je Gemeinde, boundaries/index.json; boundaries-active.json bleibt');
-  assert(ops3.vehicleFields.endsWith(',gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant') && ops3.vehicleFieldsNote?.startsWith('Felder am Zeilenende ohne Wert entfallen') && ops3.vehicles.every(v => v.length >= 10 && v.length <= 12 && (v[9] === 0 || v[9] === 1) && v[v.length - 1] != null),
+  assert(ops3.vehicleFields.endsWith(',gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens') && ops3.vehicleFieldsNote?.startsWith('Felder am Zeilenende ohne Wert entfallen') && ops3.vehicles.every(v => v.length >= 10 && v.length <= 13 && (v[9] === 0 || v[9] === 1) && v[v.length - 1] != null && (v.length < 13 || v[12] === 1)) && Number.isFinite(ops3.trackStart),
     'M-16: ops/<Land>.json Fahrzeugfeld 10 „reichweiteAbgeleitet“ (1/0), Feld 11 „reichweiteSchwelleKm“, Feld 12 „reichweiteKonstant“; keine Zeile endet mit null');
   {
-    const len = (op) => [...new Set(ops3.vehicles.filter(v => ops3.ops[v[2]] === op).map(v => v.length))].join();
+    // Feld 13 standzeitMindestens (Z6) steht bei Fahrzeugen, die seit Beginn der Verfolgung unbewegt sind; die Länge davor wie bisher
+    const core = (v) => { const r = v.slice(0, 12); while (r.length && r[r.length - 1] == null) r.pop(); return r.length; };
+    const len = (op) => [...new Set(ops3.vehicles.filter(v => ops3.ops[v[2]] === op).map(core))].join();
     const plain = ops3.vehicles.filter(v => !['Bird', 'Donkey'].includes(ops3.ops[v[2]]));
-    assert(plain.length > 0 && plain.every(v => v.length === 10) && len('Bird') === '11' && len('Donkey') === '12', `Zeilenlänge: ohne Schwelle/Kennzeichen 10 Felder (Nullen am Ende entfallen), Bird 11 (Schwelle), Donkey 12 (explizites null vor dem Kennzeichen)`);
+    assert(plain.length > 0 && plain.every(v => core(v) === 10) && len('Bird') === '11' && len('Donkey') === '12', `Zeilenlänge: ohne Schwelle/Kennzeichen 10 Felder (Nullen am Ende entfallen), Bird 11 (Schwelle), Donkey 12 (explizites null vor dem Kennzeichen)`);
+    assert(ops3.vehicles.some(v => v[12] === 1) && ops3.vehicles.every(v => v.length < 13 || (v[12] === 1 && v[7] != null)), `Z6: Feld 13 standzeitMindestens = 1 bei seit Verfolgungsbeginn unbewegten Fahrzeugen (${ops3.vehicles.filter(v => v[12] === 1).length} von ${ops3.vehicles.length}), nur mit Standzeit`);
     const O3 = await import('../lib/pulse-ops.js');
     const rf = S3('rf_test'), dv = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'Donkey'), gk = Object.keys(l3.groups).find(k => k.startsWith('08111000|Donkey|')), gD = l3.groups[gk];
     const swapD = O3.decodeFleet(ops3).vehicles.filter(v => v.operator === 'Donkey' && O3.needsSwap(v)).length;
@@ -164,8 +171,30 @@ assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1
 ex.st.price = 1.5; ex.st.manifestUp = false;
 l3.sources.find(s => s.id === 'gone_test').goneSince = Date.now() - 15 * 86400e3;
 await writeFile('test/out/latest.json', JSON.stringify(l3));
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json') });
+// Messbasis/Ampel (Agent M): Vortag als vollständig veröffentlichte Ereignisdatei – Lime mit Abholungen im Takt der Fahrten (rot), Voi unauffällig;
+// Kalender: alte Datei vorhanden, Dienst antwortet 404 → Datei bleibt, Lauf läuft weiter (CALENDAR_URL auf den Testserver)
+const ydM = T.dayOf(Date.now() - 86400e3), m0 = Date.parse(`${ydM}T00:00:00Z`) - 3600e3, H24 = (f) => Array.from({ length: 24 }, (_, h) => f(h));
+await writeFile(`test/out/events/${ydM}.json`, JSON.stringify({ day: ydM, version: 2, runs: Array.from({ length: 72 }, (_, i) => [m0 + (i + 1) * 20 * 60e3, 20 * 60e3, 1, `${T.METHOD_VERSION}@test`]), gapHours: [], hourMin: new Array(24).fill(60),
+  groups: { '08111000|Lime|scooter': { start: H24(h => 10 + h), end: H24(h => 10 + h), pickup: H24(h => 5 + h), swap: H24(() => 1) }, '08111000|Voi|scooter': { start: H24(h => 10 + (h % 5)), end: H24(h => 10 + (h % 5)), pickup: H24(() => 0), swap: H24(() => 1) },
+    '08111000|Zeus|scooter': { start: H24(() => 1), end: H24(() => 1), pickup: H24(() => 0), swap: H24(() => 0) } },
+  published: { at: Date.now(), through: null, complete: true } }));
+const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.000Z', source: 'OpenHolidays API (openholidaysapi.org, ODbL)', from: '2025-01-01', to: '2026-12-31', states: { BW: { '2026-11-02': 'F' } } });
+await writeFile('test/out/calendar.json', calOld);
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+{
+  const E2 = await import('../lib/pulse-econ.js'), ecL = l4.eventChecks?.groups?.['08111000|Lime|scooter'], mY = l4.measure?.days?.[ydM];
+  assert(l4.eventChecks?.day === ydM && ecL?.level === 'bad' && ecL.checks.flags.includes('pickup') && l4.eventChecks.groups['08111000|Voi|scooter']?.level === 'ok' && l4.eventChecks.rules?.pickupBad === E2.EVENT_CHECKS.pickupBad,
+    `Ampel: latest.json → eventChecks des letzten vollständigen Tags (${l4.eventChecks?.day}), Lime rot (Abholung ${ecL?.checks?.pickupShare}, r ${ecL?.checks?.r}), Voi ok`);
+  const zi = l4.sources.find(s => s.id === 'zi_test'), ecZ = l4.eventChecks?.groups?.['08111000|Zeus|scooter'];
+  assert(zi?.idleUnusable === true && zi.idleCheck?.shortShare === 1 && ecZ?.level === 'warn' && ecZ.checks.flags.join() === 'idle' && ecZ.checks.idleUnusable === 1,
+    `Ampel nach der Verfolgung: Standzeit unbrauchbar (Zeus, ${zi?.idleCheck?.n} Fahrzeuge) erscheint als gelber Befund idle (vorher nie, eventChecks vor idleUnusable)`);
+  assert(l4.eventChecks.ruleNow === T.METHOD_VERSION && l4.eventChecks.ruleCurrent === true && l4.eventChecks.dayRules.join() === T.METHOD_VERSION, 'Ampel: Regelstand des ausgewerteten Tags = aktueller Regelstand → rot schließt aus');
+  assert(mY?.full && mY.complete && mY.rules.join() === T.METHOD_VERSION && l4.measure.version === 1 && l4.measure.days[T.dayOf(Date.now())]?.obs?.length === 24 && !l4.measure.days[T.dayOf(Date.now())].complete,
+    'Messbasis: latest.json → measure.days (Vortag voll und abgeschlossen, Regelstand vor „@“; laufender Tag offen)');
+  assert(await readFile('test/out/calendar.json', 'utf8') === calOld && E2.dayType('2026-11-02', 'BW', JSON.parse(calOld)) === 'F' && E2.dayType('2026-11-01', 'BW', null) === 'H',
+    'Kalender: Dienst ohne gültige Antwort → alte calendar.json bleibt; dayType mit Kalender bzw. lokaler Rückfall');
+}
 const ev4 = await evWork();
 const runs4 = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs;
 assert(!existsSync('test/out/track') && ev4.runs.slice(-1)[0][2] === 1 && runs4.slice(-1)[0][9] === 0 && runs4.slice(-1)[0][10] === 0 && runs4.slice(-1)[0][11] === 0, 'Lauf mit gesalzenem Zustand: Flag 1, keine Scheinereignisse');

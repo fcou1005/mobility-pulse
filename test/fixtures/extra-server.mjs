@@ -33,14 +33,16 @@ export async function startExtra() {
   // /rk/d = Feed mit kleiner Reichweiten-Skala (wie Lime über MobiData BW): 60 E-Scooter in Stuttgart, kein Ladestand, Reichweite 0–11,8 km
   // in 200-m-Schritten (95. Perzentil 11,2 km → Reichweiten-Schwelle der Quelle 2,2 km; Vielfache von 100 m, damit die Rundung in ops/<Land>.json nichts verschiebt)
   // /rk/e = Platzhalter-Reichweite (wie Donkey Bayern): 60 E-Räder in Stuttgart, Ladestand 0–14 % (Skala unplausibel), Reichweite überall 1 km
+  // /rk/z = 250 E-Scooter in Stuttgart (Zeus), nur in Lauf 4: alle Kennungen neu = Standzeit unter einem Laufintervall (Z5 idleUnusable → Ampel)
   const rk = (v) => {
-    const veh = v === 'e' ? [...Array(60)].map((_, i) => ({ bike_id: `e-${i}`, lat: +(48.75 + i * 0.0007).toFixed(5), lon: 9.25, is_reserved: false, is_disabled: false, vehicle_type_id: 'eb', current_fuel_percent: i % 15, current_range_meters: 1000, last_reported: n() }))
+    const veh = v === 'z' ? [...Array(250)].map((_, i) => ({ bike_id: `z-${i}`, lat: +(48.71 + i * 0.0006).toFixed(5), lon: 9.29, is_reserved: false, is_disabled: false, vehicle_type_id: 'sd', current_fuel_percent: 50 + (i % 40), last_reported: n() }))
+      : v === 'e' ? [...Array(60)].map((_, i) => ({ bike_id: `e-${i}`, lat: +(48.75 + i * 0.0007).toFixed(5), lon: 9.25, is_reserved: false, is_disabled: false, vehicle_type_id: 'eb', current_fuel_percent: i % 15, current_range_meters: 1000, last_reported: n() }))
       : v === 'c' ? [...Array(60)].map((_, i) => ({ bike_id: `c-${i}`, lat: +(48.50 + i * 0.0007).toFixed(5), lon: 9.02, is_reserved: false, is_disabled: false, vehicle_type_id: 'sc', current_fuel_percent: Math.round(i * 0.6), last_reported: n() }))
       : v === 'd' ? [...Array(60)].map((_, i) => ({ bike_id: `d-${i}`, lat: +(48.75 + i * 0.0007).toFixed(5), lon: 9.20, is_reserved: false, is_disabled: false, vehicle_type_id: 'sd', current_range_meters: i * 200, last_reported: n() }))
       : [...Array(30)].map((_, i) => ({ bike_id: `${v}-${i}`, lat: +(48.50 + i * 0.0015).toFixed(5), lon: 9.10, is_reserved: false, is_disabled: false, vehicle_type_id: 'bk', last_reported: n() }));
     return {
       'gbfs.json': () => head({ de: { feeds: ['system_information', 'vehicle_types', 'free_bike_status'].map(f => ({ name: f, url: `${base}/rk/${v}/${f}.json` })) } }),
-      'system_information.json': () => head(v === 'c' ? { system_id: 'mfkid', name: 'Lime Test', operator: 'Lime', timezone: 'Europe/Berlin' } : v === 'd' ? { system_id: 'rl', name: 'Bird Test', operator: 'Bird', timezone: 'Europe/Berlin' } : v === 'e' ? { system_id: 'rf', name: 'Donkey Test', operator: 'Donkey', timezone: 'Europe/Berlin' } : { system_id: `rk_${v}`, name: 'nextbike RK', operator: 'nextbike', timezone: 'Europe/Berlin' }),
+      'system_information.json': () => head(v === 'c' ? { system_id: 'mfkid', name: 'Lime Test', operator: 'Lime', timezone: 'Europe/Berlin' } : v === 'd' ? { system_id: 'rl', name: 'Bird Test', operator: 'Bird', timezone: 'Europe/Berlin' } : v === 'e' ? { system_id: 'rf', name: 'Donkey Test', operator: 'Donkey', timezone: 'Europe/Berlin' } : v === 'z' ? { system_id: 'zi', name: 'Zeus Test', operator: 'Zeus', timezone: 'Europe/Berlin' } : { system_id: `rk_${v}`, name: 'nextbike RK', operator: 'nextbike', timezone: 'Europe/Berlin' }),
       'vehicle_types.json': () => head({ vehicle_types: [{ vehicle_type_id: 'bk', form_factor: 'bicycle', propulsion_type: 'human' }, { vehicle_type_id: 'sc', form_factor: 'scooter', propulsion_type: 'electric', max_range_meters: 40000 }, { vehicle_type_id: 'sd', form_factor: 'scooter', propulsion_type: 'electric' }, { vehicle_type_id: 'eb', form_factor: 'bicycle', propulsion_type: 'electric_assist' }] }),
       'free_bike_status.json': () => head({ bikes: veh }),
     };
@@ -51,7 +53,7 @@ export async function startExtra() {
     const json = (b, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
     const [, kind, file] = u.pathname.split('/');
     if (kind === 'p' && p[file]) return json(p[file]());
-    if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
+    if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
     if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);
     if (kind === 'cb') return json(cb());
     if (kind === 'auth') {

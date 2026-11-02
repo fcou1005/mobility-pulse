@@ -31,7 +31,7 @@ r = T.trackRun(r.state, { vehicles: [V('a', 48.56, 9.10), V('c', 48.539, 9.06), 
 h = r.hourly.get('08416041|Bolt|scooter');
 assert(h.swap[T.hourOf(t4)] === 1 && h.swapWaitN === 1 && h.swapWaitSum === 20 * 60e3, 'Akkutausch mit 20 Min Wartezeit');
 // Standzeit: a steht seit t2 → bei t4 40 Min → Bucket 0; Zellen
-assert(r.idle['08416041|Bolt|scooter'][0] === 4 && r.idle['08416041|Bolt|scooter'][5] === 4, 'Standzeiten unter 2 h');
+assert(r.idle['08416041|Bolt|scooter'][0] === 4 && r.idle['08416041|Bolt|scooter'][6] === 4 && r.idle['08416041|Bolt|scooter'].length === 7, 'Standzeiten unter 2 h (6 Klassen + Summe, Z6)');
 assert(r.cells.get('08416041').size >= 3, 'Zellen gefüllt');
 const cellsT4 = r.cells;
 // Quelle ausgefallen: Verschwinden zählt nicht als Fahrt
@@ -67,9 +67,9 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   const h3 = q1.hourly.get('08416041|Bolt|scooter'), hr3 = T.hourOf(u0 + 60 * 60e3);
   assert(h3.start[hr3] === 1 && h3.end[hr3] === 1 && h3.rot[hr3] === 0, 'Wechsel mit Ortswechsel bleibt Fahrt');
 }
-// Gruppen: 6 neue Kennungen am selben Ort = Ausbringen; 6 verschwinden zusammen = Einsammeln
+// Gruppen: 6 neue Kennungen am selben Ort = Ausbringen; 6 verschwinden zusammen = Einsammeln (nachts, außerhalb des Nachfrage-Hauptfensters, Z7)
 {
-  const u0 = Date.parse('2026-11-02T10:00:00Z');
+  const u0 = Date.parse('2026-11-01T23:00:00Z');
   const base = [...Array(40)].map((_, i) => V('b' + i, 48.40 + i * 0.01, 9.00));
   let q = T.trackRun(null, { vehicles: base, stations: [], sourceRecs: recs, now: u0 });
   q = T.trackRun(q.state, { vehicles: base, stations: [], sourceRecs: recs, now: u0 + 20 * 60e3 });
@@ -356,6 +356,7 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   F = F.map((v, i) => ({ ...v, rawId: `r9-${i}` }));
   q = T.trackRun(q.state, { vehicles: [...F, ...drop], stations: [], sourceRecs: [{ id: 'LR', status: 'live' }], now: u0 + 8 * dt });
   assert(q.groups.some(g => g.kind === 'deploy' && g.op === 'Lime' && g.n === 5), 'M-9: Ausbringen bei rotierender Quelle erkannt');
+  assert(!q.idleUnusable.LR && q.idle['08416041|Lime|scooter']?.[6] === 200 && q.idle['08416041|Lime|scooter'][1] === 190 && q.idleCens['08416041|Lime|scooter'][1] === 190, 'Z5: Kennungswechsel in jedem Lauf (Lime-Muster) ist nicht „unbrauchbar“; gepaarte stehen mit übernommener Standzeit (190 seit Beginn, 2:40 h) in idle (bisher fehlend), neue Ausbringung nicht');
 }
 // M-4: stabile Kennung, Versatz innerhalb eines Laufs – Untergrenze 3,5 km/h gilt nicht mehr
 {
@@ -459,8 +460,9 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   assert(r3.state.srcCanon === 1 && r3.state.srcStats['source-voi-mg'].runs >= 9 && !r3.state.srcStats[A], 'M-13: Altzustand auf kanonische Schlüssel umgestellt (Statistik mit den meisten Läufen)');
 }
 // M-14: ≥ 4 Räder an einer eigenen Dockstation in einem Lauf zurückgegeben/ausgeliehen = Nutzerverkehr, keine Gruppe; virtuelle Station (Abstellzone) schon
+// (nicht stationsgebundenes System, nachts; Z7 siehe unten)
 {
-  const u0 = Date.parse('2026-11-09T10:00:00Z'), dt = 20 * 60e3;
+  const u0 = Date.parse('2026-11-09T01:00:00Z'), dt = 20 * 60e3;
   const N = (id, lat, lon, extra = {}) => V(id, lat, lon, { operator: 'nextbike', sourceId: 'nbs', type: 'bike', batteryPct: null, ...extra });
   const recsN = [{ id: 'nbs', status: 'live' }];
   const dock = { operator: 'nextbike', id: 'd1', name: 'Dock', lat: 52.50, lon: 13.30, ags: '08416041', bookable: 5, docksAvailable: 3, renting: true, installed: true, returning: true, isVirtual: false };
@@ -527,4 +529,129 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const d = new Array(T.CELL_LEN).fill(0); d[0] = 5; d[4 + 2] = 4; // 1 Beginn ohne Band: unterdrückt
   const r = T.suppressCells({ A: { c, d } });
   assert(r.munis.A.c[0] === 6 && r.munis.A.c[1] === 1 && r.munis.A.d[0] === 4 && r.below.A[12] === 1, 'M-11: Anteil ohne Bandangabe bleibt ab 3 Ereignissen, sonst below (Summen stimmen)');
+}
+// Z4: Ausblendung bei niedrigem Akku (Quelle mit Untergrenze 15 %): Verschwinden bis 20 % = hide, nicht Fahrtbeginn; gesperrt = Abholung
+{
+  const u0 = Date.parse('2026-11-12T10:00:00Z'), dt = 20 * 60e3, hr = T.hourOf(u0 + 2 * dt);
+  const D = (id, bat, extra = {}) => V(id, 48.20 + Number(id.slice(1)) * 0.01, 9.40, { operator: 'Dott', sourceId: 'dott-x', batteryPct: bat, ...extra });
+  const fleet = [D('a1', 18), D('a2', 25), D('a3', 12), D('a4', 18, { disabled: true }), D('a5', 18, { reserved: true }), D('a6', 60), D('a7', 60), D('a8', 60)];
+  const run = (recs) => { let q = T.trackRun(null, { vehicles: fleet, stations: [], sourceRecs: recs, now: u0 }); q = T.trackRun(q.state, { vehicles: fleet, stations: [], sourceRecs: recs, now: u0 + dt }); return T.trackRun(q.state, { vehicles: fleet.slice(5), stations: [], sourceRecs: recs, now: u0 + 2 * dt }).hourly.get('08416041|Dott|scooter'); };
+  const h = run([{ id: 'dott-x', status: 'live', batteryFloor: 15 }]);
+  assert(T.HOUR_FIELDS.at(-1) === 'hide' && h.hide[hr] === 2 && h.start[hr] === 2 && h.pickup[hr] === 1, 'Z4: Untergrenze 15 %: 18 % und 12 % verschwunden = hide (2), 25 % und reserviert = Fahrtbeginn (2), gesperrt = Abholung (1)');
+  const h0 = run([{ id: 'dott-x', status: 'live' }]);
+  assert(h0.hide[hr] === 0 && h0.start[hr] === 3 && h0.pickup[hr] === 2, 'Z4: ohne Untergrenze wie bisher (18 % Fahrt, 12 % Abholung)');
+  const fp = fleet.map(v => ({ ...v, batteryFp: v.batteryPct, batteryPct: null }));
+  let q = T.trackRun(null, { vehicles: fp, stations: [], sourceRecs: [{ id: 'dott-x', status: 'live', batteryFloor: 15 }], now: u0 });
+  q = T.trackRun(q.state, { vehicles: fp.slice(5), stations: [], sourceRecs: [{ id: 'dott-x', status: 'live', batteryFloor: 15 }], now: u0 + dt });
+  assert(q.hourly.get('08416041|Dott|scooter').hide.every(x => !x), 'Z4: relativer Ladestand (Fingerabdruck) zählt nie als Ausblendung');
+}
+// Z4: stabile Kennung kehrt am Ort (≤ 50 m) mit ≥ 30 Punkten mehr zurück = Akkutausch (zählt zusätzlich das Fahrtende, damit der beim Verschwinden
+// gezählte Fahrtbeginn ein Gegenstück hat – Scheinfahrt als bekannte Obergrenze); weiter weg = Fahrtende
+{
+  const L = (id, lat, lon, extra = {}) => V(id, lat, lon, { operator: 'Lime', sourceId: 'lime', ...extra });
+  const recsL = [{ id: 'lime', status: 'live' }];
+  const u0 = Date.parse('2026-11-12T10:00:00Z'), dt = 20 * 60e3, hr = T.hourOf(u0 + 2 * dt);
+  const fleet = [L('a', 48.50, 9.00, { batteryPct: 18 }), L('b', 48.50, 9.02, { batteryPct: 18 }), L('c', 48.50, 9.04)];
+  let q = T.trackRun(null, { vehicles: fleet, stations: [], sourceRecs: recsL, now: u0 });
+  q = T.trackRun(q.state, { vehicles: [fleet[2]], stations: [], sourceRecs: recsL, now: u0 + dt });
+  const s1 = q.hourly.get('08416041|Lime|scooter').start[T.hourOf(u0 + dt)];
+  q.state.srcStats.lime = { runs: 10, present: 500, gone: 20, moved: 40, newc: 30, returned: 30 };
+  q = T.trackRun(q.state, { vehicles: [L('a', 48.5001, 9.00, { batteryPct: 95 }), L('b', 48.503, 9.02, { batteryPct: 95 }), fleet[2]], stations: [], sourceRecs: recsL, now: u0 + 2 * dt });
+  const h = q.hourly.get('08416041|Lime|scooter'), ea = q.state.v[T.vehicleKey('Lime', 'a')];
+  const cEnd = [...q.cells.get('08416041').values()].reduce((s, c) => s + c[1], 0);
+  assert(h.swap[hr] === 1 && h.end[hr] === 2 && s1 === 2 && cEnd === 2 && h.swapWaitN === 1 && h.swapWaitSum === 2 * dt, 'Z4: Rückkehr 11 m mit 18 → 95 % = Tausch und Fahrtende (Beginne 2 = Enden 2, auch je Zelle); 330 m entfernt = Fahrtende');
+  assert(ea[8] === u0 && ea[9] === 0 && h.swapWaitCens === 1, 'Z4: Rückkehr-Tausch: Standzeit läuft weiter, unter 20 % seit Messbeginn = zensierte Wartezeit');
+}
+// Z5: Standzeit-Plausibilität je Quelle (≥ 200 Fahrzeuge, > 50 % unter einem Laufintervall = unbrauchbar)
+{
+  const u0 = Date.parse('2026-11-12T10:00:00Z'), dt = 20 * 60e3;
+  const N = (k, i) => V(`r${k}-${i}`, 48.0 + i * 0.002, 8.5, { operator: 'nextbike', sourceId: 'nbk', type: 'bike', batteryPct: null });
+  const W = (i) => V('v' + i, 47.5 + i * 0.002, 8.0, { operator: 'Voi', sourceId: 'voi', batteryPct: 50 + (i % 40) });
+  const recs2 = [{ id: 'nbk', status: 'live' }, { id: 'voi', status: 'live' }];
+  const rk = (k, n = 250) => [...Array(n)].map((_, i) => N(k, i)), voi = [...Array(250)].map((_, i) => W(i));
+  let q = T.trackRun(null, { vehicles: [...rk(0), ...voi], stations: [], sourceRecs: recs2, now: u0 });
+  q.state.srcStats.nbk = { runs: 10, present: 500, gone: 50, moved: 0, newc: 50, returned: 0, rotated: 0 }; // Wechsel je Fahrt (streng), ohne Ladestand: keine Paarung
+  q = T.trackRun(q.state, { vehicles: [...rk(1), ...voi], stations: [], sourceRecs: recs2, now: u0 + dt });
+  assert(q.idleUnusable.nbk?.share === 1 && q.idleUnusable.nbk.n === 250 && !q.idleUnusable.voi, 'Z5: Kennung je Lauf neu (250 Räder, 100 % unter 20 Min.) = Standzeit unbrauchbar; stabile Quelle nicht');
+  assert(!Object.keys(q.idle).some(k => k.includes('nextbike')) && q.idle['08416041|Voi|scooter']?.[6] === 250, 'Z5: unbrauchbare Quelle fehlt in idle, übrige bleiben');
+  q = T.trackRun(q.state, { vehicles: [...rk(2), ...voi], stations: [], sourceRecs: recs2, now: u0 + dt + 3 * 3600e3 });
+  assert(q.gap && q.idleUnusable.nbk, 'Z5: Lauf nach Lücke übernimmt den Befund des Vorlaufs');
+  q = T.trackRun(q.state, { vehicles: [...rk(3, 150), ...voi], stations: [], sourceRecs: recs2, now: u0 + 2 * dt + 3 * 3600e3 });
+  assert(!q.idleUnusable.nbk, 'Z5: unter 200 Fahrzeugen kein Befund');
+  // Positionen springen je Lauf um 60 m (Standzeit beginnt neu, kein Massenwechsel): Quelle unbrauchbar, ihre gemeinsamen Ankünfte bilden keine Gruppe (Z7)
+  const n0 = Date.parse('2026-11-12T01:00:00Z'), J = (k, i) => V('j' + i, 48.0 + i * 0.002 + (k % 2) * 0.00055, 8.5, { operator: 'nextbike', sourceId: 'nbj', type: 'bike', batteryPct: null });
+  const jit = (k) => [...Array(250)].map((_, i) => J(k, i)), five = [...Array(5)].map((_, i) => V('x' + i, 49.0 + i * 0.00002, 8.9, { operator: 'nextbike', sourceId: 'nbj', type: 'bike', batteryPct: null }));
+  let w = T.trackRun(null, { vehicles: jit(0), stations: [], sourceRecs: [{ id: 'nbj', status: 'live' }], now: n0 });
+  w = T.trackRun(w.state, { vehicles: jit(1), stations: [], sourceRecs: [{ id: 'nbj', status: 'live' }], now: n0 + dt });
+  w = T.trackRun(w.state, { vehicles: [...jit(2), ...five], stations: [], sourceRecs: [{ id: 'nbj', status: 'live' }], now: n0 + 2 * dt });
+  assert(w.idleUnusable.nbj && !w.groups.length, 'Z5/Z7: springende Positionen = Standzeit unbrauchbar; 5 neue Räder dieser Quelle nachts keine Ausbringung');
+}
+// Z5: stiller Quellenausfall (Quelle einen Lauf error) – Rückkehr am Ort (< 50 m) behält die Standzeit und zählt nicht in die Standzeit-Prüfung;
+// versetzt zurück = bewegt; Rückkehr nach Verschwinden bei laufender Quelle beginnt die Standzeit wie bisher neu
+{
+  const u0 = Date.parse('2026-11-12T10:00:00Z'), dt = 20 * 60e3;
+  const W = (i) => V('w' + i, 47.5 + i * 0.002, 8.0, { operator: 'Voi', sourceId: 'voiS', batteryPct: 60 });
+  const fleet = [...Array(250)].map((_, i) => W(i)), live = [{ id: 'voiS', status: 'live' }], err = [{ id: 'voiS', status: 'error' }];
+  let q = T.trackRun(null, { vehicles: fleet, stations: [], sourceRecs: live, now: u0 });
+  for (let k = 1; k < 4; k++) q = T.trackRun(q.state, { vehicles: fleet, stations: [], sourceRecs: live, now: u0 + k * dt });
+  q = T.trackRun(q.state, { vehicles: [], stations: [], sourceRecs: err, now: u0 + 4 * dt });
+  const back = fleet.map((v, i) => (i === 0 ? { ...v, lat: v.lat + 0.0027 } : v)); // w0 300 m versetzt
+  q = T.trackRun(q.state, { vehicles: back, stations: [], sourceRecs: live, now: u0 + 5 * dt });
+  const K = (id) => q.state.v[T.vehicleKey('Voi', id)];
+  assert(!q.idleUnusable.voiS && K('w1')[8] === u0 && K('w0')[8] === u0 + 5 * dt && q.idle['08416041|Voi|scooter']?.[6] === 250 && q.idleCens['08416041|Voi|scooter']?.[0] === 249,
+    'Z5: nach stillem Ausfall am Ort zurück = Standzeit läuft weiter (249 seit Beginn, zensiert), nicht „unbrauchbar“; 300 m versetzt = bewegt');
+  q = T.trackRun(q.state, { vehicles: back.filter((v, i) => i !== 2), stations: [], sourceRecs: live, now: u0 + 6 * dt });
+  q = T.trackRun(q.state, { vehicles: back, stations: [], sourceRecs: live, now: u0 + 7 * dt });
+  assert(K('w2')[8] === u0 + 7 * dt && K('w1')[8] === u0 && !q.idleUnusable.voiS, 'Z5: Rückkehr nach Verschwinden bei laufender Quelle (Fahrt) beginnt die Standzeit neu');
+}
+// Z6: Standzeit, Wartezeit bis Tausch und Sperrdauer linkszensiert (seit Beginn der Verfolgung unbewegt bzw. seit erster Sichtung niedrig/gesperrt)
+{
+  const u0 = Date.parse('2026-11-12T10:00:00Z'), dt = 20 * 60e3, hr = T.hourOf(u0 + 2 * dt);
+  const B = (id, lat, extra = {}) => V(id, lat, 9.6, { operator: 'Bolt', sourceId: 'bc', ...extra });
+  const rc = [{ id: 'bc', status: 'live' }];
+  const r1 = [B('a', 48.1), B('b', 48.2, { batteryPct: 10 }), B('c', 48.3, { disabled: true }), B('m', 48.4)];
+  let q = T.trackRun(null, { vehicles: r1, stations: [], sourceRecs: rc, now: u0 });
+  q = T.trackRun(q.state, { vehicles: [...r1, B('n', 48.5)], stations: [], sourceRecs: rc, now: u0 + dt });
+  q = T.trackRun(q.state, { vehicles: [B('a', 48.1), B('b', 48.2, { batteryPct: 95 }), B('c', 48.3), B('m', 48.402), B('n', 48.5), B('o', 48.6)], stations: [], sourceRecs: rc, now: u0 + 2 * dt });
+  const lim = T.censorLimit(q.state), E = (id) => q.state.v[T.vehicleKey('Bolt', id)], C = (id) => T.isCensored(lim, E(id)[8], E(id)[7]);
+  assert(q.state.trackStart === u0 && q.state.trackStart2 === u0 + dt && lim === u0 + dt, 'Z6: Verfolgungsbeginn und zweiter Lauf im Zustand');
+  assert(C('a') && C('n') && !C('o') && !C('m'), 'Z6: zensiert = erste Sichtung im 1./2. Lauf und seitdem unbewegt (a, n); neu im 3. Lauf (o) bzw. bewegt (m) nicht');
+  const k = '08416041|Bolt|scooter', h = q.hourly.get(k);
+  assert(q.idle[k][6] === 5 && q.idleCens[k][0] === 4, 'Z6: idle 5 Fahrzeuge (neue ohne Standzeit), davon 4 zensiert (a, b, c, n)');
+  assert(h.swap[hr] === 1 && h.swapWaitCens === 1 && h.disOff[hr] === 1 && h.disDurCens === 1, 'Z6: Tausch und Entsperrung nach Niedrig/Gesperrt seit erster Sichtung = zensierte Werte');
+  const legacy = { ...q.state }; delete legacy.trackStart; delete legacy.trackStart2;
+  const q2 = T.trackRun(legacy, { vehicles: [B('a', 48.1)], stations: [], sourceRecs: rc, now: u0 + 3 * dt });
+  assert(q2.state.trackStart === u0 && q2.state.trackStart2 === u0 + dt, 'Z6: älterer Zustand ohne Angabe: kleinste und zweitkleinste erste Sichtung');
+  const old = { day: '2026-11-12', runs: [], groups: { [k]: { ...T.emptyHourly() } } }; delete old.groups[k].hide; delete old.groups[k].swapWaitCens;
+  const md = T.mergeHourly(old, q.hourly, { day: '2026-11-12', at: u0 + 2 * dt, dt, srcModes: {} });
+  assert(md.groups[k].hide.length === 24 && md.groups[k].swapWaitCens === 1 && md.groups[k].disDurCens === 1, 'Z6: ältere Tagesdatei ohne hide/Zensur-Zähler wird ergänzt');
+  assert(T.IDLE_LABELS.length === T.IDLE_BUCKETS.length + 1 && T.IDLE_LABELS.at(-1) === '> 72 h', 'Z6: Klasse > 72 h');
+}
+// Z7: Gruppen – frei abgestellt tagsüber nur Ausbringungen voller Fahrzeuge (≥ 85 %), Einsammeln nur nachts; stationsgebunden auch virtuelle Stationen aus
+{
+  const dt = 20 * 60e3;
+  const D = (id, lat, lon, bat) => V(id, lat, lon, { operator: 'Dott', sourceId: 'dg', batteryPct: bat });
+  const rc = [{ id: 'dg', status: 'live' }];
+  const base = [...Array(40)].map((_, i) => D('b' + i, 48.40 + i * 0.01, 9.00, 60));
+  const full = [...Array(4)].map((_, i) => D('f' + i, 48.90, 9.50 + i * 0.00005, 90)), half = [...Array(4)].map((_, i) => D('h' + i, 48.95, 9.55 + i * 0.00005, 50));
+  const seq = (u0) => { let q = T.trackRun(null, { vehicles: base, stations: [], sourceRecs: rc, now: u0 }); q = T.trackRun(q.state, { vehicles: base, stations: [], sourceRecs: rc, now: u0 + dt });
+    const a = T.trackRun(q.state, { vehicles: [...base, ...full, ...half], stations: [], sourceRecs: rc, now: u0 + 2 * dt }); const b = T.trackRun(a.state, { vehicles: base, stations: [], sourceRecs: rc, now: u0 + 3 * dt }); return [a.groups, b.groups]; };
+  const [dDep, dCol] = seq(Date.parse('2026-11-13T09:00:00Z')); // 10–11 Uhr Ortszeit
+  assert(dDep.length === 1 && dDep[0].kind === 'deploy' && Math.abs(dDep[0].lat - 48.90) < 1e-4 && !dCol.length, 'Z7: tagsüber 4 neue mit 90 % = Ausbringung, 4 mit 50 % keine; gemeinsames Verschwinden tagsüber keine Einsammlung');
+  const [nDep, nCol] = seq(Date.parse('2026-11-13T01:00:00Z')); // 2–3 Uhr Ortszeit
+  assert(nDep.length === 2 && nCol.length === 2 && nCol.every(g => g.kind === 'collect'), 'Z7: nachts beide Ausbringungen und beide Einsammlungen');
+  // stationsgebunden (alle Räder an eigenen virtuellen Stationen): 5 neue an einer Abstellzone = Nutzerverkehr, auch nachts
+  const u0 = Date.parse('2026-11-13T01:00:00Z');
+  const Nb = (id, lat, lon) => V(id, lat, lon, { operator: 'nextbike', sourceId: 'nbz', type: 'bike', batteryPct: null });
+  const st = [...Array(20)].map((_, i) => ({ operator: 'nextbike', id: 's' + i, name: 'S' + i, lat: 52.40 + i * 0.01, lon: 13.20, ags: '08416041', bookable: 1, docksAvailable: null, renting: true, installed: true, returning: true, isVirtual: true }));
+  const zone = { ...st[0], id: 'z', lat: 52.70, lon: 13.50 };
+  const nb = st.map((s, i) => Nb('n' + i, s.lat + 0.0001, s.lon)), rc2 = [{ id: 'nbz', status: 'live' }];
+  let q = T.trackRun(null, { vehicles: nb, stations: [...st, zone], sourceRecs: rc2, now: u0 });
+  q = T.trackRun(q.state, { vehicles: nb, stations: [...st, zone], sourceRecs: rc2, now: u0 + dt });
+  q = T.trackRun(q.state, { vehicles: [...nb, ...[...Array(5)].map((_, i) => Nb('z' + i, 52.70 + i * 0.00002, 13.50))], stations: [...st, zone], sourceRecs: rc2, now: u0 + 2 * dt });
+  assert(!q.groups.length, 'Z7: stationsgebundenes System: 5 Räder an einer virtuellen Station = keine Ausbringung');
+  const night = T.groupNight([[Date.parse('2026-11-13T22:30:00Z'), 'deploy', 'Dott'], [Date.parse('2026-11-13T11:00:00Z'), 'deploy', 'Dott'], [Date.parse('2026-11-13T17:00:00Z'), 'collect', 'nextbike']]);
+  assert(night.Dott.n === 2 && night.Dott.share === 0.5 && night.nextbike.share === 0, 'Z7: Nachtanteil je Anbieter (22–7 Uhr Ortszeit)');
+  const ix = T.groupIndex(['2026-11'], { '2026-11': 3 }, { night });
+  assert(ix.night30.Dott.share === 0.5 && ix.rules.demandMain.from === 7 && ix.rules.deployMinBattery === 85, 'Z7: groups/index.json mit Nachtanteil und Regeln');
 }

@@ -189,6 +189,19 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   s = await read([...Array(60)].map((_, i) => B(i, { current_range_meters: Math.round(i / 59 * 40000) })));
   assert(!s.batteryScale.suspect && s.batteryScale.derived === 60 && s.vehicles.every(v => v.batteryDerived && v.batteryPct != null), 'M-2: abgeleiteter Ladestand gekennzeichnet (batteryDerived), plausible Skala bleibt');
   assert(!C.batteryScaleCheck([...Array(49)].map(() => ({ batteryPct: 20 }))).suspect, 'M-2: unter 50 Fahrzeugen keine Skalenprüfung');
+  assert(s.batteryFloor && s.batteryFloor.n === 0 && !s.batteryFloor.hides, 'Z4: readGbfsSystem liefert batteryFloor (abgeleiteter Ladestand zählt nicht)');
+}
+// Z4: Ausblenden bei niedrigem Akku – 0,5-Perzentil ≥ 10 % bei ≥ 500 Fahrzeugen und sauberem Boden (0,1-Perzentil ≥ p005 − 5)
+{
+  const F = (lo, n = 600, extra = []) => [...extra.map(b => ({ batteryPct: b })), ...[...Array(n - extra.length)].map((_, i) => ({ batteryPct: lo + (i * (100 - lo)) / n }))];
+  const dott = C.batteryFloorCheck(F(14));
+  assert(dott.hides && dott.p005 === 14 && dott.n === 600, 'Z4: Ladestand ab 14 % (Dott-Muster) = Ausblendung, Untergrenze 14');
+  assert(!C.batteryFloorCheck(F(0)).hides && C.batteryFloorCheck(F(0)).p005 === 0, 'Z4: Ladestand ab 0 % (Voi/Bolt-Muster) = keine Ausblendung');
+  const wup = C.batteryFloorCheck(F(14, 1100, [1, 1, 7, 7]));
+  assert(wup.p005 >= 10 && !wup.hides, `Z4: einzelne 1–7 % (Voi Wuppertal) = Boden nicht sauber, keine Ausblendung (p005 ${wup.p005}, p001 ${wup.p001})`);
+  assert(!C.batteryFloorCheck(F(14, 499)).hides && C.batteryFloorCheck(F(14, 499)).p005 === null, 'Z4: unter 500 Fahrzeugen keine Prüfung');
+  assert(C.batteryFloorCheck([...F(14), ...[...Array(50)].map(() => ({ batteryPct: 2, batteryDerived: true }))]).hides, 'Z4: abgeleitete Ladestände zählen nicht');
+  assert(!C.batteryFloorCheck([...F(14), ...[...Array(10)].map(() => ({ batteryPct: 2, disabled: true }))]).hides, 'Z4: leere Fahrzeuge als gesperrt gemeldet (Voi/Bolt-Muster) = keine Ausblendung');
 }
 // M-22: Regression auf dem echten Datenstand (.realdata): Ladestand-Skala je Quelle und umgeschlüsselte Spiegel (Köln nextbike)
 {

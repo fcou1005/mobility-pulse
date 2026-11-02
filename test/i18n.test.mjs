@@ -46,3 +46,7 @@ assert(TY.scooter === 'E-scooters' && Object.keys(TY).join() === 'scooter,bike' 
 assert(I.setLang('de') === true && I.tx('Standardkurve') === 'Standardkurve' && I.t('app.copyLink') === 'Link kopieren' && calls.join() === 'en,de', 'zurück auf Deutsch: tx gibt den Originaltext zurück');
 off(); I.setLang('en'); I.setLang('de');
 assert(calls.length === 2 && I.setLang('xx') === false && I.lang() === 'de', 'abgemeldeter Abonnent wird nicht mehr gerufen; unbekannte Sprache abgelehnt');
+// ---------- Zellmaß und Datenschutz-Schwelle aus je einer Stelle (FIXED.CELL / CELL500, R.MIN_COUNT) ----------
+const allTxt = [...Object.values(DICT.de), ...Object.values(DICT.en)];
+assert(I.t('cmp.cellsTip').includes(I.FIXED.CELL) && I.t('flows.originDestinationFlowsEst', { v0: 'a', v1: 'b' }).includes(I.FIXED.CELL500) && !/\{CELL/.test(I.t('html.gridOfAbout250250M'))
+  && !allTxt.some(s => /≈ ?250[ -]m|250 × 250|500-m-Zell|weniger als \{MIN_COUNT\}|fewer than \{MIN_COUNT\}/.test(s)), 'Zellmaß aus FIXED ({CELL} ersetzt), keine abweichenden Angaben „≈ 250 m“, „weniger als {MIN_COUNT}“');

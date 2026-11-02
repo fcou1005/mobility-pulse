@@ -172,6 +172,12 @@ const typeOrder = C.VEHICLE_TYPES;
 const chargeThreshold = 20, rangeThreshold = 5;
 
 const operatorBySystem = Object.fromEntries(Object.entries(manual.operator_by_system || {}).filter(([k]) => !k.startsWith('_')));
+// eigener Befund der Verfolgung in der Feed-Prüfung (sources[].checks wie C.checkGbfs: Fehler zuerst, höchstens 5 Befunde; Quellen ohne Prüfung bekommen eine)
+const addCheck = (rec, msg, n = null) => {
+  const c = (rec.checks ??= { label: C.CHECKS_LABEL, errors: 0, warnings: 0, items: [] }); const items = c.items || [];
+  const k = items.findIndex(x => x.level !== 'error'); items.splice(k < 0 ? items.length : k, 0, { level: 'warning', feed: (rec.feeds || []).includes('vehicle_status') ? 'vehicle_status' : 'free_bike_status', msg, ...(n != null ? { n } : {}) });
+  c.items = items.slice(0, 5); c.warnings = (c.warnings || 0) + 1;
+};
 for (const { src, sys, probe, error } of results) {
   if (operatorBySystem[src.id]) src.operator = operatorBySystem[src.id]; // Marke je System (DB Connect → RegioRad Stuttgart, StadtRAD …)
   const rec = { id: src.id, parent: src.parent || null, operator: src.operator, name: src.name, api: src.api, url: src.url, directories: src.directories, priority: src.priority ?? 2, candidate: !!src.candidate,
@@ -198,6 +204,8 @@ for (const { src, sys, probe, error } of results) {
   if (sys.rangeLimit) { rec.rangeLimitKm = sys.rangeLimit.limitKm; if (sys.rangeLimit.n) rec.rangeLimit = { ...sys.rangeLimit, maxP95Km: C.RANGE_LIMIT.maxP95Km, share: C.RANGE_LIMIT.share }; }
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
+  // Ausblenden bei niedrigem Akku (C.batteryFloorCheck, Z4): ab 500 Fahrzeugen 0,5-Perzentil p005; hides → Verfolgung zählt Verschwinden bis p005 + 5 als hide
+  if (sys.batteryFloor?.p005 != null) { const f = sys.batteryFloor; rec.batteryFloor = { p005: f.p005, p001: f.p001, n: f.n, hides: f.hides }; if (f.hides) addCheck(rec, `Fahrzeuge unter ${f.p005} % Ladestand nicht im Feed (Ausblendung): Verschwinden bis ${f.p005 + T.HIDE_BAND} % zählt nicht als Fahrt`, f.n); }
   if (goneHttp(sys.httpStatus)) rec.status = 'gone';
   else if (sys.httpStatus === 401 || sys.httpStatus === 403) rec.status = 'auth';
   else if (!sys.vehicles.length && !sys.stations.length) rec.status = sys.errors.length ? 'error' : 'empty';
@@ -540,6 +548,29 @@ const latest = {
     rangeFlat: { ...C.RANGE_FLAT, rule: 'Reichweite der Quelle konstant (Spanne p5–p95 < maxSpreadKm oder > maxModeShare gleiche Werte, ab minN Fahrzeugen): für Energie unbekannt (sources[].rangeFlat)' } },
   sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps, mirrors: mirrorsOut,
 };
+// Messbasis und Ampel aus dem veröffentlichten Stand der Ereignisse (vom vorigen Lauf): latest.json → measure.days[Tag] (Messminuten je
+// Stunde ohne Lücken, Läufe, Regelstände der gezählten Läufe, voller Tag; lib/pulse-econ.js measureDay; abgeschlossene Tage werden
+// übernommen) und → eventChecks (Selbsttest der Ereignisregeln je Gemeinde|Anbieter|Art am letzten vollständigen Tag, E.eventChecks).
+// eventChecks hier vorläufig; nach der Verfolgung neu (Quellenbefund idleUnusable steht erst dann fest, Regel idleUnusableWarn), mit dem
+// aktuellen Regelstand ruleNow: rot schließt nur aus, wenn der ausgewertete Tag ihn trägt (sonst gelb „älterer Regelstand“).
+let ecInput = null; // Tagesdokument des letzten vollständigen Tags
+const ampel = () => { if (ecInput) latest.eventChecks = E.eventChecks(ecInput, sourceOut, E.EVENT_CHECKS, { ruleNow: T.METHOD_VERSION }); };
+try {
+  const evDir = path.join(DATA, 'events'), today = T.dayOf(now);
+  const evDays = existsSync(evDir) ? (await readdir(evDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort() : [];
+  const prevM = prev?.measure?.version === 1 ? prev.measure.days || {} : {};
+  const mDays = {}; let ecDoc = null;
+  for (const d of evDays) {
+    if (prevM[d]?.complete) { mDays[d] = prevM[d]; continue; }
+    const doc = JSON.parse(await readFile(path.join(evDir, `${d}.json`), 'utf8'));
+    const complete = d < today && doc.published?.complete !== false; // laufender Tag und noch nicht vollständig veröffentlichter Vortag: neu lesen
+    mDays[d] = { ...E.measureDay(doc), ...(complete ? { complete: true } : {}) };
+    if (complete) ecDoc = doc;
+  }
+  latest.measure = { version: 1, fullDay: E.FULL_DAY, fields: 'obs: Minuten je Ortsstunde 0–23 ohne Lücken-Stunden, runs, counted (gezählte Läufe), rules (METHOD_VERSION der gezählten Läufe, "" = ohne), full (≥ 20 h mit ≥ 50 Min.), complete', days: mDays };
+  const ecDay = Object.keys(mDays).filter(d => mDays[d].complete).sort().at(-1);
+  if (ecDay) { ecInput = ecDoc?.day === ecDay ? ecDoc : JSON.parse(await readFile(path.join(evDir, `${ecDay}.json`), 'utf8')); ampel(); }
+} catch (e) { log(`Messbasis/Ampel: ${e.message}`); }
 await mkdir(path.join(DATA, 'history'), { recursive: true });
 await mkdir(path.join(DATA, 'snapshot'), { recursive: true });
 await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(latest));
@@ -582,6 +613,24 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
   } catch (e) { log(`Zonen-Beobachtung: ${e.message}`); }
 }
 
+// Tagtyp-Kalender (calendar.json, Format in lib/pulse-econ.js calendarFromApi): gesetzliche Feiertage und Schulferien je Land aus der
+// OpenHolidays API (ODbL), einmal je Berliner Kalendertag, Zeitraum heute −400 bis +400 Tage (eine Anfrage je Endpunkt; 800 Tage am
+// 02.11.2026 geprüft). Ohne Netz, bei Fehler oder unplausibler Antwort bleibt die alte Datei. CALENDAR_URL leer = aus (Fixture-Test).
+{
+  const base = process.env.CALENDAR_URL ?? 'https://openholidaysapi.org', f = path.join(DATA, 'calendar.json'), today = T.dayOf(now);
+  let old = null; try { old = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch { old = null; }
+  if (base && !(old?.version === 1 && Number.isFinite(Date.parse(old.generatedAt)) && T.dayOf(Date.parse(old.generatedAt)) === today)) {
+    const iso = (ms) => new Date(ms).toISOString().slice(0, 10), mid = Date.parse(`${today}T12:00:00Z`);
+    const from = iso(mid - 400 * 86400e3), to = iso(mid + 400 * 86400e3), q = `countryIsoCode=DE&languageIsoCode=DE&validFrom=${from}&validTo=${to}`;
+    try {
+      const [p, s] = await Promise.all([fetchJson(`${base}/PublicHolidays?${q}`, { retry: 0 }), fetchJson(`${base}/SchoolHolidays?${q}`, { retry: 0 })]);
+      const cal = p.ok && s.ok ? E.calendarFromApi(p.json, s.json, { from, to, at: now }) : null;
+      if (cal) { await writeFile(f, JSON.stringify(cal)); log(`Kalender ${from}–${to}: ${Object.keys(cal.states).length} Länder, ${Object.values(cal.states).reduce((a, x) => a + Object.keys(x).length, 0)} Ausnahmetage`); }
+      else log(`Kalender: keine gültige Antwort (Feiertage ${p.ok ? `${(p.json || []).length} Einträge` : p.error || `HTTP ${p.status}`}, Ferien ${s.ok ? `${(s.json || []).length} Einträge` : s.error || `HTTP ${s.status}`}) – ${old ? 'alte Datei bleibt' : 'keine Datei'}`);
+    } catch (e) { log(`Kalender: ${e.message} – ${old ? 'alte Datei bleibt' : 'keine Datei'}`); }
+  }
+}
+
 // Momentaufnahmen (nur Zugangs-Quellen)
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
@@ -600,8 +649,22 @@ if (TRACK_DIR && !prevState) {
 }
 if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwinden still, keine Abholung
 // Umzugslauf zählt nichts: verworfene alte Einträge (ohne aktuelle Kennung nicht umschlüsselbar) würden sonst Fahrtenden ohne Beginn erzeugen
-const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs })), now, hmac, noEvents: migrated });
+const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs, batteryFloor: r.batteryFloor?.hides ? r.batteryFloor.p005 : null })), now, hmac, noEvents: migrated });
 if (keyId) tr.state.keyId = keyId;
+// Standzeit unbrauchbar (T.IDLE_CHECK, Z5: ≥ 200 Fahrzeuge, > 50 % unter einem Laufintervall – Kennung wechselt je Lauf): sources[].idleUnusable, Befund in
+// der Feed-Prüfung, ops-Feld 8 null; latest.json ist vor der Verfolgung geschrieben und wird dann neu geschrieben
+{
+  let n = 0;
+  for (const rec of sourceOut) { const u = tr.idleUnusable?.[rec.id]; if (!u) continue; rec.idleUnusable = true; rec.idleCheck = { n: u.n, shortShare: u.share }; addCheck(rec, `Standzeit unbrauchbar (${Math.round(u.share * 100)} % kürzer als ein Laufintervall): nicht ausgewiesen`, u.n); n++; }
+  // Ampel erst jetzt mit dem Befund idleUnusable (bis 02.11.2026 vor der Verfolgung berechnet: Regel idleUnusableWarn griff nie); Fehler brechen den Lauf nicht ab
+  let ec = false;
+  try {
+    if (ecInput) { ampel(); ec = true; const g = Object.values(latest.eventChecks?.groups || {});
+      if (g.length) log(`Ampel ${latest.eventChecks.day} (Regelstand ${latest.eventChecks.dayRules.join(' + ') || 'ohne Angabe'}${latest.eventChecks.ruleCurrent ? '' : `, älter als ${T.METHOD_VERSION}: rot nur als Hinweis`}): ${g.filter(x => x.level === 'bad').length} rot, ${g.filter(x => x.level === 'warn').length} gelb von ${g.length} Gruppen`); }
+  } catch (e) { log(`Ampel: ${e.message}`); }
+  if (n || ec) await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(latest));
+  if (n) log(`Standzeit unbrauchbar: ${Object.keys(tr.idleUnusable).join(', ')}`);
+}
 if (tr.gap) log(migrated ? 'Umzugslauf – Ereignisse dieses Laufs zählen nicht' : `Lücke: ${Math.round(tr.dt / 60e3)} Min seit dem letzten Lauf – Ereignisse dieses Laufs zählen nicht`);
 
 // Verlauf (spaltenweise je Tag); f je Lauf: 1 = zählt, 0 = Lauf nach Lücke (Vertrag 5/6), null = unbekannt (ältere Läufe)
@@ -650,7 +713,23 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
     const rows = dayRows(h); dayRuns[d] = rows.runs;
     for (const [key, row] of rows) (series[key] ??= {})[d] = row;
   }
-  await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series, dayRuns }));
+  // Bruchmarken (Z2, lib/pulse-report.js ruleBreaks): breaks { 'Gemeinde|Anbieter|Art': erster Tag mit neuem Regelstand }, wenn der Bestand
+  // beim ersten Lauf mit neuem Regelstand (Teil vor „@“, Läufe aus runs.json, dieser Lauf mit RULE) um ≥ 10 % und ≥ 5 Fahrzeuge springt.
+  // Ohne breaks in der vorigen daily.json einmal rückwirkend über alle Läufe von runs.json, danach nur Wechsel seit deren updatedAt; Marken bleiben im 30-Tage-Fenster.
+  const breaks = Object.fromEntries(Object.entries(prevDaily.breaks || {}).filter(([, d]) => d >= (useDays[0] || '')));
+  try {
+    const rf = path.join(DATA, 'runs.json');
+    const rl = existsSync(rf) ? (JSON.parse(await readFile(rf, 'utf8')).runs || []).map(r => [r[0], r[14] ?? null]) : [];
+    rl.push([now, RULE]); rl.sort((a, b) => a[0] - b[0]);
+    const since = prevDaily.breaks ? prevDaily.updatedAt ?? null : null;
+    const era = (r) => R.ruleEra([r[0], null, null, r[1]]), need = new Set();
+    for (let i = 1; i < rl.length; i++) if (era(rl[i]) !== era(rl[i - 1]) && (since == null || rl[i][0] > since)) { need.add(T.dayOf(rl[i - 1][0])); need.add(T.dayOf(rl[i][0])); }
+    const hs = []; for (const d of need) { if (d === day) hs.push(hist); else if (existsSync(path.join(DATA, 'history', `${d}.json`))) hs.push(JSON.parse(await readFile(path.join(DATA, 'history', `${d}.json`), 'utf8'))); }
+    const found = hs.length ? R.ruleBreaks(rl, hs, { since }) : {};
+    if (Object.keys(found).length) log(`Bruchmarken: ${Object.keys(found).length} Reihen (${[...new Set(Object.values(found))].join(', ')})`);
+    Object.assign(breaks, found);
+  } catch (e) { log('Bruchmarken:', e.message); }
+  await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series, dayRuns, breaks }));
 }
 
 // Abdeckung: Städte laut Anbieter-Website (data/operator-cities.json, liegt auf main im Checkout) gegen Feeds mit und ohne Fahrzeuge
@@ -719,7 +798,7 @@ try {
       counts[m] = doc ? doc.events.length : gIdx.counts[m];
       if (doc?.events.length) { first = Math.min(first ?? Infinity, doc.events[0][0]); last = Math.max(last ?? -Infinity, doc.events[doc.events.length - 1][0]); }
     }
-    await writeFile(gIdxFile, JSON.stringify(T.groupIndex(months, counts, { at: now, first, last })));
+    await writeFile(gIdxFile, JSON.stringify(T.groupIndex(months, counts, { at: now, first, last, night: T.groupNight(gd.events) }))); // night30: Nachtanteil je Anbieter (30 Tage, Z7)
     if (tr.groups?.length) log(`Gruppen: ${tr.groups.filter(g => g.kind === 'deploy').length} ausgebracht, ${tr.groups.filter(g => g.kind === 'collect').length} eingesammelt (groups/: ${months.length} Monat${months.length === 1 ? '' : 'e'}, ${Object.values(counts).reduce((a, b) => a + b, 0)} Ereignisse)`);
   }
   { const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0); runEv = { start: 0, end: 0, rot: 0 }; for (const h of tr.hourly.values()) { runEv.start += s(h.start); runEv.end += s(h.end); runEv.rot += s(h.rot); } }
@@ -864,10 +943,12 @@ try {
     for (const v of dv.vehicles) {
       const st = muniOut[v.ags]?.state; if (!st) continue; const o = S(st);
       const e = tr.state.v[vkey(v.operator, v.rawId)];
-      const idleMin = e ? Math.round((now - e[8]) / 60e3) : null;
+      // Standzeit null, wenn sie für die Quelle unbrauchbar ist (Z5); Feld 13 standzeitMindestens 1 = seit Beginn der Verfolgung unbewegt (Mindestwert, Z6)
+      const idleOk = e && !tr.idleUnusable?.[v.sourceId], idleMin = idleOk ? Math.round((now - e[8]) / 60e3) : null;
+      const idleMinOnly = idleOk && T.isCensored(T.censorLimit(tr.state), e[8], e[7]) ? 1 : null;
       // Feld 11 reichweiteSchwelleKm (null = Standard), Feld 12 reichweiteKonstant (1 = Reichweite der Quelle konstant); Felder am Zeilenende ohne
       // Wert entfallen (Leser werten fehlende Felder als null), explizites null nur vor einem späteren Wert
-      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null];
+      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null, idleMinOnly];
       while (row.length && row[row.length - 1] == null) row.pop();
       o.vehicles.push(row);
     }
@@ -876,7 +957,7 @@ try {
       o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0, s.isVirtual === true ? 1 : s.isVirtual === false ? 0 : null]);
     }
     let bytes = 0;
-    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, standzeitMin ist ein Mindestwert; standzeitMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
   }
   // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
@@ -911,7 +992,9 @@ try {
     }
     await writeFile(idxFile, JSON.stringify(cidx));
   }
-  await writeFile(path.join(DATA, 'idle.json'), JSON.stringify({ at: now, buckets: ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'], groups: tr.idle }));
+  // Standzeit-Klassen (T.IDLE_BUCKETS, ab 02.11.2026 mit „> 72 h“): groups[k] = [je Klasse, Summe], censored[k] = je Klasse Mindestwerte (seit
+  // trackStart unbewegt, Z6); Quellen mit unbrauchbarer Standzeit (Z5) fehlen (unusable)
+  await writeFile(path.join(DATA, 'idle.json'), JSON.stringify({ at: now, version: T.IDLE_VERSION, buckets: T.IDLE_LABELS, fields: 'groups: Anzahl je Klasse, dann Summe; censored: davon Mindestwerte je Klasse', trackStart: tr.state.trackStart ?? null, groups: tr.idle, censored: tr.idleCens, unusable: Object.keys(tr.idleUnusable || {}).sort() }));
   // Lange Standzeiten: je Gemeinde max. 400 Punkte (gleichmäßig ausgedünnt)
   const byAgs = new Map(); for (const p of tr.idleLong) { if (!byAgs.has(p.ags)) byAgs.set(p.ags, []); byAgs.get(p.ags).push(p); }
   const longOut = []; for (const [, list] of byAgs) { list.sort((a, b) => b.hours - a.hours); const step = Math.max(1, Math.ceil(list.length / 400)); for (let i = 0; i < list.length; i += step) longOut.push(list[i]); }
@@ -967,6 +1050,7 @@ if (boundaries) {
     '## Grundlagen', '',
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
+    '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',
     `${counted.length} Quellen mit Daten in diesem Stand (Kopien anderer Quellen und nicht erreichbare Quellen ausgenommen).`, '',

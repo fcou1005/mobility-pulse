@@ -358,10 +358,10 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
 
 // ---------- Datenschutz-Schwelle ----------
 {
-  assert(R.suppressed(0) && R.suppressed(1) && !R.suppressed(2) && !R.suppressed(null), 'Schwelle: 0 und 1 Fahrt werden unterdrückt, ab 2 sichtbar');
-  const cs = R.cellStats({ d: { '1:1': [5, 1, 3, 0], '1:2': [1, 0, 4, 0] } }, { d: 2 });
+  assert(R.MIN_COUNT === (await import('../lib/pulse-track.js')).CELL_MIN && R.suppressed(0) && R.suppressed(2) && !R.suppressed(3) && !R.suppressed(null), 'Schwelle eine Stelle (CELL_MIN = 3): 0–2 Fahrten unterdrückt, ab 3 sichtbar');
+  const cs = R.cellStats({ d: { '1:1': [5, 2, 3, 0], '1:2': [2, 0, 4, 0] } }, { d: 2 });
   const rows = R.cellsCsvRows(cs, { name: 'X' });
-  assert(rows[1][7] === 5 && rows[1][8] === '<2' && rows[2][7] === '<2', 'Orte-CSV: Zählungen unter 2 als „<2“');
+  assert(rows[1][7] === 5 && rows[1][8] === '<3' && rows[2][7] === '<3', 'Orte-CSV: Zählungen unter 3 als „<3“');
   assert(R.cellsCsvRows(cs, { name: 'X', lang: 'en' })[0].join() === 'Municipality,AGS,Period_from,Period_to,Cell,Latitude,Longitude,Trip_starts,Trip_ends,Available_per_run,Rebalancing', 'Orte-CSV englisch: Spaltenköpfe');
   const hm = R.weekHeatmap([{ day: '2026-11-02', runs: fullHourRuns('2026-11-02', 10), groups: { 'A|x|scooter': { start: h24({ 10: 1 }) } } }]);
   assert(hm.cells[0][10].raw === 1 && R.suppressed(hm.cells[0][10].raw), 'Heatmap führt die Rohzahl je Zelle für die Schwelle mit');
@@ -409,7 +409,7 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
 {
   const day = (cells) => Object.fromEntries(cells.map(([c, n]) => [c, [n, 0, 0, 0]]));
   const st = R.hotspotStability({ d1: day([['a', 9], ['b', 8], ['c', 7], ['x', 1]]), d2: day([['a', 5], ['c', 4], ['d', 3], ['x', 1]]), d3: null }, { top: 3 });
-  assert(st.days.length === 2 && st.pairs.length === 1 && st.pairs[0].common === 2 && near(st.pairs[0].share, 2 / 3) && near(st.pairs[0].jaccard, 2 / 4) && near(st.meanShare, 2 / 3), 'Top-N-Überlappung zwischen Tagen: gemeinsam ÷ kleinere Menge, Jaccard; Zellen < 2 Starts zählen nicht');
+  assert(st.days.length === 2 && st.pairs.length === 1 && st.pairs[0].common === 2 && near(st.pairs[0].share, 2 / 3) && near(st.pairs[0].jaccard, 2 / 4) && near(st.meanShare, 2 / 3), 'Top-N-Überlappung zwischen Tagen: gemeinsam ÷ kleinere Menge, Jaccard; Zellen < 3 Starts zählen nicht');
 }
 
 // ---------- endgültige Formate des Sammlers ----------
@@ -501,6 +501,12 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
   const rk = R.cityRanking([doc], {}, latest, { type: 'scooter', minFleet: 0, rvdLimit: lim }).rows[0];
   assert(rk.excluded.join() === 'Lime' && near(rk.rvd, 1.92, 1e-6) && rk.fleet === 200, 'Rangliste: überzählender Anbieter nur bei der Flotte');
   assert(R.overLimit(3.5, 'scooter', lim) && !R.overLimit(3.4, 'scooter', lim) && !R.overLimit(9, 'bike', lim) && !R.overLimit(9, 'scooter', null), 'Grenze nur für Arten mit Referenz');
+  // Ampel rot (latest.json → eventChecks, Agent M): Gruppe im Bericht nicht plausibel (Flag ampel-rot), in der Rangliste nur bei der Flotte
+  const ec = { day: '2026-11-02', groups: { 'F|Dott|scooter': { level: 'bad', checks: { flags: ['pickup'] } }, 'F|nb|bike': { level: 'warn', checks: { flags: ['se'] } } } };
+  const c = R.municipalReport({ docs: [doc], ags: 'F', eventChecks: ec }), cd = c.groups.find(g => g.op === 'Dott');
+  const rkS = R.cityRanking([doc], {}, latest, { type: 'scooter', minFleet: 0, eventChecks: ec }).rows[0], rkB = R.cityRanking([doc], {}, latest, { type: 'bike', minFleet: 0, eventChecks: ec }).rows[0];
+  assert(!cd.plausible && cd.flags.includes(R.AMPEL_RED) && R.AMPEL_RED === 'ampel-rot' && c.groups.find(g => g.op === 'nb').plausible && c.totals.excluded.join() === 'Dott|scooter' && near(c.totals.ridesDay, 960 + 480, 1e-6)
+    && rkS.excluded.join() === 'Dott' && near(rkS.rvd, 9.6, 1e-6) && rkB.excluded.length === 0, 'Ampel rot: Bericht nicht plausibel (ampel-rot), Rangliste ohne die Fahrten der roten Gruppe; gelb bleibt');
 }
 
 // Ausgenommene Anbieter (Dresden: MOBIbike mit Bestandsschutz) zählen nicht gegen die Obergrenze
@@ -591,6 +597,59 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
   const doc = { day, runs: [[at(8), 20 * 60e3, 1], [at(9), 20 * 60e3, 1, '2026-11-01b@abc'], [at(10), 20 * 60e3, 1, '2026-11-01b@abc']], groups: {} };
   const rp = R.municipalReport({ docs: [doc], ags: '1' });
   assert(rp.quality.mixedRuleDays.length === 1 && rp.quality.mixedRuleDays[0].day === day && rp.quality.mixedRuleDays[0].rules.length === 2, 'M-19: Tag mit altem und neuem Regelstand in quality.mixedRuleDays');
+}
+// Vertrag 1/2: Regelstand je Lauf (Teil vor „@“), Regelstand-Tage; Z2: Bruchmarken bei Regelwechsel
+{
+  assert(R.ruleOf([1, 2, 1, '2026-11-02a@abc1234']) === '2026-11-02a' && R.ruleOf([1, 2, 1]) === null && R.ruleOf(null) === null && R.ruleOf([1, 2, 1, '']) === null, 'ruleOf: METHOD_VERSION-Teil, null für alte Läufe');
+  const u = Date.parse('2026-11-01T12:51:00Z'), v = Date.parse('2026-11-01T13:13:00Z');
+  assert(R.ruleEra([u, 1, 1]) !== R.ruleEra([v, 1, 1]) && R.ruleEra([v, 1, 1, 'R@1']) === 'R' && R.ruleEra([v, 1, 1, 'R@1']) === R.ruleEra([v + 1, 1, 1, 'R@2']), 'ruleEra: Wechsel am 01.11. 14:13 ohne Angabe getrennt; Commit-Teil zählt nicht');
+  const d01 = { day: '2026-11-01', runs: [[u, 20 * MIN, 1], [v, 22 * MIN, 0], [v + 20 * MIN, 20 * MIN, 1]], groups: {} };
+  const d02 = { day: '2026-11-02', runs: [[T('2026-11-02T07:00:00'), 20 * MIN, 1, 'R@1cf42c8'], [T('2026-11-02T08:00:00'), 20 * MIN, 1, 'R@32d451a']], groups: {} };
+  const rq = R.municipalReport({ docs: [d01, d02], ags: '1' }).quality;
+  assert(rq.mixedRuleDays.length === 1 && rq.mixedRuleDays[0].day === '2026-11-01', 'mixedRuleDays: 01.11. (Lime reloc → slow ohne Kennzeichnung) gemischt, 02.11. mit zwei Commits desselben Regelstands nicht');
+  // drei Tage: A alter Stand (Spiegel doppelt, Flotte 200), B Wechsel um 07:00 (davor 200, danach 100), C neuer Stand (100)
+  const runsOf = (day, rule = null, from = 0) => [...Array(72).keys()].map(i => T(`${day}T00:00:00`) + (i * 20 + 10) * MIN).map(at => { const h = R.hourOfMs(at); return rule && h >= from ? [at, 20 * MIN, 1, rule] : [at, 20 * MIN, 1]; });
+  const grp = (f) => ({ start: new Array(24).fill(10), end: new Array(24).fill(10), vminTot: [...Array(24).keys()].map(h => f(h) * 60), vmin: [...Array(24).keys()].map(h => f(h) * 60) });
+  const A = { day: '2026-11-10', runs: runsOf('2026-11-10'), groups: { '1|nb|bike': grp(() => 200), '1|v|scooter': grp(() => 50) } };
+  const B = { day: '2026-11-11', runs: runsOf('2026-11-11', 'X@1', 7), groups: { '1|nb|bike': grp(h => (h < 7 ? 200 : 100)), '1|v|scooter': grp(() => 50) } };
+  const Cd = { day: '2026-11-12', runs: runsOf('2026-11-12', 'X@2', 0), groups: { '1|nb|bike': grp(() => 100), '1|v|scooter': grp(() => 50) } };
+  assert(R.docRule(Cd) === 'X' && R.docRule(B) === null && R.docRule(A) === null, 'docRule: einheitlicher Regelstand eines Tages, sonst null');
+  const brk = { '1|nb|bike': '2026-11-11' };
+  const r0 = R.municipalReport({ docs: [A, B, Cd], ags: '1', pop: 1000 }), r1 = R.municipalReport({ docs: [A, B, Cd], ags: '1', pop: 1000, breaks: brk });
+  const nb0 = r0.groups.find(g => g.key === 'nb|bike'), nb1 = r1.groups.find(g => g.key === 'nb|bike'), v1 = r1.groups.find(g => g.key === 'v|scooter');
+  assert(r1.quality.rule === 'X' && r1.quality.ruleFullDays === 1 && r1.quality.fullDays === 3 && r1.quality.mixedRuleDays.map(x => x.day).join() === '2026-11-11', 'Vertrag 2: q.rule = Regelstand des jüngsten gezählten Laufs, q.ruleFullDays = volle Tage nur mit ihm (gemischter Wechseltag zählt nicht)');
+  assert(nb0.fleet > 140 && near(nb1.fleet, 100, 1e-9) && nb1.rides === 170 + 240 && nb1.breakDay === '2026-11-11' && nb1.breakSkipped.join() === '2026-11-10' && near(v1.fleet, 50, 1e-9) && v1.rides === 720 && !v1.breakDay,
+    `Z2: Bruchmarke – Tag vor dem Bruch nicht gezählt, am Bruchtag nur Stunden ab dem Wechsel (Flotte ${nb0.fleet.toFixed(0)} → ${nb1.fleet.toFixed(0)}); andere Reihen unverändert`);
+  assert(r1.quality.breaks.length === 1 && r1.quality.breaks[0].key === 'nb|bike' && r1.quality.breaks[0].day === '2026-11-11' && near(nb1.rvd, nb1.ridesDay / 100, 1e-9) && near(r1.totals.per1000Fleet, 150, 1e-6), 'Z2: quality.breaks nennt Reihe und Tag; Fahrten je Fahrzeug und Hochrechnung aus den Tagen ab dem Bruch');
+  // Rangliste und Archiv-Bericht mit denselben Bruchmarken und der Ampel (bisher nur im Kommunal-Bericht)
+  const lt = { municipalities: { 1: { name: 'Eins', pop: 1000 } } };
+  const k0 = R.cityRanking([A, B, Cd], {}, lt, { type: 'bike', minFleet: 0 }).rows[0], k1 = R.cityRanking([A, B, Cd], {}, lt, { type: 'bike', minFleet: 0, breaks: brk }).rows[0];
+  assert(k0.fleet > 140 && near(k1.fleet, nb1.fleet, 1e-9) && near(k1.ridesDay, nb1.ridesDay, 1e-9) && near(k1.rvd, nb1.rvd, 1e-9), `Z2: Rangliste mit Bruchmarken wie der Bericht (Flotte ${k0.fleet.toFixed(0)} → ${k1.fleet.toFixed(0)}, Fahrten je Rad ${k1.rvd.toFixed(2)})`);
+  const arB = { '2026-11-10': { '1|nb|bike': [200, 240, 240, 0, 0, 0, 0, 0, 1440], '1|v|scooter': [50, 240, 240, 0, 0, 0, 0, 0, 1440] }, '2026-11-11': { '1|nb|bike': [130, 240, 240, 0, 0, 0, 0, 0, 1440], '1|v|scooter': [50, 240, 240, 0, 0, 0, 0, 0, 1440] }, '2026-11-12': { '1|nb|bike': [100, 240, 240, 0, 0, 0, 0, 0, 1440], '1|v|scooter': [50, 240, 240, 0, 0, 0, 0, 0, 1440] } };
+  const ecV = { day: '2026-11-12', groups: { '1|v|scooter': { level: 'bad', checks: { flags: ['pickup'] } } } };
+  const ar0 = R.archiveReport({ archive: arB, ags: '1', pop: 1000 }), ar1 = R.archiveReport({ archive: arB, ags: '1', pop: 1000, breaks: brk, eventChecks: ecV });
+  const an1 = ar1.groups.find(g => g.key === 'nb|bike'), av1 = ar1.groups.find(g => g.key === 'v|scooter');
+  assert(near(ar0.groups.find(g => g.key === 'nb|bike').fleet, 430 / 3) && near(an1.fleet, 115) && an1.rides === 480 && an1.breakDay === '2026-11-11' && an1.breakSkipped.join() === '2026-11-10' && ar1.quality.breaks[0]?.key === 'nb|bike'
+    && !av1.plausible && av1.flags.includes(R.AMPEL_RED) && ar1.totals.excluded.join() === 'v|scooter' && ar0.groups.every(g => g.plausible),
+    'Z2/Ampel: Archiv-Bericht ohne Tage vor dem Bruch (Ø 143 → 115, Bruchtag ganz), rote Gruppe nicht plausibel');
+  const ca = R.cityRankingArchive(arB, lt, { type: 'bike', breaks: brk }).rows[0], cs = R.cityRankingArchive(arB, lt, { type: 'scooter', eventChecks: ecV }).rows[0];
+  assert(near(ca.fleet, 115) && cs.rvd === null && cs.fleet === 50, 'Rangliste aus dem Archiv: Bruchmarken und Ampel rot (nur Flotte) ebenso');
+  // ruleBreaks: Sprung ≥ 10 % und ≥ 5 Fahrzeuge im ersten Lauf mit neuem Regelstand
+  const ts = B.runs.map(r => r[0]), cut = B.runs.findIndex(r => r[3]);
+  const hB = { day: '2026-11-11', t: ts, series: { '1|nb|bike': { total: ts.map((_, i) => (i < cut ? 200 : 100)) }, '1|v|scooter': { total: ts.map(() => 50) }, '1|z|scooter': { total: ts.map((_, i) => (i < cut ? 8 : 4)) }, '1|w|bike': { total: ts.map((_, i) => (i === cut ? null : i < cut ? 60 : 40)) } } };
+  const runs = B.runs.map(r => [r[0], r[3] ?? null]);
+  const rb = R.ruleBreaks(runs, [hB]);
+  assert(JSON.stringify(rb) === '{"1|nb|bike":"2026-11-11"}' && Object.keys(R.ruleBreaks(runs, [hB], { since: ts[cut] })).length === 0 && Object.keys(R.ruleBreaks(runs.map(r => [r[0], 'X@1']), [hB])).length === 0,
+    'ruleBreaks: nur die Reihe mit Sprung (200 → 100) beim ersten Lauf mit neuem Stand; < 5 Fahrzeuge, fehlender Wert und Wechsel vor since zählen nicht; ohne Regelwechsel keine Marke');
+  // rückwirkend auf dem echten Datenstand: Doppelzählung der Spiegelquellen bis 02.11. 07:17 (Köln nextbike 4.952 → 2.406)
+  const RD = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '.realdata');
+  if (existsSync(path.join(RD, 'runs.json')) && existsSync(path.join(RD, 'history', '2026-11-02.json'))) {
+    const J = (f) => JSON.parse(readFileSync(path.join(RD, f), 'utf8'));
+    const hs = J('history/index.json').days.filter(d => existsSync(path.join(RD, 'history', `${d}.json`))).map(d => J(`history/${d}.json`));
+    const real = R.ruleBreaks(J('runs.json').runs.map(r => [r[0], r[14] ?? null]), hs);
+    assert(real['05315000|nextbike|bike'] === '2026-11-02' && real['05111000|nextbike|bike'] === '2026-11-02' && real['08311000|Yoio|scooter'] === '2026-11-02' && !real['11000000|Dott|scooter'] && !real['08111000|Lime|scooter'] && Object.values(real).every(d => d === '2026-11-02'),
+      `Z2 Datenstand: Bruch am 02.11. rückwirkend erkannt (${Object.keys(real).length} Reihen, u. a. Köln/Düsseldorf nextbike, Yoio Freiburg; Dott Berlin, Lime Stuttgart ohne Bruch; Wechsel am 01.11. ohne Bestandssprung)`);
+  } else console.log('übersprungen: .realdata fehlt (Z2-Datenstand-Test)');
 }
 // Q-9/Q-24: Formel-Schutz auch hinter führenden Leerzeichen; CSV-Kopf der Städte-Rangliste übersetzt
 assert(R.csvCell(' =HYPERLINK("x")') === `"' =HYPERLINK(""x"")"` && R.csvCell(' +1') === "' +1" && R.csvCell('Köln') === 'Köln', 'Q-9: führende Leerzeichen vor = + - @ werden ebenfalls entschärft');

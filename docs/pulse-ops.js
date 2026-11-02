@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mvyywh5o';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvyywh5o';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mvz5nwfe';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvz5nwfe';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -171,17 +171,18 @@ export function decodeFleet(doc) {
   // rangeDerived = Feld 10 „reichweiteAbgeleitet“ (Reichweite aus dem Ladestand gerechnet, M-16; ältere Dateien ohne Feld → false)
   // rangeLimitKm = Feld 11 „reichweiteSchwelleKm“ (Reichweiten-Schwelle der Quelle, pulse-core rangeLimitCheck; null/fehlt = Standard)
   // rangeFlat = Feld 12 „reichweiteKonstant“ (Reichweite der Quelle konstant, pulse-core rangeFlatCheck: für Energie/Akkutausch unbekannt; fehlt = nein)
+  // idleCensored = Feld 13 „standzeitMindestens“ (seit Beginn der Verfolgung unbewegt: idleMin ist ein Mindestwert, Z6; fehlt = nein)
   // Felder am Zeilenende ohne Wert schreibt der Sammler nicht (fehlend = null)
-  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idleMin, m, rd, rl, rf]) => ({
-    lat, lon, operator: doc.ops[op], type: doc.types[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), battery: bat, rangeKm: range, idleMin, ags: doc.munis[m], rangeDerived: rd === 1,
-    rangeLimitKm: Number.isFinite(rl) ? rl : null, rangeFlat: rf === 1,
+  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idleMin, m, rd, rl, rf, ic]) => ({
+    lat, lon, operator: doc.ops[op], type: doc.types[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), battery: bat, rangeKm: range, idleMin: idleMin ?? null, ags: doc.munis[m], rangeDerived: rd === 1,
+    rangeLimitKm: Number.isFinite(rl) ? rl : null, rangeFlat: rf === 1, idleCensored: ic === 1,
   }));
   // physical = physischer Bestand an der Station (Fahrzeuge), virtual = Merkmal der Station (Feld 12 „virtuell“: 1/0; ältere Dateien ohne Feld → null)
   const stations = (doc?.stations || []).map(([lat, lon, op, name, bookable, docks, capacity, m, renting, returning, physical, virtual]) => ({
     lat, lon, operator: doc.ops[op], name, bookable, docks, capacity, ags: doc.munis[m], renting: !!renting, returning: !!returning, physical,
     virtual: virtual === 1 || virtual === true ? 1 : virtual === 0 || virtual === false ? 0 : null,
   }));
-  return { at: doc?.at ?? null, vehicles, stations };
+  return { at: doc?.at ?? null, trackStart: doc?.trackStart ?? null, vehicles, stations }; // trackStart: Beginn der Verfolgung (Standzeit höchstens seitdem)
 }
 export const isAvailable = (v) => !v.disabled && !v.reserved;
 export function operatorShare(fleet, ags, operator) {
@@ -1074,5 +1075,98 @@ export function planGeoJson(spots, runs, depot) {
   }
   f.push({ type: 'Feature', properties: { kind: 'depot' }, geometry: { type: 'Point', coordinates: [depot.lon, depot.lat] } });
   return { type: 'FeatureCollection', features: f };
+}
+// ---------- Einsammelliste: Fahrzeuge im eigenen Abstellverbot (intern, kein Anbieter-Vergleich) ----------
+// Zonenart wie zoneConstraints: 'mpz' = Pflicht-Abstellzone (GBFS station_parking, ohne Durchfahrtsverbot: Abstellen an Stationen erlaubt),
+// 'ban' = Abstell- oder Fahrverbot (Fahrtende, ride_allowed aus GBFS 2.x oder Durchfahrt verboten), 'ok' = Fahren und Abstellen erlaubt
+// (Betriebsgebiet, Tempozone, Ausnahmefläche wie ein Mobility Hub in einer Verbotszone). Die Feeds 2.x melden ride_end_allowed nicht
+// (endAllowed null, Stand 02.11.2026 alle BW-Feeds), dort trägt ride_allowed die Regel.
+export const COLLECT = { buffers: [15, 25, 50], stationM: 25 };
+export function zoneKind(rules = []) {
+  if (rules.some(x => x.parking === true) && !rules.some(x => x.rideThrough === false)) return 'mpz';
+  if (rules.some(x => x.endAllowed === false || x.rideAllowed === false || x.rideThrough === false)) return 'ban';
+  return rules.some(x => x.rideAllowed === true || x.endAllowed === true) ? 'ok' : null;
+}
+// Fläche in m² (eben, je Polygon mit cos der Breite; Löcher abgezogen): nur zum Vergleich „kleinere Zone gilt“
+const ringArea = (r) => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] - r[i][0]) * (r[j][1] + r[i][1]); return Math.abs(a / 2); };
+function geomAreaM2(g) {
+  let s = 0;
+  for (const p of g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []) {
+    if (!p?.[0]?.length) continue;
+    s += (ringArea(p[0]) - p.slice(1).reduce((x, h) => x + ringArea(h), 0)) * 111320 * 111320 * Math.cos(p[0][0][1] * Math.PI / 180);
+  }
+  return s;
+}
+/**
+ * Verfügbare Fahrzeuge (nicht gesperrt, nicht reserviert) von operator, die in einer EIGENEN Abstell- oder Fahrverbotszone stehen.
+ * fleet: { vehicles, stations } (decodeFleet; vom Aufrufer auf Gemeinde/Fahrzeugart eingegrenzt, Stationen dürfen das ganze Land sein).
+ * zonesDoc: zones/<Datei>.json oder eine Liste davon; Dateien eines anderen Anbieters zählen nicht. Gleiche Zone aus zwei Quellen
+ * (MobiData BW und Direktfeed, gleiche Umrandung und Fläche) zählt einmal.
+ * Ein Punkt ist „im Verbot“, wenn er in einer eigenen Verbotszone liegt, in keiner eigenen Pflicht-Abstellzone und in keiner eigenen
+ * erlaubten Zone, die kleiner ist als die kleinste Verbotszone am Punkt (die genauere Zone gilt: Hub in der Verbotszone ja, Betriebsgebiet nein).
+ * Roh = Koordinate im Verbot und keine eigene Station ≤ stationM. Robust je Puffer b: auch die 4 Punkte im Abstand b (N/O/S/W) sind im Verbot
+ * (Umfeld der Koordinate geprüft: GPS-Fehler, Fahrzeug knapp neben einer Abstellfläche). Gelistet nur, wenn robust bei ALLEN Puffern.
+ * mpzNoStation (nur Transparenz, nicht gelistet): in einer Pflicht-Abstellzone ohne eigene Station ≤ stationM.
+ * Rückgabe { operator, features, zones: { ban, mpz, ok }, buffers, stationM, counts: { available, inZone, mpz, allowed, station, raw,
+ *   robust: { <b>: n }, listed, mpzNoStation }, list: [{ lat, lon, type, ags, zone: { id, name, noRide }, idleMin, idleCensored, battery,
+ *   rangeKm, rangeFlat }] (Standzeit absteigend), zonesHit: [{ id, name, noRide, geometry, n }] }
+ */
+export function parkingViolations(fleet, zonesDoc, { operator = null, buffers = COLLECT.buffers, stationM = COLLECT.stationM } = {}) {
+  const docs = (Array.isArray(zonesDoc) ? zonesDoc : [zonesDoc]).filter(d => d && (operator == null || d.operator == null || d.operator === operator));
+  const vehicles = (fleet?.vehicles || []).filter(v => (operator == null || v.operator === operator) && isAvailable(v) && Number.isFinite(v.lat) && Number.isFinite(v.lon));
+  const near = gridIndex((fleet?.stations || []).filter(s => (operator == null || s.operator === operator) && Number.isFinite(s.lat) && Number.isFinite(s.lon)));
+  const bmax = Math.max(0, ...buffers);
+  // Begrenzung der Fahrzeuge + größter Puffer: Zonen außerhalb (z. B. Voi-Feed für ganz Deutschland) fallen vorab weg
+  const vb = vehicles.length ? [Math.min(...vehicles.map(v => v.lon)), Math.min(...vehicles.map(v => v.lat)), Math.max(...vehicles.map(v => v.lon)), Math.max(...vehicles.map(v => v.lat))] : null;
+  const padLat = (bmax + 10) / 111320, padLon = vb ? (bmax + 10) / (111320 * Math.cos(((vb[1] + vb[3]) / 2) * Math.PI / 180)) : 0;
+  const zones = { ban: [], mpz: [], ok: [] }, seen = new Set(); let features = 0;
+  docs.forEach((d, di) => (d.features || []).forEach((f, i) => {
+    features++;
+    const g = f?.geometry; if (!vb || !g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) return;
+    const rules = f.properties?.rules || [], kind = zoneKind(rules); if (!kind) return;
+    const [{ b }] = boxed([g]); if (b[2] < vb[0] - padLon || b[0] > vb[2] + padLon || b[3] < vb[1] - padLat || b[1] > vb[3] + padLat) return;
+    const area = geomAreaM2(g), dup = `${kind}|${b.map(x => x.toFixed(6)).join(',')}|${area.toFixed(1)}`; if (seen.has(dup)) return; seen.add(dup);
+    zones[kind].push({ g, b, area, id: `${d.sourceId ?? di}#${i}`, name: f.properties?.name || null, noRide: rules.some(x => x.rideThrough === false) });
+  }));
+  const inside = (z, lat, lon) => lon >= z.b[0] && lon <= z.b[2] && lat >= z.b[1] && lat <= z.b[3] && geomContains(z.g, lat, lon);
+  const at = (lat, lon) => {
+    let ban = null; for (const z of zones.ban) if ((!ban || z.area < ban.area) && inside(z, lat, lon)) ban = z;
+    if (!ban) return { why: 'none' };
+    if (zones.mpz.some(z => inside(z, lat, lon))) return { why: 'mpz', ban };
+    if (zones.ok.some(z => z.area < ban.area && inside(z, lat, lon))) return { why: 'allowed', ban };
+    return { why: 'ban', ban };
+  };
+  const counts = { available: vehicles.length, inZone: 0, mpz: 0, allowed: 0, station: 0, raw: 0, robust: Object.fromEntries(buffers.map(b => [b, 0])), listed: 0, mpzNoStation: 0 };
+  const list = [], hit = new Map();
+  for (const v of vehicles) {
+    const stationNear = () => near(v, stationM).length > 0;
+    if (zones.mpz.length && zones.mpz.some(z => inside(z, v.lat, v.lon)) && !stationNear()) counts.mpzNoStation++;
+    const a = at(v.lat, v.lon); if (a.why === 'none') continue;
+    counts.inZone++;
+    if (a.why !== 'ban') { counts[a.why]++; continue; }
+    if (stationNear()) { counts.station++; continue; }
+    counts.raw++;
+    let all = true;
+    for (const b of buffers) {
+      const dLat = b / 111320, dLon = b / (111320 * Math.cos(v.lat * Math.PI / 180));
+      const ok = [[dLat, 0], [-dLat, 0], [0, dLon], [0, -dLon]].every(([x, y]) => at(v.lat + x, v.lon + y).why === 'ban');
+      if (ok) counts.robust[b]++; else all = false;
+    }
+    if (!all) continue;
+    counts.listed++;
+    const z = a.ban; let h = hit.get(z); if (!h) hit.set(z, (h = { id: z.id, name: z.name, noRide: z.noRide, geometry: z.g, n: 0 })); h.n++;
+    list.push({ lat: v.lat, lon: v.lon, type: v.type, ags: v.ags ?? null, zone: { id: z.id, name: z.name, noRide: z.noRide }, idleMin: v.idleMin ?? null, idleCensored: v.idleCensored ?? null, battery: v.battery ?? null, rangeKm: v.rangeKm ?? null, rangeFlat: !!v.rangeFlat });
+  }
+  list.sort((a, b) => (b.idleMin ?? -1) - (a.idleMin ?? -1) || a.lat - b.lat || a.lon - b.lon);
+  return { operator, features, zones: { ban: zones.ban.length, mpz: zones.mpz.length, ok: zones.ok.length }, buffers: [...buffers], stationM, counts, list, zonesHit: [...hit.values()] };
+}
+// Einsammelliste als CSV (Formel-Schutz über csvCell): Deutsch mit Semikolon, Englisch mit Komma und englischen Spaltennamen
+export const COLLECT_CSV_FIELDS = ['rang', 'anbieter', 'lat', 'lon', 'zone_id', 'zone_name', 'zonenart', 'standzeit_min', 'standzeit_mindestens', 'akku_prozent', 'reichweite_km', 'fahrzeugart'];
+const COLLECT_CSV_EN = { rang: 'rank', anbieter: 'operator', zonenart: 'zone_kind', standzeit_min: 'idle_min', standzeit_mindestens: 'idle_at_least', akku_prozent: 'battery_pct', reichweite_km: 'range_km', fahrzeugart: 'vehicle_type' };
+export function violationsCsv(res, { lang = 'de' } = {}) {
+  const en = lang === 'en';
+  const rows = (res?.list || []).map((v, i) => [i + 1, res.operator, v.lat.toFixed(6), v.lon.toFixed(6), v.zone.id, v.zone.name ?? '', v.zone.noRide ? (en ? 'no-riding zone' : 'Fahrverbot') : (en ? 'no-parking zone' : 'Abstellverbot'),
+    v.idleMin, v.idleCensored == null ? '' : v.idleCensored ? 1 : 0, v.battery, v.rangeKm, v.type]);
+  return en ? csvRows([COLLECT_CSV_FIELDS.map(h => COLLECT_CSV_EN[h] ?? h), ...rows], ',') : csvRows([COLLECT_CSV_FIELDS, ...rows]);
 }
 export { cellOf, cellCenter, CELL_LAT, CELL_LON };

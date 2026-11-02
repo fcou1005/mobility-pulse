@@ -382,6 +382,7 @@ export async function readGbfsSystem(source, fetchJson, { now = Date.now(), maxV
   // Energie) und in der Feed-Prüfung ausweisen; der Wert bleibt nur als Fingerabdruck für den Kennungswechsel-Abgleich (batteryFp). Keine Umrechnung.
   res.batteryScale = batteryScaleCheck(res.vehicles, { fraction: fuelFraction });
   if (res.batteryScale.suspect) for (const v of res.vehicles) { if (v.batteryPct != null) v.batteryFp = v.batteryPct; v.batteryPct = null; }
+  res.batteryFloor = batteryFloorCheck(res.vehicles); // Ausblenden bei niedrigem Akku (Z4): sources[].batteryFloor, Verfolgung zählt hide statt Fahrtbeginn
   // Reichweite: konstant (Platzhalter) → v.rangeFlat; aus dem Ladestand gerechnet → v.rangeDerived; kleine Skala → v.rangeLimitKm (applyRangeChecks)
   Object.assign(res, applyRangeChecks(res.vehicles));
   res.checks = checkGbfs({ disc: disc.json, listed: Object.keys(feeds), now, battery: res.batteryScale, range: res.rangeCheck, rangeLimit: res.rangeLimit, rangeFlat: res.rangeFlat,
@@ -405,6 +406,21 @@ export function batteryScaleCheck(vehicles, { minN = BATTERY_SCALE.minN, maxP99 
   const b = (vehicles || []).map(v => v.batteryPct).filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y);
   const n = b.length, p99 = n ? b[Math.floor(0.99 * (n - 1))] : null;
   return { n, p99: p99 != null ? Math.round(p99) : null, max: n ? Math.round(b[n - 1]) : null, derived: (vehicles || []).filter(v => v.batteryDerived).length, fraction: !!fraction, suspect: n >= minN && p99 < maxP99 };
+}
+// Ausblenden bei niedrigem Akku (Z4, Prüfung 02.11.2026): Manche Betreiber nehmen fast leere Fahrzeuge aus dem Feed, statt sie als gesperrt zu
+// melden (Dott meldet nie gesperrte; Dott Stuttgart: 3 von 1.277 unter 15 %, Voi 67 von 1.450, Bolt 77 von 1.056). Ihr Verschwinden sähe aus wie
+// eine Ausleihe. Je Quelle mit ≥ minN (500) Fahrzeugen mit absolutem Ladestand (Skala plausibel, nicht abgeleitet; gesperrte zählen mit – wer leere
+// Fahrzeuge als gesperrt meldet, blendet nicht aus: ohne Gesperrte läge Voi Köln bei 17 %, Bolt Stuttgart bei 12 %): Untergrenze p005 =
+// 0,5-Perzentil; ab minFloor (10 %) blendet die Quelle aus, wenn der Boden sauber ist (0,1-Perzentil p001 ≥ p005 − band): einzelne Fahrzeuge
+// mit 1–7 % sprechen gegen eine Ausblendung (Voi Wuppertal 02.11.: p005 13, aber Werte 1, 1, 7, 7). Gemessen 02.11.2026 (ops, je Anbieter und
+// Stadt): Dott Stuttgart p005 16 (Minimum 13), Köln 17, München 15, Berlin 14, Düsseldorf 10; nextbike-E-Räder München 23; Voi 2–9, Bolt 0–4.
+// Rückgabe { n, p005, p001, hides } (p005/p001 null unter minN).
+export const BATTERY_FLOOR = { minN: 500, minFloor: 10, band: 5 };
+export function batteryFloorCheck(vehicles, { minN = BATTERY_FLOOR.minN, minFloor = BATTERY_FLOOR.minFloor, band = BATTERY_FLOOR.band } = {}) {
+  const b = (vehicles || []).filter(v => !v.batteryDerived).map(v => v.batteryPct).filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y);
+  const n = b.length; if (n < minN) return { n, p005: null, p001: null, hides: false };
+  const p005 = Math.round(b[Math.floor(0.005 * (n - 1))]), p001 = Math.round(b[Math.floor(0.001 * (n - 1))]);
+  return { n, p005, p001, hides: p005 >= minFloor && p001 >= p005 - band };
 }
 // Reichweite aus dem Ladestand gerechnet (M-16): je Fahrzeugtyp (vehicle_type_id) mit ≥ minN Fahrzeugen mit eigenem Ladestand ≥ minBattery %
 // (nicht aus der Reichweite abgeleitet, Skala plausibel) und Reichweite: Spanne p10–p90 von Reichweite ÷ Ladestand höchstens maxSpread (3 %) des

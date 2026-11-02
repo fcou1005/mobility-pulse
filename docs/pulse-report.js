@@ -1,9 +1,9 @@
 // Mobility Pulse — Kommunal-Bericht, Obergrenzen-Wächter, Wochen-Heatmap, Preis-Log und Feed-Prüfung.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: events/<Tag>.json (Stundenwerte, Läufe),
 // history/<Tag>.json (Bestand je Lauf), cells/<Tag>/<Land>.json (Zellen), latest.json, reference.json.
-import { GAP_MS, CELL_LAT, CELL_LON } from './pulse-track.js?v=mvyywh5o';
-import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mvyywh5o';
-import { hourMinutes } from './pulse-core.js?v=mvyywh5o';
+import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mvz5nwfe';
+import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mvz5nwfe';
+import { hourMinutes } from './pulse-core.js?v=mvz5nwfe';
 export { CELL_LAT, CELL_LON };
 
 export const TZ = 'Europe/Berlin';
@@ -46,6 +46,44 @@ export function isGapRun(r) {
 }
 /** Lücken-Lauf, dessen Ereignisse trotzdem in den Stundenwerten stecken (kein Flag 0): Stunde ganz verwerfen */
 export const isTaintedRun = (r) => isGapRun(r) && r[2] !== 0;
+
+// ---------- Regelstand (Datenvertrag 1/2) ----------
+/** Regelstand eines Laufs: METHOD_VERSION-Teil von runs[k][3] („2026-11-01b@1cf42c8“ → „2026-11-01b“); null für ältere Läufe ohne Angabe */
+export const ruleOf = (r) => { const s = Array.isArray(r) ? r[3] : null; return typeof s === 'string' && s ? s.split('@')[0] : null; };
+// Regelwechsel aus der Zeit vor der Angabe je Lauf (runs[k][3] erst ab 02.11.2026 07:17): Läufe ab `at` zählen nach einem anderen Stand.
+// 01.11.2026: Lime-Versatz ohne Ladestandverlust ab dem Umzugslauf 14:13 als GPS-Sprung (slow) statt Umsetzung (reloc), Tausch erst danach.
+export const UNTAGGED_RULE_CHANGES = [{ at: Date.parse('2026-11-01T13:00:00Z'), id: 'ohne Angabe ab 01.11.2026 14:13' }];
+/** Regelstand für Vergleiche: ruleOf, sonst der Abschnitt vor der Angabe (unterscheidet den Wechsel am 01.11. ohne Kennzeichnung) */
+export const ruleEra = (r) => ruleOf(r) ?? (UNTAGGED_RULE_CHANGES.filter(c => Array.isArray(r) && r[0] >= c.at).pop()?.id || 'ohne Angabe');
+/** Gezählter Lauf (Beobachtungsfenster ohne Lücke) – nur diese bestimmen Regelstand und Regelstand-Tage */
+const countedRun = (r) => Array.isArray(r) && Number.isFinite(r[0]) && r[1] != null && !isGapRun(r);
+/** Regelstand eines Tagesdokuments: ruleOf aller gezählten Läufe, wenn einheitlich; sonst null (gemischt, alt oder ohne Lauf) */
+export function docRule(doc) { const rs = new Set((doc?.runs || []).filter(countedRun).map(ruleOf)); return rs.size === 1 ? [...rs][0] : null; }
+// Bruchmarken (history/daily.json → breaks, Z2): springt der Bestand einer Reihe Gemeinde|Anbieter|Art im ersten Lauf mit neuem Regelstand um
+// mindestens BREAK_JUMP (und BREAK_MIN Fahrzeuge) gegenüber dem letzten Lauf mit altem, gilt die Reihe ab dem Tag dieses Laufs als neu gezählt.
+export const BREAK_JUMP = 0.1, BREAK_MIN = 5;
+/**
+ * Bruchmarken aus Regelwechseln. runs: [[at, regelstand?], …] (runs.json at/regelstand, der laufende Lauf mit RULE); hists: history/<Tag>.json
+ * der betroffenen Tage ({ day, t, series }); since: nur Wechsel nach diesem Zeitpunkt (null = alle, rückwirkend). Rückgabe { Schlüssel: Tag }.
+ */
+export function ruleBreaks(runs, hists, { since = null, minJump = BREAK_JUMP, minAbs = BREAK_MIN } = {}) {
+  const rs = (runs || []).filter(r => Array.isArray(r) && Number.isFinite(r[0])).sort((a, b) => a[0] - b[0]);
+  const era = rs.map(r => ruleEra([r[0], null, null, r[1]]));
+  const at = new Map(); for (const h of hists || []) (h?.t || []).forEach((t, j) => at.set(t, { h, j }));
+  const val = (i, k) => { const e = at.get(rs[i]?.[0]); const v = e?.h.series?.[k]?.total?.[e.j]; return v == null ? null : v; };
+  const out = {};
+  for (let i = 1; i < rs.length; i++) {
+    if (era[i] === era[i - 1] || (since != null && rs[i][0] <= since)) continue;
+    const cur = at.get(rs[i][0]); if (!cur) continue;
+    const keys = new Set([...Object.keys(cur.h.series || {}), ...Object.keys(at.get(rs[i - 1][0])?.h.series || {})]);
+    for (const k of keys) {
+      let o = null; for (let p = i - 1; p >= 0 && era[p] === era[i - 1] && o == null; p--) o = val(p, k); // letzter Lauf mit altem Stand und Wert
+      const n = val(i, k);
+      if (o > 0 && n != null && Math.abs(n - o) >= minAbs && Math.abs(n - o) / o >= minJump) out[k] = cur.h.day;
+    }
+  }
+  return out;
+}
 
 /**
  * Beobachtung je Stunde eines Tages. Ein Lauf deckt das Fenster seit dem vorigen ab (höchstens 45 Min.) und zählt in der
@@ -178,15 +216,22 @@ export const SUSPENDED = 'Kalibrierung ausgesetzt – Messung unplausibel (Über
 export const INCOMPLETE = 'unvollständig – an einzelnen Tagen nur in wenigen Läufen gemeldet, dort nicht als Flotte gezählt';
 function SUSPENDED_ID() { return SUSPENDED; }
 export const overLimit = (rvd, ty, rvdLimit) => rvd != null && rvdLimit?.[ty] != null && rvd > rvdLimit[ty];
-const isPlausible = (flags) => !flags.some(f => f.startsWith('unplausibel') || f === SUSPENDED);
-export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = {}, ags, pop = null, operator = 'all', type = 'all', latestGroups = null, rvdLimit = null } = {}) {
+// Ampel rot (latest.json → eventChecks, lib/pulse-econ.js eventChecks): Ereignisregeln der Gruppe am letzten vollständigen Tag nicht plausibel
+export const AMPEL_RED = 'ampel-rot';
+const mbRedSet = (ec) => new Set(Object.entries(ec?.groups || {}).filter(([, v]) => v?.level === 'bad').map(([k]) => k));
+const isPlausible = (flags) => !flags.some(f => f.startsWith('unplausibel') || f === SUSPENDED || f === AMPEL_RED);
+// breaks: Bruchmarken aus history/daily.json ({ 'Gemeinde|Anbieter|Art': erster Tag mit neuem Regelstand }): Tage davor zählen für diese Reihe
+// nicht (Flotte, Fahrten, Hochrechnung); am Bruchtag nur Stunden, deren Läufe alle den letzten Regelstand des Tages tragen. quality.breaks nennt sie.
+export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = {}, ags, pop = null, operator = 'all', type = 'all', latestGroups = null, rvdLimit = null, breaks = null, eventChecks = null } = {}) {
+  const ampelRed = mbRedSet(eventChecks); // eventChecks: latest.json → eventChecks; rote Gruppen nicht plausibel (AMPEL_RED)
   const keep = keyFilter({ ags, operator, type });
   const list = docs.filter(d => d?.day).sort((a, b) => a.day.localeCompare(b.day));
   const prof = measuredProfile(list);
   const G = new Map(); // op|ty → Akkumulator
-  const acc = (op, ty) => { const k = `${op}|${ty}`; if (!G.has(k)) G.set(k, { op, ty, key: k, fleetDays: [], fleetSrc: new Set(), rides: 0, ends: 0, reloc: 0, cov: 0, durSum: 0, durN: 0, distSum: 0, distN: 0, dis: 0, tot: 0, disSrc: null, days: new Set(), incompleteDays: new Set() }); return G.get(k); };
+  const acc = (op, ty) => { const k = `${op}|${ty}`; if (!G.has(k)) G.set(k, { op, ty, key: k, fleetDays: [], fleetSrc: new Set(), rides: 0, ends: 0, reloc: 0, cov: 0, durSum: 0, durN: 0, distSum: 0, distN: 0, dis: 0, tot: 0, disSrc: null, days: new Set(), incompleteDays: new Set(), breakDay: null, breakDays: new Set(), breakCut: false }); return G.get(k); };
   const daily = [];
-  const q = { days: list.length, runs: 0, counted: 0, gapRuns: 0, gaps: [], obsMin: 0, fullDays: 0, excludedHours: 0, taintedDays: [], fleetFromHistory: [], incompleteGroups: [], mixedRuleDays: [] };
+  const q = { days: list.length, runs: 0, counted: 0, gapRuns: 0, gaps: [], obsMin: 0, fullDays: 0, excludedHours: 0, taintedDays: [], fleetFromHistory: [], incompleteGroups: [], mixedRuleDays: [], breaks: [], rule: null, ruleFullDays: 0 };
+  const dayRule = []; // je Tag { full, rule } für q.ruleFullDays
   for (const doc of list) {
     const hq = hourQuality(doc.runs, doc.gapHours);
     const cov = dayCoverage(hq, prof.profile, hourMinOf(doc));
@@ -196,27 +241,40 @@ export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = 
     for (const g of hq.gaps) q.gaps.push({ ...g, day: doc.day });
     if (hq.full) q.fullDays++;
     const tainted = hq.tainted > 0; if (tainted) q.taintedDays.push(doc.day);
-    { const rs = [...new Set((doc.runs || []).map(r => (Array.isArray(r) ? r[3] ?? null : null)))]; if (rs.length > 1) q.mixedRuleDays.push({ day: doc.day, rules: rs }); } // Tag mit mehreren Regelständen (M-19)
+    // Tag mit mehreren Regelständen (M-19): nur der Teil vor „@“ zählt; ohne Angabe getrennt am bekannten Wechsel (01.11. 14:13)
+    const runsA = (doc.runs || []).filter(Array.isArray), eras = [...new Set(runsA.map(ruleEra))];
+    if (eras.length > 1) q.mixedRuleDays.push({ day: doc.day, rules: eras });
+    dayRule.push({ full: hq.full, rule: docRule(doc) });
+    // Bruchtag: Stunden, deren Läufe alle den letzten Regelstand des Tages tragen (late[h])
+    const lastEra = eras.length > 1 ? ruleEra(runsA[runsA.length - 1]) : null;
+    const late = lastEra ? Array.from({ length: 24 }, (_, h) => runsA.every(r => hourOfMs(r[0]) !== h || ruleEra(r) === lastEra)) : null;
     const obsRaw = hq.obs.reduce((a, m, h) => a + (hq.ok[h] ? m : 0), 0);
     const row = { day: doc.day, weekday: weekdayOf(doc.day), obsHours: hq.obsMin / 60, runs: hq.runs, gapRuns: hq.gaps.length, coverage: cov, full: hq.full, fleet: 0, fleetKnown: false, rides: 0, byGroup: {} };
     const keys = new Set([...Object.keys(doc.groups || {}), ...Object.keys(hist?.series || {})].filter(keep));
     let histUsed = false;
     for (const k of keys) {
       const [, op, ty] = k.split('|'); const a = acc(op, ty);
+      // Bruchmarke: Tage vor dem Regelwechsel zählen für diese Reihe nicht, am Bruchtag nur Stunden mit dem neuen Stand
+      const bd = breaks?.[k] ?? null; if (bd) a.breakDay = bd;
+      if (bd && doc.day < bd) { a.breakDays.add(doc.day); continue; }
+      const cut = bd === doc.day && late ? late : null; if (cut) a.breakCut = true;
+      const okH = (h) => hq.ok[h] && (!cut || cut[h]);
+      const obsG = cut ? hq.obs.reduce((s, m, h) => s + (okH(h) ? m : 0), 0) : obsRaw;
+      const covG = cut ? dayCoverage({ ...hq, obsOk: hq.obsOk.map((m, h) => (cut[h] ? m : 0)) }, prof.profile, hourMinOf(doc)) : cov;
       const g = doc.groups?.[k];
       let rides = 0, ends = 0, reloc = 0, vt = 0;
-      if (g) for (let h = 0; h < 24; h++) { if (!hq.ok[h]) continue; rides += g.start?.[h] || 0; ends += g.end?.[h] || 0; reloc += g.reloc?.[h] || 0; vt += g.vminTot?.[h] || 0; }
+      if (g) for (let h = 0; h < 24; h++) { if (!okH(h)) continue; rides += g.start?.[h] || 0; ends += g.end?.[h] || 0; reloc += g.reloc?.[h] || 0; vt += g.vminTot?.[h] || 0; }
       let fleet = null;
-      const hs = histStats(hist, k);
-      if (vOk && obsRaw > 0 && vt > 0) { fleet = vt / obsRaw; a.fleetSrc.add('gemessen'); }
+      const hs = cut ? null : histStats(hist, k); // Tagesmittel mischt am Bruchtag beide Stände
+      if (vOk && obsG > 0 && vt > 0) { fleet = vt / obsG; a.fleetSrc.add('gemessen'); }
       else if (hs?.incomplete) a.incompleteDays.add(doc.day); // nur in einzelnen Läufen gemeldet: keine Tagesflotte
       else if (hs) { fleet = hs.fleet; a.fleetSrc.add('Verlauf'); histUsed = true; }
       if (hs && !hs.incomplete) { a.dis += hs.disabled; a.tot += hs.total; a.disSrc = 'Verlauf'; }
       const present = (fleet || 0) > 0 || rides > 0;
       if (fleet != null) a.fleetDays.push({ day: doc.day, fleet });
       a.rides += rides; a.ends += ends; a.reloc += reloc;
-      if (present) { a.cov += cov; a.days.add(doc.day); }
-      if (g && !tainted) { a.durSum += g.tripDurSum || 0; a.durN += g.tripDurN || 0; a.distSum += g.tripDistSum || 0; a.distN += g.tripDistN || 0; }
+      if (present) { a.cov += covG; a.days.add(doc.day); }
+      if (g && !tainted && !cut) { a.durSum += g.tripDurSum || 0; a.durN += g.tripDurN || 0; a.distSum += g.tripDistSum || 0; a.distN += g.tripDistN || 0; }
       row.rides += rides; if (fleet != null) { row.fleet += fleet; row.fleetKnown = true; }
       row.byGroup[`${op}|${ty}`] = { fleet, rides };
     }
@@ -242,6 +300,7 @@ export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = 
     else if (overLimit(rvd, a.ty, rvdLimit)) flags.push(SUSPENDED);
     if (a.ends > a.rides * 1.3 && a.rides > 20) flags.push('deutlich mehr Fahrtenden als -beginne (Neuaufstellungen oder Kennungswechsel)');
     if (a.incompleteDays.size) flags.push(INCOMPLETE);
+    if (ampelRed.has(`${ags}|${a.key}`)) flags.push(AMPEL_RED);
     const measured = (n) => n >= DEFAULTS.minTripsMeasured;
     return {
       key: a.key, op: a.op, ty: a.ty, fleet, fleetMin: fl.length ? Math.min(...fl) : null, fleetMax: fl.length ? Math.max(...fl) : null, fleetDays: a.fleetDays,
@@ -249,9 +308,14 @@ export function municipalReport({ docs = [], hists = {}, cells = {}, cellRuns = 
       disabledShare: a.tot > 0 ? a.dis / a.tot : null, disabledSource: a.disSrc,
       avgMin: measured(a.durN) ? a.durSum / a.durN / 60e3 : null, avgKm: measured(a.distN) ? a.distSum / a.distN / 1000 : null, durN: a.durN, distN: a.distN,
       per1000Fleet: per1000(fleet), per1000Rides: per1000(ridesDay), plausible: isPlausible(flags), flags, incompleteDays: [...a.incompleteDays].sort(),
+      breakDay: a.breakDays.size || a.breakCut ? a.breakDay : null, breakSkipped: [...a.breakDays].sort(),
     };
   });
   for (const g of groups) if (g.incompleteDays.length && !((g.fleet || 0) > 0)) q.incompleteGroups.push(g.key);
+  for (const g of groups) if (g.breakDay) q.breaks.push({ key: g.key, day: g.breakDay, skipped: g.breakSkipped });
+  // Regelstand (Datenvertrag 2): des jüngsten gezählten Laufs; volle Messtage, an denen alle gezählten Läufe ihn tragen
+  for (let i = list.length - 1; i >= 0 && q.rule == null; i--) { const rs = (list[i].runs || []).filter(countedRun); if (rs.length) q.rule = ruleOf(rs[rs.length - 1]); }
+  q.ruleFullDays = q.rule == null ? 0 : dayRule.filter(d => d.full && d.rule === q.rule).length;
   groups = groups.filter(g => (g.fleet || 0) > 0 || g.rides > 0).sort((x, y) => (y.fleet || 0) - (x.fleet || 0) || y.rides - x.rides);
   const good = groups.filter(g => g.plausible);
   const fleetT = sum(groups.map(g => g.fleet));
@@ -618,11 +682,13 @@ export const daysIn = (period, days) => { const r = periodRange(period); return 
  * 30 Tage der Tagesdateien hinausreicht. Gleiche Form wie municipalReport; Hochrechnung linear über die beobachtete Zeit
  * (Tagesgang je Stunde ist im Archiv nicht enthalten), ohne Orte, Dauer, Distanz und Sperrquote.
  */
-export function archiveReport({ archive = {}, fields = ARCHIVE_FIELDS, ags, pop = null, operator = 'all', type = 'all', days = null, rvdLimit = null } = {}) {
-  const keep = keyFilter({ ags, operator, type });
+// breaks/eventChecks wie municipalReport: Tage vor dem Bruch zählen für die Reihe nicht (der Bruchtag zählt ganz – das Archiv hat keine Stundenwerte;
+// Marken reichen so weit wie history/daily.json, 30 Tage); rote Gruppen (Ampel) nicht plausibel (AMPEL_RED)
+export function archiveReport({ archive = {}, fields = ARCHIVE_FIELDS, ags, pop = null, operator = 'all', type = 'all', days = null, rvdLimit = null, breaks = null, eventChecks = null } = {}) {
+  const keep = keyFilter({ ags, operator, type }), ampelRed = mbRedSet(eventChecks);
   const F = (n) => fields.indexOf(n); const iF = F('flotte_avg'), iR = F('fahrten'), iE = F('fahrtenden'), iRl = F('umsetzungen'), iO = F('beobachtet_min');
   const list = (days || Object.keys(archive)).filter(d => archive[d]).sort();
-  const G = new Map(); const acc = (op, ty) => { const k = `${op}|${ty}`; if (!G.has(k)) G.set(k, { op, ty, key: k, fleetDays: [], rides: 0, ends: 0, reloc: 0, cov: 0 }); return G.get(k); };
+  const G = new Map(); const acc = (op, ty) => { const k = `${op}|${ty}`; if (!G.has(k)) G.set(k, { op, ty, key: k, fleetDays: [], rides: 0, ends: 0, reloc: 0, cov: 0, breakDay: null, breakDays: new Set() }); return G.get(k); };
   const daily = []; let obsT = 0, full = 0;
   for (const day of list) {
     const rows = archive[day] || {}; let obs = 0; for (const v of Object.values(rows)) obs = Math.max(obs, +v?.[iO] || 0);
@@ -630,6 +696,7 @@ export function archiveReport({ archive = {}, fields = ARCHIVE_FIELDS, ags, pop 
     const row = { day, weekday: weekdayOf(day), obsHours: obs / 60, runs: null, gapRuns: null, coverage: cov, full: isFull, fleet: 0, fleetKnown: false, rides: 0, byGroup: {} };
     for (const [k, v] of Object.entries(rows)) {
       if (!keep(k) || !Array.isArray(v)) continue; const [, op, ty] = k.split('|'); const a = acc(op, ty);
+      const bd = breaks?.[k] ?? null; if (bd) { a.breakDay = bd; if (day < bd) { a.breakDays.add(day); continue; } }
       const fleet = v[iF] == null ? null : +v[iF], rides = +v[iR] || 0;
       if (fleet != null) { a.fleetDays.push({ day, fleet }); row.fleet += fleet; row.fleetKnown = true; }
       a.rides += rides; a.ends += +v[iE] || 0; a.reloc += +v[iRl] || 0; if ((fleet || 0) > 0 || rides > 0) a.cov += cov;
@@ -642,28 +709,32 @@ export function archiveReport({ archive = {}, fields = ARCHIVE_FIELDS, ags, pop 
     const fl = a.fleetDays.map(x => x.fleet); const fleet = fl.length ? sum(fl) / fl.length : null;
     const ridesDay = a.cov > 0 ? a.rides / a.cov : null; const rvd = ridesDay != null && fleet > 0 ? ridesDay / fleet : null;
     const flags = []; if (rvd != null && rvd > DEFAULTS.maxRvd) flags.push('unplausibel hoch – Kennungen wechseln vermutlich ohne Fahrt'); else if (overLimit(rvd, a.ty, rvdLimit)) flags.push(SUSPENDED);
+    if (ampelRed.has(`${ags}|${a.key}`)) flags.push(AMPEL_RED);
     return { key: a.key, op: a.op, ty: a.ty, fleet, fleetMin: fl.length ? Math.min(...fl) : null, fleetMax: fl.length ? Math.max(...fl) : null, fleetDays: a.fleetDays, fleetSource: 'Archiv', rides: a.rides, ends: a.ends, reloc: a.reloc,
-      coverageDays: a.cov, ridesDay, rvd, disabledShare: null, disabledSource: null, avgMin: null, avgKm: null, durN: 0, distN: 0, per1000Fleet: per1000(fleet), per1000Rides: per1000(ridesDay), plausible: isPlausible(flags), flags };
+      coverageDays: a.cov, ridesDay, rvd, disabledShare: null, disabledSource: null, avgMin: null, avgKm: null, durN: 0, distN: 0, per1000Fleet: per1000(fleet), per1000Rides: per1000(ridesDay), plausible: isPlausible(flags), flags,
+      breakDay: a.breakDays.size || list.includes(a.breakDay) ? a.breakDay : null, breakSkipped: [...a.breakDays].sort() };
   }).filter(g => (g.fleet || 0) > 0 || g.rides > 0).sort((x, y) => (y.fleet || 0) - (x.fleet || 0) || y.rides - x.rides);
   const good = groups.filter(g => g.plausible); const fleetT = sum(groups.map(g => g.fleet)); const ridesDayT = good.some(g => g.ridesDay != null) ? sum(good.map(g => g.ridesDay)) : null; const fleetGood = sum(good.map(g => g.fleet));
   const totals = { fleet: groups.length ? fleetT : null, rides: sum(groups.map(g => g.rides)), ridesDay: ridesDayT, rvd: ridesDayT != null && fleetGood > 0 ? ridesDayT / fleetGood : null, disabledShare: null,
     per1000Fleet: per1000(groups.length ? fleetT : null), per1000Rides: per1000(ridesDayT), excluded: groups.filter(g => !g.plausible).map(g => g.key) };
   const quality = { source: 'archiv', days: list.length, runs: null, counted: null, gapRuns: null, gaps: [], obsMin: obsT, fullDays: full, excludedHours: 0, taintedDays: [], fleetFromHistory: [], possibleMin: list.length * 1440,
-    prelim: full < MIN_FULL_DAYS, profileSource: 'linear über die beobachtete Zeit (Archiv ohne Stundenwerte)', profileDays: 0, longestGapMs: 0 };
+    prelim: full < MIN_FULL_DAYS, profileSource: 'linear über die beobachtete Zeit (Archiv ohne Stundenwerte)', profileDays: 0, longestGapMs: 0,
+    breaks: groups.filter(g => g.breakDay).map(g => ({ key: g.key, day: g.breakDay, skipped: g.breakSkipped })) };
   return { ags, pop, from: list[0] || null, to: list[list.length - 1] || null, days: list, quality, groups, totals, daily, cells: cellStats({}, {}) };
 }
 /** Rangliste aus dem Archiv (je Gemeinde × Art): Ø Flotte, Fahrten/Tag linear hochgerechnet, Fahrten je Fahrzeug und Tag */
-export function cityRankingArchive(archive, latest, { fields = ARCHIVE_FIELDS, type = 'all', operator = 'all', days = null, rvdLimit = null } = {}) {
-  const iF = fields.indexOf('flotte_avg'), iR = fields.indexOf('fahrten'), iO = fields.indexOf('beobachtet_min');
+// breaks/eventChecks wie archiveReport (Tage vor dem Bruch nicht; rote Gruppen nur bei der Flotte)
+export function cityRankingArchive(archive, latest, { fields = ARCHIVE_FIELDS, type = 'all', operator = 'all', days = null, rvdLimit = null, breaks = null, eventChecks = null } = {}) {
+  const iF = fields.indexOf('flotte_avg'), iR = fields.indexOf('fahrten'), iO = fields.indexOf('beobachtet_min'), ampelRed = mbRedSet(eventChecks);
   const keep = keyFilter({ ags: 'DE', operator, type }); const list = (days || Object.keys(archive || {})).filter(d => archive?.[d]).sort();
   const G = new Map();
   for (const day of list) {
     const rows = archive[day]; let obs = 0; for (const v of Object.values(rows)) obs = Math.max(obs, +v?.[iO] || 0); const cov = Math.min(1, obs / 1440);
-    for (const [k, v] of Object.entries(rows)) { if (!keep(k) || !Array.isArray(v)) continue; const a = G.get(k) || { fl: [], rides: 0, cov: 0 }; if (v[iF] != null) a.fl.push(+v[iF]); a.rides += +v[iR] || 0; if ((+v[iF] || 0) > 0 || (+v[iR] || 0) > 0) a.cov += cov; G.set(k, a); }
+    for (const [k, v] of Object.entries(rows)) { if (!keep(k) || !Array.isArray(v) || (breaks?.[k] && day < breaks[k])) continue; const a = G.get(k) || { fl: [], rides: 0, cov: 0 }; if (v[iF] != null) a.fl.push(+v[iF]); a.rides += +v[iR] || 0; if ((+v[iF] || 0) > 0 || (+v[iR] || 0) > 0) a.cov += cov; G.set(k, a); }
   }
   const by = new Map();
   for (const [k, a] of G) {
-    const [ags, , ty] = k.split('|'); const fleet = a.fl.length ? sum(a.fl) / a.fl.length : 0; const rd = a.cov > 0 ? a.rides / a.cov : null; const ok = !(rd != null && fleet > 0 && (rd / fleet > DEFAULTS.maxRvd || overLimit(rd / fleet, ty, rvdLimit)));
+    const [ags, , ty] = k.split('|'); const fleet = a.fl.length ? sum(a.fl) / a.fl.length : 0; const rd = a.cov > 0 ? a.rides / a.cov : null; const ok = !(rd != null && fleet > 0 && (rd / fleet > DEFAULTS.maxRvd || overLimit(rd / fleet, ty, rvdLimit))) && !ampelRed.has(k);
     const r = by.get(`${ags}|${ty}`) || { ags, ty, fleet: 0, fleetGood: 0, ridesDay: 0, has: false }; r.fleet += fleet; if (ok) { r.fleetGood += fleet; if (rd != null) { r.ridesDay += rd; r.has = true; } } by.set(`${ags}|${ty}`, r);
   }
   return { days: list, rows: [...by.values()].map(r => ({ key: `${r.ags}|${r.ty}`, ags: r.ags, ty: r.ty, name: latest?.municipalities?.[r.ags]?.name || r.ags, fleet: r.fleet, ridesDay: r.has ? r.ridesDay : null, rvd: r.has && r.fleetGood > 0 ? r.ridesDay / r.fleetGood : null })) };
@@ -903,7 +974,9 @@ export function availabilityCsvRows(rows, { operator = 'all', type = 'all', at =
 }
 
 // ---------- Datenschutz-Schwelle ----------
-export const MIN_COUNT = 2; // Orte/Zellen mit weniger als 2 Fahrten werden als „< 2“ ausgewiesen (Schwelle wie Portland)
+// Datenschutz-Schwelle eine Stelle: wie die veröffentlichten Zellen (lib/pulse-track.js CELL_MIN = 3); Orte/Zellen mit weniger Fahrten
+// erscheinen als „< 3“ (vorher eigene Schwelle 2 „wie Portland“ – widersprach der Regel „unter 3 unterdrückt“)
+export const MIN_COUNT = CELL_MIN;
 export const suppressed = (v, min = MIN_COUNT) => v != null && Number.isFinite(+v) && +v < min;
 /** Orte als CSV-Zeilen: Zählungen unter der Schwelle als „<2“ */
 export function cellsCsvRows(cs, { ags = '', name = '', from = '', to = '', minCount = MIN_COUNT, lang = 'de' } = {}) {
@@ -914,20 +987,28 @@ export function cellsCsvRows(cs, { ags = '', name = '', from = '', to = '', minC
 
 // ---------- Städte-Rangliste (je Stadt × Fahrzeugart) ----------
 // je Schlüssel Gemeinde|Anbieter|Art: gemessene Fahrten (ohne Lücken-Stunden), Tagesflotte, beobachteter Anteil des Tagesgangs
-function accumulate(list, hists, keep, profile) {
+// breaks (history/daily.json → breaks) wie municipalReport: Tage vor dem Bruch zählen für die Reihe nicht, am Bruchtag nur Stunden mit dem
+// letzten Regelstand des Tages (bis 02.11.2026 fehlte das hier: Köln nextbike in der Rangliste Ø 5.806 statt ≈ 2.400 Räder)
+function accumulate(list, hists, keep, profile, breaks = null) {
   const G = new Map();
   for (const doc of list) {
     const hq = hourQuality(doc.runs, doc.gapHours), cov = dayCoverage(hq, profile, hourMinOf(doc)), vOk = vminCounted(doc.runs), hist = hists?.[doc.day] || null;
     const obsRaw = hq.obs.reduce((a, m, h) => a + (hq.ok[h] ? m : 0), 0);
+    const runsA = (doc.runs || []).filter(Array.isArray), lastEra = breaks && new Set(runsA.map(ruleEra)).size > 1 ? ruleEra(runsA[runsA.length - 1]) : null;
+    const late = lastEra ? Array.from({ length: 24 }, (_, h) => runsA.every(r => hourOfMs(r[0]) !== h || ruleEra(r) === lastEra)) : null;
     const keys = new Set([...Object.keys(doc.groups || {}), ...Object.keys(hist?.series || {})].filter(keep));
     for (const k of keys) {
+      const bd = breaks?.[k] ?? null; if (bd && doc.day < bd) continue;
+      const cut = bd === doc.day && late ? late : null, okH = (h) => hq.ok[h] && (!cut || cut[h]);
+      const obsG = cut ? hq.obs.reduce((s, m, h) => s + (okH(h) ? m : 0), 0) : obsRaw;
+      const covG = cut ? dayCoverage({ ...hq, obsOk: hq.obsOk.map((m, h) => (cut[h] ? m : 0)) }, profile, hourMinOf(doc)) : cov;
       const g = doc.groups?.[k]; let rides = 0, vt = 0;
-      if (g) for (let h = 0; h < 24; h++) if (hq.ok[h]) { rides += g.start?.[h] || 0; vt += g.vminTot?.[h] || 0; }
+      if (g) for (let h = 0; h < 24; h++) if (okH(h)) { rides += g.start?.[h] || 0; vt += g.vminTot?.[h] || 0; }
       let fleet = null;
-      if (vOk && obsRaw > 0 && vt > 0) fleet = vt / obsRaw; else { const hs = histStats(hist, k); if (hs && !hs.incomplete) fleet = hs.fleet; }
+      if (vOk && obsG > 0 && vt > 0) fleet = vt / obsG; else if (!cut) { const hs = histStats(hist, k); if (hs && !hs.incomplete) fleet = hs.fleet; } // Tagesmittel mischt am Bruchtag beide Stände
       const a = G.get(k) || { fleetDays: [], rides: 0, cov: 0 };
       if (fleet != null) a.fleetDays.push(fleet);
-      a.rides += rides; if ((fleet || 0) > 0 || rides > 0) a.cov += cov; G.set(k, a);
+      a.rides += rides; if ((fleet || 0) > 0 || rides > 0) a.cov += covG; G.set(k, a);
     }
   }
   return G;
@@ -936,16 +1017,18 @@ function accumulate(list, hists, keep, profile) {
  * Rangliste je Gemeinde × Fahrzeugart über die Tagesdateien: Ø Flotte, Fahrten/Tag (hochgerechnet), Fahrten je Fahrzeug und Tag,
  * je 1.000 Einwohner. Anbieter mit unplausibler Quote (> 15) zählen nur bei der Flotte, nicht bei den Fahrten.
  */
-export function cityRanking(docs, hists, latest, { type = 'all', operator = 'all', minFleet = MIN_FLEET, rvdLimit = null } = {}) {
+// eventChecks (latest.json → eventChecks): Gruppen mit Ampel rot zählen wie unplausible nur bei der Flotte (excluded); breaks: Bruchmarken (accumulate)
+export function cityRanking(docs, hists, latest, { type = 'all', operator = 'all', minFleet = MIN_FLEET, rvdLimit = null, eventChecks = null, breaks = null } = {}) {
+  const ampelRed = mbRedSet(eventChecks);
   const list = (docs || []).filter(d => d?.day).sort((a, b) => a.day.localeCompare(b.day));
   const prof = measuredProfile(list);
-  const G = accumulate(list, hists, keyFilter({ ags: 'DE', operator, type }), prof.profile);
+  const G = accumulate(list, hists, keyFilter({ ags: 'DE', operator, type }), prof.profile, breaks);
   const by = new Map();
   for (const [k, a] of G) {
     const [ags, op, ty] = k.split('|');
     const fleet = a.fleetDays.length ? sum(a.fleetDays) / a.fleetDays.length : 0;
     const ridesDay = a.cov > 0 ? a.rides / a.cov : null;
-    const ok = !(ridesDay != null && fleet > 0 && (ridesDay / fleet > DEFAULTS.maxRvd || overLimit(ridesDay / fleet, ty, rvdLimit)));
+    const ok = !(ridesDay != null && fleet > 0 && (ridesDay / fleet > DEFAULTS.maxRvd || overLimit(ridesDay / fleet, ty, rvdLimit))) && !ampelRed.has(k);
     const r = by.get(`${ags}|${ty}`) || { ags, ty, fleet: 0, fleetGood: 0, ridesDay: 0, rides: 0, hasRides: false, ops: new Set(), excluded: [] };
     r.fleet += fleet; r.ops.add(op);
     if (ok) { r.fleetGood += fleet; if (ridesDay != null) { r.ridesDay += ridesDay; r.rides += a.rides; r.hasRides = true; } } else r.excluded.push(op);

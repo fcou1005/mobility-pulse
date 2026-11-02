@@ -1,6 +1,10 @@
 {
   "_hinweis": "Öffentliche Referenzwerte zur Einordnung der eigenen Schätzungen. Nur Werte, die in der genannten Quelle stehen. Fahrten je Fahrzeug und Tag = TVD/RVD.",
-  "updatedAt": "2026-11-01",
+  "updatedAt": "2026-11-02",
+  "kalibrierung": {
+    "_hinweis": "Freigabe durch Felix: regelstand = METHOD_VERSION (lib/pulse-track.js, Teil vor „@“ in events runs[k][3]), ab dem k gelten darf; null = gesperrt. Format { \"regelstand\": \"2026-11-02a\", \"datum\": \"YYYY-MM-DD\" }. k wirkt erst, wenn der Regelstand der Berliner Messung gleich ist und 7 volle Messtage mit ihm vorliegen, und nur auf E-Scooter derselben Kennungsart wie Dott Berlin (lib/pulse-calib.js).",
+    "freigabe": null
+  },
   "rvd": [
     {
       "ags": "11000000",
@@ -74,6 +78,18 @@
       "quelle": "micromobility.io, Voi Q4 2025",
       "url": "https://micromobility.io/news/voi-finishes-2025-strong-with-45-q4-revenue-growth",
       "hinweis": "Konzern, alle Märkte, inkl. E-Bikes; Ø 141.800 Fahrzeuge"
+    },
+    {
+      "ags": "05111000",
+      "ort": "Düsseldorf",
+      "type": "all",
+      "zeitraum": "2025",
+      "wert": 1.8,
+      "flotteJe1000": 13.9,
+      "fahrtenJe1000": 25.7,
+      "hinweis": "Jahresmittel, alle Arten, MDS (städtischer Kern, Tabelle 9, S. 24; E-Scooter allein 1,8 / 12,0 / 21,8). Plausibilitätsprobe, kein Schätzer: Jahresmittel mit Sommer, ein November-Wert liegt darunter.",
+      "quelle": "ScooP2City, SMM-CPI (Rüdiger/Friedel/Schlebusch, 18.05.2026), MDS-Daten der Stadt Düsseldorf",
+      "url": "https://scoop2.city/wp-content/uploads/go-x/u/7c1b0928-5a99-4409-9bde-165b5bf03928/2026-Mai_Scoop2City_SMM-CPI.pdf"
     }
   ],
   "umsatz": [
@@ -87,6 +103,17 @@
       "hinweis": "Konzernumsatz je eingesetztem Fahrzeug und Tag, alle Märkte, inkl. E-Bikes (Q4/2024: 3,68 €)",
       "quelle": "micromobility.io, Voi Q4 2025",
       "url": "https://micromobility.io/news/voi-finishes-2025-strong-with-45-q4-revenue-growth"
+    },
+    {
+      "ags": null,
+      "ort": "Voi gesamt",
+      "type": "scooter",
+      "zeitraum": "2025",
+      "wert": 1.54,
+      "einheit": "€ je Fahrt",
+      "hinweis": "Nettoumsatz 178,2 Mio. € ÷ 116 Mio. Fahrten (beide laut Quelle, Geschäftsjahr 2025); Konzern, alle Märkte, inkl. E-Bikes",
+      "quelle": "micromobility.io, Voi 2025 (23.04.2026)",
+      "url": "https://micromobility.io/news/voi-la-a-record-year-on-every-metric"
     }
   ],
   "fahrt": [
@@ -940,6 +967,6 @@
   ],
   "_hinweis_gebuehren": "Berlin: Die Sharing-Strategie 2035 nennt ein Entgelt pro Fahrzeug und Monat, aber keinen Betrag – deshalb kein Eintrag.",
   "_hinweis_fahrt": "Berlin: Ø Dauer und Ø Strecke je Fahrt laut Quartalstabelle eKF des Berichts (Tabelle reicht ab Q1/2023; hier Q1/2025–Q1/2026 wie bei rvd). Die frühere Spanne 1,3–1,8 km / 6,4–8,5 Min. umfasste Q1/2023–Q1/2026, nicht nur 2025.",
-  "_hinweis_kalibrierung": "Regeln in lib/pulse-calib.js: Ø Fahrtdauer E-Scooter = Mittel der Berliner Quartalswerte (fahrt); Methodenfaktor k = amtliche Fahrten je Fahrzeug und Tag Berlin (rvd, gleiches bzw. Vorjahresquartal, sonst jüngstes) ÷ eigene Messung Berlin; Spanne aus kleinstem und größtem Quartalswert.",
+  "_hinweis_kalibrierung": "Regeln in lib/pulse-calib.js: Ø Fahrtdauer E-Scooter = Mittel der Berliner Quartalswerte (fahrt); Methodenfaktor k = amtliche Fahrten je Fahrzeug und Tag Berlin (rvd, gleiches bzw. Vorjahresquartal, sonst jüngstes) ÷ eigene Messung Berlin; Spanne aus kleinstem und größtem Quartalswert. Angewandt nur mit Freigabe (kalibrierung.freigabe) für den Regelstand der Messung, ab 7 vollen Tagen mit ihm und nur für E-Scooter derselben Kennungsart wie Dott Berlin (Kennungswechsel je Fahrt). rvd mit ags außer Berlin (Düsseldorf, alle Arten) und umsatz „€ je Fahrt“: nur Plausibilitätsprobe.",
   "_hinweis_obergrenzen": "status: amtlich = in der Quelle als geltende Regel; geplant/presse/ungeprüft/veraltet = nicht für die Verfügbar-÷-erlaubt-Rechnung; jeAnbieterAbgeleitet = nicht in der Quelle genannt, sondern gerechnet; zonen = gelten nur in einem Teilgebiet (ohne Gebietsgrenze nicht prüfbar). Recherche 01.11.2026."
 }

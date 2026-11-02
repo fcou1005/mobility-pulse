@@ -144,7 +144,7 @@ const pairsOf = (rows) => { const m = new Map(); for (const [k, r] of Object.ent
   q.state.srcStats.bolt = { runs: 10, present: 500, gone: 200, moved: 2, newc: 190, returned: 0 };
   // x verschwindet (Fahrtbeginn), p verschwindet mit Akku 10 (Abholung), y neu 1,2 km weiter (Fahrtende), 5 neue an einem Punkt (Ausbringen);
   // l1 2,2 km versetzt (gemessene Fahrt), l2 verschwindet (Beginn, stabil)
-  const drop = [...Array(5)].map((_, i) => V('d' + i, 48.70 + i * 0.00005, 9.20));
+  const drop = [...Array(5)].map((_, i) => V('d' + i, 48.70 + i * 0.00005, 9.20, { batteryPct: 95 })); // tagsüber zählt eine Ausbringung nur aus vollen Fahrzeugen (Z7)
   const t2 = u0 + 2 * m20;
   q = T.trackRun(q.state, { vehicles: [...base, Lm('l1', 48.52, 9.00, { batteryPct: 46 }), lime[2], V('y', 48.461, 9.10), ...drop], stations: [], sourceRecs: recs, now: t2 });
   const e = q.est;
