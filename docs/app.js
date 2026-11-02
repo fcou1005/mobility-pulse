@@ -1,16 +1,16 @@
-import * as C from './pulse-core.js?v=mvyy1hb9';
-import * as Ops from './ops.js?v=mvyy1hb9';
-import * as E from './pulse-econ.js?v=mvyy1hb9';
-import * as K from './pulse-calib.js?v=mvyy1hb9';
-import * as Rp from './report.js?v=mvyy1hb9';
-import * as R from './pulse-report.js?v=mvyy1hb9';
-import * as Fl from './flows.js?v=mvyy1hb9';
-import * as Cov from './coverage.js?v=mvyy1hb9';
-import * as Cmp from './compare.js?v=mvyy1hb9';
-import * as Sp from './spots.js?v=mvyy1hb9';
-import { mapKeys } from './mapkeys.js?v=mvyy1hb9';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mvyy1hb9';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvyy1hb9';
+import * as C from './pulse-core.js?v=mvyy3d52';
+import * as Ops from './ops.js?v=mvyy3d52';
+import * as E from './pulse-econ.js?v=mvyy3d52';
+import * as K from './pulse-calib.js?v=mvyy3d52';
+import * as Rp from './report.js?v=mvyy3d52';
+import * as R from './pulse-report.js?v=mvyy3d52';
+import * as Fl from './flows.js?v=mvyy3d52';
+import * as Cov from './coverage.js?v=mvyy3d52';
+import * as Cmp from './compare.js?v=mvyy3d52';
+import * as Sp from './spots.js?v=mvyy3d52';
+import { mapKeys } from './mapkeys.js?v=mvyy3d52';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mvyy3d52';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvyy3d52';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -1253,7 +1253,7 @@ function computeSignalsNow() {
     if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.sourceChangeDetected', { operator: r.operator }), text: t('app.endpointVersionFeedsOr', { v0: r.name || r.id }), foot: t('app.fingerprint') });
   }
   for (const e of state.usage?.consistency?.systems || []) { if (e.verdict !== 'divergent') continue; const r = (state.latest?.sources || []).find(x => x.id === e.sourceId); if (!r || (state.scope !== 'DE' && !(r.municipalities || []).includes(state.scope)) || (state.operator !== 'all' && e.operator !== state.operator)) continue; out.push({ cat: 'data', sev: 'warn', w: Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0)), n: fmt(Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0))), short: t('app.sigShortDivergent', { op: e.operator }), title: t('app.stateAndOperatorFeedDiffer', { operator: e.operator }), text: t('app.vsVehiclesMedianDistance', { sourceId: e.sourceId, v1: fmt(e.primary?.vehicles), v2: fmt(e.alt?.vehicles), v3: e.idOverlap == null ? '' : pctf(e.idOverlap, 1) + ` ${t('app.sharedIds')} `, v4: e.medianDistM == null ? '—' : fmt(e.medianDistM) + ' m' }), foot: t('app.consistencyCheck') }); }
-  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.publicDataMissingSince', { operator: g.operator, city: g.city, v2: String(g.since || '').split('-').reverse().join('.') }), text: g.note, foot: g.probeOk ? t('app.feedReachableAgain') : t('app.feedChecked', { v0: g.probeStatus ?? '–' }) });
+  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.publicDataMissingSince', { operator: g.operator, city: g.city, v2: String(g.since || '').split('-').reverse().join('.') }), text: (lang() === 'en' && g.note_en) || g.note, foot: g.probeOk ? t('app.feedReachableAgain') : t('app.feedChecked', { v0: g.probeStatus ?? '–' }) });
   // Bestandssprung gegen Verlauf
   const h = state.histDay ? state.hist[state.histDay] : state.hist[state.histIndex?.days?.slice(-1)[0]];
   if (h && h.t.length >= 3) {
@@ -1350,9 +1350,11 @@ function renderCoverage() {
   $('#tbl-cov tbody').innerHTML = show.map(r => `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${Object.entries(r.o.types || {}).filter(([, n]) => n).map(([tq, n]) => `${esc(TYPE[tq] || tq)} ${fmt(n)}`).join(' · ')}</div></td><td>${esc(r.m.name)} <span class="muted">${esc(r.m.state)}</span></td><td class="n">${fmt(r.o.total)}</td><td class="n">${fmt(r.o.available)}</td><td class="small internal">${r.dirs.map(dirLabel).join(' · ')}<div class="sub-line">${r.srcs.length} ${r.srcs.length === 1 ? t('app.source') : t('app.sources')}</div></td><td>${pillStatus(r.status)}</td><td><a href="#live" class="pick-muni" data-ags="${esc(r.ags)}">${t('app.openPlace2')}</a></td></tr>`).join('') || emptyRow(7, t('app.noMatches'), q || dir !== 'all' ? t('app.clearSearchOrChooseAll') : state.latest ? t('app.noOperatorsInCollector') : failedText('latest.json'));
   $('#cov-more').innerHTML = moreBtn('cov', rest, ` ${t('app.orNarrowSearch')}`);
   // Lücken mit gleichem Anbieter und gleichem Text als eine Karte mit Städteliste (z. B. Ryde in zehn NRW-Städten)
+  // Hinweistext der Datenlücke: englisch, wo gepflegt (data/sources-manual.json → known_gaps[].note_en), sonst deutsch mit lang="de"
+  const gapNote = (g) => lang() === 'en' && g.note_en ? `<p>${esc(g.note_en)}</p>` : `<p lang="de">${esc(g.note)}</p>`;
   const gb = new Map(); for (const g of state.latest?.gaps || []) { const k = `${g.operator}|${g.note}`; (gb.get(k) || gb.set(k, []).get(k)).push(g); }
   $('#gaps').innerHTML = [...gb.values()].map(list => { const g = list[0]; const cities = [...new Set(list.map(x => x.city))].sort((a, b) => a.localeCompare(b, 'de')); const since = list.map(x => x.since).filter(Boolean).sort()[0] || g.since; const ok = list.filter(x => x.probeOk).length;
-    return `<div class="card info"><div class="k">${t('app.dataGap2')}</div><b>${esc(g.operator)} · ${cities.length > 1 ? esc(t('app.gapCities', { n: fmt(cities.length) })) : esc(g.city)}</b>${cities.length > 1 ? `<p translate="no">${esc(cities.join(', '))}</p>` : ''}<p lang="de">${esc(g.note)}</p><div class="foot">${cities.length > 1 ? t('app.gapGroupFoot', { since: esc(since), v1: timeText(Math.max(...list.map(x => x.checkedAt || 0)) || null), ok: fmt(ok), n: fmt(list.length) }) : t('app.sinceLastCheckedFeed', { since: esc(g.since), v1: timeText(g.checkedAt), v2: g.probeOk ? t('app.reachable') : t('app.notReachable', { v0: esc(g.probeStatus ?? '–') }) })}</div></div>`; }).join('') || `<div class="empty">${t('app.noKnownGapsAllKnownOperators')}</div>`;
+    return `<div class="card info"><div class="k">${t('app.dataGap2')}</div><b>${esc(g.operator)} · ${cities.length > 1 ? esc(t('app.gapCities', { n: fmt(cities.length) })) : esc(g.city)}</b>${cities.length > 1 ? `<p translate="no">${esc(cities.join(', '))}</p>` : ''}${gapNote(g)}<div class="foot">${cities.length > 1 ? t('app.gapGroupFoot', { since: esc(since), v1: timeText(Math.max(...list.map(x => x.checkedAt || 0)) || null), ok: fmt(ok), n: fmt(list.length) }) : t('app.sinceLastCheckedFeed', { since: esc(g.since), v1: timeText(g.checkedAt), v2: g.probeOk ? t('app.reachable') : t('app.notReachable', { v0: esc(g.probeStatus ?? '–') }) })}</div></div>`; }).join('') || `<div class="empty">${t('app.noKnownGapsAllKnownOperators')}</div>`;
 }
 // Lange Tabellen: erst 100 Zeilen, je Klick 100 weitere; neuer Filter (Schlüssel) setzt auf 100 zurück
 const MORE = {};

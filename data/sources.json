@@ -40,67 +40,78 @@
    "city": "Tübingen",
    "since": "2026-09-25",
    "note": "MobiData BW führt Dott Tübingen als „Aktuell nicht verfügbar (25.09.2026)“; CityBikes-Spiegel steht auf dem 23.09.2026. Fehlender Datenzugang ist kein Betriebsende.",
+   "note_en": "MobiData BW lists Dott Tübingen as “currently not available (25 Sep 2026)”; the CityBikes mirror stops on 23 Sep 2026. Missing data access does not mean the service has ended.",
    "probe_url": "https://gbfs.api.ridedott.com/public/v2/tubingen/gbfs.json"
   },
   {
    "operator": "Ryde",
    "city": "Köln",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Dortmund",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Bochum",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Essen",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Duisburg",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Wuppertal",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Bonn",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Aachen",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Oberhausen",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   },
   {
    "operator": "Ryde",
    "city": "Herne",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com)."
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW). Der Abruf ist gesperrt, bis der MDD-Betreiber den Zugang freischaltet (mdd-nrw@gorheinland.com).",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW). Access stays blocked until the MDD operator grants it (mdd-nrw@gorheinland.com)."
   }
  ],
  "mobidata_wfs": {
