@@ -2,11 +2,11 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvy6blnf';
-import * as K from './pulse-calib.js?v=mvy6blnf';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvy6blnf';
-import { decodeFleet } from './pulse-ops.js?v=mvy6blnf';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvy6blnf';
+import * as R from './pulse-report.js?v=mvyuri2c';
+import * as K from './pulse-calib.js?v=mvyuri2c';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyuri2c';
+import { decodeFleet } from './pulse-ops.js?v=mvyuri2c';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyuri2c';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -313,6 +313,8 @@ function qualityBlock(ctx, rep, extra) {
     [t('rep.extrapolationToDay'), arch ? t('rep.tripsObservedShareOfDay', { profileSource: esc(tx(q.profileSource)) }) : t('rep.dailyProfileTripsObserved', { profileSource: esc(tx(q.profileSource)) })],
     [t('rep.fleet'), arch ? t('rep.avgVehiclesPerDayAccordingTo') : q.fleetFromHistory.length ? t('rep.vehicleMinutesObserved', { v0: q.fleetFromHistory.map(d => dm(d)).join(', ') }) : t('rep.vehicleMinutesObserved2')],
     [t('rep.durationAndDistance'), arch ? t('rep.notContainedInArchive') : t('rep.onlyWithStableVehicleIdsAnd', { MIN_TRIPS_MEASURED: R.MIN_TRIPS_MEASURED, v1: q.taintedDays.length ? t('rep.leftOutGapCounted', { v0: q.taintedDays.map(d => dm(d)).join(', ') }) : '' })],
+    ...(q.incompleteGroups?.length ? [[t('rep.incompleteGroups'), t('rep.incompleteGroupsTxt', { v0: esc(q.incompleteGroups.map(k => k.replace('|', ' ')).join(', ')) })]] : []),
+    ...(q.mixedRuleDays?.length ? [[t('rep.ruleVersions'), t('rep.mixedRuleDays', { v0: q.mixedRuleDays.map(d => dm(d.day)).join(', ') })]] : []),
     ...extra,
   ];
   return `<dl class="rp-qual${q.prelim ? ' prelim' : ''}">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
@@ -327,23 +329,23 @@ function groupTable(ctx, rep, cal = null) {
   const rdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.ridesDay, c.lo, c.hi) : num(ctx, g.ridesDay); };
   const rvdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : `<b>${num(ctx, g.rvd, 2)}</b>`; };
   const calCol = C && !client;
-  const calCell = (g) => { const c = cOf(g); return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : `<span class="muted" title="${t('rep.onlyEScootersAreCalibrated')}">—</span>`; };
+  const calCell = (g) => { const c = cOf(g); return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) + (c.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '') : `<span class="muted" title="${t('rep.onlyEScootersAreCalibrated')}">—</span>`; };
   const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? ` · ${t('rep.currentFleetOnly')}` : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(tx(g.flags[0]))}</div>` : ''}</td>
     <td class="n">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, g.rides)}</td>`}<td class="n">${rdCell(g)}</td><td class="n">${rvdCell(g)}</td>${calCol ? `<td class="n">${calCell(g)}</td>` : ''}
-    <td class="n">${minTxt(ctx, g.avgMin) || notMeasurable}</td><td class="n">${kmTxt(ctx, g.avgKm) || notMeasurable}</td><td class="n">${pctTxt(ctx, g.disabledShare)}${g.disabledSource === 'aktuell' ? `<div class="sub-line">${t('rep.current')}</div>` : ''}</td><td class="n">${num(ctx, g.per1000Fleet, 2)}</td></tr>`).join('');
+    <td class="n">${g.avgMin != null ? t('rep.atMost', { v0: minTxt(ctx, g.avgMin) }) : notMeasurable}</td><td class="n">${kmTxt(ctx, g.avgKm) || notMeasurable}</td><td class="n">${pctTxt(ctx, g.disabledShare)}${g.disabledSource === 'aktuell' ? `<div class="sub-line">${t('rep.current')}</div>` : ''}</td><td class="n">${num(ctx, g.per1000Fleet, 2)}</td></tr>`).join('');
   const ct = C?.totals; const cols = 9 + (calCol ? 1 : 0) - (client ? 1 : 0);
   const footRd = client && ct ? withSpan(ctx, ct.ridesDay, ct.lo, ct.hi) : num(ctx, tq.ridesDay), footRvd = client && ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : num(ctx, tq.rvd, 2);
-  return `<div class="tbl"><table><thead><tr><th>${t('rep.operatorType')}</th><th class="n">${t('rep.avgFleet')}</th>${client ? '' : `<th class="n">${t('rep.tripsMeasured')}</th>`}<th class="n">${t('rep.tripsDay', { v0: client && C ? ` <span class="muted">${t('rep.eScootersCalibrated')}</span>` : '' })}</th><th class="n">${t('rep.perVehAndDay')}</th>${calCol ? `<th class="n" title="${t('rep.eScootersCalibrationFactor')}">${t('rep.calibratedPerVehAndDay')}</th>` : ''}<th class="n">${t('rep.avgDuration')}</th><th class="n">${t('rep.avgDistance')}</th><th class="n">${t('rep.disabledRate')}</th><th class="n">${t('rep.vehPer1000Residents')}</th></tr></thead>
+  return `<div class="tbl"><table><thead><tr><th>${t('rep.operatorType')}</th><th class="n">${t('rep.avgFleet')}</th>${client ? '' : `<th class="n">${t('rep.tripsMeasured')}</th>`}<th class="n">${t('rep.tripsDay', { v0: client && C ? ` <span class="muted">${t('rep.eScootersCalibrated')}</span>` : '' })}</th><th class="n">${t('rep.perVehAndDay')}</th>${calCol ? `<th class="n" title="${t('rep.eScootersCalibrationFactor')}">${t('rep.calibratedPerVehAndDay')}</th>` : ''}<th class="n" title="${t('rep.avgDurationUpperTitle')}">${t('rep.avgDurationUpper')}</th><th class="n">${t('rep.avgDistance')}</th><th class="n">${t('rep.disabledRate')}</th><th class="n">${t('rep.vehPer1000Residents')}</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="${cols}" class="empty">${t('rep.noVehiclesInFilterSet')}</td></tr>`}</tbody>
     ${rep.groups.length > 1 ? `<tfoot><tr><td>${t('rep.total', { v0: tq.excluded.length ? `<div class="sub-line">${t('rep.tripsWithoutImplausible', { join: esc(tq.excluded.map(k => k.replace('|', ' ')).join(', ')) })}</div>` : '' })}</td><td class="n">${num(ctx, tq.fleet)}</td>${client ? '' : `<td class="n">${num(ctx, tq.rides)}</td>`}<td class="n">${footRd}</td><td class="n">${footRvd}</td>${calCol ? `<td class="n">${ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : '—'}</td>` : ''}<td></td><td></td><td class="n">${pctTxt(ctx, tq.disabledShare)}</td><td class="n">${num(ctx, tq.per1000Fleet, 2)}</td></tr></tfoot>` : ''}</table></div>`;
 }
-function dailyTable(ctx, rep, k = null) {
+function dailyTable(ctx, rep, k = null, limits = null) {
   const { esc } = ctx; const client = isClient();
-  // kalibriert je Tag: E-Scooter-Fahrten × k, andere Arten gemessen, ÷ beobachteter Anteil
-  const calDay = (d) => { if (!k?.applied || !(d.coverage > 0)) return null; let r = 0, any = false; for (const [key, v] of Object.entries(d.byGroup)) { const sc = key.split('|')[1] === 'scooter'; if (sc && v.rides) any = true; r += (v.rides || 0) * (sc ? k.k : 1); } return any ? r / d.coverage : null; };
+  // kalibriert je Tag: E-Scooter-Fahrten × k (höchstens bis zur Plausibilitätsgrenze je Gruppe), andere Arten gemessen, ÷ beobachteter Anteil
+  const calDay = (d) => { if (!k?.applied || !(d.coverage > 0)) return null; let r = 0, any = false; for (const [key, v] of Object.entries(d.byGroup)) { const sc = key.split('|')[1] === 'scooter'; if (sc && v.rides) any = true; const f = sc ? K.cappedFactor(k.k, v.fleet > 0 ? (v.rides || 0) / d.coverage / v.fleet : null, limits?.scooter ?? null).f : 1; r += (v.rides || 0) * f; } return any ? r / d.coverage : null; };
   const rows = rep.daily.map(d => {
     const byOp = new Map(); for (const [key, v] of Object.entries(d.byGroup)) { const op = key.split('|')[0]; byOp.set(op, (byOp.get(op) || 0) + (v.fleet || 0)); }
-    const ops = [...byOp].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([o, v]) => `${esc(o)} ${num(ctx, v)}`).join(' · ');
+    const ops = [...byOp].filter(([, v]) => v >= 0.5).sort((a, b) => b[1] - a[1]).map(([o, v]) => `${esc(o)} ${num(ctx, v)}`).join(' · '); // Anbieter mit gerundet 0 Fahrzeugen nicht als „Zeus 0“
     const c = calDay(d);
     const rd = client && c != null ? `${num(ctx, c)}<div class="sub-line">${t('rep.eScootersCalibrated2')}</div>` : `${num(ctx, d.ridesDay)}<div class="sub-line">${t('rep.observed', { v0: pctTxt(ctx, d.coverage, 0), v1: c != null ? ` · ${t('rep.calibrated', { ctx: num(ctx, c) })}` : '' })}</div>`;
     return `<tr><td>${WD()[d.weekday]}, ${dd(d.day)}${d.full ? '' : `<div class="sub-line">${t('rep.noFullMeasurementDay')}</div>`}</td><td class="n">${num(ctx, d.obsHours, 1)} h</td><td class="n">${d.runs ?? '–'}</td><td class="n">${d.gapRuns || '–'}</td><td class="n">${num(ctx, d.fleet)}${ops ? `<div class="sub-line">${ops}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, d.rides)}</td>`}<td class="n">${rd}</td></tr>`;
@@ -414,7 +416,7 @@ function reportHtml(ctx, rep, meta, ref) {
     calTile(t('rep.tripsPerVehiclePerDay2'), C?.rvd, C?.rvdLo, C?.rvdHi, 2, tq.rvd, t('rep.tripsDayAvgFleet', { pre })),
     q.source === 'archiv' ? '' : tile(t('rep.disabledRate'), pctTxt(ctx, tq.disabledShare), t('rep.disabledVehiclesInFleetMean')),
     tile(t('rep.vehiclesPer1000Residents'), num(ctx, tq.per1000Fleet, 1), rep.pop ? t('rep.residents', { pop: fmt(rep.pop) }) : t('rep.populationMissing')),
-    calTile(t('rep.tripsPer1000ResidentsAndDay'), C?.per1000Rides, C?.per1000Lo, C?.per1000Hi, 1, tq.per1000Rides, rep.pop ? `hochgerechnet${pre}` : t('rep.populationMissing')),
+    calTile(t('rep.tripsPer1000ResidentsAndDay'), C?.per1000Rides, C?.per1000Lo, C?.per1000Hi, 1, tq.per1000Rides, rep.pop ? t('rep.extrapolatedPre', { pre }) : t('rep.populationMissing')),
   ].join('');
   const per = meta.period && ['Quartal', 'Monat'].includes(meta.period.kind) ? `${esc(PKIND(meta.period.kind))} ${esc(meta.period.label)} · ` : '';
   const calMethod = client ? (C ? ` ${t('rep.eScooterTripsAreCalibratedTo')}` : '')
@@ -426,7 +428,7 @@ function reportHtml(ctx, rep, meta, ref) {
     <section class="rp-sec"><h3>${t('rep.dataQuality')}</h3>${qualityBlock(ctx, rep, extra)}</section>
     <section class="rp-sec"><h3>${t('rep.metrics')}</h3><div class="sub">${t('rep.structuredAfterListOfMetrics', { v0: C ? (client ? t('rep.eScooterTripsCalibratedTo2') : t('rep.tripMetricsCalibrated')) : '' })}</div><div class="tiles">${tiles}</div></section>
     <section class="rp-sec"><h3>${t('rep.perOperatorAndVehicleType')}</h3><div class="sub">${t('rep.meanOverPeriodFleetWithRange')}</div>${groupTable(ctx, rep, meta.cal)}</section>
-    <section class="rp-sec"><h3>${t('rep.dailyValues')}</h3><div class="sub">${t('rep.fleetPerDayObservationAnd')}</div>${dailyTable(ctx, rep, k)}</section>
+    <section class="rp-sec"><h3>${t('rep.dailyValues')}</h3><div class="sub">${t('rep.fleetPerDayObservationAnd')}</div>${dailyTable(ctx, rep, k, meta.calib?.limits)}</section>
     ${q.source === 'archiv' ? '' : cellsSection(ctx, rep, meta.s)}
     ${referenceRows(ctx, ref, rep, meta.cal)}
     <footer class="rp-sec small muted"><h3>${t('rep.method')}</h3><p style="margin:0 0 var(--s1)">${t('rep.basisIsOperatorsOpenLive')}</p><p style="margin:0">${t('rep.tripsPerDayAreMeasuredTrips', { calMethod, v1: esc(ctx.CFG.REPO || '') })}</p></footer>
@@ -491,7 +493,7 @@ export async function renderReport(el, ctx) {
       missing = days.filter((d, i) => !docs[i]);
     }
     const calib = await calibP; if (tok !== s.tok) return;
-    const cal = K.calibrateReport(rep, calib.k);
+    const cal = K.calibrateReport(rep, calib.k, { limits: calib.limits });
     const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive };
     s.rep = rep; s.meta = meta;
     put(head(t('rep.municipalReport2'), t('rep.printableReportPer2', { name: esc(name) }), reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref));
@@ -690,13 +692,17 @@ function capChart(ctx, v, c) {
   const ymax = Math.max(limit || 0, ...pts.map(d => d.max)) * 1.08 || 1;
   const Y = (x) => P.t + (1 - x / ymax) * (H - P.t - P.b);
   const xi = (d) => Math.round((Date.parse(`${d}T12:00:00Z`) - (last - (n - 1) * 86400e3)) / 86400e3);
+  // Tage ohne Protokoll (vor dem ersten Tag und Lücken) schraffiert statt leer – leer läse sich wie 0
+  const have = new Set(pts.map(d => xi(d.day))), pid = `rp-na-${String(v.ags).replace(/[^\w-]/g, '')}`;
+  const gaps = [...Array(n).keys()].filter(i => !have.has(i)).map(i => `<rect class="gap" x="${(P.l + i * slot).toFixed(1)}" y="${P.t}" width="${slot.toFixed(1)}" height="${H - P.t - P.b}" fill="url(#${pid})"/>`).join('');
+  const defs = gaps ? `<defs><pattern id="${pid}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--muted)" stroke-opacity=".35" stroke-width="1.5"/></pattern></defs>` : '';
   const bars = pts.map((d, i) => { const x = P.l + xi(d.day) * slot + (slot - bw) / 2, y = Y(d.max), y0 = Y(0), r = Math.min(4, bw / 2, y0 - y);
     const path = y0 - y < 0.5 ? '' : `<path class="bar" d="M${x.toFixed(1)},${y0.toFixed(1)}V${(y + r).toFixed(1)}Q${x.toFixed(1)},${y.toFixed(1)} ${(x + r).toFixed(1)},${y.toFixed(1)}H${(x + bw - r).toFixed(1)}Q${(x + bw).toFixed(1)},${y.toFixed(1)} ${(x + bw).toFixed(1)},${(y + r).toFixed(1)}V${y0.toFixed(1)}Z"/>`;
     return `<g data-i="${i}"><rect class="hit" x="${(P.l + xi(d.day) * slot).toFixed(1)}" y="${P.t}" width="${slot.toFixed(1)}" height="${H - P.t - P.b}"/>${path}</g>`; }).join('');
   const lim = limit ? `<line class="lim" x1="${P.l}" x2="${W - P.r}" y1="${Y(limit).toFixed(1)}" y2="${Y(limit).toFixed(1)}"/><text x="${P.l - 6}" y="${(Y(limit) + 3.5).toFixed(1)}" text-anchor="end">${ctx.fmt(limit)}</text>` : '';
   const ax = `<line class="base" x1="${P.l}" x2="${W - P.r}" y1="${Y(0)}" y2="${Y(0)}"/><text x="${P.l - 6}" y="${Y(0) + 3.5}" text-anchor="end">0</text><text x="${P.l}" y="${H - 6}">${dm(new Date(last - (n - 1) * 86400e3).toISOString().slice(0, 10))}</text><text x="${W - P.r}" y="${H - 6}" text-anchor="end">${dm(pts[pts.length - 1].day)}</text>`;
-  return `<div class="rp-chart" data-rp="capchart" data-ags="${ctx.esc(v.ags)}"><svg class="rp-line rp-bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('rep.dailyMaximumOfFleetOnDays', { length: pts.length, v1: limit ? ctx.fmt(limit) : '' })}">${ax}${lim}<g>${bars}</g></svg></div>
-    <div class="rp-legend"><span><i class="rp-sw" style="--rp-f:var(--accent)"></i>${t('rep.highestFleetPerDayAll')}</span>${limit ? `<span><i class="rp-key" style="--c:var(--fg-2)"></i>${t('rep.totalFleetCap', { limit: ctx.fmt(limit) })}</span>` : ''}</div>`;
+  return `<div class="rp-chart" data-rp="capchart" data-ags="${ctx.esc(v.ags)}"><svg class="rp-line rp-bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('rep.dailyMaximumOfFleetOnDays', { length: pts.length, v1: limit ? ctx.fmt(limit) : '' })}">${defs}<g>${gaps}</g>${ax}${lim}<g>${bars}</g></svg></div>
+    <div class="rp-legend"><span><i class="rp-sw" style="--rp-f:var(--accent)"></i>${t('rep.highestFleetPerDayAll')}</span>${limit ? `<span><i class="rp-key" style="--c:var(--fg-2)"></i>${t('rep.totalFleetCap', { limit: ctx.fmt(limit) })}</span>` : ''}${gaps ? `<span><i class="rp-sw" style="background:var(--rp-na)"></i>${t('rep.notMeasuredDays', { n: n - have.size })}</span>` : ''}</div>`;
 }
 function violationsBlock(ctx, c, v, s) {
   const { esc, fmt, opColor } = ctx;
@@ -733,8 +739,10 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const derivedOf = (o) => (own(o) ? o.derived : c.limitDerived);
   const shareNote = (o) => (o.licensed === false || own(o) ? '' : hasTotal ? `<div class="sub-line">${t('rep.shareOfTotalCap')}</div>` : '');
   const limCell = (o) => (o.licensed === false ? '—' : own(o) ? `${fmt(o.limit)}${o.derived ? `<div class="sub-line">${DERIVED_TXT_DEF()}</div>` : ''}` : '—');
-  const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>`);
-  const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${fmt(o.available)}</td><td class="n">${limCell(o)}</td><td style="min-width:120px">${meterCell(o)}</td><td class="n">${rateCell(ctx, rate(o, 'share'), false, derivedOf(o))}${shareNote(o)}</td><td class="n">${rateCell(ctx, rate(o, 'availShare'), false, derivedOf(o))}${shareNote(o)}</td><td>${badge(o.licensed === false ? 'unlicensed' : own(o) ? o.status : 'unknown')}</td></tr>`).join('');
+  // Ausschöpfung (gemeldet ÷ erlaubt) direkt am Balken; ohne eigene Grenze der Anteil an der Gesamtgrenze als Text
+  const shareLbl = (o) => { const v = rate(o, 'share'); return v == null ? '' : `<div class="sub-line"><b>${rateTxt(ctx, v)}</b>${overMark(v, derivedOf(o))}${own(o) ? '' : ` ${t('rep.shareOfTotalCap')}`}</div>`; };
+  const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) + shareLbl(o) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>${shareLbl(o)}`);
+  const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${fmt(o.available)}</td><td class="n">${limCell(o)}</td><td style="min-width:120px">${meterCell(o)}</td><td class="n">${rateCell(ctx, rate(o, 'availShare'), false, derivedOf(o))}${shareNote(o)}</td><td>${badge(o.licensed === false ? 'unlicensed' : own(o) ? o.status : 'unknown')}</td></tr>`).join('');
   const zoneNum = (d) => [d.limit != null ? t('rep.total3', { limit: fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null].filter(Boolean).join(' · ') || '—';
   const districts = c.districts.map(d => d.check ? zoneCheckRows(ctx, d) : `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)} · ` : '' })}</td></tr>`).join('');
   const per1000 = pop ? (c.total / pop) * 1000 : null;
@@ -743,16 +751,16 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const listTxt = c.listed ? ` · ${t('rep.operatorsAccordingToSource', { join: esc(c.listed.join(', ')), v1: c.listComplete ? '' : ` ${t('rep.listIncompleteNoLicenceCheck')}` })}` : '';
   const head = hasTotal
     ? `<div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status === 'hint' ? 'near' : c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">${t('rep.of3', { limit: fmt(c.limit), v1: pctTxt(ctx, c.share, 0) })}</span></div></div>
-    <div class="small">${t('rep.availableAllowedInTotal', { v0: c.availShare == null ? '—' : rateTxt(ctx, c.availShare) })} <span class="muted">${t('rep.bookableOf', { available: fmt(c.available), limit: fmt(c.limit) })}</span>${overMark(c.availShare, c.limitDerived)}</div>`
+    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)}</div>`
     : `<div class="small">${t('rep.reported', { total: fmt(c.total), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.noTotalCapCapPerOperatorSee') : t('rep.noCityWideCap') })}</div>`;
   return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · <span translate="no">${esc(c.art)}</span>` : ''}</span></h3>${badge(c.status)}</div>
     ${head}
     <div class="small muted">${t('rep.totalFleetCapOfficialSource', { limTxt, v1: c.perOperator != null ? ` · ${t('rep.perOperator', { perOperator: fmt(c.perOperator), v1: c.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' })}` : '', v2: hist ? ` · ${hist}` : '', v3: c.since && !c.previous ? ` · ${t('rep.validSince', { standTxt: esc(standTxt(c.since)) })}` : '', v4: c.stand ? ` · ${t('rep.asOf2', { standTxt: esc(standTxt(c.stand)) })}` : '', links, listTxt })}</div>
     ${c.hinweis ? `<div class="small muted">${`<span translate="no">${esc(c.hinweis)}</span>`}</div>` : ''}
-    ${ops ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.fleet2')}</th><th class="n">${t('rep.ofWhichDisabled')}</th><th class="n">${t('rep.bookable')}</th><th class="n">${t('rep.cap')}</th><th>${t('rep.utilisation')}</th><th class="n" title="${t('rep.reportedCap')}">${t('rep.reportedAllowed')}</th><th class="n" title="${t('rep.bookableCap')}">${t('rep.availableAllowed')}</th><th>Status</th></tr></thead><tbody>${ops}</tbody></table></div>` : emptyBox(t('rep.noInFeed', { typeName: esc(typeName(c.type)) }), t('rep.noOpenFeedCurrentlyReports'))}
+    ${ops ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.fleet2')}</th><th class="n">${t('rep.ofWhichDisabled')}</th><th class="n">${t('rep.bookable')}</th><th class="n">${t('rep.cap')}</th><th title="${t('rep.reportedCap')}">${t('rep.utilisation')}</th><th class="n" title="${t('rep.bookableCap')}">${t('rep.availableAllowed')}</th><th>Status</th></tr></thead><tbody>${ops}</tbody></table></div>` : emptyBox(t('rep.noInFeed', { typeName: esc(typeName(c.type)) }), t('rep.noOpenFeedCurrentlyReports'))}
     ${districts ? `<div class="tbl"><table><thead><tr><th>${t('rep.subAreaWithItsOwnCap')}</th><th class="n">${t('rep.cap')}</th><th>Status</th><th>${t('rep.note')}</th></tr></thead><tbody>${districts}</tbody></table></div>` : ''}
     ${c.hasRate ? violationsBlock(ctx, c, viol, s) : ''}
-    <div class="tiles">${tile(t('rep.per1000Residents', { typeName: esc(typeName(c.type)) }), num(ctx, per1000, 1), pop ? t('rep.vehiclesResidents', { total: fmt(c.total), pop: fmt(pop) }) : t('rep.populationMissing'))}${tile(t('rep.tripsPer1000ResidentsAndDay'), num(ctx, rep?.totals.per1000Rides, 1), rep ? t('rep.extrapolatedMeasured', { typeName: esc(typeName(c.type)), v1: plural(rep.days.length, t('rep.day'), t('rep.days')), pre }) : t('rep.noDailyFilesYet2'))}</div></div>`;
+    <div class="tiles">${tile(t('rep.per1000Residents', { typeName: esc(typeName(c.type)) }), num(ctx, per1000, 1), pop ? t('rep.vehiclesResidents', { total: fmt(c.total), pop: fmt(pop) }) : t('rep.populationMissing'))}${tile(t('rep.tripsPer1000ResidentsAndDayMeasured'), num(ctx, rep?.totals.per1000Rides, 1), rep ? t('rep.extrapolatedMeasured', { typeName: esc(typeName(c.type)), v1: plural(rep.days.length, t('rep.day'), t('rep.days')), pre }) : t('rep.noDailyFilesYet2'))}</div></div>`;
 }
 // Einträge ohne Prüfung (nicht amtlich, „keine“): kompakte Tabelle mit Zahl laut Quelle und heutigem Bestand zur Einordnung
 function capInfoTable(ctx, list, title) {
@@ -801,7 +809,7 @@ export async function renderCaps(el, ctx) {
       const total = Object.entries(state.latest.groups || {}).filter(([k]) => k.startsWith(`${ags}|`) && k.endsWith('|scooter')).reduce((a, [, g]) => a + (g.total || 0), 0);
       const rep = repFor(ags, 'scooter');
       body = `<div class="note">${t('rep.noFleetCapIsStoredFor', { v0: esc(m.name || ags), v1: [...new Set(R.capsCheck(ref, state.latest.groups, { asOf: state.latest.at || Date.now() }).filter(c => c.hasRate).map(c => c.ort))].map(esc).join(', ') || t('rep.none') })}</div>
-        <div class="tiles" style="margin-top:var(--s3)">${tile(t('rep.eScootersPer1000Residents'), num(ctx, m.pop ? (total / m.pop) * 1000 : null, 1), m.pop ? t('rep.vehiclesResidents', { total: ctx.fmt(total), pop: ctx.fmt(m.pop) }) : t('rep.populationMissing'))}${tile(t('rep.tripsPer1000ResidentsAndDay'), num(ctx, rep?.totals.per1000Rides, 1), rep ? t('rep.eScootersExtrapolated', { v0: rep.quality.prelim ? ` · ${t('rep.preliminary')}` : '' }) : t('rep.noDailyFilesYet2'))}</div>`;
+        <div class="tiles" style="margin-top:var(--s3)">${tile(t('rep.eScootersPer1000Residents'), num(ctx, m.pop ? (total / m.pop) * 1000 : null, 1), m.pop ? t('rep.vehiclesResidents', { total: ctx.fmt(total), pop: ctx.fmt(m.pop) }) : t('rep.populationMissing'))}${tile(t('rep.tripsPer1000ResidentsAndDayMeasured'), num(ctx, rep?.totals.per1000Rides, 1), rep ? t('rep.eScootersExtrapolated', { v0: rep.quality.prelim ? ` · ${t('rep.preliminary')}` : '' }) : t('rep.noDailyFilesYet2'))}</div>`;
     }
     el.innerHTML = title + body + defn;
   } catch (e) { console.error('Obergrenzen', e); if (tok === s.tok) el.innerHTML = title + emptyBox(t('rep.checkNotPossible'), t('rep.dataNotLoadableTryAgainLater')); }
@@ -891,10 +899,11 @@ export async function renderZoneWatch(el, ctx) {
   const num = (v) => (v == null ? '<span class="muted">–</span>' : esc(fmt(v, Number.isInteger(v) ? 0 : 1)));
   const opCell = (op) => (op === '*' ? `<b>${t('rep.zwAll')}</b>` : `<span class="op"><i style="background:${ctx.opColor(op)}"></i>${esc(op)}</span>`);
   const blocks = zones.map(z => {
+    const trend = z.rows.some(r => (r.series || []).filter(([, v]) => Number.isFinite(v)).length >= 2); // Tagesmaximum-Verlauf erst ab 2 Tagen
     const rows = z.rows.map(r => `<tr${r.op === '*' ? ' class="rp-sum"' : ''}><td>${opCell(r.op)}</td><td class="n">${num(r.now)}${r.avail != null && r.avail !== r.now ? `<div class="sub-line">${t('rep.zwAvail', { v: esc(fmt(r.avail)) })}</div>` : ''}</td>
-      <td class="n">${r.todayMin == null ? '<span class="muted">–</span>' : `${esc(fmt(r.todayMin))}–${esc(fmt(r.todayMax))}`}</td><td class="n">${num(r.mean7)}</td><td class="n">${num(r.max30)}</td><td>${sparkline(ctx, r.series)}</td></tr>`).join('');
+      <td class="n">${r.todayMin == null ? '<span class="muted">–</span>' : `${esc(fmt(r.todayMin))}–${esc(fmt(r.todayMax))}`}</td><td class="n">${num(r.mean7)}</td><td class="n">${num(r.max30)}</td>${trend ? `<td>${sparkline(ctx, r.series)}</td>` : ''}</tr>`).join('');
     const city = z.ags ? (ctx.muniName?.(z.ags) || z.ags) : '';
-    return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th><th>${t('rep.zwTrend')}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
+    return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th>${trend ? `<th>${t('rep.zwTrend')}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
   }).join('');
   const shown = shapes.filter(z => zones.some(x => x.id === z.id));
   s.zmap?.remove(); s.zmap = null;
@@ -992,7 +1001,7 @@ export function renderFeedChecks(el, ctx) {
   if (!checked.length) { el.innerHTML = title + emptyBox(state.latest?.sources?.some(r => r.checks) ? t('rep.noCheckedSourceInFilter') : t('rep.noFeedCheckInDataSnapshotYet'), state.latest?.sources?.some(r => r.checks) ? t('rep.widenAreaOrOperatorAbove') : t('rep.checkAppearsWithNext')); return; }
   checked.sort((a, b) => b.c.errors - a.c.errors || b.c.warnings - a.c.warnings || String(a.r.name || a.r.id).localeCompare(String(b.r.name || b.r.id), 'de'));
   const ok = checked.filter(x => !x.c.errors && !x.c.warnings).length;
-  const rows = checked.slice(0, 300).map(({ r, c }) => `<tr><td>${/^https?:/i.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a>` : esc(r.name || r.id)}<div class="sub-line">${esc(r.operator || '')}${r.version ? ` · GBFS ${esc(r.version)}` : ''}${r.status === 'duplicate' ? ` · ${t('rep.duplicateNotCounted')}` : ''}</div></td>
+  const rows = checked.slice(0, 300).map(({ r, c }) => `<tr><td>${/^https?:/i.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a>` : esc(r.name || r.id)}<div class="sub-line">${esc(r.operator || '')}${r.version ? ` · GBFS ${esc(r.version)}` : ''}${r.status === 'duplicate' ? ` · ${t('rep.duplicateNotCounted')}` : ''}${r.mirror ? ` · ${t('rep.mirrorOf', { of: esc(r.mirror.of), n: ctx.fmt(r.mirror.dropped) })}` : ''}${r.batteryScale?.suspect ? ` · ${t('rep.batteryScaleSuspect', { p99: ctx.fmt(r.batteryScale.p99) })}` : ''}${r.rangeCheck?.derived ? ` · ${t('rep.rangeDerived', { km: r.rangeCheck.types.filter(x => x.derived).map(x => ctx.fmt(x.kmPer100, 1)).join(' / ') })}` : ''}</div></td>
     <td class="n">${c.errors ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${c.errors}</span>` : '<span class="muted">0</span>'}</td><td class="n">${c.warnings ? `<span class="rp-status near"><i aria-hidden="true">!</i>${c.warnings}</span>` : '<span class="muted">0</span>'}</td>
     <td class="small">${c.findings.slice(0, 3).map(f => `<div>${f.level === 'error' ? t('rep.error') : t('rep.warning')}: ${esc(tx(f.text)).slice(0, 160)}</div>`).join('') || `<span class="muted">${t('rep.noFindings')}</span>`}${Math.max(c.findings.length, c.errors + c.warnings) > 3 ? `<div class="muted">${t('rep.more', { v0: Math.max(c.findings.length, c.errors + c.warnings) - 3 })}</div>` : ''}</td></tr>`).join('');
   el.innerHTML = title + `<div class="muted small" style="margin-bottom:var(--s2)">${t('rep.checkedWithoutFindingsWith', { v0: plural(checked.length, t('rep.source'), t('rep.sources')), ok, length: checked.filter(x => x.c.errors).length })}</div>
@@ -1098,7 +1107,9 @@ function availData(ctx, s) {
   const rows = R.availabilityRows(state.latest, { operator: s.op, type: s.type, minTotal: s.min, keepAgs: scope });
   const th = state.latest?.thresholds || {};
   const rangeOnly = (op) => R.RANGE_ONLY_OPS.includes(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
-  const readyFor = (land) => { const k = `${land}|${s.op}|${s.type}`; if (!s.readyCache.has(k) && s.ops.has(land)) s.readyCache.set(k, R.readinessFromOps(s.ops.get(land), { operator: s.op, type: s.type, charge: th.chargeThreshold ?? 20, range: th.rangeThreshold ?? 5, rangeOnly })); return s.readyCache.get(k) || null; };
+  // Einsatzbereit: aus den Zählern je Gruppe in latest.json (energyKnown, ready; Sammler seit latest.energy), sonst je Land aus ops/<Land>.json
+  const fromGroups = (k) => { if (!s.readyCache.has(k)) { const m = new Map(); for (const [key, g] of Object.entries(state.latest.groups || {})) { const [ags, op, ty] = key.split('|'); if (ags === 'DE' || (s.op !== 'all' && op !== s.op) || (s.type !== 'all' && ty !== s.type)) continue; const o = m.get(ags) || { total: 0, known: 0, ready: 0 }; o.total += g.total || 0; o.known += g.energyKnown || 0; o.ready += g.ready || 0; m.set(ags, o); } s.readyCache.set(k, m); } return s.readyCache.get(k); };
+  const readyFor = (land) => { if (state.latest?.energy) return fromGroups(`groups|${s.op}|${s.type}`); const k = `${land}|${s.op}|${s.type}`; if (!s.readyCache.has(k) && s.ops.has(land)) s.readyCache.set(k, R.readinessFromOps(s.ops.get(land), { operator: s.op, type: s.type, charge: th.chargeThreshold ?? 20, range: th.rangeThreshold ?? 5, rangeOnly })); return s.readyCache.get(k) || null; };
   const ha = s.hist ? R.histAvailability(s.hist, { operator: s.op, type: s.type }) : null;
   for (const r of rows) {
     const rd = r.state ? readyFor(r.state) : null; const o = rd?.get(r.ags);
@@ -1206,7 +1217,8 @@ export async function renderAvailability(el, ctx) {
     if (s.ref === undefined) { s.ref = await reference(ctx); if (tok !== s.tok) return; draw(); } // Obergrenzen (reference.json) für Verfügbar ÷ erlaubt
     // Einsatzbereitschaft: ops/<Land>.json der Länder in der Tabelle (und der gewählten Gemeinde) nachladen
     if (s.opsAt !== state.latest.at) { s.ops.clear(); s.readyCache.clear(); s.opsFailed.clear(); s.opsAt = state.latest.at; }
-    const lands = [...new Set(Object.values(state.latest.municipalities || {}).map(m => m.state).filter(Boolean))].filter(l => !s.ops.has(l) && !s.opsFailed.has(l));
+    // mit Energie-Zählern je Gruppe (latest.energy) keine Flottendateien laden (vorher alle 15 Länder, 6,3 MB)
+    const lands = state.latest.energy ? [] : [...new Set(Object.values(state.latest.municipalities || {}).map(m => m.state).filter(Boolean))].filter(l => !s.ops.has(l) && !s.opsFailed.has(l));
     await Promise.all(lands.map(async (l) => { const d = await opsDoc(ctx, l); if (tok !== s.tok) return; if (d?.vehicles) { s.ops.set(l, d); if (d.at && d.at !== state.latest.at) s.opsStamp = d.at; } else s.opsFailed.add(l); }));
     if (tok === s.tok) draw();
   } catch (e) { console.error('Verfügbarkeit', e); }
@@ -1371,7 +1383,7 @@ function drawRanking(el) {
 function rankingCsv(el) {
   const s = st(el); if (!s.rows) return;
   const vp = s.rq ? t('rep.against', { cur: s.rq.cur, prev: s.rq.prev }) : s.rk.prev ? t('rep.against2', { curFrom: s.rk.prev.curFrom, curTo: s.rk.prev.curTo, from: s.rk.prev.from, to: s.rk.prev.to }) : '';
-  const rows = [[t('rep.rank'), 'AGS', t('rep.city'), t('rep.state'), t('rep.vehicleType'), 'Flotte_Mittel', t('rep.tripsperday'), t('rep.tripspervehicleday'), t('rep.vehiclesper1000residents'), t('rep.tripsper1000residentsday'), t('rep.operator2'), t('rep.csvDeltaPrev'), t('rep.days'), t('rep.csvPrelim'), t('rep.note'), t('rep.previousPeriod')],
+  const rows = [[t('rep.rank'), 'AGS', t('rep.city'), t('rep.state'), t('rep.vehicleType'), R.csvText('Flotte_Mittel', lang()), t('rep.tripsperday'), t('rep.tripspervehicleday'), t('rep.vehiclesper1000residents'), t('rep.tripsper1000residentsday'), t('rep.operator2'), t('rep.csvDeltaPrev'), t('rep.days'), t('rep.csvPrelim'), t('rep.note'), t('rep.previousPeriod')],
     ...s.rows.map((r, i) => [i + 1, r.ags, r.name, r.state || '', typeName(r.ty), [r.fleet, 1], [r.ridesDay, 1], [r.rvd, 2], [r.per1000Fleet, 2], [r.per1000Rides, 2], r.opCount, [r.delta, 2], s.rk.days.length, s.rk.prelim ? t('rep.yes') : t('rep.no'), r.excluded.length ? t('rep.without', { v0: r.excluded.join(', ') }) : '', vp])];
   download(`${t('file.cityRanking')}_${s.type}_${lastOf(s.rk.days)}.csv`, R.toCsv(rows, lang()));
 }
@@ -1506,7 +1518,7 @@ export async function renderRegulationProfile(el, ctx) {
   const profs = R.regulationProfiles(ref, state.latest, { ags: state.scope || 'DE', asOf: state.latest.at || Date.now() });
   const src = (e) => safeLink(ctx, e.url, e.quelle || t('rep.source'));
   const card = (p) => {
-    const caps = p.caps.map(c => t('rep.inTotalCounted', { limit: fmt(c.limit), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.perOperator4', { perOperator: fmt(c.perOperator) }) : '', v3: c.districts.length ? `; ${c.districts.map(d => `${srcTxt(esc, d.label)} ${fmt(d.limit)}`).join(', ')}` : '', v4: c.previous != null ? ` <span class="muted">${t('rep.fromBeforeThat', { v0: dd(c.since), previous: fmt(c.previous) })}</span>` : '', v5: badge(c.status), total: fmt(c.total), c: src(c) })).join('<br>') || `<span class="muted">${t('rep.notStored')}</span>`;
+    const caps = p.caps.map(c => t('rep.inTotalCounted', { limit: fmt(c.limit), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.perOperator4', { perOperator: fmt(c.perOperator) }) : '', v3: c.districts.length ? `; ${c.districts.map(d => `${srcTxt(esc, d.label)} ${d.limit != null ? fmt(d.limit) : d.perOperator != null ? t('rep.perOperatorZone', { perOperator: fmt(d.perOperator) }) : '—'}`).join(', ')}` : '', v4: c.previous != null ? ` <span class="muted">${t('rep.fromBeforeThat', { v0: dd(c.since), previous: fmt(c.previous) })}</span>` : '', v5: badge(c.status), total: fmt(c.total), c: src(c) })).join('<br>') || `<span class="muted">${t('rep.notStored')}</span>`;
     const fees = p.fees.map(f => `${esc([].concat(f.satz).join('–'))} ${esc(tx(f.einheit || ''))} · ${esc([].concat(f.type || []).map(typeName).join(', '))}${f.gebiet ? ` · ${srcTxt(esc, f.gebiet)}` : ''} · ${src(f)}`).join('<br>') || `<span class="muted">${t('rep.noRateWithSourceStored')}</span>`;
     const ops = Object.entries(p.operators).sort((a, b) => TYPE_ORDER.indexOf(a[0]) - TYPE_ORDER.indexOf(b[0])).map(([ty, l]) => `${esc(typeName(ty))}: ${l.length} <span class="muted">(${l.map(esc).join(', ')})</span>`).join('<br>') || `<span class="muted">${t('rep.noVehiclesInOpenFeeds')}</span>`;
     const refs = p.refs.map(r => { const v = r.kind === 'fahrt' ? tripTxt(ctx, r) : fmt(r.wert, r.kind === 'rvd' ? 2 : 0);

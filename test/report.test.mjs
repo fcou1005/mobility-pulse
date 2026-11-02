@@ -86,6 +86,19 @@ const docSun = { day: '2026-11-08', runs: [...fullHourRuns('2026-11-08', 15).map
   assert(near(dur.groups.find(x => x.op === 'Voi').avgMin, 9) && near(dur.groups.find(x => x.op === 'Voi').avgKm, 1.2), 'Ø Dauer 9 Min. und Distanz 1,2 km ab 20 Messungen');
   const none = R.municipalReport({ docs: [], ags: '08111000', latestGroups: { '08111000|Voi|scooter': { total: 50, disabled: 5 } } });
   assert(none.groups[0].fleet === 50 && none.groups[0].fleetSource === 'aktuell' && near(none.groups[0].disabledShare, 0.1) && none.quality.prelim, 'ohne Tagesdateien: aktueller Bestand als Ersatz, ausgewiesen');
+  // M-12: Gruppe nur in 1 von 16 Läufen („Gebündelte“ aus dem konflationierten Feed) → keine Tagesflotte, nicht in den Summen
+  const t16 = [...Array(16).keys()], one = t16.map(i => (i === 0 ? 6105 : null));
+  const h16 = { '2026-11-03': { t: t16, f: t16.map(() => 1), series: { '08111000|Voi|scooter': { total: t16.map(() => 100), disabled: t16.map(() => 5) }, '08111000|Gebündelte|scooter': { total: one, disabled: one.map(x => (x == null ? null : 600)) } } } };
+  const r16 = R.municipalReport({ docs: [d2], hists: h16, ags: '08111000', type: 'scooter' });
+  assert(!r16.groups.some(x => x.op === 'Gebündelte') && r16.quality.incompleteGroups.includes('Gebündelte|scooter') && near(r16.totals.fleet, 100) && near(r16.groups.find(x => x.op === 'Voi').disabledShare, 0.05),
+    'M-12: Wert nur in einem von 16 Läufen → nicht als Tagesflotte (6.105), nicht in Flotte und Sperrquote, als unvollständig ausgewiesen');
+  // über daily.json (dayRuns): Präsenz aus Läufen mit Wert ÷ zählende Läufe des Tages
+  const dly = { days: ['2026-11-03'], fields: ['available', 'total', 'disabled', 'lowBattery', 'stations', 'stationsEmptyDock', 'runs'], dayRuns: { '2026-11-03': 16 }, series: { '08111000|Voi|scooter': { '2026-11-03': [95, 100, 5, 0, 0, 0, 16] }, '08111000|Gebündelte|scooter': { '2026-11-03': [6000, 6105, 600, 0, 0, 0, 1] } } };
+  const hd = R.histFromDaily(dly, '2026-11-03');
+  const rd = R.municipalReport({ docs: [d2], hists: { '2026-11-03': hd }, ags: '08111000', type: 'scooter' });
+  assert(near(hd.series['08111000|Gebündelte|scooter'].presence, 1 / 16) && !rd.groups.some(x => x.op === 'Gebündelte') && near(rd.totals.fleet, 100), 'M-12: daily.json mit dayRuns: Präsenz 1/16 → ausgeschlossen');
+  const rk16 = R.cityRanking([d2], h16, { municipalities: {} }, { type: 'scooter', minFleet: 0 });
+  assert(near(rk16.rows.find(r => r.ags === '08111000').fleet, 100), 'M-12: Städte-Rangliste ebenso ohne Ein-Lauf-Gruppe');
 }
 
 // ---------- Zellen ----------
@@ -162,6 +175,15 @@ const docSun = { day: '2026-11-08', runs: [...fullHourRuns('2026-11-08', 15).map
   assert(ca.info.map(i => i.ort).join() === 'Berlin,Köln,Mannheim,Hamburg' && ca.info[0].districts[0].limit === 19000 && ca.info[1].sourceStatus === 'geplant' && ca.cities === 4, 'übrige Einträge als Information (Teilgebiet, geplant, Presse, keine)');
   const bike = R.capAvailability(ref, { groups }, { asOf, type: 'bike' });
   assert(bike.rows.every(r => r.ags === 'D' && r.types[0] === 'bike') && bike.rows.find(r => r.op === 'nextbike').kind === 'share', 'Filter Räder: nur der Räder-Eintrag Dresden');
+  // M-15: Rad-Grenze zählt E-Räder mit (außer exakteArt), Dresdner Eintrag ist nur Pressebericht
+  const rb = { obergrenzen: [{ ags: 'D', ort: 'Dresden', type: 'bike', gesamt: 3000, status: 'amtlich', ausgenommeneAnbieter: ['nextbike'] }] };
+  const gb = { 'D|Lime|ebike': { total: 1202, available: 1100 }, 'D|nextbike|bike': { total: 1500, available: 1400 } };
+  const cb = R.capsCheck(rb, gb, { asOf })[0];
+  assert(cb.total === 1202 && cb.types.join() === 'bike,ebike' && cb.type === 'bike' && R.capsCheck({ obergrenzen: [{ ...rb.obergrenzen[0], exakteArt: true }] }, gb, { asOf })[0].total === 0, 'M-15: type bike deckt ebike ab (Lime-E-Räder 1.202), exakteArt: nur Räder');
+  const { readFileSync } = await import('node:fs');
+  const realRef = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url), 'utf8'));
+  const dRad = realRef.obergrenzen.find(e => e.ags === '14612000' && e.type === 'bike');
+  assert(dRad.status === 'presse' && /electrive/.test(dRad.quelle) && !R.capsCheck({ obergrenzen: [dRad] }, gb, { asOf })[0].official, 'M-15: Dresden Rad (nur Pressebericht) nicht als amtlich geführt');
 }
 
 // ---------- Verfügbar ÷ erlaubt je Anbieter und Stadt ----------
@@ -549,4 +571,40 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
     && !d1.check.operators.some(o => o.op === 'RegioRad') && d1.status === 'near' && d2.status === 'unchecked' && !d2.check,
     'Teilgebiet mit Zuordnung: je Anbieter jetzt gegen 100 (nahe), Tagesmaximum 120 → 1 Tag über Grenze, nur Arten der Obergrenze; ohne Zuordnung weiter nicht prüfbar');
   assert(R.capsCheck({ obergrenzen: [{ ags: '08111000', ort: 'S', type: 'scooter', jeAnbieter: 10, zonen: [{ name: 'x', jeAnbieter: 1, beobachtung: 'fehlt' }], status: 'amtlich' }] }, {}, { zoneWatch: log })[0].districts[0].status === 'unchecked', 'Zuordnung auf unbekannte Zone: nicht prüfbar');
+}
+// M-20: Zeitumstellung – Heatmap und Tagesgang beziehen Stunde 2 am 25.10. (120 Min.) auf 60 Min.; Stichtage in Ortszeit (Sommer +02:00)
+{
+  const t0 = Date.parse('2026-10-24T22:00:00Z'), t1 = Date.parse('2026-10-25T23:00:00Z');
+  const runs = [], start = new Array(24).fill(0);
+  for (let t = t0 + 20 * 60e3; t < t1; t += 20 * 60e3) { runs.push([t, 20 * 60e3, 1]); start[R.hourOfMs(t)] += 10; }
+  const doc = { day: '2026-10-25', runs, groups: { 'X|op|scooter': { start, end: start } } };
+  const hm = R.weekHeatmap([doc]), wd = R.weekdayOf('2026-10-25');
+  assert([1, 2, 3].map(h => hm.cells[wd][h].mean).join() === '30,30,30', 'M-20: Heatmap am Umstellungstag 30/30/30 (vorher 30/60/30)');
+  assert(R.hourMinOf(doc)[2] === 120 && R.hourMinOf({ ...doc, hourMin: new Array(24).fill(60) })[2] === 60, 'M-20: Minuten je Stunde aus dem Tagesdokument, sonst gerechnet');
+  assert(R.berlinMidnight('2026-07-01') === Date.parse('2026-06-30T22:00:00Z') && R.berlinMidnight('2026-12-01') === Date.parse('2026-11-30T23:00:00Z'), 'M-20: Mitternacht Ortszeit (Sommer +02:00, Winter +01:00)');
+  const e = { gesamt: 100, gesamtAb: 200, ab: '2026-07-01' };
+  assert(R.capLimit(e, Date.parse('2026-06-30T22:30:00Z')).limit === 200 && R.capLimit(e, Date.parse('2026-06-30T21:30:00Z')).limit === 100, 'M-20: Stichtag im Sommer gilt ab 0 Uhr Ortszeit (vorher 1 Uhr)');
+}
+// M-19: Tage mit mehreren Regelständen im Bericht ausgewiesen
+{
+  const day = '2026-11-12', at = (h) => Date.parse(`${day}T${String(h).padStart(2, '0')}:00:00Z`);
+  const doc = { day, runs: [[at(8), 20 * 60e3, 1], [at(9), 20 * 60e3, 1, '2026-11-01b@abc'], [at(10), 20 * 60e3, 1, '2026-11-01b@abc']], groups: {} };
+  const rp = R.municipalReport({ docs: [doc], ags: '1' });
+  assert(rp.quality.mixedRuleDays.length === 1 && rp.quality.mixedRuleDays[0].day === day && rp.quality.mixedRuleDays[0].rules.length === 2, 'M-19: Tag mit altem und neuem Regelstand in quality.mixedRuleDays');
+}
+// Q-9/Q-24: Formel-Schutz auch hinter führenden Leerzeichen; CSV-Kopf der Städte-Rangliste übersetzt
+assert(R.csvCell(' =HYPERLINK("x")') === `"' =HYPERLINK(""x"")"` && R.csvCell(' +1') === "' +1" && R.csvCell('Köln') === 'Köln', 'Q-9: führende Leerzeichen vor = + - @ werden ebenfalls entschärft');
+assert(R.csvText('Flotte_Mittel', 'en') === 'Fleet_mean' && R.csvText('Flotte_Mittel', 'de') === 'Flotte_Mittel', 'Q-24: Flotte_Mittel im englischen CSV-Kopf als Fleet_mean');
+// M-16: Reichweite aus dem Ladestand gerechnet → nur „Ladestand < 20 %“ (Energie, Einsatzbereitschaft, needsSwap); sonst UND-Regel
+{
+  const O = await import('../lib/pulse-ops.js');
+  assert(R.energyLow(15, 12) === false && R.energyLow(15, 12, { rangeDerived: true }) === true && R.energyLow(25, 3, { rangeDerived: true }) === false && R.energyLow(null, 3, { rangeDerived: true }) === true, 'M-16: energyLow mit rangeDerived – Voi 15 % / 12 km niedrig, 25 % / 3 km nicht; ohne Ladestand weiter Reichweite');
+  const ops = { at: 1, types: ['scooter'], ops: ['Voi', 'Dott'], munis: ['08111000'], vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet',
+    vehicles: [[48.7, 9.1, 0, 0, 0, 15, 12, 10, 0, 1], [48.7, 9.1, 0, 0, 0, 30, 24, 10, 0, 1], [48.7, 9.1, 1, 0, 0, 15, 12, 10, 0, 0], [48.7, 9.1, 1, 0, 0, 15, 4, 10, 0, 0]], stations: [] };
+  const e = R.energyFromOps(ops, { rangeOnly: () => false }), rd = R.readinessFromOps(ops, { rangeOnly: () => false }).get('08111000');
+  assert(e.get('08111000|Voi|scooter').low === 1 && e.get('08111000|Voi|scooter').rangeOnly === 0 && e.get('08111000|Dott|scooter').low === 1 && rd.ready === 2 && rd.known === 4, 'M-16: energyFromOps/readinessFromOps lesen Feld „reichweiteAbgeleitet“');
+  const fl = O.decodeFleet(ops);
+  assert(fl.vehicles[0].rangeDerived === true && fl.vehicles[2].rangeDerived === false && O.needsSwap(fl.vehicles[0]) && !O.needsSwap(fl.vehicles[1]) && !O.needsSwap(fl.vehicles[2]) && O.needsSwap(fl.vehicles[3]), 'M-16: decodeFleet v.rangeDerived; needsSwap Voi 15 %/12 km ja, Dott 15 %/12 km nein (UND-Regel), Dott 15 %/4 km ja');
+  const old = O.decodeFleet({ ...ops, vehicles: ops.vehicles.map(v => v.slice(0, 9)) });
+  assert(old.vehicles.every(v => v.rangeDerived === false) && !O.needsSwap(old.vehicles[0]), 'M-16: ältere ops-Dateien ohne Feld 10 → UND-Regel wie bisher');
 }

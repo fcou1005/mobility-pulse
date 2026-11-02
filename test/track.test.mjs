@@ -222,7 +222,7 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   assert(G(q).swap[hr] === 1 && G(q).rot[hr] === 0 && G(q).start[hr] === 0 && G(q).pickup[hr] === 0 && G(q).end[hr] === 0 && G(q).swapWaitN === 1, 'Akkutausch mit neuer Kennung: keine Fahrt, kein Abholen');
   assert(q.state.v[T.vehicleKey('Bolt', 'n1')][7] === u0 && !q.state.v[T.vehicleKey('Bolt', 'o1')], 'Akkutausch: erste Sichtung übernommen, alte Kennung entfernt');
 }
-// M14 – stabile Kennungen: Tempo-Grenzen 3,5–24 km/h (slow/fast), ≥ 2 km ohne Ladestandverlust = Umsetzung, Sammeltransport mit Rückkehrern
+// M14 – stabile Kennungen: über 24 km/h = fast, kurzer Versatz < 500 m ohne Ladestandverlust = slow (M-4), ≥ 2 km ohne Ladestandverlust = Umsetzung, Sammeltransport mit Rückkehrern
 {
   const L = (id, lat, lon, extra = {}) => V(id, lat, lon, { operator: 'Lime', sourceId: 'lime', ...extra });
   const recsL = [{ id: 'lime', status: 'live', latencyMs: 50 }];
@@ -231,12 +231,12 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   let q = T.trackRun(null, { vehicles: fleet, stations: [], sourceRecs: recsL, now: u0 });
   q = T.trackRun(q.state, { vehicles: fleet.filter(v => v.rawId !== 'g'), stations: [], sourceRecs: recsL, now: u0 + 20 * 60e3 }); // g verschwindet (Fahrtbeginn)
   q.state.srcStats.lime = { runs: 10, present: 500, gone: 20, moved: 40, newc: 30, returned: 30 };
-  // a: 500 m (1,5 km/h) = slow; b: 9 km (27 km/h, Akku 50 → 30) = fast; c: 2,2 km, Akku 50 → 50 = Umsetzung ohne Energieverlust; d: 2,2 km, Akku 50 → 47 = Fahrt
+  // a: 300 m, Akku gleich = slow (GPS-Sprung); b: 9 km (27 km/h, Akku 50 → 30) = fast; c: 2,2 km, Akku 50 → 50 = Umsetzung ohne Energieverlust; d: 2,2 km, Akku 50 → 47 = Fahrt
   // e, f (versetzt) und g (Rückkehrer) kommen ≤ 40 m beieinander an = Sammeltransport → e, f Umsetzung
-  const after = [L('a', 48.5045, 9.00), L('b', 48.58, 9.02, { batteryPct: 30 }), L('c', 48.52, 9.04), L('d', 48.52, 9.06, { batteryPct: 47 }), L('e', 48.60, 9.20), L('f', 48.60005, 9.20), L('g', 48.6001, 9.20005)];
+  const after = [L('a', 48.5027, 9.00), L('b', 48.58, 9.02, { batteryPct: 30 }), L('c', 48.52, 9.04), L('d', 48.52, 9.06, { batteryPct: 47 }), L('e', 48.60, 9.20), L('f', 48.60005, 9.20), L('g', 48.6001, 9.20005)];
   q = T.trackRun(q.state, { vehicles: after, stations: [], sourceRecs: recsL, now: t });
   const h = q.hourly.get('08416041|Lime|scooter');
-  assert(h.slow[hr] === 1 && h.fast[hr] === 1, 'Tempo außerhalb 3,5–24 km/h: gesondert (slow 1, fast 1)');
+  assert(h.slow[hr] === 1 && h.fast[hr] === 1, 'kurz ohne Ladestandverlust (slow 1) und über 24 km/h (fast 1) gesondert');
   assert(h.reloc[hr] === 3 && h.start[hr] === 1 && h.end[hr] === 2, 'Umsetzung: ohne Energieverlust (c) + Sammeltransport mit Rückkehrer (e, f); Fahrt nur d; Ende d + Rückkehr g');
   const doc = T.mergeHourly(null, q.hourly, { day: q.day, at: t, dt: q.dt, srcModes: q.srcModes });
   assert(doc.groups['08416041|Lime|scooter'].slow[hr] === 1 && T.HOUR_FIELDS.includes('fast'), 'slow/fast in der Tagesdatei');
@@ -303,4 +303,216 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
 {
   const doc = T.mergeHourly(null, new Map(), { day: '2026-10-25', at: Date.parse('2026-10-25T01:30:00Z'), dt: 20 * 60e3, srcModes: {} });
   assert(doc.hourMin[2] === 120 && doc.hourMin.reduce((a, b) => a + b, 0) === 1500 && T.hourOf(Date.parse('2026-10-25T00:30:00Z')) === 2 && T.hourOf(Date.parse('2026-10-25T01:30:00Z')) === 2, 'hourMin im Tagesdokument, beide Stunden 2 am 25.10.');
+}
+// ---------- Methodenprüfung 01.11.2026 (M-2, M-4, M-6, M-8, M-9) ----------
+const sumH = (m, f) => [...m.values()].reduce((a, h) => a + h[f].reduce((x, y) => x + y, 0), 0);
+const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce((x, y) => x + y, 0), 0);
+// M-6: Quelle fehlt in sourceRecs (Manifest ausgefallen) → keine Fahrtbeginne, Kennungen still; Rückkehr ohne Fahrtende
+{
+  const u0 = Date.parse('2026-11-02T10:00:00Z'), dt = 20 * 60e3;
+  const M = [...Array(50)].map((_, i) => V('m' + i, 48.40 + i * 0.001, 9.18, { operator: 'Voi', sourceId: 'M:child', batteryPct: 60 }));
+  let q = null; for (let k = 0; k < 3; k++) q = T.trackRun(q?.state ?? null, { vehicles: M, stations: [], sourceRecs: [{ id: 'M:child', status: 'live' }], now: u0 + k * dt });
+  q = T.trackRun(q.state, { vehicles: [], stations: [], sourceRecs: [{ id: 'M', status: 'error' }], now: u0 + 3 * dt });
+  assert(sumH(q.hourly, 'start') === 0 && sumH(q.hourly, 'pickup') === 0, 'M-6: Kindquelle fehlt in sourceRecs → 0 Fahrtbeginne');
+  assert(M.every(v => (q.state.v[T.vehicleKey('Voi', v.rawId)][3] & 12) === 12), 'M-6: Kennungen tragen F_MISSING|F_SILENT');
+  q = T.trackRun(q.state, { vehicles: M, stations: [], sourceRecs: [{ id: 'M:child', status: 'live' }], now: u0 + 4 * dt });
+  assert(sumH(q.hourly, 'end') === 0, 'M-6: Rückkehr der Quelle ohne Fahrtenden');
+}
+// M-8: rotierende Quelle fällt einen Lauf aus und kommt mit neuen Kennungen zurück → keine Fahrtenden; danach normale Zählung
+{
+  const u0 = Date.parse('2026-11-03T10:00:00Z'), dt = 20 * 60e3;
+  const L = (id, i, extra = {}) => V(id, 48.30 + i * 0.001, 9.18, { operator: 'Lime', sourceId: 'L', batteryPct: 40 + (i % 50), ...extra });
+  let fleet = [...Array(50)].map((_, i) => L('a' + i, i));
+  let q = null; for (let k = 0; k < 3; k++) q = T.trackRun(q?.state ?? null, { vehicles: fleet, stations: [], sourceRecs: [{ id: 'L', status: 'live' }], now: u0 + k * dt });
+  q = T.trackRun(q.state, { vehicles: [], stations: [], sourceRecs: [{ id: 'L', status: 'error' }], now: u0 + 3 * dt });
+  fleet = fleet.map((v, i) => ({ ...v, rawId: 'b' + i }));
+  q = T.trackRun(q.state, { vehicles: fleet, stations: [], sourceRecs: [{ id: 'L', status: 'live' }], now: u0 + 4 * dt });
+  assert(sumH(q.hourly, 'end') === 0 && sumH(q.hourly, 'start') === 0, 'M-8: Rückkehr nach Ausfall mit neuen Kennungen → 0 Fahrtenden');
+  assert(cnt(q.est.e) === 0 && !q.groups.length, 'M-8: Massenwechsel auch nicht in Schätzung und Gruppen');
+  // nächster Lauf: ein Fahrzeug verschwindet, eines taucht 2 km entfernt neu auf (echte Fahrt)
+  const next = [...fleet.slice(1), L('c0', 30, { lat: 48.33, lon: 9.21 })];
+  q = T.trackRun(q.state, { vehicles: next, stations: [], sourceRecs: [{ id: 'L', status: 'live' }], now: u0 + 5 * dt });
+  assert(sumH(q.hourly, 'start') === 1 && sumH(q.hourly, 'end') === 1, 'M-8: danach normale Zählung (1 Beginn, 1 Ende)');
+  // Teilausfall bei laufender Quelle: 30 von 50 verschwinden in einem Lauf → keine Fahrtbeginne, still behalten
+  const half = next.slice(0, 20);
+  q = T.trackRun(q.state, { vehicles: half, stations: [], sourceRecs: [{ id: 'L', status: 'live' }], now: u0 + 6 * dt });
+  assert(sumH(q.hourly, 'start') === 0 && sumH(q.hourly, 'pickup') === 0, 'M-8: Massenverschwinden (30 von 50) → 0 Fahrtbeginne');
+  q = T.trackRun(q.state, { vehicles: next, stations: [], sourceRecs: [{ id: 'L', status: 'live' }], now: u0 + 7 * dt });
+  assert(sumH(q.hourly, 'end') === 0, 'M-8: Rückkehr nach Massenverschwinden ohne Fahrtenden');
+}
+// M-9: Quelle wechselt jede Kennung in jedem Lauf (Lime direkt) – kein Massenwechsel, Schätzung zählt die echten Fahrten, Gruppen werden erkannt
+{
+  const u0 = Date.parse('2026-11-04T10:00:00Z'), dt = 20 * 60e3;
+  const mk = (id, lat, lon, bat) => ({ operator: 'Lime', rawId: id, lat, lon, batteryPct: bat, disabled: false, reserved: false, type: 'scooter', ags: '08416041', sourceId: 'LR' });
+  let F = [...Array(200)].map((_, i) => mk('r0-' + i, 48.40 + (i % 20) * 0.003, 9.00 + Math.floor(i / 20) * 0.004, 60));
+  let q = null;
+  for (let k = 0; k < 8; k++) {
+    F = F.map((v, i) => ({ ...v, rawId: `r${k}-${i}`, ...(k > 0 && i < 10 ? { lat: v.lat + 0.0135, batteryPct: v.batteryPct - 3 } : {}) }));
+    q = T.trackRun(q?.state ?? null, { vehicles: F, stations: [], sourceRecs: [{ id: 'LR', status: 'live' }], now: u0 + k * dt });
+  }
+  assert(sumH(q.hourly, 'start') === 10 && sumH(q.hourly, 'end') === 10 && sumH(q.hourly, 'rot') === 190, 'M-9: Lime-Muster 10 Fahrten, 190 Kennungswechsel');
+  assert(cnt(q.est.s) === 10 && cnt(q.est.e) === 10, 'M-9: est.s = est.e = 10 (vorher 0: als Massenwechsel verworfen)');
+  const drop = [...Array(5)].map((_, i) => mk('dep' + i, 48.70 + i * 0.00005, 9.30, 100));
+  F = F.map((v, i) => ({ ...v, rawId: `r9-${i}` }));
+  q = T.trackRun(q.state, { vehicles: [...F, ...drop], stations: [], sourceRecs: [{ id: 'LR', status: 'live' }], now: u0 + 8 * dt });
+  assert(q.groups.some(g => g.kind === 'deploy' && g.op === 'Lime' && g.n === 5), 'M-9: Ausbringen bei rotierender Quelle erkannt');
+}
+// M-4: stabile Kennung, Versatz innerhalb eines Laufs – Untergrenze 3,5 km/h gilt nicht mehr
+{
+  const L = (id, lat, lon, extra = {}) => V(id, lat, lon, { operator: 'DB Connect', sourceId: 'db', type: 'ebike', ...extra });
+  const recsD = [{ id: 'db', status: 'live', latencyMs: 50 }];
+  const u0 = Date.parse('2026-11-05T10:00:00Z'), t = u0 + 40 * 60e3, hr = T.hourOf(t);
+  const fleet = ['a', 'b', 'c', 'd', 'e'].map((id, i) => L(id, 48.50, 9.00 + i * 0.03, { batteryPct: 60 }));
+  let q = T.trackRun(null, { vehicles: fleet, stations: [], sourceRecs: recsD, now: u0 });
+  q = T.trackRun(q.state, { vehicles: fleet, stations: [], sourceRecs: recsD, now: u0 + 20 * 60e3 });
+  q.state.srcStats.db = { runs: 10, present: 500, gone: 20, moved: 40, newc: 30, returned: 30 };
+  // a: 800 m, Akku 60 → 57 = Fahrt; b: 200 m, Akku gleich = slow; c: 1,5 km, Akku gleich = Fahrt; d: 300 m, Akku 60 → 58 = Fahrt; e bleibt
+  const after = [L('a', 48.5072, 9.00, { batteryPct: 57 }), L('b', 48.5018, 9.03, { batteryPct: 60 }), L('c', 48.5135, 9.06, { batteryPct: 60 }), L('d', 48.5027, 9.09, { batteryPct: 58 }), fleet[4]];
+  q = T.trackRun(q.state, { vehicles: after, stations: [], sourceRecs: recsD, now: t });
+  const h = q.hourly.get('08416041|DB Connect|ebike');
+  assert(h.start[hr] === 3 && h.end[hr] === 3 && h.slow[hr] === 1, 'M-4: 800 m/20 Min. mit Akku −3, 1,5 km und 300 m mit Akku −2 = Fahrt; 200 m ohne Verlust = slow');
+  assert(h.tripDurN === 3 && Math.abs(h.tripDistSum - (800 + 1501 + 300)) < 10, 'M-4: Dauer/Distanz der drei Fahrten erfasst');
+}
+// M-2: Ladestand mit unplausibler Skala nur als Fingerabdruck (batteryFp): keine Abholung, kein Akkutausch, Kennungswechsel weiter über den Wert
+{
+  const u0 = Date.parse('2026-11-06T10:00:00Z'), dt = 20 * 60e3;
+  const S = (id, lat, fp) => V(id, lat, 9.00, { operator: 'Lime', sourceId: 'ls', batteryPct: null, batteryFp: fp });
+  const recsS = [{ id: 'ls', status: 'live' }];
+  const base = [...Array(30)].map((_, i) => S('z' + i, 48.20 + i * 0.01, 25));
+  let q = T.trackRun(null, { vehicles: [...base, S('lo', 48.60, 10), S('sw', 48.61, 30), S('ro', 48.62, 33)], stations: [], sourceRecs: recsS, now: u0 });
+  q = T.trackRun(q.state, { vehicles: [...base, S('lo', 48.60, 10), S('sw', 48.61, 30), S('ro', 48.62, 33)], stations: [], sourceRecs: recsS, now: u0 + dt });
+  assert((q.state.v[T.vehicleKey('Lime', 'lo')][3] & 16) === 16 && q.state.v[T.vehicleKey('Lime', 'lo')][2] === 10 && !q.state.v[T.vehicleKey('Lime', 'lo')][9], 'M-2: Fingerabdruck im Zustand (F_BATREL), keine „niedrig seit“-Zeit');
+  // lo (10) verschwindet = Fahrtbeginn (keine Abholung); sw (30) verschwindet, neue Kennung 5 m daneben mit 90 = kein Akkutausch; ro (33) → neue Kennung 80 m daneben mit 33 = Kennungswechsel
+  q = T.trackRun(q.state, { vehicles: [...base, S('sw2', 48.610045, 90), S('ro2', 48.62072, 33)], stations: [], sourceRecs: recsS, now: u0 + 2 * dt });
+  assert(sumH(q.hourly, 'pickup') === 0 && sumH(q.hourly, 'swap') === 0 && sumH(q.hourly, 'start') === 2 && sumH(q.hourly, 'end') === 1 && sumH(q.hourly, 'rot') === 1,
+    'M-2: Ladestand 10 % → Fahrtbeginn statt Abholung; Sprung 30 → 90 kein Akkutausch; gleicher Fingerabdruck 80 m = Kennungswechsel');
+}
+// M-3: Altlauf (dt > 45 Min., vor der Lückenregel gezählt) in Zellendateien – Band fällt für den Tag aus
+{
+  const day = '2026-11-01', at = (hm) => Date.parse(`${day}T${hm}:00Z`); // 07:25 UTC = 08:25 Uhr (Band Morgen)
+  const cell = () => { const c = new Array(T.CELL_LEN).fill(0); c[0] = 50; c[4 + 1] = 40; c[4 + 2] = 10; c[1] = 30; c[16 + 1] = 25; c[16 + 2] = 5; c[2] = 12; c[10 + 1] = 6; c[10 + 2] = 6; c[3] = 2; return c; };
+  const legacy = () => ({ day, version: 2, bandMin: [0, 64.5, 40, 0, 0, 0], bandRuns: [0, 2, 2, 0, 0, 0], states: { BE: { '11000000': { '1:1': cell() } } } });
+  const runs = [[at('06:00'), 20 * 60e3, 1], [at('07:25'), 456 * 60e3, 0], [at('07:45'), 20 * 60e3, 1], [at('08:05'), 20 * 60e3, 1], [at('12:13'), 22 * 60e3, 0]];
+  const { doc, bands } = T.repairCells(legacy(), runs);
+  const c = doc.states.BE['11000000']['1:1'];
+  assert(bands.join() === '1' && doc.bandTainted[1] === 1 && doc.bandMin[1] === 0 && doc.bandRuns[1] === 0 && doc.bandMin[2] === 40, 'M-3: Band Morgen (Altlauf 07:25 UTC) ohne Messminuten; Lauf ohne Zählung (dt 22 Min., Flag 0) zählt nicht als Altlauf');
+  assert(c[0] === 10 && c[5] === 0 && c[6] === 10 && c[1] === 5 && c[17] === 0 && c[2] === 6 && c[11] === 0 && c[3] === 2 && doc.relocUnrepaired, 'M-3: Starts/Enden/Präsenz des Bands abgezogen, übrige Bänder bleiben; Umsetzungen ohne Bandaufteilung bleiben (relocUnrepaired)');
+  assert(T.repairCells(doc, runs).bands.length === 0 && doc.taintChecked === T.CELLS_TAINT_VERSION, 'M-3: Reparatur nur einmal (taintChecked)');
+  const st = { BE: { '11000000': { '1:1': cell() } } };
+  const ps = T.repairCells({ day, bandMin: [0, 64.5, 40, 0, 0, 0], bandRuns: [0, 2, 2, 0, 0, 0], munis: st.BE }, runs);
+  assert(ps.bands.join() === '1' && ps.doc.munis['11000000']['1:1'][0] === 10, 'M-3: Landesdatei (munis) ebenso');
+  // mergeCells: ältere Tagesdatei wird beim nächsten Lauf repariert, neue Datei gilt als geprüft
+  const merged = T.mergeCells(legacy(), new Map(), { '11000000': { state: 'BE' } }, day, { dt: 20 * 60e3, hour: 10, runs: [...runs, [at('09:00'), 20 * 60e3, 1]], at: at('09:00') });
+  assert(merged.bandTainted[1] === 1 && merged.taintChecked && merged.bandMin[2] === 60, 'M-3: mergeCells repariert ältere Tagesdatei, laufender Lauf zählt weiter');
+  const fresh = T.mergeCells(null, new Map(), {}, day, { dt: 20 * 60e3, hour: 10, runs: [[at('07:25'), 456 * 60e3, 0]], at: at('09:00') });
+  assert(fresh.taintChecked && !fresh.bandTainted, 'M-3: neue Tagesdatei: keine Reparatur nötig');
+  // Nachfrage danach ohne Morgen-Band (Disposition liest bandMin/Bänder)
+  assert(T.taintedBands(runs).join() === '1' && T.taintedBands(runs, { exclude: at('07:25') }).length === 0, 'M-3: taintedBands (laufender Lauf ausgenommen)');
+}
+// M-7: Kennung wechselt je Fahrt (nextbike, Dott) – Ausleihe und Rückgabe am selben Ort im selben Lauf sind zwei Fahrten
+{
+  const u0 = Date.parse('2026-11-07T10:00:00Z'), dt = 20 * 60e3;
+  const N = (id, lat, extra = {}) => V(id, lat, 13.40, { operator: 'nextbike', sourceId: 'nb', type: 'bike', batteryPct: null, ...extra });
+  const recsN = [{ id: 'nb', status: 'live' }];
+  const stn = [{ operator: 'nextbike', id: 's1', name: 'Station', lat: 52.52, lon: 13.40, ags: '08416041', bookable: 8, docksAvailable: 2, renting: true, installed: true, returning: true }];
+  const S8 = [...Array(8)].map((_, i) => N('n' + i, 52.52)), far = [...Array(20)].map((_, i) => N('f' + i, 52.60 + i * 0.002));
+  let q = null; for (let k = 0; k < 4; k++) q = T.trackRun(q?.state ?? null, { vehicles: [...S8, ...far], stations: stn, sourceRecs: recsN, now: u0 + k * dt });
+  q = T.trackRun(q.state, { vehicles: [...S8.slice(1), N('n-new', 52.52005), ...far], stations: stn, sourceRecs: recsN, now: u0 + 4 * dt });
+  assert(sumH(q.hourly, 'start') === 1 && sumH(q.hourly, 'end') === 1 && sumH(q.hourly, 'rot') === 0, 'M-7: Station, Wechsel je Fahrt: Ausleihe + Rückgabe 5 m daneben = 1 Beginn, 1 Ende (vorher 1 Kennungswechsel)');
+  // frei abgestellt (keine Station), gleicher Ladestand, 3 m: weiterhin Kennungswechsel; 20 m: nicht mehr
+  const E = (id, lat, bat) => N(id, lat, { type: 'ebike', batteryPct: bat });
+  const eb = [...Array(20)].map((_, i) => E('e' + i, 52.70 + i * 0.002, 50 + i));
+  q = null; for (let k = 0; k < 4; k++) q = T.trackRun(q?.state ?? null, { vehicles: eb, stations: stn, sourceRecs: recsN, now: u0 + k * dt });
+  q = T.trackRun(q.state, { vehicles: [...eb.slice(2), E('x0', 52.70 + 0.000027, 50), E('x1', 52.702 + 0.00018, 51)], stations: stn, sourceRecs: recsN, now: u0 + 4 * dt });
+  assert(sumH(q.hourly, 'rot') === 1 && sumH(q.hourly, 'start') === 1 && sumH(q.hourly, 'end') === 1, 'M-7: Wechsel je Fahrt: ≤ 5 m mit gleichem Ladestand = Kennungswechsel, 20 m = Fahrt');
+}
+// M-13: Spiegelkopien desselben Ursprungsfeeds (MOBIDROM-Manifeste) teilen Statistik und Kennungsmodus, auch wenn der Dublettensieger wechselt
+{
+  assert(T.canonSource('mobidrom_voi-nrw:source-voi-moenchengladbach') === 'source-voi-moenchengladbach' && T.canonSource('mobidrom_e-scooter-sharing-nrw:source-voi-moenchengladbach') === 'source-voi-moenchengladbach' && T.canonSource('lime_bw') === 'lime_bw', 'M-13: kanonischer Feed (Teil nach dem Manifest)');
+  const u0 = Date.parse('2026-11-08T10:00:00Z'), dt = 20 * 60e3, A = 'mobidrom_voi-nrw:source-voi-mg', B = 'mobidrom_voi-mg:source-voi-mg';
+  const recsAB = [{ id: A, status: 'live' }, { id: B, status: 'live' }];
+  const fleet = [...Array(30)].map((_, i) => V('v' + i, 51.18 + i * 0.002, 6.44, { operator: 'Voi', batteryPct: 40 + i }));
+  let q = null;
+  for (let k = 0; k < 8; k++) { // Sieger wechselt je Lauf; jeder Lauf: 3 Fahrzeuge verschwinden, 3 frühere kehren zurück (stabile Kennungen)
+    const vis = fleet.filter((_, i) => (i + k) % 10 !== 0).map(v => ({ ...v, sourceId: k % 2 ? A : B }));
+    q = T.trackRun(q?.state ?? null, { vehicles: vis, stations: [], sourceRecs: recsAB, now: u0 + k * dt });
+  }
+  assert(q.srcModes[A] === q.srcModes[B] && q.srcModes[A] === 'stable' && Object.keys(q.state.srcStats).includes('source-voi-mg') && !Object.keys(q.state.srcStats).includes(A), 'M-13: wechselnder Dublettensieger → derselbe Modus (stabil) für beide Kopien');
+  // eine Kopie fällt aus, die andere läuft: Verschwinden zählt (Quelle lief), Kennungen der ausgefallenen Kopie nicht still
+  const r2 = T.trackRun(q.state, { vehicles: fleet.slice(1).map(v => ({ ...v, sourceId: A })), stations: [], sourceRecs: [{ id: A, status: 'live' }, { id: B, status: 'error' }], now: u0 + 8 * dt });
+  assert(sumH(r2.hourly, 'start') + sumH(r2.hourly, 'pickup') >= 1, 'M-13: eine laufende Kopie genügt als Quellenstatus');
+  // Altzustand mit Schlüsseln je Quelle: Umstieg übernimmt die Statistik mit den meisten Läufen
+  const old = { ...T.emptyState(0), at: u0, srcStats: { [A]: { runs: 9, present: 100, gone: 10, moved: 20, newc: 5, returned: 20 }, [B]: { runs: 2, present: 5, gone: 50, moved: 0, newc: 50, returned: 0 } } };
+  const r3 = T.trackRun(old, { vehicles: [], stations: [], sourceRecs: recsAB, now: u0 + 20 * 60e3 });
+  assert(r3.state.srcCanon === 1 && r3.state.srcStats['source-voi-mg'].runs >= 9 && !r3.state.srcStats[A], 'M-13: Altzustand auf kanonische Schlüssel umgestellt (Statistik mit den meisten Läufen)');
+}
+// M-14: ≥ 4 Räder an einer eigenen Dockstation in einem Lauf zurückgegeben/ausgeliehen = Nutzerverkehr, keine Gruppe; virtuelle Station (Abstellzone) schon
+{
+  const u0 = Date.parse('2026-11-09T10:00:00Z'), dt = 20 * 60e3;
+  const N = (id, lat, lon, extra = {}) => V(id, lat, lon, { operator: 'nextbike', sourceId: 'nbs', type: 'bike', batteryPct: null, ...extra });
+  const recsN = [{ id: 'nbs', status: 'live' }];
+  const dock = { operator: 'nextbike', id: 'd1', name: 'Dock', lat: 52.50, lon: 13.30, ags: '08416041', bookable: 5, docksAvailable: 3, renting: true, installed: true, returning: true, isVirtual: false };
+  const zone = { ...dock, id: 'z1', name: 'Zone', lat: 52.55, lon: 13.35, isVirtual: true };
+  const base = [...Array(60)].map((_, i) => N('b' + i, 52.40 + i * 0.001, 13.20));
+  let q = T.trackRun(null, { vehicles: base, stations: [dock, zone], sourceRecs: recsN, now: u0 });
+  q = T.trackRun(q.state, { vehicles: base, stations: [dock, zone], sourceRecs: recsN, now: u0 + dt });
+  const atDock = [...Array(5)].map((_, i) => N('r' + i, 52.50 + i * 0.00002, 13.30)), atZone = [...Array(5)].map((_, i) => N('z' + i, 52.55 + i * 0.00002, 13.35));
+  q = T.trackRun(q.state, { vehicles: [...base, ...atDock, ...atZone], stations: [dock, zone], sourceRecs: recsN, now: u0 + 2 * dt });
+  assert(q.groups.length === 1 && q.groups[0].kind === 'deploy' && Math.abs(q.groups[0].lat - 52.55) < 0.001, 'M-14: 5 Räder an der Dockstation = keine Gruppe; 5 an einer Abstellzone = Ausbringung');
+  q = T.trackRun(q.state, { vehicles: base, stations: [dock, zone], sourceRecs: recsN, now: u0 + 3 * dt });
+  assert(q.groups.filter(g => g.kind === 'collect').length === 1 && Math.abs(q.groups[0].lat - 52.55) < 0.001, 'M-14: gemeinsames Verschwinden an der Dockstation = keine Einsammlung');
+}
+// M-19: Regelstand je Lauf; Tag mit mehreren Regelständen gekennzeichnet
+{
+  let d = T.mergeHourly(null, new Map(), { day: '2026-11-10', at: 1, dt: 20 * 60e3, srcModes: {} });
+  d = T.mergeHourly(d, new Map(), { day: '2026-11-10', at: 2, dt: 20 * 60e3, srcModes: {}, rule: `${T.METHOD_VERSION}@abc1234` });
+  assert(d.runs[0].length === 3 && d.runs[1][3] === `${T.METHOD_VERSION}@abc1234` && d.mixedRules?.length === 2, 'M-19: runs[k][3] = Regelstand, Tag mit altem und neuem Stand als mixedRules');
+  const e = T.mergeHourly(null, new Map(), { day: '2026-11-11', at: 1, dt: null, srcModes: {}, rule: 'x@1' });
+  assert(!e.mixedRules, 'M-19: ein Regelstand → keine Kennzeichnung');
+}
+// M-22: Regression auf dem echten Datenstand (.realdata, falls vorhanden): nach der Reparatur kein Morgen-Band über 2 × Tagesmittel
+{
+  const { existsSync, readFileSync, readdirSync } = await import('node:fs');
+  const D = new URL('../.realdata/', import.meta.url).pathname;
+  if (existsSync(`${D}cells`) && existsSync(`${D}events`)) {
+    const days = readdirSync(`${D}cells`).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f) && existsSync(`${D}events/${f}.json`));
+    let worst = 0, where = '';
+    for (const day of days) {
+      const runs = JSON.parse(readFileSync(`${D}events/${day}.json`, 'utf8')).runs;
+      for (const f of readdirSync(`${D}cells/${day}`)) {
+        const doc = JSON.parse(readFileSync(`${D}cells/${day}/${f}`, 'utf8')); T.repairCells(doc, runs);
+        const hDay = doc.bandMin.reduce((a, b) => a + b, 0) / 60; if (!(hDay > 0)) continue;
+        let sDay = 0; const sB = new Array(6).fill(0); for (const m of Object.values(doc.munis)) for (const c of Object.values(m)) { sDay += c[0]; for (let b = 0; b < 6; b++) sB[b] += c[4 + b] || 0; }
+        if (sDay < 500) continue;
+        for (let b = 0; b < 6; b++) { if (!(doc.bandMin[b] >= 30)) continue; const r = (sB[b] / (doc.bandMin[b] / 60)) / (sDay / hDay); if (r > worst) { worst = r; where = `${day} ${f} ${T.BANDS[b].label}`; } }
+      }
+    }
+    assert(worst <= 2, `M-22 echte Daten: nach der Reparatur kein Band über 2 × Tagesmittel (höchstens ${worst.toFixed(2)}${where ? `, ${where}` : ''})`);
+  } else console.log('ok: M-22 echte Zellen übersprungen (.realdata fehlt)');
+}
+// M-18 (Teil): nach einer Lücke von 5 h gilt ± 7 Punkte als gleicher Ladestand – rotierende Kennung behält die Standzeit
+{
+  const u0 = Date.parse('2026-11-10T06:00:00Z');
+  const L = (id, bat) => V(id, 48.30, 9.30, { operator: 'Voi', sourceId: 'vg', batteryPct: bat });
+  let q = T.trackRun(null, { vehicles: [L('a1', 60)], stations: [], sourceRecs: [{ id: 'vg', status: 'live' }], now: u0 });
+  q = T.trackRun(q.state, { vehicles: [L('a1', 60)], stations: [], sourceRecs: [{ id: 'vg', status: 'live' }], now: u0 + 20 * 60e3 });
+  q = T.trackRun(q.state, { vehicles: [L('a2', 54)], stations: [], sourceRecs: [{ id: 'vg', status: 'live' }], now: u0 + 20 * 60e3 + 5 * 3600e3 });
+  assert(q.gap && q.state.v[T.vehicleKey('Voi', 'a2')][7] === u0 && !q.state.v[T.vehicleKey('Voi', 'a1')], 'M-18: Lücke 5 h, Ladestand 60 → 54 am Ort = Kennungswechsel, erste Sichtung bleibt');
+}
+// M-11: Zelle × Band unter 3 Ereignissen unterdrückt, Summen je Gemeinde in below, Präsenz und Umsetzungen bleiben
+{
+  const C3 = (b, st, en, pres = 0, reloc = 0) => { const c = new Array(T.CELL_LEN).fill(0); c[4 + b] = st; c[16 + b] = en; c[0] = st; c[1] = en; c[10 + b] = pres; c[2] = pres; c[3] = reloc; return c; };
+  const two = C3(1, 1, 1, 4, 1); two[4 + 2] = 5; two[0] += 5; // Band 1: 2 Ereignisse (unterdrückt), Band 2: 5 (bleibt)
+  const m = { A: { '1:1': two, '2:2': C3(3, 1, 0), '3:3': C3(4, 2, 2) }, B: { '9:9': C3(0, 0, 1) } };
+  const r = T.suppressCells(m);
+  assert(r.munis.A['1:1'][5] === 0 && r.munis.A['1:1'][17] === 0 && r.munis.A['1:1'][6] === 5 && r.munis.A['1:1'][0] === 5 && r.munis.A['1:1'][1] === 0 && r.munis.A['1:1'][2] === 4 && r.munis.A['1:1'][3] === 1, 'M-11: Band unter 3 Ereignissen auf 0, Summenfelder neu, Präsenz/Umsetzung bleiben');
+  assert(!r.munis.A['2:2'] && r.munis.A['3:3'][8] === 2 && !r.munis.B && r.below.A[1] === 1 && r.below.A[7] === 1 && r.below.A[3] === 1 && r.below.B[6] === 1 && m.A['1:1'][5] === 1, 'M-11: leere Zellen entfallen, Summen in below je Gemeinde (Start/Ende je Band), Eingabe unverändert');
+  const old = T.suppressCells({ A: { 'x': [1, 1, 0, 0], 'y': [3, 1, 2, 0] } });
+  assert(!old.munis.A.x && old.munis.A.y[0] === 3 && old.below.A[12] === 1 && old.below.A[13] === 1, 'M-11: ältere Zellen ohne Bandfelder: ganze Zelle unter 3 → below');
+}
+{
+  const c = new Array(T.CELL_LEN).fill(0); c[0] = 6; c[4 + 2] = 4; c[1] = 1; // 2 Beginne ohne Bandangabe + 1 Ende ohne Band (zusammen 3: bleibt)
+  const d = new Array(T.CELL_LEN).fill(0); d[0] = 5; d[4 + 2] = 4; // 1 Beginn ohne Band: unterdrückt
+  const r = T.suppressCells({ A: { c, d } });
+  assert(r.munis.A.c[0] === 6 && r.munis.A.c[1] === 1 && r.munis.A.d[0] === 4 && r.below.A[12] === 1, 'M-11: Anteil ohne Bandangabe bleibt ab 3 Ereignissen, sonst below (Summen stimmen)');
 }

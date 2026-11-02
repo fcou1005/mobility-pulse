@@ -484,8 +484,9 @@
       "stand": "2025-05-19",
       "quelle": "electrive, 19.05.2025",
       "url": "https://www.electrive.net/2025/05/19/dresden-sucht-neue-anbieter-fuer-bike-und-roller-sharing/",
-      "hinweis": "Drei Betreiber mit zusammen bis zu 3.000 Rädern; MOBIbike (nextbike/DVB, 1.500 Räder, Ausbau bis 5.000 möglich) hat Bestandsschutz und zählt nicht dazu. MOBIbike (nextbike/DVB) ist ausgenommen und wird nicht gezählt.",
-      "status": "amtlich",
+      "hinweis": "Drei Betreiber mit zusammen bis zu 3.000 Rädern; MOBIbike (nextbike/DVB, 1.500 Räder, Ausbau bis 5.000 möglich) hat Bestandsschutz und zählt nicht dazu. MOBIbike (nextbike/DVB) ist ausgenommen und wird nicht gezählt. Die Zahl stammt nur aus dem Pressebericht; die amtliche Interessenbekundung Rad ist nicht belegt (Stand 01.11.2026). Gilt für Räder und E-Räder (Fahrzeugart bike deckt ebike ab).",
+      "status": "presse",
+      "statusText": "nur Pressebericht (electrive), amtliche Interessenbekundung Rad nicht belegt",
       "ausgenommeneAnbieter": [
         "nextbike"
       ]

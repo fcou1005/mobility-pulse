@@ -94,7 +94,7 @@ assert(R('dott', '05334002')?.cat === 'gesperrt' && R('dott', '05334002').gap.vi
 assert(R('ryde', '05113000')?.cat === 'gesperrt' && cov.notes[R('ryde', '05113000').gap.note] === 'MDD gesperrt', 'Ryde Essen: Datenlücke ohne Abrufadresse → Feed nicht offen, Hinweis einmal abgelegt');
 assert(R('bolt', '05315000')?.cat === 'abgedeckt' && R('bolt', '05315000').claimWeak && cov.operators.find((o) => o.opKey === 'bolt').claimWeak, 'Bolt: Liste gilt für alle Dienste → schwache Selbstauskunft gekennzeichnet');
 assert(R('lime', '05113000')?.cat === 'abgedeckt' && R('lime', '05113000').claimRegion === 'Ruhrpott', 'Lime Essen über „Ruhrpott“ gelistet');
-assert(R('lime', '02000000')?.cat === 'feed-still' && R('lime', '02000000').guessed, 'Lime Hamburg: Quelle weg, Gemeinde aus der URL geraten → Feed ohne Aktivität');
+assert(R('lime', '02000000')?.cat === 'nicht-erreichbar' && R('lime', '02000000').guessed, 'Lime Hamburg: Quelle weg (404), Gemeinde aus der URL geraten → nicht erreichbar (M-17, vorher „Feed ohne Aktivität“)');
 assert(!R('lime', '11000000'), 'geratene Adresse (candidate) ohne Daten legt keine Zeile an');
 assert(R('nextbike', '11000000')?.cat === 'aktiv' && R('nextbike', '11000000').claimed === null, 'nextbike ohne Städteliste: Feed aktiv, Selbstauskunft unbekannt');
 assert(cov.totals.abgedeckt === 5 && cov.rows.every((r) => !('id' in r) && !('feedStatus' in r)), 'Summen je Kategorie; Zeilen ohne ableitbare Felder');
@@ -109,4 +109,31 @@ assert(V.rowId({ opKey: 'voi', ags: null, city: 'Flensburg' }) === 'voi|?flensbu
 {
   const fb = V.coverage({ claims, latest, features: [], now: Date.parse('2026-11-01T18:00:00Z') });
   assert(fb.rows.find((r) => r.opKey === 'voi' && r.ags === '05315000')?.cat === 'abgedeckt', 'ohne Gemeindegrenzen: Namen aus latest.municipalities');
+}
+// M-17: Kategorie nach dem Status der Quelle – Lücke vor allem anderen, veraltet und nicht erreichbar getrennt von „Feed ohne Aktivität“
+{
+  const cl = { erstellt: '2026-11-01', anbieter: [{ name: 'Dott', quelle: 'q', staedte: [{ ort: 'Köln' }, { ort: 'Hamburg' }, { ort: 'Essen' }, { ort: 'Bonn' }] }] };
+  const lt = { municipalities: {}, gaps: [{ operator: 'Dott', city: 'Köln', since: '2026-09-25', probe_url: 'http://x/gone' }], sources: [
+    { id: 'dott-koeln-cb', operator: 'Dott', name: 'Dott Köln (CityBikes)', status: 'stale', url: 'c1', municipalities: ['05315000'] },
+    { id: 'dott-hamburg', operator: 'Dott', name: 'Dott Hamburg', status: 'stale', url: 'c2', municipalities: ['02000000'] },
+    { id: 'dott-essen', operator: 'Dott', name: 'Dott Essen', status: 'error', url: 'c3', municipalities: ['05113000'] },
+    { id: 'dott-bonn', operator: 'Dott', name: 'Dott Bonn', status: 'live', url: 'c4', municipalities: ['05314000'] }] };
+  const fts = [['05315000', 'Köln', 'NW'], ['02000000', 'Hamburg', 'HH'], ['05113000', 'Essen', 'NW'], ['05314000', 'Bonn', 'NW']].map(([ags, name, state]) => ({ properties: { ags, name, state, pop: 1 } }));
+  const c = V.coverage({ claims: cl, latest: lt, features: fts, now: Date.parse('2026-11-01T18:00:00Z') });
+  const cat = (a) => c.rows.find((r) => r.ags === a)?.cat;
+  assert(cat('05315000') === 'gesperrt' && cat('02000000') === 'veraltet' && cat('05113000') === 'nicht-erreichbar' && cat('05314000') === 'feed-still' && V.CATS.includes('veraltet') && V.CATS.includes('nicht-erreichbar'),
+    'M-17: Lücke + veraltete Kopie → gesperrt; nur veraltet → veraltet; nur Fehler → nicht erreichbar; laufend ohne Fahrzeuge → Feed ohne Aktivität');
+}
+
+// web/coverage.js csvOf: Formel-Schutz wie alle übrigen Exporte (Anbieter- und Quellennamen stammen aus Feeds). Das Browser-Modul importiert
+// ./pulse-ops.js (in docs/ neben ihm); für Node auf lib/ umgelenkt.
+{
+  const { readFileSync } = await import('node:fs');
+  const root = new URL('..', import.meta.url);
+  const src = readFileSync(new URL('web/coverage.js', root), 'utf8').replace("'./i18n.js'", `'${new URL('web/i18n.js', root).href}'`).replace("'./pulse-ops.js'", `'${new URL('lib/pulse-ops.js', root).href}'`);
+  const W = await import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`);
+  const row = { city: '=HYPERLINK("http://x")', ags: '08111000', state: 'BW', op: '@Evil', claimed: true, cat: 'abgedeckt', vehicles: 3, src: ['s1'] };
+  const csv = W.csvOf({ sources: { s1: { name: '+cmd|calc', status: 'live' } } }, [row]);
+  const line = csv.split('\r\n')[1];
+  assert(line.startsWith(`"'=HYPERLINK(""http://x"")"`) && line.includes(";'@Evil;") && line.includes("'+cmd|calc"), 'Abdeckungs-CSV: Zellen mit = + - @ beginnen mit \' (Formel-Schutz), Anführungszeichen gequotet');
 }

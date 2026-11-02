@@ -4,10 +4,14 @@ import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
-const S = { map: null, layers: {}, canvas: {}, spotMarkers: [], ops: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, official: true, fleet: true, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, retry: false, pending: null, again: false, rescore: null, stale: false, routing: null, op: null, focus: null,
+const S = { map: null, layers: {}, canvas: {}, spotMarkers: [], ops: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, official: true, fleet: true, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, retry: false, pending: null, again: false, rescore: null, stale: false, routing: null, op: null, focus: null, prioLevel: urlPrio(),
   // Gruppen-Monatsdateien (groups/<JJJJ-MM>.json) und Ströme (flows/<Tag>.json): fertige Monate/Tage bleiben gecacht; index und laufender Monat werden bei neuem Stand neu geladen
   gidx: undefined, gdocs: {}, flowsIdx: undefined, flowDocs: {}, gf: null };
-const RUN_COLOR = { rebalance: '#60a5fa', swap: '#34d399', workshop: '#ef6b6b', station: '#f59e0b' };
+// Farben je Thema: hell die dunkleren Stufen (≥ 3:1 auf Weiß und entsättigtem Kartengrund), dunkel die hellen; Ebenen aus den Themen-Tokens
+const dk = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888888';
+const RUN_COLOR = { get rebalance() { return dk() ? '#60a5fa' : '#2563eb'; }, get swap() { return dk() ? '#34d399' : '#047857'; }, get workshop() { return dk() ? '#ef6b6b' : '#c93c3c'; }, get station() { return dk() ? '#f59e0b' : '#b45309'; } };
+const IDLE_COL = () => (dk() ? '#c084fc' : '#7c3aed');
 const RUN_KINDS = Object.keys(RUN_COLOR);
 // Rechenschritte entkoppeln, damit Status gezeichnet wird und die Seite zwischen den Schritten reagiert
 const tick = () => globalThis.scheduler?.yield ? scheduler.yield() : new Promise(r => setTimeout(r, 0));
@@ -15,6 +19,18 @@ const RUN_LABEL = { get rebalance() { return t('ops.rebalance'); }, get swap() {
 const STOP_LABEL = { get pickup() { return t('ops.pickUp'); }, get drop() { return t('ops.dropOff'); }, get swap() { return t('ops.swapBattery'); }, get pickup_disabled() { return t('ops.pickUpDefective'); } };
 const BAND_NOW = () => O.bandOf(+new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Berlin' }).format(new Date()) % 24);
 const num = (id, d) => { const v = +$(id)?.value; return Number.isFinite(v) && v > 0 ? v : d; };
+// Regler „Priorität ↔ Strecke“: Stufe 0–4 (O.PRIO_LEVELS → λ), in der URL als ?prio= (Standardstufe ohne Parameter; app.js syncUrl lässt ihn stehen)
+function urlPrio() { try { const v = new URLSearchParams(location.search).get('prio'), n = v == null || v === '' ? NaN : +v; return Number.isInteger(n) && n >= 0 && n < O.PRIO_LEVELS.length ? n : O.PRIO_LEVEL_DEFAULT; } catch { return O.PRIO_LEVEL_DEFAULT; } }
+function syncPrioUrl() {
+  try { const q = new URLSearchParams(location.search); if (S.prioLevel === O.PRIO_LEVEL_DEFAULT) q.delete('prio'); else q.set('prio', String(S.prioLevel));
+    const s = q.toString().replace(/%2F/g, '/'); history.replaceState(history.state, '', `${location.pathname}${s ? `?${s}` : ''}${location.hash}`); } catch { /* file:// o. Ä. */ }
+}
+const prioLambda = () => O.PRIO_LEVELS[S.prioLevel] ?? O.DEFAULTS.prioLambda;
+const prioName = (lv = S.prioLevel) => t(`ops.prioLevel${lv}`);
+function prioOut(lv = S.prioLevel) {
+  const el = $('#ops-prio'), out = $('#ops-prio-val'); if (!el || !out) return; const l = O.PRIO_LEVELS[lv];
+  out.textContent = `${prioName(lv)} (λ ${X.fmt(l, l % 1 ? 1 : 0)})`; el.setAttribute('aria-valuetext', out.textContent);
+}
 
 // Deep-Links: aktuelle Flotte lesen, Parameter aus der URL setzen (Flotte wird beim Rechnen geprüft)
 export const opsFleet = () => S.op;
@@ -44,9 +60,10 @@ export function initOps(ctx) {
   $('#ops-op').addEventListener('change', (e) => { S.op = e.target.value; computePlan(); });
   ['#ops-type', '#ops-band', '#ops-days'].forEach(id => $(id).addEventListener('change', () => computePlan()));
   $('#ops-depot').addEventListener('click', () => { S.pickDepot = !S.pickDepot; $('#ops-depot').classList.toggle('primary', S.pickDepot); status(S.pickDepot ? t('ops.clickOnMapToSetDepot') : ''); });
-  $('#ops-layers').addEventListener('click', (e) => {
-    const j = e.target.closest('[data-jump]'); if (j) { const el = $(`#${j.dataset.jump}`)?.closest('.panel') || $(`#${j.dataset.jump}`); if (!el) return; el.tabIndex = -1; el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'start' }); return; }
-    const b = e.target.closest('[data-l]'); if (!b || !S.plan) return; const k = b.dataset.l; S.show[k] = !S.show[k]; legend();
+  // „Zu den Touren“: Textlink im Kopf der Plan-Karte (springt zur Tourliste, ohne die Ansicht zu wechseln)
+  document.addEventListener('click', (e) => { const j = e.target.closest('[data-ops-jump]'); if (!j) return; e.preventDefault(); const el = $(`#${j.dataset.opsJump}`)?.closest('.panel') || $(`#${j.dataset.opsJump}`); if (!el) return; el.tabIndex = -1; el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'start' }); });
+  $('#ops-layers').addEventListener('change', (e) => {
+    const b = e.target.closest('input[data-l]'); if (!b || !S.plan) return; const k = b.dataset.l; S.show[k] = b.checked; legend();
     if (RUN_COLOR[k]) drawRoutes(); else drawLayers([k]); // nur die umgeschaltete Ebene neu, alle anderen Marker bleiben stehen
   });
   // Klick auf Tourkarte oder „Auf Karte“: nur diese Tour zeichnen und einpassen; Links bleiben Links
@@ -62,6 +79,16 @@ export function initOps(ctx) {
   document.addEventListener('click', (e) => { if (e.target.closest('#ops-retry')) { S.retry = true; computePlan(); } });
   // Einsatzzeit je Tour: Feld in den Parametern ergänzen, solange index.html es nicht selbst führt
   if (!$('#ops-maxh')) { const l = document.createElement('label'); l.innerHTML = `${t('ops.timePerRunH')}<input type="number" id="ops-maxh" value="4" min="1" max="12" step="0.5">`; ($('#ops-maxruns')?.closest('label') || $('#ops-swapthr')?.closest('label'))?.after(l); }
+  // Regler „Priorität ↔ Strecke“ in der Hauptzeile vor „Plan berechnen“ (Texte über data-i18n, damit der Sprachwechsel sie mitnimmt)
+  if (!$('#ops-prio')) {
+    const main = $('#ops-run')?.closest('.ops-form'), act = main?.querySelector('.ops-actions'), l = document.createElement('label');
+    l.className = 'ops-prio'; l.dataset.i18nTitle = 'ops.prioSliderTitle'; l.title = t('ops.prioSliderTitle');
+    l.innerHTML = `<span data-i18n="ops.prioVsDistance">${t('ops.prioVsDistance')}</span><input type="range" id="ops-prio" min="0" max="${O.PRIO_LEVELS.length - 1}" step="1" value="${S.prioLevel}"><span class="ops-prio-scale"><span data-i18n="ops.prioOnlyKm">${t('ops.prioOnlyKm')}</span><output id="ops-prio-val" for="ops-prio"></output><span data-i18n="ops.prioMax">${t('ops.prioMax')}</span></span>`;
+    if (act) main.insertBefore(l, act); else main?.appendChild(l);
+  }
+  const prio = $('#ops-prio'); prio.value = S.prioLevel; prioOut();
+  prio.addEventListener('input', () => prioOut(+prio.value));
+  prio.addEventListener('change', () => { S.prioLevel = +prio.value; syncPrioUrl(); prioOut(); replanRuns(); });
   injectStyle(); $('#ops-spots thead').innerHTML = spotHead(); initGroupsUi();
   renderMethod();
 }
@@ -80,6 +107,9 @@ th .th-sort{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;g
 th .th-sort:hover,th[aria-sort] .th-sort{color:var(--fg)}th .th-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 th .th-sort i{font-style:normal;font-family:var(--mono);min-width:1ch}
 .ops-gkind{display:inline-flex;gap:2px}.ops-gkind button{min-height:28px}
+.ops-form label.ops-prio{min-width:0}.ops-prio input[type=range]{width:100%;margin:0;min-height:var(--ctl);accent-color:var(--accent);cursor:pointer}
+.ops-prio .ops-prio-scale{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);text-transform:none;letter-spacing:0;font-size:11px;font-weight:400;color:var(--muted)}
+.ops-prio output{color:var(--fg);font-weight:600;text-align:center}.ops-seq{margin:2px 0 0}.ops-run ol li{margin:2px 0}
 @media (pointer:coarse){.ops-gfilter input[type=date],th .th-sort,.ops-gkind button{min-height:44px}}`;
   document.head.appendChild(st);
 }
@@ -106,14 +136,14 @@ export async function renderOps() {
   ensureMap();
   const st = X.state;
   if (st.scope === 'DE') { showPicker(); return; }
-  $('#ops-pick').hidden = true;
+  $('#ops-pick').hidden = true; planUi(true);
   if (S.busy && S.pending === st.scope) return; // läuft schon für dieses Gebiet (Gebietswechsel ruft mehrfach)
   if (!S.plan || S.plan.ags !== st.scope || S.stale) await computePlan();
 }
 /** Sprachwechsel: nichts neu rechnen; Formular, Kacheln, Touren, Spots, Gruppen, Karte (Legende, Marker, Popups), Methode und Status neu
  *  beschriften. Die Kartennamensnennung (Leaflet) wird ausgetauscht. */
 export function relabelOps() {
-  fillBands(); $('#ops-spots thead').innerHTML = spotHead();
+  fillBands(); $('#ops-spots thead').innerHTML = spotHead(); prioOut();
   if (S.map && S.tiles) { const prev = S.tiles.options.attribution, next = t('ops.openstreetmapContributors'); if (prev !== next) { S.tiles.options.attribution = next; S.map.attributionControl?.removeAttribution(prev).addAttribution(next); } }
   renderMethod();
   if (!S.map) return;
@@ -133,13 +163,16 @@ export function resetCaches() {
   S.gidx = undefined; S.flowsIdx = undefined;
   if (S.plan) S.stale = true;
 }
+// Ohne Gemeinde („Deutschlandweit“) nur die Gemeindeauswahl zeigen, nicht das leere Gerüst aus Formular, Karte und Tabellen (wie der Vergleich)
+const planUi = (on) => { for (const el of document.querySelectorAll('#view-ops > :not(.hero):not(#ops-pick)')) el.hidden = !on; if (on) S.map?.invalidateSize(); };
 function showPicker() {
+  planUi(false);
   const munis = Object.values(X.state.latest?.municipalities || {}).map(m => ({ ...m, avail: Object.values(m.operators || {}).reduce((s, o) => s + (o.available ?? o.total ?? 0), 0) })).sort((a, b) => b.avail - a.avail).slice(0, 18);
   const el = $('#ops-pick'); el.hidden = false;
   el.innerHTML = `<h2>${t('ops.chooseMunicipality')}</h2><div class="sub">${t('ops.operationsPlansPer')}</div><div class="chips">${munis.map(m => `<a href="#ops" class="chip ops-pick" data-ags="${X.esc(m.ags)}">${X.esc(m.name)} <span class="muted">${X.fmt(m.avail)}</span></a>`).join('')}</div>`;
   for (const k in S.layers) S.layers[k].clearLayers();
   $('#ops-tiles').innerHTML = ''; $('#ops-runs').innerHTML = ''; $('#ops-warn').innerHTML = ''; $('#ops-spots-sub').textContent = ''; $('#ops-spots tbody').innerHTML = `<tr><td colspan="${SPOT_COLS}" class="empty">${t('ops.noPlanYetChooseMunicipality')}</td></tr>`; status('');
-  $('#ops-groups-sub').textContent = ''; $('#ops-groups tbody').innerHTML = `<tr><td colspan="${GCOLS.length}" class="empty">${t('ops.noPlanYetChooseMunicipality')}</td></tr>`; $('#ops-runs-all').hidden = true; $('#ops-gf-count').textContent = '';
+  $('#ops-groups-sub').textContent = ''; $('#ops-groups tbody').innerHTML = ''; groupsEmpty($('#ops-groups'), t('ops.noPlanYetChooseMunicipality')); $('#ops-runs-all').hidden = true; $('#ops-gf-count').textContent = '';
 }
 
 // ---------- Daten ----------
@@ -249,7 +282,7 @@ async function officialData(ags) {
   return out;
 }
 const refLabel = (ref) => ref.name || (ref.kind === 'noPark' ? t('ops.officialNoParkingZones') : t('ops.officialParkingAreas'));
-const refCite = (ref) => `${ref.source ? `<a href="${X.esc(ref.source)}" target="_blank" rel="noopener">${X.esc(refLabel(ref))}</a>` : X.esc(refLabel(ref))}${ref.license ? ` (${X.esc(ref.license)}${ref.attribution ? `, ${X.esc(ref.attribution)}` : ''})` : ''}`;
+const refCite = (ref) => `${/^https?:\/\//i.test(String(ref.source || '')) ? `<a href="${X.esc(ref.source)}" target="_blank" rel="noopener">${X.esc(refLabel(ref))}</a>` : X.esc(refLabel(ref))}${ref.license ? ` (${X.esc(ref.license)}${ref.attribution ? `, ${X.esc(ref.attribution)}` : ''})` : ''}`;
 // Sichtbare Warnungen zu fehlenden Kontextdaten (statt stillem Weiterrechnen)
 function renderWarn(ags, osm, np, official, groupRes = S.plan?.groupSrc) {
   const w = [];
@@ -324,16 +357,16 @@ async function computePlan() {
     if (useOsm && !osm && pre.spots.length) overpassBackground(ags, pre.spots, () => rescoreSpots(ags));
     renderWarn(ags, osm, np, official, groupRes);
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
-    const params = { topN, spacing, share, horizonH, van: num('#ops-van', 20), common: { depot, maxRuns: num('#ops-maxruns', 6), horizonH, maxRunMin: Math.round(num('#ops-maxh', 4) * 60) }, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
+    const params = { topN, spacing, share, horizonH, van: num('#ops-van', 20), common: { depot, maxRuns: num('#ops-maxruns', 6), horizonH, maxRunMin: Math.round(num('#ops-maxh', 4) * 60), prioLambda: prioLambda() }, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
     const plan = { ags, op, type, band, bandNote, model, share, depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, days: cellDocs.length };
     if (!S.gf || S.gf.forOp !== op || S.gf.forAgs !== ags) S.gf = { ...GF0(), kind: S.gf?.kind || 'deploy', sort: S.gf?.sort || 'count', dir: S.gf?.dir || 'desc', op, forOp: op, forAgs: ags };
     // Rechenschritte nacheinander mit Status, dazwischen die Seite freigeben
     const steps = [
       [t('ops.scoringSpots'), () => { plan.spots = scoreFor(plan, osm); }],
       [t('ops.runsRebalancing'), () => { plan.rebalance = rebalanceFor(plan); }],
-      [t('ops.runsBatterySwap'), () => { plan.swaps = O.planSwaps({ vehicles: vehicles.filter(v => !v.reserved), model, swapCapacity: params.swapCapacity, swapThreshold: params.swapThreshold, swapRangeKm: params.swapRangeKm, ...params.common }); }],
-      [t('ops.runsWorkshop'), () => { plan.workshop = O.planWorkshop({ vehicles, workshopCapacity: params.van, ...params.common }); }],
-      [t('ops.runsStations'), () => { const sb = stations.length ? O.planStationBalance({ stations, vanCapacity: params.van, ...params.common }) : null; plan.station = sb?.stations ? sb : null; }],
+      [t('ops.runsBatterySwap'), () => { plan.swaps = swapsFor(plan); }],
+      [t('ops.runsWorkshop'), () => { plan.workshop = workshopFor(plan); }],
+      [t('ops.runsStations'), () => { plan.station = stationFor(plan); }],
     ];
     for (const [label, fn] of steps) { status(`${label} …`); await tick(); if (stop()) return; fn(); }
     plan.kpi = O.fleetKpis(vehicles, { swapThreshold: params.swapThreshold, swapRangeKm: params.swapRangeKm });
@@ -357,6 +390,25 @@ function scoreFor(p, osm) {
   return spots;
 }
 const rebalanceFor = (p) => O.planRebalance({ spots: p.spots.spots, vehicles: p.fleet.vehicles.filter(O.isAvailable), model: p.model, share: p.share, vanCapacity: p.params.van, ...p.params.common });
+const swapsFor = (p) => O.planSwaps({ vehicles: p.fleet.vehicles.filter(v => !v.reserved), model: p.model, swapCapacity: p.params.swapCapacity, swapThreshold: p.params.swapThreshold, swapRangeKm: p.params.swapRangeKm, ...p.params.common });
+const workshopFor = (p) => O.planWorkshop({ vehicles: p.fleet.vehicles, workshopCapacity: p.params.van, ...p.params.common });
+const stationFor = (p) => { const sb = p.fleet.stations.length ? O.planStationBalance({ stations: p.fleet.stations, vanCapacity: p.params.van, ...p.params.common }) : null; return sb?.stations ? sb : null; };
+/** Regler „Priorität ↔ Strecke“ geändert: nur die Touren neu (Bündelung, Einsatzgrenze, Reihenfolge); Nachfrage, Spots und Kartenebenen
+ *  bleiben, eine fokussierte Tour bleibt fokussiert, die Straßenmatrix kommt aus dem Cache. Läuft gerade ein Plan, rechnet er danach neu. */
+async function replanRuns() {
+  const p = S.plan; if (!p) return;
+  if (S.busy) { S.again = true; return; } S.busy = true;
+  try {
+    status(`${t('ops.reorderingRuns', { level: prioName() })} …`); await tick(); if (S.plan !== p || S.again) return;
+    const next = { ...p, params: { ...p.params, common: { ...p.params.common, prioLambda: prioLambda() } }, hhmm: hhmm() };
+    next.rebalance = rebalanceFor(next); next.swaps = swapsFor(next); next.workshop = workshopFor(next); next.station = stationFor(next);
+    const keep = S.focus;
+    S.plan = next; S.routed = {}; S.focus = keep && allRuns().some(r => r.id === keep) ? keep : null;
+    renderTiles(); renderRuns(); drawRoutes(); status(planStatus(next));
+    if ($('#ops-route').checked) routeRuns();
+  } catch (e) { console.error(e); status(`<span class="warn-text">${t('ops.planCouldNotBeCalculated', { message: X.esc(e.message) })}</span>`); }
+  finally { S.busy = false; if (S.again) { S.again = false; setTimeout(computePlan, 0); } }
+}
 function planStatus(p) {
   const osm = p.osm, loading = $('#ops-osm').checked && !osm && S.osm[p.ags]?.state === 'loading';
   const osmNote = !$('#ops-osm').checked ? '' : osm ? ` · ${t('ops.surroundingsOsm', { v0: osm.from === 'Sammler' ? t('ops.osmFromCollector', { v0: new Date(osm.at).toLocaleDateString(fmtLocale()) }) : X.esc(osm.from) })}` : loading ? ` · ${t('ops.publicTransportAndParking')}` : '';
@@ -398,7 +450,7 @@ function emptyPlan(why) {
   $('#ops-tiles').innerHTML = ''; $('#ops-layers').innerHTML = ''; $('#ops-legend').innerHTML = ''; $('#ops-warn').innerHTML = '';
   $('#ops-runs').innerHTML = `<div class="empty">${t('ops.noRuns', { why })}</div>`; $('#ops-runs-all').hidden = true;
   $('#ops-spots-sub').textContent = ''; $('#ops-spots tbody').innerHTML = row(SPOT_COLS);
-  $('#ops-groups-sub').textContent = ''; $('#ops-groups tbody').innerHTML = row(GCOLS.length); $('#ops-gf-count').textContent = '';
+  $('#ops-groups-sub').textContent = ''; $('#ops-groups tbody').innerHTML = ''; groupsEmpty($('#ops-groups'), t('ops.noPlan', { why })); $('#ops-gf-count').textContent = '';
   $('#ops-map-sub').textContent = X.muniName(X.state.scope);
 }
 
@@ -412,22 +464,32 @@ function renderTiles() {
   const drainCells = cl.filter(c => (c.outPerHour ?? 0) > 0), drain = drainCells.reduce((s, c) => s + c.outPerHour, 0);
   const pr = X.state.usage?.profile; const prelim = !pr || pr.source === 'Standardkurve' || (pr.days ?? 0) < 3; const rv = (x) => x >= 100 ? f(sig2(x)) : f(x);
   $('#ops-tiles').innerHTML = [
-    tile(t('ops.fleet'), `${f(k.available)} / ${f(k.total)}`, t('ops.availableReportedDisabled', { disabled: f(k.disabled), v1: f(p.share * 100) })),
+    tile(t('ops.fleet'), `${f(k.available)}<small> / ${f(k.total)}</small>`, t('ops.availableReportedDisabled', { disabled: f(k.disabled), v1: f(p.share * 100) })),
     tile(t('ops.demand'), `${f(sph * p.share, 1)} /h`, t('ops.tripStartsMarketHNetOutflowH', { v0: p.band === 'day' ? t('ops.dailyMean') : bandLabel(p.band), sph: f(sph, 1), v2: f(drain * p.share, 1), length: f(drainCells.length), hours: f(p.model.hours, 1) })),
     tile(t('ops.spots'), `${f(p.spots.spots.length)}`, t('ops.needVehShortfall', { target: f(target), need: f(need), v2: p.spots.excluded ? ` · ${t('ops.cellsExcludedZones', { excluded: f(p.spots.excluded), v1: p.spots.excludedBy?.official ? t('ops.ofWhichNoParkingZonePerCity', { official: f(p.spots.excludedBy.official) }) : '' })}` : '' }), need > target * 0.5 ? 'warn' : ''),
-    tile(t('ops.batteryIdleTime'), k.batteryKnown ? `${f(k.low)}` : 'k. A.', t('ops.notMovedForOver24HMedian', { v0: k.batteryKnown ? t('ops.belowAndKmOf', { v0: num('#ops-swapthr', 20), v1: num('#ops-swaprange', 5), batteryKnown: f(k.batteryKnown) }) : t('ops.noChargeLevelInFeed'), idle24: f(k.idle24), v2: k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h' }), (k.batteryKnown && k.low / k.batteryKnown > 0.25) || (k.idleKnown && k.idle24 / k.idleKnown > 0.3) ? 'warn' : ''),
-    tile(t('ops.revenueDay'), p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? (prelim ? `${rv(p.econ.revDay * 0.7)}–${rv(p.econ.revDay * 1.3)} €` : `${f(p.econ.revDay)} €`) : '—', p.econ === undefined ? t('ops.loadingEstimate') : !p.econ ? t('ops.noTripDataForThisOperator') : t('ops.tripsVehDayUtilisationNet', { v0: prelim ? `${t('ops.preliminaryUnder3Measurement')} · ` : '', v1: p.econ.plausible ? '' : `${t('ops.tripCountImplausible')} · `, rvd: f(p.econ.rvd, 2), v3: p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %' }), `est${p.econ && !p.econ.plausible ? ' warn' : ''}`),
-    tile(t('ops.runs'), `${f(runs.length)}`, t('ops.kmHOnDuty', { km: f(km, 1), v1: f(min / 60, 1), v2: Object.keys(S.routed).length ? t('ops.byRoad', { length: f(Object.keys(S.routed).length), length2: f(runs.length) }) : $('#ops-route')?.checked ? t('ops.roadRoutingInProgress') : t('ops.straightLine135') })),
+    // Akku und Standzeit getrennt: jede Kachel warnt nur wegen ihres eigenen Werts (vorher „0“ in Warnfarbe wegen der Standzeit)
+    tile(t('ops.lowBatteryTile'), k.batteryKnown ? `${f(k.low)}` : t('common.na'), k.batteryKnown ? t('ops.lowBatterySub', { charge: num('#ops-swapthr', 20), range: num('#ops-swaprange', 5), known: f(k.batteryKnown) }) : t('ops.noChargeLevelInFeed'), k.batteryKnown && k.low / k.batteryKnown > 0.25 ? 'warn' : ''),
+    tile(t('ops.idleTile'), k.idleKnown ? `${f(k.idle24)}` : t('common.na'), k.idleKnown ? t('ops.idleSub', { share: `${f((k.idle24 / k.idleKnown) * 100)} %`, median: k.idleMedianH == null ? '–' : f(k.idleMedianH, 1) + ' h' }) : '', k.idleKnown && k.idle24 / k.idleKnown > 0.3 ? 'warn' : ''),
+    tile(t('ops.revenueDay'), p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? (prelim ? `${rv(p.econ.revDay * 0.7)}<small> ${t('ops.rangeTo')} ${rv(p.econ.revDay * 1.3)} €</small>` : `${f(p.econ.revDay)} €`) : '—', p.econ === undefined ? t('ops.loadingEstimate') : !p.econ ? t('ops.noTripDataForThisOperator') : t('ops.tripsVehDayUtilisationNet', { v0: prelim ? `${t('ops.preliminaryUnder3Measurement')} · ` : '', v1: p.econ.plausible ? '' : `${t('ops.tripCountImplausible')} · `, rvd: f(p.econ.rvd, 2), v3: p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %' }), `est${p.econ && !p.econ.plausible ? ' warn' : ''}`),
+    tile(t('ops.runs'), `${f(runs.length)}`, t('ops.kmHOnDuty', { km: f(km, 1), v1: f(min / 60, 1), v2: Object.keys(S.routed).length ? t('ops.byRoad', { length: f(Object.keys(S.routed).length), length2: f(runs.length) }) : $('#ops-route')?.checked && !osrmDown() ? t('ops.roadRoutingInProgress') : t('ops.straightLine135') })),
   ].join('');
 }
+// Ebenen wie auf der Übersicht: Checkbox-Leiste (an = Haken und Fläche), Farbpunkt nur als Zuordnung zur Karte. Die Leiste wird je Plan einmal
+// gebaut; ein Umschalter ändert nur Karte und Legende, damit der Tastaturfokus auf der Checkbox bleibt.
+function layerToggles() {
+  const opc = X.opColor(S.plan.op);
+  const tog = (k, label, color) => `<label class="tog"><input type="checkbox" data-l="${k}"${S.show[k] ? ' checked' : ''}> ${color ? `<i class="dot" style="background:${color};margin-right:0"></i>` : ''}<span>${label}</span></label>`;
+  $('#ops-layers').innerHTML = tog('demand', t('ops.netOutflow'), 'var(--accent)') + tog('fleet', t('ops.fleet'), opc) + tog('spots', t('ops.spots'), 'var(--accent)') + '<span class="sep" aria-hidden="true"></span>'
+    + tog('groups', t('ops.operatorSpots'), opc) + tog('collect', t('ops.pickupPlaces'), opc) + (S.plan.official?.noPark.length ? tog('official', t('ops.officialZones'), 'var(--bad)') : '') + '<span class="sep" aria-hidden="true"></span>'
+    + tog('rebalance', t('ops.rebalance'), RUN_COLOR.rebalance) + (S.plan?.station ? tog('station', t('ops.stations'), RUN_COLOR.station) : '') + tog('swap', t('ops.batterySwap'), RUN_COLOR.swap) + tog('workshop', t('ops.workshop'), RUN_COLOR.workshop);
+}
 function legend() {
-  const chip = (k, label, color) => `<button class="chip${S.show[k] ? ' on' : ''}" data-l="${k}" aria-pressed="${S.show[k]}"${color ? ` style="${S.show[k] ? `background:color-mix(in srgb, ${color} 24%, var(--panel));border-color:${color};color:var(--fg)` : `border-color:${color}`}"` : ''}>${label}</button>`;
   const opc = X.opColor(S.plan.op), gv = (k) => groupView(k), mixed = S.gf?.op === 'all';
-  $('#ops-layers').innerHTML = `<button class="chip" data-jump="ops-runs" title="${t('ops.jumpToListOfRunsSkipMapAnd')}">${t('ops.toRuns')}</button>` + chip('demand', t('ops.netOutflow')) + chip('fleet', t('ops.fleet')) + chip('spots', t('ops.spots')) + chip('groups', t('ops.operatorSpots'), opc) + chip('collect', t('ops.pickupPlaces'), opc) + (S.plan.official?.noPark.length ? chip('official', t('ops.officialZones'), '#ef6b6b') : '') + chip('rebalance', t('ops.rebalance'), RUN_COLOR.rebalance) + (S.plan?.station ? chip('station', t('ops.stations'), RUN_COLOR.station) : '') + chip('swap', t('ops.batterySwap'), RUN_COLOR.swap) + chip('workshop', t('ops.workshop'), RUN_COLOR.workshop);
-  $('#ops-legend').innerHTML = `<span><i class="sq" style="background:#49c7b0;border-color:#49c7b0"></i>${t('ops.netOutflowHStartsEnds250M', { v0: abbr(t('ops.cell'), t('ops.gridOfAbout250250MStartsEnds')) })}</span><span><i class="dot" style="background:#ef6b6b"></i>${t('ops.disabled')}</span><span><i class="dot" style="background:#e3b341"></i>${t('ops.batteryLow')}</span><span><i class="dot" style="background:#c084fc"></i>${t('ops.n24HNotMoved')}</span><span><b class="ops-spot-mini">1</b>${t('ops.spotDashedRankUncertain')}</span><span><b class="ops-spot-mini" style="background:var(--fg)">D</b>Depot</span>`
+  const lay = $('#ops-layers'); if (lay._plan !== S.plan || lay._lang !== lang() || !lay.querySelector('input[data-l]')) { layerToggles(); lay._plan = S.plan; lay._lang = lang(); }
+  $('#ops-legend').innerHTML = `<span><i class="sq" style="background:var(--accent);border-color:var(--accent)"></i>${t('ops.netOutflowHStartsEnds250M', { v0: abbr(t('ops.cell'), t('ops.gridOfAbout250250MStartsEnds')) })}</span><span><i class="dot" style="background:var(--bad)"></i>${t('ops.disabled')}</span><span><i class="dot" style="background:var(--warn)"></i>${t('ops.batteryLow')}</span><span><i class="dot" style="background:${IDLE_COL()}"></i>${t('ops.n24HNotMoved')}</span><span><b class="ops-spot-mini">1</b>${t('ops.spotDashedRankUncertain')}</span><span><b class="ops-spot-mini" style="background:var(--fg)">D</b>Depot</span>`
     + (S.show.groups && gv('deploy').length ? `<span>${t('ops.presumedOperatorSpot', { v0: groupSvg('deploy', opc, 12), v1: mixed ? t('ops.colourOperator') : '' })}</span>` : '')
     + (S.show.collect && gv('collect').length ? `<span>${t('ops.pickupPlaceObservation', { v0: groupSvg('collect', opc, 12), v1: mixed ? t('ops.colourOperator') : '' })}</span>` : '')
-    + (S.show.official && S.plan.official?.noPark.length ? `<span><i class="sq" style="background:#ef6b6b33;border-color:#ef6b6b;border-style:dashed"></i>${t('ops.noParkingZonePerCity', { v0: S.plan.official.sources.filter(x => x.ref.kind === 'noPark').map(x => refCite(x.ref)).join(', ') })}</span>` : '')
+    + (S.show.official && S.plan.official?.noPark.length ? `<span><i class="sq" style="background:color-mix(in srgb,var(--bad) 20%,transparent);border-color:var(--bad);border-style:dashed"></i>${t('ops.noParkingZonePerCity', { v0: S.plan.official.sources.filter(x => x.ref.kind === 'noPark').map(x => refCite(x.ref)).join(', ') })}</span>` : '')
     + (S.plan.official?.points.length ? `<span class="muted">${t('ops.parkingAreas', { v0: S.plan.official.sources.filter(x => x.ref.kind !== 'noPark').map(x => refCite(x.ref)).join(', ') })}</span>` : '');
 }
 // Raute = Ausbringung, gestricheltes Sechseck = Einsammeln; Umriss in der Anbieterfarbe
@@ -468,16 +530,16 @@ function drawLayers(keys) {
     const fl = p.model.flow;
     for (const c of p.model.cells.values()) {
       if (!(c.outPerHour > 0)) continue;
-      withPop(L.rectangle([[c.lat - O.CELL_LAT / 2, c.lon - O.CELL_LON / 2], [c.lat + O.CELL_LAT / 2, c.lon + O.CELL_LON / 2]], { weight: 0, fillColor: '#49c7b0', fillOpacity: 0.08 + 0.5 * q(c.outPerHour), renderer: S.canvas.demand }),
+      withPop(L.rectangle([[c.lat - O.CELL_LAT / 2, c.lon - O.CELL_LON / 2], [c.lat + O.CELL_LAT / 2, c.lon + O.CELL_LON / 2]], { weight: 0, fillColor: tok('--accent'), fillOpacity: 0.08 + 0.5 * q(c.outPerHour), renderer: S.canvas.demand }),
         () => t('ops.cellMarketMeasuredHoursNet', { cell: esc(c.cell), hours: f(p.model.hours, 1), v2: sgn(c.outPerHour), outSe: f(c.outSe, 2), starts: f(c.starts), startsPerHour: f(c.startsPerHour, 2), ends: f(c.ends), endsPerHour: f(c.endsPerHour, 2), supplyAvg: f(c.supplyAvg, 1), v9: fl ? t('ops.flowsOutIn', { days: f(fl.days), v1: fl.days === 1 ? t('ops.day') : t('ops.days2'), v2: f(c.flow?.out || 0), v3: f(c.flow?.in || 0) }) : '' })).addTo(Lx.demand);
     }
   }
   // Abstellverbotszonen der Stadt (Ausschluss), gestrichelt unter der Flotte; nicht anklickbar, Quelle und Lizenz in der Legende
-  if (on('official')) for (const g of p.official?.noPark || []) L.geoJSON(g, { interactive: false, style: { color: '#ef6b6b', weight: 1, dashArray: '4 3', fillColor: '#ef6b6b', fillOpacity: 0.12 }, renderer: S.canvas.demand }).addTo(Lx.official);
+  if (on('official')) for (const g of p.official?.noPark || []) L.geoJSON(g, { interactive: false, style: { color: tok('--bad'), weight: 1, dashArray: '4 3', fillColor: tok('--bad'), fillOpacity: 0.12 }, renderer: S.canvas.demand }).addTo(Lx.official);
   if (on('fleet')) {
     const swapOpt = { swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
     for (const v of p.fleet.vehicles) {
-      const opc = X.opColor(v.operator), col = v.disabled ? '#ef6b6b' : O.needsSwap(v, swapOpt) ? '#e3b341' : (v.idleMin ?? 0) >= 1440 ? '#c084fc' : opc;
+      const opc = X.opColor(v.operator), col = v.disabled ? tok('--bad') : O.needsSwap(v, swapOpt) ? tok('--warn') : (v.idleMin ?? 0) >= 1440 ? IDLE_COL() : opc;
       const plain = col === opc;
       withPop(L.circleMarker([v.lat, v.lon], { radius: plain ? 2.5 : 3.5, weight: 0, fillColor: col, fillOpacity: plain ? .4 : .95, renderer: S.canvas.fleet }),
         () => `<b>${esc(v.operator)}</b> · ${esc(X.TYPE[v.type] || v.type)}<br>${v.disabled ? `${t('ops.disabled')} · ` : v.reserved ? `${t('ops.reserved')} · ` : ''}${v.battery != null ? `${t('ops.battery', { battery: f(v.battery) })} · ` : ''}${v.idleMin != null ? t('ops.idleForH', { v0: f(v.idleMin / 60, 1) }) : ''}`).addTo(Lx.fleet);
@@ -491,7 +553,7 @@ function drawLayers(keys) {
     const needBy = new Map(p.rebalance.needs.map(n => [n.cell, n]));
     for (const s of p.spots.spots) {
       const n = needBy.get(s.cell);
-      L.circle([s.lat, s.lon], { radius: 150, weight: 1, color: '#49c7b0', fill: false, dashArray: s.stabilityLabel === 'stabil' ? null : '4 4', interactive: false }).addTo(Lx.spots);
+      L.circle([s.lat, s.lon], { radius: 150, weight: 1, color: tok('--accent'), fill: false, dashArray: s.stabilityLabel === 'stabil' ? null : '4 4', interactive: false }).addTo(Lx.spots);
       S.spotMarkers.push([s, L.marker([s.lat, s.lon], { icon: L.divIcon({ className: `ops-spot${s.stabilityLabel === 'stabil' ? '' : ' weak'}`, html: `${s.rank}`, iconSize: [24, 24] }), title: spotTitle(s), keyboard: false })
         .bindPopup(() => t('ops.spotNeedVehFleet150M', { rank: s.rank, v1: s.park ? ` · ${esc(parkLabel(s.park))}` : '', target: f(s.target), v3: f(n?.have), v4: f(n?.need), startsPerHourOp: f(s.startsPerHourOp, 2), endsPerHourOp: f(s.endsPerHourOp, 2), v7: sgn(s.outPerHourOp), hours: f(s.hours, 1), score: f(s.score, 2), v10: p.spots.prelim ? t('ops.preliminary') : (STAB[s.stabilityLabel] ?? s.stabilityLabel) })).addTo(Lx.spots)]);
     }
@@ -511,9 +573,9 @@ function drawRoutes() {
   for (const r of allRuns()) {
     if (!S.show[r.kind] || (S.focus && r.id !== S.focus)) continue;
     const geo = S.routed[r.id]?.coords || [[p.depot.lat, p.depot.lon], ...r.stops.map(s => [s.lat, s.lon]), [p.depot.lat, p.depot.lon]];
-    L.polyline(geo, { color: RUN_COLOR[r.kind], weight: 3, opacity: .85, dashArray: S.routed[r.id] ? null : '6 5', renderer: S.canvas.runs }).bindPopup(() => runTitle(r)).addTo(S.layers[r.kind]);
+    L.polyline(geo, { color: RUN_COLOR[r.kind], weight: 3, opacity: .85, dashArray: S.routed[r.id]?.coords ? null : '6 5', renderer: S.canvas.runs }).bindPopup(() => runTitle(r)).addTo(S.layers[r.kind]);
     r.stops.forEach((s, i) => L.circleMarker([s.lat, s.lon], { radius: 5, weight: 2, color: RUN_COLOR[r.kind], fillColor: s.type === 'drop' ? RUN_COLOR[r.kind] : '#ffffff', fillOpacity: 1, renderer: S.canvas.runs })
-      .bindTooltip(`${r.id}·${i + 1} ${STOP_LABEL[s.type]} ${s.count}`, { direction: 'top' }).addTo(S.layers[r.kind]));
+      .bindTooltip(`${r.id}·${i + 1} ${STOP_LABEL[s.type]} ${s.count}${s.prio != null ? ` · ${t('ops.stopPrio', { prio: X.fmt(s.prio, 2), rank: s.rank, n: r.stops.length })}` : ''}${whyText(s) ? ` · ${whyText(s)}` : ''}`, { direction: 'top' }).addTo(S.layers[r.kind]));
   }
   $('#ops-map-sub').textContent = `${X.muniName(p.ags)} · ${p.op} · ${p.band === 'day' ? t('ops.wholeDay2') : bandLabel(p.band)}${S.focus ? ` · ${t('ops.onlyRun', { focus: S.focus })}` : ''}`;
 }
@@ -536,6 +598,39 @@ function markFocus() {
 }
 const parkLabel = (pk) => ({ station: t('ops.operatorStationMandatory'), escooter: t('ops.eScooterParkingBay'), official: t('ops.officialParkingArea'), sharing: t('ops.sharingMobilityHub'), rad: t('ops.bikeRack') }[pk.cat] || pk.cat) + (pk.name ? ` „${pk.name}“` : '');
 const runTitle = (r) => t('ops.vehKmMin', { id: r.id, v1: RUN_LABEL[r.kind], vehicles: X.fmt(r.vehicles), km: X.fmt(r.km, 1), totalMin: X.fmt(r.totalMin) });
+// Grund der Priorität eines Stopps (dringendstes Fahrzeug): „Akku 8 %, steht 31 h“, „Spot leer (150 m)“, „Station voll“
+function whyText(s) {
+  const w = s.why || {}, f = X.fmt, out = [];
+  if (s.type === 'swap') { if (w.battery != null) out.push(t('ops.battery2', { v0: f(w.battery) })); else if (w.rangeKm != null) out.push(t('ops.whyRange', { v: f(w.rangeKm, 1) })); }
+  if (w.idleH != null && s.type !== 'drop' && !s.station) out.push(t('ops.idleH', { idleMaxH: f(w.idleH) }));
+  if (s.type === 'drop') { if (s.station) out.push(w.empty ? t('ops.whyStationEmpty') : t('ops.whyShortfall', { need: f(w.need) })); else if (w.empty) out.push(t('ops.whySpotEmpty')); }
+  if (s.type === 'pickup' && s.station && w.full) out.push(t('ops.whyStationFull'));
+  return out.join(', ');
+}
+// Stoppliste: Art, Anzahl, Spot/Station, Priorität mit Rang in der Tour, Grund, Strecke vom Depot bis hierher
+function stopItem(s, r) {
+  const f = X.fmt, esc = X.esc, why = whyText(s);
+  const base = `${STOP_LABEL[s.type]} ${f(s.count)}${s.station ? ` · ${esc(s.station)} (${esc(s.fill)})` : ''}${s.spotRank ? ` · ${t('ops.spot2', { spotRank: s.spotRank, v1: s.need != null ? ` · ${t('ops.shortfallNeedFleet', { need: f(s.need), target: f(s.target), have: f(s.have) })}` : '' })}` : ''}`;
+  if (s.prio == null) return `<li>${base}${s.battery?.length ? ` · ${t('ops.battery2', { v0: s.battery.slice(0, 6).join('/') })}` : ''}${s.idleMaxH ? ` · ${t('ops.idleH', { idleMaxH: f(s.idleMaxH) })}` : ''}</li>`;
+  const all = s.count > 1 && s.battery?.length > 1 ? ` · ${t('ops.battery2', { v0: s.battery.slice(0, 6).join('/') })}` : '';
+  const pr = t('ops.stopPrio', { prio: f(s.prio, 2), rank: s.rank, n: r.stops.length });
+  return `<li>${base}${all} · ${s.prio >= 1 ? `<b>${pr}</b>` : pr}${why ? `: ${why}` : ''} <span class="muted">· ${t('ops.atKm', { km: f(s.atKm, 1) })}</span></li>`; // ab 1 = dringend: fett
+}
+// Reihenfolge der Tour: Grundlage der km, Vergleich mit reiner Prioritätsfolge und Nächstem Nachbarn (gleiche Stopps), Preis der Priorität
+function seqLine(r) {
+  if (r.kmPrio == null && r.kmNN == null) return '';
+  const f = X.fmt, k = r.kmSeq ?? r.km, d = (x) => `${x > 0.05 ? '+' : x < -0.05 ? '−' : '±'}${f(Math.abs(x), 1)}`;
+  const parts = [r.road ? t('ops.seqBasisRoad') : t('ops.straightLine135')];
+  if (r.kmPrio != null) parts.push(t('ops.seqVsPrio', { d: d(k - r.kmPrio) }));
+  if (r.kmNN != null) parts.push(t('ops.seqVsNN', { d: d(k - r.kmNN) }));
+  if (!r.lambda) parts.push(t('ops.seqKmOnly'));
+  else if (r.reachKm != null && r.reachKmMin != null) {
+    const extra = k - r.kmMin, gain = r.reachKmMin - r.reachKm, v = { d: d(extra), reach: f(r.reachKm, 1), reachMin: f(r.reachKmMin, 1) };
+    // gleich lang und gleich früh: die kürzeste Reihenfolge ist auch nach Priorität die beste (z. B. Umsetzen: jeder Umweg beim Einsammeln verzögert alle Ausbringungen)
+    parts.push(Math.abs(extra) < 0.05 && Math.abs(gain) < 0.05 ? t('ops.seqPrioSame', v) : Math.abs(extra) < 0.05 ? t('ops.seqPrioFree', v) : t('ops.seqPrio', v));
+  }
+  return `<p class="small muted ops-seq" title="${X.esc(t('ops.seqTitle'))}">${parts.join(' · ')}</p>`;
+}
 function renderRuns() {
   const p = S.plan, f = X.fmt, esc = X.esc, box = $('#ops-runs');
   // Neu zeichnen nach jeder Straßenroute: offene Stopplisten und den Tastaturfokus erhalten
@@ -551,7 +646,8 @@ function renderRuns() {
       const pts = [p.depot, ...r.stops, p.depot]; const links = O.mapsLinks(pts);
       return `<div class="card ops-run${S.focus === r.id ? ' focus' : ''}" data-run="${r.id}" title="${t('ops.showOnlyThisRunOnMap')}" style="border-left:3px solid ${RUN_COLOR[kind]}">${t('ops.vehStops', { id: r.id, vehicles: f(r.vehicles), length: f(r.stops.length), v3: r.kind === 'rebalance' && r.prio ? ` · ${t('ops.shortfallUpTo', { prio: f(r.prio) })}` : '' })}
         <p>${t('ops.kmMinDrivingMinOnSiteMin', { km: f(r.km, 1), driveMin: f(r.driveMin), handleMin: f(r.handleMin), totalMin: f(r.totalMin), v4: S.routed[r.id] ? ` · ${t('ops.road')}` : '', v5: limit && r.totalMin > limit ? ` · <span class="warn-text">${t('ops.byRoadOver', { hText })}</span>` : '' })}</p>
-        <details${open.has(r.id) ? ' open' : ''}><summary>${t('ops.stopList')}</summary><ol class="small">${r.stops.map(s => `<li>${STOP_LABEL[s.type]} ${f(s.count)}${s.station ? ` · ${esc(s.station)} (${esc(s.fill)})` : ''}${s.spotRank ? ` · ${t('ops.spot2', { spotRank: s.spotRank, v1: s.need != null ? ` · ${t('ops.shortfallNeedFleet', { need: f(s.need), target: f(s.target), have: f(s.have) })}` : '' })}` : ''}${s.battery?.length ? ` · ${t('ops.battery2', { v0: s.battery.slice(0, 6).join('/') })}` : ''}${s.idleMaxH ? ` · ${t('ops.idleH', { idleMaxH: f(s.idleMaxH) })}` : ''}</li>`).join('')}</ol></details>
+        ${seqLine(r)}
+        <details${open.has(r.id) ? ' open' : ''}><summary>${t('ops.stopList')}</summary><ol class="small">${r.stops.map(s => stopItem(s, r)).join('')}</ol></details>
         <div class="foot"><button class="chip" data-fit="${r.id}">${t('ops.onMap')}</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener" title="${t('ops.googleMapsAllowsAtMost10')}">${links.length > 1 ? t('ops.routePartOf', { v0: i + 1, length: links.length }) : t('ops.route')} ↗</a>`).join(' · ')}</div></div>`;
     }).join('') : `<div class="muted small">${t('ops.noRunNeeded')}</div>`;
     return `<h3 style="margin-top:12px">${RUN_LABEL[kind]}</h3><div class="sub">${head}</div><div class="cards" style="grid-template-columns:1fr">${body}</div>`;
@@ -563,15 +659,16 @@ function renderRuns() {
     (sb ? block('station', sb, t('ops.nearlyEmptyNearlyFullOf', { empty: f(sb.empty), full: f(sb.full), stations: f(sb.stations), moves: f(sb.moves), v4: left(sb.unplanned) })) : '') +
     block('swap', sw, sw.below ? t('ops.vehiclesBelowChargeAndKm', { below: f(sw.below), v1: num('#ops-swapthr', 20), v2: num('#ops-swaprange', 5), v3: left(sw.unplanned) }) : t('ops.noVehicleBelowThresholdOrNo')) +
     block('workshop', ws, ws.disabled ? t('ops.disabledVehiclesLongest', { disabled: f(ws.disabled), v1: left(ws.unplanned) }) : t('ops.noDisabledVehicles'));
-  $('#ops-runs-sub').textContent = t('ops.runsForBundledByCityAreaAt', { op: p.op, hText });
+  $('#ops-runs-sub').textContent = `${t('ops.runsForBundledByCityAreaAt', { op: p.op, hText })} · ${t('ops.orderBy', { level: prioName() })}`;
   markFocus();
   if (actRun && actSel) box.querySelector(`[data-run="${actRun}"] ${actSel}`)?.focus({ preventScroll: true });
 }
 // Spot-Tabelle: alle Zahlen der Bedarfsrechnung sichtbar (Kopf ersetzt den aus index.html)
-const SPOT_COLS = 12;
+// Lage steht vorn, der Rang als Präfix: am Telefon bleibt die erste (feste) Spalte die Lage statt einer schmalen Rangnummer
+const SPOT_COLS = 11;
 function spotHead() {
   const th = (tq, tip, n = true) => `<th${n ? ' class="n"' : ''}><abbr title="${tip}">${tq}</abbr></th>`;
-  return `<tr><th class="n">${t('ops.rank')}</th><th>${t('ops.location')}</th>${th(t('ops.startsPerH'), t('ops.tripStartsPerHourOperatorS'))}${th(t('ops.endsPerH'), t('ops.tripEndsPerHourOperatorS'))}${th(t('ops.netPerH'), t('ops.netOutflowStartsEndsPerHour'))}`
+  return `<tr><th>${t('ops.rank')} · ${t('ops.location')}</th>${th(t('ops.startsPerH'), t('ops.tripStartsPerHourOperatorS'))}${th(t('ops.endsPerH'), t('ops.tripEndsPerHourOperatorS'))}${th(t('ops.netPerH'), t('ops.netOutflowStartsEndsPerHour'))}`
     + `${th(t('ops.measurement'), t('ops.measuredHoursInChosenTimeOf'))}${th(t('ops.need'), t('ops.needMax0NetHHorizonBaseStock'))}${th(t('ops.fleet2'), t('ops.operatorSAvailableVehicles'))}${th(t('ops.shortfall'), t('ops.shortfallNeedFleet2'))}`
     + `${th('Score', t('ops.weightedSumOfFactorsDTPAhp'))}${th(t('ops.factors'), t('ops.netOutflowDDemandStartsHT'), false)}${th(t('ops.stability'), t('ops.howSurelySpotStaysIn'), false)}</tr>`;
 }
@@ -595,7 +692,7 @@ function renderSpots() {
     const osm = osmLink(s.lat, s.lon);
     const place = s.park ? esc(parkLabel(s.park)) : t('ops.cellCentre');
     const main = s.rank > GEO_TOP ? place : `<span class="geo-main" translate="no" data-geo="${k}" data-fallback="${place}">${g ? esc(g) : g === null ? place : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span>`;
-    return `<tr><td class="n">${s.rank}</td><td>${main}<div class="sub-line">${osm}${s.rank <= GEO_TOP ? ` · ${place}` : ''}</div></td>
+    return `<tr><td><span class="mono muted">${s.rank} ·</span> ${main}<div class="sub-line">${osm}${s.rank <= GEO_TOP ? ` · ${place}` : ''}</div></td>
     <td class="n">${f(s.startsPerHourOp, 2)}<div class="sub-line">${t('ops.market', { startsPerHour: f(s.startsPerHour, 2) })}</div></td><td class="n">${f(s.endsPerHourOp, 2)}<div class="sub-line">${t('ops.market2', { endsPerHour: f(s.endsPerHour, 2) })}</div></td>
     <td class="n"><b>${sgn(s.outPerHourOp)}</b><div class="sub-line">± ${f(s.outSeOp, 2)}${fl ? ` · ${t('ops.flowsOutIn2', { v0: f(s.flow?.out || 0), v1: f(s.flow?.in || 0) })}` : ''}</div></td>
     <td class="n">${f(s.hours, 1)} h<div class="sub-line">${t('ops.startsEnds', { starts: f(s.starts), ends: f(s.ends) })}</div></td>
@@ -667,6 +764,13 @@ function initGroupsUi() {
 function syncGf(force = false) {
   for (const el of document.querySelectorAll('#ops-gfilter [data-f]')) { if (!force && el === document.activeElement) continue; const v = S.gf?.[el.dataset.f] ?? ''; if (el.value !== String(v)) el.value = v; }
 }
+// Leerzustand der Gruppentabelle als eigener Block unter der Tabelle; die Tabelle selbst ist dann ausgeblendet
+function groupsEmpty(tbl, msg) {
+  const wrap = tbl.closest('.tbl'); if (!wrap) return;
+  let box = wrap.nextElementSibling?.classList.contains('ops-groups-empty') ? wrap.nextElementSibling : null;
+  if (!box) { box = document.createElement('div'); box.className = 'empty ops-groups-empty'; wrap.after(box); }
+  wrap.hidden = !!msg; box.hidden = !msg; box.innerHTML = msg || '';
+}
 function renderGroups() {
   const p = S.plan, f = X.fmt, esc = X.esc, g = p.groups, gf = S.gf, kind = gf.kind, deploy = kind === 'deploy', all = g?.[kind] || [];
   const tbl = $('#ops-groups'), panel = tbl.closest('.panel'), noun = deploy ? t('ops.deployments') : t('ops.pickups');
@@ -698,8 +802,10 @@ function renderGroups() {
       : !g.events.deploy && !g.events.collect ? t('ops.noGroupsObservedForYetPlace', { muni, GROUP_MIN: O.GROUP_MIN })
       : filtered ? `${t('ops.noPlaceMatchesFilters')}<button type="button" class="chip" id="ops-gf-reset2">${t('ops.resetFilters')}</button>`
       : t('ops.noObservedForYetAppearsAs', { where: esc(where), noun, GROUP_MIN: O.GROUP_MIN, v3: deploy ? t('ops.appear') : t('ops.disappear'), v4: all.length ? ` ${t('ops.otherOperatorsSetOperator', { length: f(all.length), v1: all.length === 1 ? t('ops.place') : t('ops.places2') })}` : '' });
-    tb.innerHTML = `<tr><td colspan="${GCOLS.length}" class="empty">${msg}</td></tr>`; return;
+    // Leerzustand außerhalb der scrollenden Tabelle (am Telefon sonst rechts abgeschnitten)
+    tb.innerHTML = ''; groupsEmpty(tbl, msg); return;
   }
+  groupsEmpty(tbl, null);
   tb.innerHTML = rows.map((s, i) => {
     const n = nearOf(s), k = geoKey(s.lat, s.lon), geo = GEO.get(k), ty = typesText(s.types);
     const main = geo ? `<span class="geo-main" translate="no" data-geo="${k}">${esc(geo)}</span>` : i < GROUP_GEO_TOP ? `<span class="geo-main" translate="no" data-geo="${k}" data-fallback="${t('ops.addressNotFound')}">${geo === null ? t('ops.addressNotFound') : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span>` : osmLink(s.lat, s.lon);
@@ -738,36 +844,65 @@ async function pumpGeo() {
     }
   } finally { geoBusy = false; }
 }
-// Straßenrouting: Reihenfolge je Tour nach echter Fahrzeit (OSRM-Matrix), dann Strecke und km nach Straße.
-// Demo-Server: höchstens eine Anfrage je Sekunde, bis 100 Punkte je Matrix.
-const pause = () => new Promise(res => setTimeout(res, 1100));
+// ---------- Straßenkilometer (OSRM-Demo-Server) ----------
+// Matrix je Tour über /table (Strecke und Fahrzeit; bis OSRM_MAX Punkte je Anfrage, größere Touren in Blöcken zu je OSRM_MAX/2 Punkten),
+// Linie und Fahrzeit über /route. Höflich: alle Anfragen nacheinander mit ≥ 1,2 s Abstand; Ergebnisse je Punktpaar bzw. Punktfolge im
+// Speicher gecacht (über Pläne und Reglerstellungen hinweg), nach Ausfall/429/5xx 2 Minuten Pause. Fehlt die Matrix, bleibt die Planung
+// aus lib (Luftlinie × 1,35); einzelne fehlende Paare ersetzt O.matrixCost ebenso.
+const OSRM = 'https://router.project-osrm.org', OSRM_MAX = 90, OSRM_GAP_MS = 1200, OSRM_PAUSE_MS = 120e3;
+const MX = new Map(), ROUTES = new Map(), OSRM_S = { last: 0, chain: Promise.resolve(), downUntil: 0 };
+const okey = (p) => `${(+p.lon).toFixed(5)},${(+p.lat).toFixed(5)}`;
+const osrmDown = () => Date.now() < OSRM_S.downUntil;
+function osrmGet(path) {
+  const run = async () => {
+    if (osrmDown()) return null;
+    const wait = OSRM_S.last + OSRM_GAP_MS - Date.now(); if (wait > 0) await new Promise(res => setTimeout(res, wait));
+    OSRM_S.last = Date.now();
+    const r = await X.getJson(OSRM + path, { timeout: 30000 });
+    if (!r.ok) { if (!r.status || r.status === 429 || r.status >= 500) OSRM_S.downUntil = Date.now() + OSRM_PAUSE_MS; return null; }
+    return r.json?.code === 'Ok' ? r.json : null;
+  };
+  const q = OSRM_S.chain.then(run, run); OSRM_S.chain = q.catch(() => null); return q;
+}
+// Straßenmatrix (Meter) für points; null, wenn kein einziges Paar bekannt ist
+async function roadMatrix(points) {
+  const keys = points.map(okey), uniq = [...new Set(keys)], h = uniq.length <= OSRM_MAX ? uniq.length : Math.floor(OSRM_MAX / 2), blocks = [];
+  for (let i = 0; i < uniq.length; i += h) blocks.push(uniq.slice(i, i + h));
+  const miss = (a, b) => a !== b && !MX.has(`${a}>${b}`);
+  outer: for (let a = 0; a < blocks.length; a++) for (let b = a; b < blocks.length; b++) {
+    const set = a === b ? blocks[a] : [...blocks[a], ...blocks[b]];
+    if (!set.some(x => set.some(y => miss(x, y)))) continue;
+    const j = await osrmGet(`/table/v1/driving/${set.join(';')}?annotations=distance,duration`);
+    if (!j?.distances) break outer;
+    set.forEach((x, i) => set.forEach((y, k) => { const d = j.distances[i]?.[k]; if (i !== k && d != null) MX.set(`${x}>${y}`, { d, t: j.durations?.[i]?.[k] ?? null }); }));
+  }
+  let known = 0; const D = keys.map(a => keys.map(b => { if (a === b) return 0; const v = MX.get(`${a}>${b}`); if (v) known++; return v ? v.d : null; }));
+  return known ? { D, missing: keys.length * (keys.length - 1) - known } : null;
+}
+const roadDur = (seq) => { let s = 0; for (let i = 0; i < seq.length - 1; i++) { const a = okey(seq[i]), b = okey(seq[i + 1]); if (a === b) continue; const v = MX.get(`${a}>${b}`); if (v?.t == null) return null; s += v.t; } return s; };
+async function roadRoute(seq) {
+  const key = seq.map(okey).join(';'); if (ROUTES.has(key)) return ROUTES.get(key);
+  if (seq.length > 100) return null; // Wegpunkte je Route begrenzt: dann nur km aus der Matrix, Linie gerade
+  const rt = (await osrmGet(`/route/v1/driving/${key}?overview=simplified&geometries=geojson`))?.routes?.[0]; if (!rt) return null;
+  const v = { coords: rt.geometry.coordinates.map(([lo, la]) => [la, lo]), km: +(rt.distance / 1000).toFixed(1), min: Math.round(rt.duration / 60) };
+  ROUTES.set(key, v); return v;
+}
+// Tour nach Straße: Reihenfolge mit der Straßenmatrix neu (gleiches Ziel wie in lib: Strecke + λ · gewichtete Anfahrt, Gruppen bleiben),
+// Vergleichswerte aus der Matrix, km und Fahrzeit aus der gefahrenen Route
 async function roadOptimize(r, p) {
-  if (r.stops.length + 1 > 99) return false;
-  const W = r.stops.map((st, k) => ({ lat: st.lat, lon: st.lon, i: k + 1, st })), D0 = { lat: p.depot.lat, lon: p.depot.lon, i: 0 };
-  const coords = [D0, ...W].map(x => `${x.lon.toFixed(5)},${x.lat.toFixed(5)}`).join(';');
-  const tq = (await X.getJson(`https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration,distance`, { timeout: 30000 })).json;
-  if (tq?.code !== 'Ok' || S.plan !== p) return false; // Plan inzwischen ersetzt: nichts mehr in die alte Tour schreiben
-  // optimiert wird nach Fahrzeugkilometern (Straßendistanz), Fahrzeit nur als Ersatz
-  const cost = (a, b) => tq.distances?.[a.i]?.[b.i] ?? (tq.durations[a.i][b.i] != null ? tq.durations[a.i][b.i] * 8 : 1e9);
-  // Umsetzen/Stationen: erst alle Abholungen, dann ausbringen; sonst eine Rundtour
-  const pick = W.filter(x => x.st.type === 'pickup'), drop = W.filter(x => x.st.type === 'drop');
-  let order;
-  if (pick.length && drop.length) { const a = O.orderStops(pick, { start: D0, cost }); order = [...a, ...O.orderStops(drop, { start: a[a.length - 1], end: D0, cost })]; }
-  else order = O.orderStops(W, { start: D0, end: D0, cost });
-  r.stops = order.map(x => x.st);
-  await pause();
-  const pts = [p.depot, ...r.stops, p.depot];
-  const j = (await X.getJson(`https://router.project-osrm.org/route/v1/driving/${pts.map(x => `${x.lon.toFixed(5)},${x.lat.toFixed(5)}`).join(';')}?overview=simplified&geometries=geojson`, { timeout: 30000 })).json;
-  if (j?.code !== 'Ok' || S.plan !== p) return false;
-  const rt = j.routes[0];
-  S.routed[r.id] = { coords: rt.geometry.coordinates.map(([lo, la]) => [la, lo]) };
-  r.km = +(rt.distance / 1000).toFixed(1); r.driveMin = Math.round(rt.duration / 60); r.totalMin = r.driveMin + r.handleMin; r.road = true;
+  const mx = await roadMatrix([p.depot, ...r.stops]); if (!mx || S.plan !== p) return false; // Plan inzwischen ersetzt: nichts in die alte Tour schreiben
+  const sq = O.sequenceRun(O.runGroups(r.stops), { depot: p.depot, cost: O.matrixCost([p.depot, ...r.stops], mx.D), lambda: p.params.common.prioLambda });
+  Object.assign(r, { stops: sq.stops, km: sq.km, kmSeq: sq.km, kmMin: sq.kmMin, kmNN: sq.kmNN, kmPrio: sq.kmPrio, reachKm: sq.reachKm, reachKmMin: sq.reachKmMin, obj: sq.obj, road: true, roadMissing: mx.missing });
+  const seq = [p.depot, ...r.stops, p.depot], dur = roadDur(seq); if (dur != null) r.driveMin = Math.round(dur / 60);
+  const rt = await roadRoute(seq); if (S.plan !== p) return false;
+  if (rt) { r.km = rt.km; r.driveMin = rt.min; }
+  S.routed[r.id] = { coords: rt?.coords || null }; r.totalMin = r.driveMin + r.handleMin;
   return true;
 }
 async function routeRuns() {
   const p = S.plan; if (!p || S.routing === p) return;
-  const prev = S.routing; S.routing = p; if (prev) await pause(); // Schleife des vorigen Plans läuft noch aus: Abstand zum Demo-Server halten
-  if (S.plan !== p) return;
+  S.routing = p; // eine noch laufende Schleife des vorigen Plans bricht ab; den Abstand zum Server hält osrmGet
+  if (osrmDown()) { status(`${planStatus(p)} · ${t('ops.osrmUnreachable')}`); renderTiles(); S.routing = null; return; }
   // Reihenfolge: fokussierte Tour, dann sichtbare Arten, dann der Rest
   // Reihenfolge wird je Schritt neu bestimmt: eine während des Routings angeklickte Tour kommt als nächste dran
   const tried = new Set(), total = allRuns().filter(r => !S.routed[r.id]).length;
@@ -782,11 +917,12 @@ async function routeRuns() {
       try { await roadOptimize(r, p); } catch { /* Tour bleibt bei Luftlinie */ }
       if (S.plan !== p) return;
       renderTiles(); renderRuns(); markFocus(); drawRoutes(); // nur Routen-Ebenen, nicht alle Marker
-      await pause();
+      await tick();
+      if (osrmDown()) break; // Server nicht erreichbar: übrige Touren bleiben bei Luftlinie, kein Nachfeuern
     }
     // Zähler über S.routed: nach einer Neubewertung (Overpass) behalten die übrigen Touren ihr Routing
     const done = allRuns().filter(x => S.routed[x.id]).length;
-    if (S.plan === p) status(t('ops.roadRoutingOsrmOfRunsByRoad', { v0: base(), done, length: allRuns().length, v3: done < allRuns().length ? t('ops.restStraightLine135') : '' }));
+    if (S.plan === p) { status(t('ops.roadRoutingOsrmOfRunsByRoad', { v0: base(), done, length: allRuns().length, v3: done < allRuns().length ? t('ops.restStraightLine135') : '' }) + (osrmDown() ? ` · ${t('ops.osrmUnreachable')}` : '')); renderTiles(); }
   } finally { if (S.routing === p) S.routing = null; }
 }
 // Methode als aufklappbarer Block über die volle Breite (das Panel trägt .prose mit 76ch; Breite hier per Inline-Stil aufgehoben),
@@ -803,7 +939,8 @@ function renderMethod() {
   <p class="small">${t('ops.saatyScale1EquallyImportant3', { lambdaMax: X.fmt(A.lambdaMax, 3), cr: X.fmt(A.cr, 4) })}</p></section>
   <section><h3>${t('ops.runs')}</h3><p>${t('ops.rebalanceSurplusMeans', { minBatteryForMove: D.minBatteryForMove, v1: D.maxPickupM / 1000, swapThreshold: f(D.swapThreshold), swapRangeKm: f(D.swapRangeKm) })}</p>
   <p>${t('ops.bundlingByAreaOpenJob', { v0: D.maxRunMin / 60 })}</p>
-  <p>${t('ops.orderPerRunNearestNeighbour', { speedKmh: D.speedKmh })}</p></section>
+  <p>${t('ops.orderPerRunPrio', { levels: O.PRIO_LEVELS.map((l, i) => `${i} = λ ${X.fmt(l, l % 1 ? 1 : 0)}`).join(', '), exactMax: O.EXACT_MAX, osrmMax: OSRM_MAX, detour: X.fmt(D.detour, 2), speedKmh: D.speedKmh })}</p>
+  <p>${t('ops.prioValues', { energyW: X.fmt(O.PRIO.energyW, 1), idleW: X.fmt(O.PRIO.idleW, 1), idleRefH: O.PRIO.idleRefH, longIdleH: O.PRIO.longIdleH, longIdleBonus: X.fmt(O.PRIO.longIdleBonus, 1), needRef: O.PRIO.needRef, emptyBonus: X.fmt(O.PRIO.emptyBonus, 1), fullStation: X.fmt(O.PRIO.fullStation, 1) })}</p></section>
   <section><h3>${t('ops.limits')}</h3><p>${t('ops.idleTimeCountsFromFirst')}</p></section>
   </div></details>`;
 }

@@ -118,11 +118,15 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
   // 2. Methodenfaktor
   const meas = { rvd: 1.075, fleet: 4570, ridesDay: 4913, days: 2, fullDays: 0, obsMin: 276, possibleMin: 2880, from: '2026-10-31', to: '2026-11-01' };
   const kf = K.methodFactor(ref, meas);
-  assert(kf.applied && near(kf.k, 1.72 / 1.075, 1e-9) && kf.quarter === 'Q4/2025' && near(kf.kLow, 1.42 / 1.075, 1e-9) && near(kf.kHigh, 2.31 / 1.075, 1e-9), 'k = 1,72 (Q4/2025) ÷ 1,075 gemessen = 1,60; Spanne aus 1,42 und 2,31');
-  assert(kf.prelim && kf.prelimWhy.length === 2 && !K.methodFactor(ref, { ...meas, days: 7, obsMin: 1500 }).prelim, 'vorläufig unter 7 Messtagen oder unter 50 % beobachteter Stunden');
+  assert(near(kf.k, 1.72 / 1.075, 1e-9) && kf.quarter === 'Q4/2025' && near(kf.kLow, 1.42 / 1.075, 1e-9) && near(kf.kHigh, 2.31 / 1.075, 1e-9), 'k = 1,72 (Q4/2025) ÷ 1,075 gemessen = 1,60; Spanne aus 1,42 und 2,31');
+  assert(kf.prelim && kf.prelimWhy.length === 2 && !K.methodFactor(ref, { ...meas, days: 7, fullDays: 7, obsMin: 1500 }).prelim && K.methodFactor(ref, { ...meas, days: 7, obsMin: 1500 }).prelim, 'vorläufig unter 7 vollen Messtagen oder unter 50 % beobachteter Stunden (7 Tage ohne volle Tage bleiben vorläufig)');
+  // M-5: vorläufig = nicht angewandt (k nur angezeigt), erst mit 7 vollen Messtagen und ≥ 50 % der Stunden
+  const kfA = K.methodFactor(ref, { ...meas, days: 7, fullDays: 7, obsMin: 1500 });
+  assert(!kf.applied && kf.reason === 'vorläufiger Faktor k = 1,60 (1,32–2,15) nicht angewandt: erst 0 von 7 vollen Messtagen; 10 % statt 50 % der Tagesstunden beobachtet' && kfA.applied && !kfA.reason, 'M-5: 2 Messtage → applied false, prelim true, Grund nennt k und Vorbehalte; 7 volle Tage → angewandt');
+  assert(K.factorFor('scooter', { k: kf }).f === 1 && K.factorFor('scooter', { k: kf }).source === 'gemessen', 'M-5: vorläufiges k wirkt nicht auf die Fahrten');
   assert(!K.methodFactor(ref, null).applied && /keine Berliner/.test(K.methodFactor(ref, { ...meas, rvd: null }).reason) && !K.methodFactor({}, meas).applied && !K.methodFactor(ref, { ...meas, rvd: 0.1 }).applied, 'keine Kalibrierung ohne Berliner Messung, ohne Quartalswerte oder bei unplausiblem Faktor (> 5)');
   // Faktor je Gruppe: Korrektur übersteuert, k nur E-Scooter im Modus „kalibriert“
-  assert(K.factorFor('scooter', { k: kf }).source === 'kalibriert' && K.factorFor('ebike', { k: kf }).f === 1 && K.factorFor('scooter', { k: kf, mode: 'mess' }).f === 1 && K.factorFor('scooter', { k: kf, manual: 1.3 }).f === 1.3 && K.factorFor('scooter', { k: kf, manual: 1.3 }).source === 'Korrektur', 'Faktor: Korrektur × übersteuert, k nur für E-Scooter, „gemessen“ ohne Faktor');
+  assert(K.factorFor('scooter', { k: kfA }).source === 'kalibriert' && K.factorFor('ebike', { k: kfA }).f === 1 && K.factorFor('scooter', { k: kfA, mode: 'mess' }).f === 1 && K.factorFor('scooter', { k: kfA, manual: 1.3 }).f === 1.3 && K.factorFor('scooter', { k: kfA, manual: 1.3 }).source === 'Korrektur', 'Faktor: Korrektur × übersteuert, k nur für E-Scooter, „gemessen“ ohne Faktor');
   const kk = K.applyFactor(kc, 2);
   assert(near(kk.ridesDay, 2 * kc.ridesDay) && near(kk.rvd, 2 * kc.rvd) && near(kk.utilization, 2 * kc.utilization) && near(kk.revDay, 2 * kc.revDay) && near(kk.perRide, kc.perRide) && near(kk.fleet, kc.fleet), 'Faktor skaliert Fahrten, RVD, Auslastung, Umsatz; Preis je Fahrt und Flotte bleiben');
   const rep = { pop: 1e6, groups: [{ key: 'Dott|scooter', op: 'Dott', ty: 'scooter', fleet: 100, ridesDay: 100, plausible: true }, { key: 'nb|bike', op: 'nb', ty: 'bike', fleet: 50, ridesDay: 50, plausible: true }] };
@@ -132,26 +136,26 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
   const cov = K.fleetCoverage(ref, { '11000000|Dott|scooter': { total: 4557 }, '11000000|nextbike|bike': { total: 999 }, '09162000|Dott|scooter': { total: 3392 } });
   assert(cov.length === 2 && cov[0].ours === 4557 && near(cov[0].share, 4557 / 46450) && cov[0].art === 'genehmigt' && near(cov[1].share, 3392 / 21000), 'Abdeckung: eigene E-Scooter ÷ amtliche Flotte (Berlin 9,8 %, München 16 %)');
   // 4. Plausibilität
-  const pc = K.plausibilityChecks(ref, { byAgs: { '06412000': { rvd: 1.2 } }, national: { rvd: 1.0 }, voi: { rvd: 2, revPerVehicleDay: 5 } }, kf);
+  const pc = K.plausibilityChecks(ref, { byAgs: { '06412000': { rvd: 1.2 } }, national: { rvd: 1.0 }, voi: { rvd: 2, revPerVehicleDay: 5 } }, kfA);
   const ff = pc.find(x => x.key === 'fahrten:06412000');
-  assert(ff && ff.kind === 'Untergrenze' && ff.limit === 12000 && near(ff.refValue, 10490000 / 365 / 12000, 1e-9) && near(ff.calibrated, 1.2 * kf.k, 1e-9), 'Frankfurt: 10,49 Mio. ÷ 365 ÷ 12.000 (Obergrenze 2025) = Untergrenze 2,39');
+  assert(ff && ff.kind === 'Untergrenze' && ff.limit === 12000 && near(ff.refValue, 10490000 / 365 / 12000, 1e-9) && near(ff.calibrated, 1.2 * kfA.k, 1e-9), 'Frankfurt: 10,49 Mio. ÷ 365 ÷ 12.000 (Obergrenze 2025) = Untergrenze 2,39');
   assert(pc.some(x => x.ref.ort === 'Europa' && x.measured === 1) && pc.some(x => x.ref.ort === 'Voi gesamt' && x.measured === 2 && x.kind === 'Vergleich') && pc.some(x => x.unit === '€' && x.measured === 5 && near(x.ratio, 5 / 3.64)), 'Europa und Voi (Fahrten und Umsatz je Fahrzeug) als Vergleich ohne Faktor');
-  const bRep = (groups) => ({ quality: { fullDays: 0, obsMin: 276, possibleMin: 2880 }, days: ['2026-10-31', '2026-11-01'], from: '2026-10-31', to: '2026-11-01', groups });
+  const bRep = (groups, q = {}) => ({ quality: { fullDays: 0, obsMin: 276, possibleMin: 2880, ...q }, days: ['2026-10-31', '2026-11-01'], from: '2026-10-31', to: '2026-11-01', groups });
   const dott = { op: 'Dott', ty: 'scooter', plausible: true, flags: [], ridesDay: 4913, fleet: 4570, rides: 681, rvd: 4913 / 4570 };
   const all = K.calibration(ref, { berlinReport: bRep([dott]), groups: {} });
-  assert(all.k.applied && near(all.k.k, 1.72 / (4913 / 4570), 1e-9) && all.assume.scooter.calibrated && all.coverage.length === 2 && near(all.limits.scooter, 2.31 * 1.5, 1e-9), 'Kalibrierung gesamt aus Berliner Bericht; Plausibilitätsgrenze 2,31 × 1,5');
+  assert(!all.k.applied && all.k.prelim && K.calibration(ref, { berlinReport: bRep([dott], { fullDays: 7, obsMin: 1500 }), groups: {} }).k.applied && near(all.k.k, 1.72 / (4913 / 4570), 1e-9) && all.assume.scooter.calibrated && all.coverage.length === 2 && near(all.limits.scooter, 2.31 * 1.5, 1e-9), 'Kalibrierung gesamt aus Berliner Bericht; Plausibilitätsgrenze 2,31 × 1,5');
   // Herkunft von k offenlegen, Einschränkung bei nur einem Anbieter; unplausible Berliner Anbieter gehen nicht in k ein
   assert(all.k.source === 'aus Dott Berlin, 681 Fahrten, 4,6 Messstunden' && /nur aus einem Anbieter \(Dott\)/.test(all.k.single), 'k: Herkunft „aus Dott Berlin, n Fahrten, x Messstunden“ und Hinweis auf nur einen Anbieter');
   const lime = { op: 'Lime', ty: 'scooter', plausible: false, flags: [K.SUSPENDED], ridesDay: 9000, fleet: 1000, rides: 900, rvd: 9 };
   const two = K.calibration(ref, { berlinReport: bRep([dott, lime]), groups: {} });
-  assert(two.k.applied && near(two.k.k, all.k.k, 1e-9) && two.k.measured.excluded[0].op === 'Lime' && two.k.single && two.k.source.startsWith('aus Dott Berlin'), 'unplausibler Berliner Anbieter (Lime) geht nicht in k ein und wird als ausgeschlossen geführt');
+  assert(near(two.k.k, all.k.k, 1e-9) && two.k.measured.excluded[0].op === 'Lime' && two.k.single && two.k.source.startsWith('aus Dott Berlin'), 'unplausibler Berliner Anbieter (Lime) geht nicht in k ein und wird als ausgeschlossen geführt');
   const none = K.calibration(ref, { berlinReport: bRep([lime]), groups: {} });
   assert(!none.k.applied && /keine plausible Berliner/.test(none.k.reason) && /Lime/.test(none.k.reason), 'nur unplausible Berliner Messung: keine Kalibrierung, Grund nennt den Anbieter');
   // Englische Oberfläche (lang 'en'): Texte übersetzt, Zahlen mit Dezimalpunkt, Kennungen (kind, Flags) sprachunabhängig, Werte gleich
   const allEn = K.calibration(ref, { berlinReport: bRep([dott]), groups: {}, lang: 'en' });
   assert(allEn.lang === 'en' && allEn.k.source === 'from Dott Berlin, 681 trips, 4.6 measured hours' && /^k comes from only one operator \(Dott\)/.test(allEn.k.single) && near(allEn.k.k, all.k.k, 1e-12) && allEn.k.rule === 'same quarter of the previous year',
     'EN: Herkunft „from Dott Berlin, 681 trips, 4.6 measured hours“, Hinweis auf einen Anbieter, Referenzregel; k unverändert');
-  assert(allEn.k.prelimWhy.join(' | ') === 'only 2 of 7 measurement days | 10 % instead of 50 % of the hours of the day observed' && allEn.assume.ebike.label === 'assumption (no official evidence)' && allEn.coverage[0].label === 'licensed fleet' && allEn.coverage[0].shareLabel.startsWith('Share of the licensed fleet'),
+  assert(allEn.k.prelimWhy.join(' | ') === 'only 0 of 7 full measurement days | 10 % instead of 50 % of the hours of the day observed' && /^provisional factor k = 1\.60 \(1\.32–2\.15\) not applied: only 0/.test(allEn.k.reason) && allEn.assume.ebike.label === 'assumption (no official evidence)' && allEn.coverage[0].label === 'licensed fleet' && allEn.coverage[0].shareLabel.startsWith('Share of the licensed fleet'),
     'EN: Vorbehalte, Annahme und Abdeckung übersetzt');
   const ffEn = allEn.checks.find(x => x.key === 'fahrten:06412000');
   assert(ffEn.kind === 'Untergrenze' && ffEn.label === 'Frankfurt am Main: trips per vehicle per day' && ffEn.how === '10490000 trips 2025 ÷ 365 days ÷ fleet cap 12000' && allEn.checks.some(x => x.scope === 'Voi in open feeds (Germany)'), 'EN: Prüfwerte beschriftet, kind bleibt Kennung');
@@ -167,9 +171,21 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
   assert(crs.groups.get('Lime|scooter').factor === 1 && crs.groups.get('Lime|scooter').suspended && crs.totals.ridesDay === 200 && near(crs.totals.rvd, 2), 'Bericht: unplausible E-Scooter-Zeile nicht kalibriert und nicht in der Summe');
   const crn = K.calibrateReport({ pop: 1e6, groups: [{ key: 'Lime|scooter', op: 'Lime', ty: 'scooter', fleet: 100, ridesDay: 900, plausible: false, flags: [K.SUSPENDED] }, { key: 'nb|bike', op: 'nb', ty: 'bike', fleet: 50, ridesDay: 50, plausible: true, flags: [] }] }, { applied: true, k: 2, kLow: 1.5, kHigh: 3 });
   assert(!crn.applied, 'alle E-Scooter-Zeilen ausgesetzt: Bericht gilt als nicht kalibriert (keine Kalibrier-Beschriftung)');
-  const pcs = K.plausibilityChecks(ref, { byAgs: { '06412000': { rvd: 9.64 } }, national: { rvd: 1.9 }, voi: { rvd: 3.6, revPerVehicleDay: 5 } }, kf);
+  const pcs = K.plausibilityChecks(ref, { byAgs: { '06412000': { rvd: 9.64 } }, national: { rvd: 1.9 }, voi: { rvd: 3.6, revPerVehicleDay: 5 } }, kfA);
   assert(pcs.find(x => x.key === 'fahrten:06412000').calibrated === null && pcs.find(x => x.key === 'fahrten:06412000').suspended && pcs.find(x => x.unit === '€').calibrated === null && pcs.find(x => x.ref.ort === 'Europa').calibrated != null, 'Prüfwerte: Frankfurt 9,64 und Voi 3,6 über der Grenze → keine kalibrierten Vergleichswerte');
   assert(cov[0].label === 'genehmigte Flotte' && /Untergrenze der Feed-Abdeckung/.test(cov[0].shareLabel) && cov[1].label === 'aktive Flotte', 'Beschriftung: Berlin genehmigte Flotte (Anteil = Untergrenze der Abdeckung), München aktive Flotte');
+  // M-5: kalibrierte Werte höchstens bis zur eigenen Überzählungsgrenze (2,31 × 1,5 ≈ 3,47), gekennzeichnet
+  {
+    const k266 = { applied: true, k: 2.66, kLow: 2.2, kHigh: 3.57 };
+    const cv = K.calibrateReport({ pop: 1e6, groups: [{ key: 'Voi|scooter', op: 'Voi', ty: 'scooter', fleet: 100, ridesDay: 202, rvd: 2.02, plausible: true, flags: [] }, { key: 'Dott|scooter', op: 'Dott', ty: 'scooter', fleet: 100, ridesDay: 60, rvd: 0.6, plausible: true, flags: [] }] }, k266, { limits: all.limits });
+    const voi = cv.groups.get('Voi|scooter'), dt = cv.groups.get('Dott|scooter');
+    assert(near(voi.rvd, all.limits.scooter, 1e-9) && voi.capped && voi.rvdHi <= all.limits.scooter + 1e-9 && near(dt.rvd, 0.6 * 2.66, 1e-9) && !dt.capped && cv.capped, 'M-5: k = 2,66 auf Voi mit RVD 2,02 → kalibriert ≤ 3,47 und gekappt markiert; Dott 0,6 × 2,66 unverändert');
+    const ak = K.applyFactor({ rides: 202, ridesDay: 202, rvd: 2.02, revDay: 100 }, 2.66, { limit: all.limits.scooter });
+    assert(near(ak.rvd, all.limits.scooter, 1e-9) && ak.capped && near(ak.revDay, 100 * all.limits.scooter / 2.02, 1e-9) && !K.applyFactor({ rvd: 0.5 }, 2, { limit: 3.47 }).capped, 'M-5: applyFactor mit Grenze kappt rvd × f, Umsatz skaliert mit');
+    const kA = { ...kfA, k: 2.66 };
+    const pk = K.plausibilityChecks(ref, { byAgs: {}, national: { rvd: 2.0 }, voi: { rvd: 3.0, revPerVehicleDay: 5 } }, kA);
+    assert(pk.filter(x => x.calibrated != null && x.unit !== '€').every(x => x.calibrated <= all.limits.scooter + 1e-9) && pk.find(x => x.unit === '€').calibrated <= 5 * all.limits.scooter / 3 + 1e-9, 'M-5: Prüfwerte kalibriert höchstens bis zur Grenze');
+  }
   // echte Referenzdatei: Regeln greifen auf dem eingecheckten Stand
   const { readFileSync } = await import('node:fs');
   const real = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url), 'utf8'));

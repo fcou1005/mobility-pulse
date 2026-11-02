@@ -2,6 +2,7 @@
 // Eigenständiges Modul; app.js übergibt ctx = { state, CFG, esc, getJson, setScope }. Daten: coverage.json (Sammler, lib/pulse-coverage.js).
 // Alle Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel cov.*), Zahlen und Daten über i18n.js.
 import { t, has, lang, numFmt, dateFmt } from './i18n.js';
+import { csvCell } from './pulse-ops.js';
 
 const CAT = (c) => (has(`cov.cat.${c}`) ? t(`cov.cat.${c}`) : c);
 const SHORT = (c) => t(`cov.short.${c}`);
@@ -12,8 +13,9 @@ const dayFmt = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? dateFmt({ day: '2-d
 const stampFmt = (ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(ms)) : '–');
 
 // Kategorie → [Symbol, Statusklasse]; Farbe nie allein (Symbol + Text)
-const CAT_ORDER = ['abgedeckt', 'gesperrt', 'feed-still', 'kein-feed', 'nicht-gelistet', 'eingestellt', 'aktiv', 'still'];
-const CAT_MARK = { abgedeckt: ['✓', 'ok'], gesperrt: ['⊘', 'info'], 'feed-still': ['!', 'near'], 'kein-feed': ['✕', 'over'], 'nicht-gelistet': ['+', 'hint'], eingestellt: ['–', 'none'], aktiv: ['✓', 'ok'], still: ['!', 'near'] };
+// veraltet = Feed liefert nur alte Stände, nicht erreichbar = Abruf scheitert (lib/pulse-coverage.js CATS)
+const CAT_ORDER = ['abgedeckt', 'gesperrt', 'feed-still', 'veraltet', 'nicht-erreichbar', 'kein-feed', 'nicht-gelistet', 'eingestellt', 'aktiv', 'still'];
+const CAT_MARK = { abgedeckt: ['✓', 'ok'], gesperrt: ['⊘', 'info'], 'feed-still': ['!', 'near'], veraltet: ['◔', 'near'], 'nicht-erreichbar': ['⊗', 'over'], 'kein-feed': ['✕', 'over'], 'nicht-gelistet': ['+', 'hint'], eingestellt: ['–', 'none'], aktiv: ['✓', 'ok'], still: ['!', 'near'] };
 const badge = (c) => `<span class="rp-status ${CAT_MARK[c]?.[1] || 'none'}"><i aria-hidden="true">${CAT_MARK[c]?.[0] || '?'}</i>${CAT(c) || c}</span>`;
 
 const S = new WeakMap();
@@ -37,7 +39,7 @@ const CSS = `
 .cov-meter b{font-weight:600;font-variant-numeric:tabular-nums;min-width:3.2em;text-align:right}
 .cov-n button{all:unset;font:inherit;cursor:pointer;font-variant-numeric:tabular-nums;padding:2px 6px;border-radius:6px}
 .cov-op{white-space:nowrap}.cov-op .sub-line{white-space:nowrap}
-a.cov-ext{margin-left:4px;text-decoration:none;color:var(--fg-2)}a.cov-ext:hover{color:var(--accent)}
+a.cov-ext{margin-left:2px;text-decoration:none;color:var(--fg-2);display:inline-block;min-width:24px;min-height:24px;line-height:24px;text-align:center;vertical-align:middle;border-radius:4px}a.cov-ext:hover{color:var(--accent)}
 .cov-th{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.cov-th i{font-style:normal}
 .cov-n button:hover,.cov-n button:focus-visible{background:var(--panel-2);outline:2px solid var(--accent);outline-offset:-2px}
 .cov-n .z{color:var(--muted)}
@@ -99,17 +101,17 @@ function opTable(cov, s, ctx) {
   const ops = cov.operators.filter((o) => !s.listOnly || o.hasList);
   const num = (o, c) => { const v = o.cats[c] || 0; return `<td class="n cov-n">${v ? `<button type="button" data-cov-op="${esc(o.opKey)}" data-cov-cat="${c}" title="${esc(CAT(c))}">${n0(v)}</button>` : '<span class="z">0</span>'}</td>`; };
   const rows = ops.map((o) => {
-    const listed = o.hasList ? (o.cats.abgedeckt || 0) + (o.cats.gesperrt || 0) + (o.cats['feed-still'] || 0) + (o.cats['kein-feed'] || 0) : 0;
+    const listed = o.hasList ? ['abgedeckt', 'gesperrt', 'feed-still', 'veraltet', 'nicht-erreichbar', 'kein-feed'].reduce((a, c) => a + (o.cats[c] || 0), 0) : 0;
     const rate = listed ? (o.cats.abgedeckt || 0) / listed : null;
     const meter = rate == null ? `<span class="muted">${t('cov.noList')}</span>`
       : `<div class="cov-meter" title="${esc(t('cov.rateTip', { n: o.cats.abgedeckt || 0, m: listed }))}"><div class="bar" role="img" aria-label="${esc(t('cov.rateTip', { n: o.cats.abgedeckt || 0, m: listed }))}"><span style="width:${Math.round(rate * 100)}%"></span></div><b>${pct(rate)}</b></div>`;
     const srcLink = o.hasList && /^https?:/i.test(o.claimSrc || '') ? `<a class="cov-ext" href="${esc(o.claimSrc)}" target="_blank" rel="noopener" title="${esc(t('cov.sourceLink'))}" aria-label="${esc(`${t('cov.sourceLink')}: ${o.op}`)}">↗</a>` : '';
     const stray = o.stray ? `<div class="sub-line muted" title="${esc(t('cov.stray', { g: n0(o.stray.gemeinden), v: n0(o.stray.fahrzeuge), min: cov.minStray }))}">${t('cov.strayShort', { g: n0(o.stray.gemeinden), v: n0(o.stray.fahrzeuge) })}</div>` : '';
     return `<tr${s.op === o.opKey ? ' class="cov-sel"' : ''}><td class="cov-op"><button type="button" class="rp-city" data-cov-op="${esc(o.opKey)}" aria-pressed="${s.op === o.opKey}">${esc(o.op)}</button>${o.claimWeak ? `<sup title="${esc(t('cov.weak'))}">¹</sup>` : ''}${srcLink}${stray}</td>
-      <td class="n">${o.hasList ? n0(listed) : '–'}</td><td>${meter}</td>${num(o, 'abgedeckt')}${num(o, 'gesperrt')}${num(o, 'feed-still')}${num(o, 'kein-feed')}${num(o, 'nicht-gelistet')}${num(o, 'eingestellt')}<td class="n">${n0(o.vehicles)}</td></tr>`;
+      <td class="n">${o.hasList ? n0(listed) : '–'}</td><td>${meter}</td>${num(o, 'abgedeckt')}${num(o, 'gesperrt')}${num(o, 'feed-still')}${num(o, 'veraltet')}${num(o, 'nicht-erreichbar')}${num(o, 'kein-feed')}${num(o, 'nicht-gelistet')}${num(o, 'eingestellt')}<td class="n">${n0(o.vehicles)}</td></tr>`;
   }).join('');
   const th = (c) => `<th class="n" title="${esc(CAT(c))}"><span class="rp-status ${CAT_MARK[c][1]} cov-th"><i aria-hidden="true">${CAT_MARK[c][0]}</i>${SHORT(c)}</span></th>`;
-  return `<div class="tbl"><table><thead><tr><th>${t('cov.op')}</th><th class="n">${t('cov.listed')}</th><th>${t('cov.rate')}</th>${th('abgedeckt')}${th('gesperrt')}${th('feed-still')}${th('kein-feed')}${th('nicht-gelistet')}${th('eingestellt')}<th class="n">${t('cov.vehTotal')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('cov.opTableAria'))}"><table><thead><tr><th>${t('cov.op')}</th><th class="n">${t('cov.listed')}</th><th>${t('cov.rate')}</th>${th('abgedeckt')}${th('gesperrt')}${th('feed-still')}${th('veraltet')}${th('nicht-erreichbar')}${th('kein-feed')}${th('nicht-gelistet')}${th('eingestellt')}<th class="n">${t('cov.vehTotal')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function controls(cov, s, ctx) {
@@ -137,13 +139,15 @@ function detailTable(cov, list, s, ctx) {
   };
   const body = list.slice(0, s.limit).map((r) => `<tr><td>${city(r)}</td><td>${esc(r.op)}</td><td>${claimCell(r, ops.get(r.opKey), esc)}</td><td>${feedCell(r, cov, esc)}</td>
     <td class="n">${r.vehicles ? n0(r.vehicles) : '<span class="muted">0</span>'}</td><td class="n">${r.vehicles ? t('cov.now') : r.lastActive ? dayFmt(r.lastActive) : '–'}</td><td>${noteCell(r, cov, esc)}</td></tr>`).join('');
-  const more = list.length > s.limit ? `<div class="rp-ctl rp-noprint" style="margin-top:var(--s2)"><button type="button" data-cov-act="more">${t('cov.more', { n: Math.min(100, list.length - s.limit), m: list.length - s.limit })}</button></div>` : '';
-  return `<div class="tbl"><table>${head}<tbody>${body}</tbody></table></div>${more}`;
+  const rest = list.length - s.limit;
+  const more = rest > 0 ? `<div class="rp-ctl rp-noprint" style="margin-top:var(--s2)"><button type="button" data-cov-act="more">${rest <= 100 ? t('common.showAllMore', { n: n0(rest) }) : t('common.show100More', { n: n0(rest - 100) })}</button></div>` : '';
+  return `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('cov.cityTableAria'))}"><table>${head}<tbody>${body}</tbody></table></div>${more}`;
 }
 
-function csvOf(cov, list) {
+/** CSV der Abdeckung; Zellen mit Formel-Schutz (Anbieter- und Quellennamen stammen aus den Feeds) wie alle übrigen Exporte */
+export function csvOf(cov, list) {
   const sep = lang() === 'en' ? ',' : ';';
-  const cell = (v) => { const x = v == null ? '' : String(v); return /[";,\n\r]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+  const cell = (v) => csvCell(v, sep);
   const head = [t('cov.city'), 'AGS', t('cov.state'), t('cov.op'), t('cov.claimed'), t('cov.cat'), t('cov.vehicles'), t('cov.last'), t('cov.feed'), t('cov.note')];
   const rows = list.map((r) => [r.city, r.ags || '', r.state || '', r.op, r.claimed === null ? t('cov.noList') : r.claimed ? (r.claimRegion ? t('cov.region', { r: r.claimRegion }) : t('cov.yes')) : t('cov.no'), CAT(r.cat) || r.cat,
     r.vehicles, r.vehicles ? t('cov.now') : r.lastActive || '', (r.src || []).map((id) => `${cov.sources?.[id]?.name || id} (${ST(cov.sources?.[id]?.status)})`).join(' | '),
@@ -168,6 +172,8 @@ function draw(el, ctx, cov) {
     ${detailTable(cov, list, s, ctx)}
     <div class="muted small cov-foot">${t('cov.method', { min: cov.minStray })}${cov.operators.some((o) => o.claimWeak) ? `<div>¹ ${t('cov.weak')}</div>` : ''}${unres.length ? `<div>${t('cov.unresolvedList', { list: unres.slice(0, 30).map((u) => `${esc(u.op)}: ${esc(u.ort)}`).join(', ') + (unres.length > 30 ? ' …' : '') })}</div>` : ''}</div>`;
   el._covList = list;
+  // Fokus zurück, wenn ein Klick die Tabelle neu aufgebaut hat (Ort öffnen, weitere Zeilen)
+  if (s.refocus) { const f = el.querySelector(s.refocus.sel) || el.querySelectorAll('.tbl tbody tr')[s.refocus.row]?.querySelector('td'); if (f) { if (f.tagName === 'TD') f.tabIndex = -1; f.focus(); } s.refocus = null; }
 }
 
 /** Panel zeichnen (Ansicht „Quellen“) */
@@ -196,11 +202,11 @@ export async function renderCoverage(el, ctx) {
       const so = e.target.closest('button[data-cov-sort]');
       if (so) { const k = so.dataset.covSort; s.sort = s.sort.key === k ? { key: k, dir: s.sort.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: k === 'vehicles' || k === 'last' ? 'desc' : 'asc' }; redraw(); el.querySelector(`button[data-cov-sort="${k}"]`)?.focus(); return; }
       const ob = e.target.closest('button[data-cov-op]');
-      if (ob) { const k = ob.dataset.covOp, c = ob.dataset.covCat; const same = s.op === k && (c ? s.cat === c : s.cat === 'all'); s.op = same ? 'all' : k; s.cat = same ? 'all' : c || 'all'; s.limit = 100; redraw(); return; }
+      if (ob) { const k = ob.dataset.covOp, c = ob.dataset.covCat; const same = s.op === k && (c ? s.cat === c : s.cat === 'all'); s.op = same ? 'all' : k; s.cat = same ? 'all' : c || 'all'; s.limit = 100; s.refocus = { sel: `button[data-cov-op="${CSS.escape(k)}"]${c ? `[data-cov-cat="${CSS.escape(c)}"]` : ':not([data-cov-cat])'}` }; redraw(); return; }
       const cb = e.target.closest('button.rp-city[data-ags]');
-      if (cb && typeof s.ctx.setScope === 'function') { s.ctx.setScope(cb.dataset.ags); return; }
+      if (cb && typeof s.ctx.setScope === 'function') { s.refocus = { sel: `button.rp-city[data-ags="${CSS.escape(cb.dataset.ags)}"]` }; s.ctx.setScope(cb.dataset.ags); return; }
       const a = e.target.closest('button[data-cov-act]');
-      if (a?.dataset.covAct === 'more') { s.limit += 100; redraw(); }
+      if (a?.dataset.covAct === 'more') { const n = s.limit, rest = (el._covList?.length || 0) - n; s.limit = rest <= 100 ? Infinity : n + 100; s.refocus = { sel: null, row: n }; redraw(); }
       if (a?.dataset.covAct === 'csv') download(`mobility-pulse_${lang() === 'en' ? 'coverage' : 'abdeckung'}_${new Date(s.cov.generatedAt || Date.now()).toISOString().slice(0, 10)}.csv`, csvOf(s.cov, el._covList || []));
     });
   }

@@ -137,3 +137,90 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   const E = (e, s) => C.errorCause(e, s);
   assert(E(['discovery: HTTP 0 Timeout']) === 'timeout' && E(['citybikes: HTTP 429']) === 'http429' && E(['discovery: HTTP 404']) === 'http404' && E(['discovery: HTTP 0 CERT_HAS_EXPIRED']) === 'tls' && E(['discovery: HTTP 0 ENOTFOUND']) === 'dns' && E(['discovery: HTTP 200 kein JSON'], 200) === 'noJson' && E(['discovery: HTTP 200 Antwort zu groß']) === 'tooLarge' && E(['x']) === 'other', 'Fehlerursachen');
 }
+// ---------- Methodenprüfung 01.11.2026 ----------
+// M-1: Spiegelquelle mit umgeschlüsselten Kennungen (MOBIDROM ↔ nextbike direkt): schwächere Quelle je Gemeinde ganz, sonst räumliche Zwillinge
+{
+  const N = (src, id, lat, lon, extra = {}) => ({ operator: 'nextbike', rawId: id, sourceId: src, ags: '05315000', type: 'bike', lat, lon, batteryPct: null, rangeKm: null, priority: 2, ...extra });
+  const A = [...Array(30)].map((_, i) => N('nextbike_kg', 'k' + i, 50.90 + i * 0.001, 6.95));
+  const B = [...Array(30)].map((_, i) => N('mobidrom_x:source-nextbike-kvb-rad', 'm' + i, 50.90 + i * 0.001, 6.95));
+  const rank = (id) => [2, id.startsWith('mobidrom_') ? 1 : 0, 0]; // wie collect.mjs: Priorität, Manifest-Kind schwächer, CityBikes schwächer
+  const pairs = [{ operator: 'nextbike', ags: '05315000', a: { sourceId: 'mobidrom_x:source-nextbike-kvb-rad', vehicles: 30 }, b: { sourceId: 'nextbike_kg', vehicles: 30 }, idsRekeyed: true, posMatch: 1, countDiff: 0 }];
+  const dv = C.dedupeVehicles([...B, ...A]);
+  assert(dv.vehicles.length === 60, 'Kennungs-Dubletten greifen bei umgeschlüsselten Kennungen nicht (60)');
+  const r = C.dropMirrorVehicles(dv.vehicles, { pairs, rank });
+  assert(r.vehicles.length === 30 && r.vehicles.every(v => v.sourceId === 'nextbike_kg') && r.dropped.length === 30 && r.dropped.every(d => d.why === 'whole' && d.of === 'nextbike_kg'), 'M-1: 30 Fahrzeuge an gleichen Positionen → 30, schwächere Quelle (MOBIDROM) fällt ganz');
+  assert(r.known.length === 1 && r.known[0].winner === 'nextbike_kg' && r.known[0].loser === 'mobidrom_x:source-nextbike-kvb-rad', 'M-1: bekanntes Spiegelpaar mit Sieger/Verlierer');
+  // kleine Nachbargemeinde (kein Paar unter 20 Fahrzeugen): bekanntes Paar → Zwillinge ≤ 10 m, eins zu eins (Station mit 5 bzw. 3 Rädern auf derselben Koordinate)
+  const smallA = [...Array(5)].map((_, i) => N('nextbike_kg', 's' + i, 50.80, 6.90, { ags: '05362024' })), smallB = [...Array(3)].map((_, i) => N('mobidrom_x:source-nextbike-kvb-rad', 't' + i, 50.80003, 6.90, { ags: '05362024' }));
+  const far = N('mobidrom_x:source-nextbike-kvb-rad', 'u0', 50.81, 6.91, { ags: '05362024' });
+  const r2 = C.dropMirrorVehicles([...smallA, ...smallB, far], { pairs, rank });
+  assert(r2.vehicles.length === 6 && r2.dropped.length === 3 && r2.dropped.every(d => d.why === 'twin') && r2.vehicles.includes(far), 'M-1: bekanntes Paar in kleiner Gemeinde: 3 Zwillinge eins zu eins verworfen, Einzelfahrzeug ohne Zwilling bleibt');
+  // Paar aus dem vorigen Lauf (latest.json → mirrors) wirkt auch ohne aktuelles Paar
+  const r3 = C.dropMirrorVehicles([...smallA, ...smallB], { pairs: [], rank, extra: [{ operator: 'nextbike', of: 'nextbike_kg', source: 'mobidrom_x:source-nextbike-kvb-rad' }] });
+  assert(r3.vehicles.length === 5, 'M-1: bekanntes Paar aus dem vorigen Lauf');
+  // unbekanntes Paar: nur ≤ 5 m mit gleichem Ladestand (unter 99 %) und gleicher Reichweite
+  const Z = (src, id, lat, bat, rg, prio) => ({ operator: 'Zeus', rawId: id, sourceId: src, ags: '08226049', type: 'scooter', lat, lon: 8.69, batteryPct: bat, rangeKm: rg, priority: prio });
+  const zs = [Z('zeus_leimen', 'a', 49.35, 63, 22.1, 1), Z('zeus_heidelberg', 'x', 49.35002, 63, 22.1, 2), // Zwilling
+    Z('zeus_leimen', 'b', 49.36, 100, 35, 1), Z('zeus_heidelberg', 'y', 49.36001, 100, 35, 2), // voll geladen: nicht abgleichen
+    Z('zeus_leimen', 'c', 49.37, 50, 17, 1), Z('zeus_heidelberg', 'z', 49.37002, 51, 17.4, 2)]; // anderer Ladestand
+  const rz = C.dropMirrorVehicles(zs, { rank: (id) => [id === 'zeus_leimen' ? 1 : 2] });
+  assert(rz.vehicles.length === 5 && rz.dropped.length === 1 && rz.dropped[0].v.rawId === 'x' && rz.dropped[0].of === 'zeus_leimen', 'M-1: unbekanntes Paar: nur Zwilling mit gleichem Ladestand/Reichweite ≤ 5 m, schwächere Quelle fällt');
+  const cmp = C.compareSources(rank);
+  assert(cmp('nextbike_kg', 'mobidrom_x:source-nextbike-kvb-rad') < 0 && cmp('b', 'a') > 0, 'Quellenstärke: direkte Quelle vor Manifest-Kind, sonst Kennung');
+}
+// M-2: Ladestand-Skala je Quelle – 0..1 nur, wenn die Quelle insgesamt keine Werte über 1 meldet; unplausible Skala → Ladestand null
+{
+  const n = Math.floor(now / 1000);
+  const feed = (bikes) => ({ 'https://b/gbfs.json': { last_updated: n, ttl: 60, version: '2.3', data: { de: { feeds: [{ name: 'free_bike_status', url: 'https://b/fbs.json' }, { name: 'vehicle_types', url: 'https://b/vt.json' }] } } },
+    'https://b/vt.json': { last_updated: n, ttl: 60, version: '2.3', data: { vehicle_types: [{ vehicle_type_id: 'sc', form_factor: 'scooter', propulsion_type: 'electric', max_range_meters: 40000 }] } },
+    'https://b/fbs.json': { last_updated: n, ttl: 60, version: '2.3', data: { bikes } } });
+  const read = (bikes) => C.readGbfsSystem({ id: 'b_t', url: 'https://b/gbfs.json', operator: 'Lime' }, async (u) => ({ ok: true, status: 200, json: feed(bikes)[u] }), { now });
+  const B = (i, extra) => ({ bike_id: 'v' + i, lat: 48.7 + i * 0.001, lon: 9.1, is_reserved: false, is_disabled: false, vehicle_type_id: 'sc', last_reported: n, ...extra });
+  // 0–100-Feed mit einem Fahrzeug bei 1 %: bleibt 1 % (vorher ×100 = 100 %)
+  let s = await read([B(0, { current_fuel_percent: 1 }), B(1, { current_fuel_percent: 80 }), B(2, { current_fuel_percent: 0.5 })]);
+  assert(s.vehicles[0].batteryPct === 1 && s.vehicles[1].batteryPct === 80 && s.vehicles[2].batteryPct === 0.5 && !s.batteryScale.fraction, 'M-2: 0–100-Feed: 1 % bleibt 1 %');
+  s = await read([B(0, { current_fuel_percent: 0.12 }), B(1, { current_fuel_percent: 1 })]);
+  assert(Math.abs(s.vehicles[0].batteryPct - 12) < 1e-9 && s.vehicles[1].batteryPct === 100 && s.batteryScale.fraction, 'M-2: 0..1-Feed (alle ≤ 1) ×100');
+  // 100 Fahrzeuge mit Ladestand 0–37 % → Skala unplausibel: Ladestand null, Fingerabdruck bleibt, Befund in der Feed-Prüfung
+  s = await read([...Array(100)].map((_, i) => B(i, { current_fuel_percent: Math.round(i * 0.37) })));
+  assert(s.batteryScale.suspect && s.batteryScale.n === 100 && s.batteryScale.p99 === 36 && s.vehicles.every(v => v.batteryPct === null) && s.vehicles[10].batteryFp === 4, 'M-2: Ladestand 0–37 % (n = 100) → null, Fingerabdruck batteryFp');
+  assert(s.checks.items.some(x => x.msg === C.BATTERY_SCALE_MSG && x.level === 'warning' && x.n === 100), 'M-2: Befund „Ladestand-Skala unplausibel“ in der Feed-Prüfung');
+  // abgeleiteter Ladestand (Reichweite ÷ Maximalreichweite): gekennzeichnet; gleichverteilt 0–100 % bleibt
+  s = await read([...Array(60)].map((_, i) => B(i, { current_range_meters: Math.round(i / 59 * 40000) })));
+  assert(!s.batteryScale.suspect && s.batteryScale.derived === 60 && s.vehicles.every(v => v.batteryDerived && v.batteryPct != null), 'M-2: abgeleiteter Ladestand gekennzeichnet (batteryDerived), plausible Skala bleibt');
+  assert(!C.batteryScaleCheck([...Array(49)].map(() => ({ batteryPct: 20 }))).suspect, 'M-2: unter 50 Fahrzeugen keine Skalenprüfung');
+}
+// M-22: Regression auf dem echten Datenstand (.realdata): Ladestand-Skala je Quelle und umgeschlüsselte Spiegel (Köln nextbike)
+{
+  const { existsSync, readFileSync, readdirSync } = await import('node:fs');
+  const D = new URL('../.realdata/', import.meta.url).pathname;
+  if (existsSync(`${D}snapshot`) && existsSync(`${D}consistency.json`)) {
+    const flagged = [], ok = [];
+    for (const f of readdirSync(`${D}snapshot`)) { const sn = JSON.parse(readFileSync(`${D}snapshot/${f}`, 'utf8')); const bs = C.batteryScaleCheck(sn.vehicles.map(v => ({ batteryPct: v[4] }))); if (bs.n >= 50) (bs.suspect ? flagged : ok).push([sn.id, sn.operator, bs.p99]); }
+    assert(flagged.some(x => x[0] === 'lime_dresden') && flagged.some(x => /lime-dortmund/.test(x[0])) && ok.some(x => x[0] === 'lime_frankfurt') && ok.every(x => x[2] >= 60) && !flagged.some(x => x[1] === 'Voi' || x[1] === 'Bolt'),
+      `M-22 echte Daten: Ladestand-Skala unplausibel bei ${flagged.length} Quellen (${[...new Set(flagged.map(x => x[1]))].join(', ')}), alle übrigen mit p99 ≥ 60 %`);
+    const l = JSON.parse(readFileSync(`${D}latest.json`, 'utf8')), cons = JSON.parse(readFileSync(`${D}consistency.json`, 'utf8'));
+    const rec = new Map(l.sources.map(s => [s.id, s])), rank = (id) => { const r = rec.get(id) || {}; return [r.priority ?? 2, r.parent ? 1 : 0, (r.directories || []).includes('citybikes') ? 1 : 0]; };
+    const { whole } = C.mirrorPairs(cons.pairs, C.compareSources(rank));
+    const losers = [...whole].filter(([k]) => k.endsWith('|05315000')).map(([k, w]) => [k.slice(0, -9), w]);
+    assert(losers.length >= 3 && losers.every(([src]) => src.startsWith('mobidrom_')) && losers.some(([, w]) => w === 'nextbike_kg'), `M-22 echte Daten: Köln nextbike – MOBIDROM-Kopien (${losers.length}) verlieren gegen die Direktfeeds`);
+  } else console.log('ok: M-22 echte Daten übersprungen (.realdata fehlt)');
+}
+// M-16: Reichweite aus dem Ladestand gerechnet (Voi: Reichweite = Ladestand × 0,8 km) – je Fahrzeugtyp erkannt, andere Feeds bleiben
+{
+  const mk = (n, f, vtId = 'a', extra = {}) => [...Array(n)].map((_, i) => { const b = 20 + (i * 79) % 81; return { batteryPct: b, rangeKm: f(b, i), vtId, ...extra }; });
+  const voi = C.rangeDerivedCheck([...mk(60, b => b * 0.8), ...mk(55, b => b * 1.0, 'b')]);
+  assert(voi.derived && voi.derivedTypes.sort().join() === 'a,b' && voi.types.find(t => t.id === 'a').kmPer100 === 80 && voi.types.find(t => t.id === 'b').kmPer100 === 100, 'M-16: Voi-Muster (80 bzw. 100 km je 100 %, zwei Typen) → abgeleitet');
+  const dott = C.rangeDerivedCheck(mk(80, (b, i) => b * 0.28 * (0.85 + (i % 7) * 0.05)));
+  assert(!dott.derived && dott.types[0].spread > 0.03, 'M-16: Reichweite unabhängig vom Ladestand (Spanne > 3 %) → nicht abgeleitet');
+  assert(!C.rangeDerivedCheck(mk(60, b => b * 0.4, 'a', { batteryDerived: true })).derived && !C.rangeDerivedCheck(mk(40, b => b * 0.8)).derived, 'M-16: Ladestand selbst aus der Reichweite abgeleitet (Lime) oder unter 50 Fahrzeugen → keine Erkennung');
+  const pooled = C.rangeDerivedCheck([...mk(30, b => b * 0.35, 'x'), ...mk(30, b => b * 0.35, 'y')]);
+  assert(pooled.derived && pooled.types.every(t => t.pooled), 'M-16: kleine Typen gemeinsam geprüft');
+  // im Feed: Fahrzeuge der Quelle markiert, Befund in der Feed-Prüfung
+  const n = Math.floor(now / 1000);
+  const F = { 'https://r/gbfs.json': { last_updated: n, ttl: 60, version: '2.3', data: { de: { feeds: [{ name: 'free_bike_status', url: 'https://r/fbs.json' }, { name: 'vehicle_types', url: 'https://r/vt.json' }] } } },
+    'https://r/vt.json': { last_updated: n, ttl: 60, version: '2.3', data: { vehicle_types: [{ vehicle_type_id: 'v', form_factor: 'scooter', propulsion_type: 'electric', max_range_meters: 80000 }] } },
+    'https://r/fbs.json': { last_updated: n, ttl: 60, version: '2.3', data: { bikes: [...Array(60)].map((_, i) => { const b = 20 + i; return { bike_id: 'v' + i, lat: 48.7 + i * 0.001, lon: 9.1, is_reserved: false, is_disabled: false, vehicle_type_id: 'v', current_fuel_percent: b, current_range_meters: b * 800, last_reported: n }; }) } } };
+  const sv = await C.readGbfsSystem({ id: 'voi_t', url: 'https://r/gbfs.json', operator: 'Voi' }, async (u) => ({ ok: true, status: 200, json: F[u] }), { now });
+  assert(sv.rangeCheck.derived && sv.vehicles.every(v => v.rangeDerived) && sv.checks.items.some(x => x.msg === C.RANGE_DERIVED_MSG), 'M-16: readGbfsSystem markiert v.rangeDerived und meldet den Befund');
+}

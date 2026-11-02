@@ -39,6 +39,7 @@ if (TRACK_DIR) {
   keyId = hmac('#mobility-pulse-key-check'); // passt der Zustand zum Salt? (sonst wären alle Kennungen „neu“ → Scheinfahrten)
 }
 const vkey = (operator, rawId) => T.vehicleKey(operator, rawId, hmac);
+const RULE = `${T.METHOD_VERSION}@${String(process.env.GITHUB_SHA || 'lokal').slice(0, 7)}`; // Regelstand je Lauf (events runs[k][3], runs.json)
 
 const catalog = JSON.parse(await readFile(process.env.SOURCES_FILE || path.join(DATA, 'sources.json'), 'utf8'));
 const manual = JSON.parse(await readFile(path.join(ROOT, 'data', 'sources-manual.json'), 'utf8'));
@@ -186,6 +187,10 @@ for (const { src, sys, probe, error } of results) {
   rec.attribution = sys.systemInfo?.attribution || null; // Namensnennung (GBFS attribution_organization_name)
   rec.attributionUrl = sys.systemInfo?.attributionUrl || null;
   rec.checks = sys.checks || null; // Basisprüfung (C.checkGbfs), nur GBFS
+  // Ladestand-Skala (C.batteryScaleCheck): unplausibel → Ladestand dieser Quelle nicht verwendet (Abholung, Akkutausch, Energie), Befund in checks
+  if (sys.batteryScale) rec.batteryScale = sys.batteryScale.suspect || sys.batteryScale.derived ? sys.batteryScale : { n: sys.batteryScale.n, p99: sys.batteryScale.p99, suspect: false };
+  // Reichweite aus dem Ladestand gerechnet (C.rangeDerivedCheck, M-16): je Fahrzeugtyp km je 100 % und Spanne; derived → nur der Ladestand zählt
+  if (sys.rangeCheck?.types?.length) rec.rangeCheck = sys.rangeCheck;
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
   if (goneHttp(sys.httpStatus)) rec.status = 'gone';
@@ -206,7 +211,8 @@ for (const { src, sys, probe, error } of results) {
   rec.vehicleTypes = [...new Set([...Object.values(sys.vehicleTypes).map(t => t.type), ...sys.vehicles.map(v => v.type)])];
 
   for (const id of sys.ghostIds || []) if (id != null) ghostKeys.push(vkey(src.operator, id));
-  const counts = { vehicles: sys.vehicles.length, stations: sys.stations.length, assigned: 0, unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0, posStale: 0, ghosts: sys.ghosts || 0 };
+  const counts = { vehicles: sys.vehicles.length, stations: sys.stations.length, assigned: 0, unassigned: 0, outside: 0, missing: 0, repaired: 0, stationFallback: 0, posStale: 0, ghosts: sys.ghosts || 0,
+    batteryNative: sys.vehicles.filter(v => v.batteryPct != null && !v.batteryDerived).length }; // Ladestand aus dem Feed (nicht abgeleitet, Skala plausibel)
   // Reichweite je Quelle: Median und Fahrzeuge unter 25 % des 95. Perzentils (Energie-Alarm für Quellen ohne Ladestand)
   { const rg = sys.vehicles.map(v => v.rangeKm).filter(x => x != null).map(x => x * 1000).sort((a, b) => a - b); counts.rangeMedianM = rg.length ? Math.round(rg[Math.floor(rg.length / 2)]) : null; counts.lowRangeRel = rg.length ? rg.filter(x => x < 0.25 * rg[Math.floor(0.95 * (rg.length - 1))]).length : null; }
   const agsSet = new Set();
@@ -242,6 +248,21 @@ for (const { src, sys, probe, error } of results) {
     snapshots.push({ id: src.id, at: now, feedAgeMs: rec.feedAgeMs, operator: src.operator,
       vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null]),
       stations: sys.stations.filter(s => C.validLatLon(s.lat, s.lon)).map(s => [+s.lat.toFixed(5), +s.lon.toFixed(5), s.name, s.physicalAvailable, s.bookable, s.docksAvailable, s.renting ? 1 : 0, s.returning ? 1 : 0]) });
+  }
+}
+
+// Manifest ausgefallen: Kindquellen tauchen im Lauf gar nicht auf. Aus dem vorigen Stand mit Status error übernehmen (sichtbar, Zuverlässigkeit,
+// Verfolgung: Quelle ausgefallen statt „alle Fahrzeuge verschwunden“), höchstens 14 Tage (manifestMissingSince)
+{
+  const have = new Set(sourceOut.map(r => r.id));
+  const failed = new Map(results.filter(r => r.probe && !r.src.parent && /manifest\.json$|systems\.json$/.test(r.src.url || '')).map(r => [r.src.id, r.probe]));
+  for (const p of prev?.sources || []) {
+    if (!p?.parent || !failed.has(p.parent) || have.has(p.id)) continue;
+    const since = p.manifestMissingSince ?? now; if (now - since > C.RETIRED_MS) continue;
+    const pr = failed.get(p.parent);
+    sourceOut.push({ ...p, status: 'error', feedStatus: undefined, duplicateOf: undefined, duplicateKind: undefined, mirror: undefined, errors: ['Manifest ausgefallen'], httpStatus: pr?.status ?? null, latencyMs: pr?.latencyMs ?? null,
+      counts: { vehicles: 0, stations: 0 }, feedAgeMs: null, vehicleFeedAgeMs: null, stationFeedAgeMs: null, checkedAt: now, manifestMissingSince: since, sourceChanged: false });
+    have.add(p.id);
   }
 }
 
@@ -419,13 +440,60 @@ for (const x of [...allVehicles, ...allStations]) if (!munis.has(x.ags)) munis.s
 // Dedupe über alle Quellen (je Anbieter)
 allVehicles.sort((a, b) => a.priority - b.priority);
 const dv = C.dedupeVehicles(allVehicles);
+// Spiegelquellen mit umgeschlüsselten Kennungen (consistency.pairs: idsRekeyed): schwächere Quelle je Gemeinde ganz bzw. räumliche Zwillinge
+// verwerfen (lib/pulse-core.js dropMirrorVehicles). Stärke: Priorität, direkte Quelle vor Manifest-Kind (MOBIDROM fiel in 14 von 44 Läufen aus),
+// nicht CityBikes, dann Kennung – bewusst ohne Fahrzeugzahl, damit der Sieger nicht von Lauf zu Lauf wechselt.
+// Verworfene Kennungen verlassen den Verfolgungszustand still (ghostKeys), sonst zählten sie beim Umstieg als Fahrtbeginne.
+let mirrorsOut = []; // bekannte Spiegelpaare für den nächsten Lauf (latest.json → mirrors)
+const mirrorInfo = new Map(); // verlierende Quelle → { of: Map(Sieger → n), ags: Set, n, why: Set }
+{
+  const recOf = new Map(sourceOut.map(r => [r.id, r]));
+  const rank = (id) => { const r = recOf.get(id) || {}; return [r.priority ?? 2, r.parent ? 1 : 0, (r.directories || []).includes('citybikes') ? 1 : 0]; };
+  const extra = (prev?.mirrors || []).filter(m => recOf.has(m.of) && recOf.has(m.source) && now - (m.seen || 0) <= 7 * 86400e3); // bekannte Paare höchstens 7 Tage ohne neuen Beleg
+  const mr = C.dropMirrorVehicles(dv.vehicles, { pairs: consistency.pairs, rank, extra });
+  dv.vehicles = mr.vehicles;
+  for (const { v, of, why } of mr.dropped) {
+    const m = mirrorInfo.get(v.sourceId) || { of: new Map(), ags: new Set(), n: 0, why: new Set(), op: v.operator };
+    m.n++; m.of.set(of, (m.of.get(of) || 0) + 1); m.ags.add(v.ags); m.why.add(why); mirrorInfo.set(v.sourceId, m);
+    ghostKeys.push(vkey(v.operator, v.rawId));
+  }
+  dv.stats.mirrorDropped = mr.dropped.length; dv.stats.mirrorWhole = mr.dropped.filter(d => d.why === 'whole').length; dv.stats.mirrorTwins = mr.dropped.filter(d => d.why === 'twin').length;
+  // Quelle ganz gespiegelt (kein Fahrzeug übrig): Status duplicate wie bei findSourceCopies (Feed-Status bleibt in feedStatus), sonst nur Angabe mirror
+  const left = new Set(dv.vehicles.map(v => v.sourceId));
+  for (const [id, m] of mirrorInfo) {
+    const r = recOf.get(id); if (!r) continue;
+    const of = [...m.of].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0];
+    r.mirror = { of, ofAll: [...m.of.keys()].sort(), dropped: m.n, municipalities: [...m.ags].sort(), how: [...m.why].sort() };
+    if (!left.has(id) && r.status !== 'duplicate') { r.feedStatus = r.status; r.status = 'duplicate'; r.duplicateOf = of; r.duplicateKind = 'rekeyed'; r.duplicateShare = null; dupOf.set(id, of); }
+  }
+  snapshots = snapshots.filter(s => !dupOf.has(s.id));
+  const fresh = new Set([...C.mirrorPairs(consistency.pairs, C.compareSources(rank)).known.values()].map(k => `${k.op}|${k.winner}|${k.loser}`));
+  mirrorsOut = mr.known.map(k => ({ operator: k.op, of: k.winner, source: k.loser, seen: fresh.has(`${k.op}|${k.winner}|${k.loser}`) ? now : extra.find(e => e.operator === k.op && [e.of, e.source].sort().join('|') === [k.winner, k.loser].sort().join('|'))?.seen ?? now }));
+  if (mr.dropped.length) log(`Spiegelquellen (umgeschlüsselt): ${mr.dropped.length} Fahrzeuge verworfen (${dv.stats.mirrorWhole} ganze Quelle je Gemeinde, ${dv.stats.mirrorTwins} Zwillinge) aus ${mirrorInfo.size} Quellen`);
+}
 const ds = C.dedupeStations(allStations);
-log(`Fahrzeuge ${allVehicles.length} → ${dv.vehicles.length} (Dubletten ${dv.stats.duplicates}, Kennungs-Wiederverwendung ${dv.stats.reusedIds}); Stationen ${allStations.length} → ${ds.stations.length}`);
+log(`Fahrzeuge ${allVehicles.length} → ${dv.vehicles.length} (Dubletten ${dv.stats.duplicates}, Kennungs-Wiederverwendung ${dv.stats.reusedIds}, Spiegel ${dv.stats.mirrorDropped}); Stationen ${allStations.length} → ${ds.stations.length}`);
 
 // Aggregation: Gemeinde × Anbieter × Fahrzeugart
 const groups = C.aggregateGroups(dv.vehicles, ds.stations, { chargeThreshold, rangeThreshold });
 const groupsOut = {};
 for (const [k, v] of groups) groupsOut[k] = v;
+// Energie je Gruppe (Q-2): dieselbe Regel wie lib/pulse-report.js energyLow (Ladestand < 20 % UND Reichweite < 5 km, wo beides gemeldet; sonst die
+// gemeldete Angabe; Anbieter nur mit Reichweite über die Reichweite), Ladestand unplausibler Skala ist schon verworfen (C.batteryScaleCheck).
+// energyKnown = Fahrzeuge mit Energieangabe, energyLow = Energie niedrig, energyRangeOnly(Low) = davon nur über die Reichweite beurteilt,
+// ready = einsatzbereit (nicht gesperrt, nicht reserviert, Energieangabe vorhanden und nicht niedrig; wie R.readinessFromOps). Gesperrte zählen bei Energie mit.
+const rangeOnlyOps = new Set(R.RANGE_ONLY_OPS);
+for (const r of sourceOut) if (r.operator && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0 && ['live', 'delayed'].includes(r.feedStatus || r.status)) rangeOnlyOps.add(r.operator);
+// Gruppen ohne Fahrzeug mit Energieangabe tragen die Felder nicht (latest.energy gesetzt = fehlendes Feld bedeutet 0)
+for (const v of dv.vehicles) {
+  const st = groups.get(`${v.ags}|${v.operator}|${v.type}`); if (!st) continue;
+  const ro = rangeOnlyOps.has(v.operator), rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: rangeThreshold, rangeOnly: ro, rangeDerived: rd });
+  if (low == null) continue;
+  if (st.energyKnown == null) Object.assign(st, { energyKnown: 0, energyLow: 0, energyRangeOnly: 0, energyRangeOnlyLow: 0, ready: 0 });
+  st.energyKnown++; if (low) st.energyLow++;
+  if (!rd && (ro || v.batteryPct == null)) { st.energyRangeOnly++; if (low) st.energyRangeOnlyLow++; }
+  if (!low && !v.disabled && !v.reserved) st.ready++;
+}
 
 // Gemeinde-Zusammenfassung (Anbieter vor Ort, Bestand) und Totals
 const muniOut = {};
@@ -435,7 +503,7 @@ for (const [ags, m] of munis) {
   muniOut[ags] = { ...m, c: centroids.get(ags) || null, areaKm2: areas.get(ags) ?? null, operators: ops }; // c = [lat, lon] Flächenschwerpunkt, areaKm2 aus den Grenzen
 }
 const totals = {};
-for (const [k, st] of groups) { const ty = k.split('|')[2]; totals[ty] ??= C.emptyStats(); for (const f of Object.keys(st)) totals[ty][f] += st[f]; }
+for (const [k, st] of groups) { const ty = k.split('|')[2]; totals[ty] ??= C.emptyStats(); for (const f of Object.keys(st)) totals[ty][f] = (totals[ty][f] || 0) + st[f]; }
 
 // Datenlücken (bekannte Betreiber ohne öffentliche Daten) prüfen
 const gaps = [];
@@ -457,9 +525,10 @@ const latest = {
   at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt,
   boundaries: boundaries ? { count: boundaries.features.length, attribution: boundaries.attribution, source: boundaries.source } : null,
   counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
-  dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size },
+  dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size, mirrorSources: mirrorInfo.size },
   thresholds: { chargeThreshold, rangeThreshold },
-  sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps,
+  energy: { version: 1, fields: ['energyKnown', 'energyLow', 'energyRangeOnly', 'energyRangeOnlyLow', 'ready'], rangeOnlyOps: [...rangeOnlyOps].sort() }, // Felder je groups-Eintrag (Q-2)
+  sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps, mirrors: mirrorsOut,
 };
 await mkdir(path.join(DATA, 'history'), { recursive: true });
 await mkdir(path.join(DATA, 'snapshot'), { recursive: true });
@@ -552,11 +621,11 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   const dailyFile = path.join(DATA, 'history', 'daily.json');
   const prevDaily = existsSync(dailyFile) ? JSON.parse(await readFile(dailyFile, 'utf8')) : { days: [], series: {} };
   const useDays = histDays.slice(-30);
-  const series = {};
+  const series = {}, dayRuns = {}; // dayRuns: zählende Läufe je Tag (Präsenz einer Gruppe = Läufe mit Wert ÷ dayRuns, lib/pulse-report.js histStats)
   const dayRows = (h) => { // Map key → Zeile
     const flags = h.f || [], runs = h.t.length;
     let use = [...Array(runs).keys()].filter(i => flags[i] !== 0); if (!use.length) use = [...Array(runs).keys()]; // Tag nur mit Lücken-Läufen: alle
-    const out = new Map();
+    const out = new Map(); out.runs = use.length;
     for (const [key, ser] of Object.entries(h.series)) {
       const idx = use.filter(i => ser.total?.[i] != null); if (!idx.length) continue;
       // Mittel je Feld über die Läufe mit Wert (stationsEmptyDock fehlt in älteren Tagen → null)
@@ -566,11 +635,12 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   };
   for (const d of useDays) {
     const reuse = d !== day && prevDaily.days.includes(d) && JSON.stringify(prevDaily.fields) === JSON.stringify([...DAILY, 'runs']); // nur bei gleichem Feldaufbau übernehmen
-    if (reuse) { for (const [key, byDay] of Object.entries(prevDaily.series)) if (byDay[d]) (series[key] ??= {})[d] = byDay[d]; continue; }
+    if (reuse && (prevDaily.dayRuns?.[d] != null || !existsSync(path.join(DATA, 'history', `${d}.json`)))) { for (const [key, byDay] of Object.entries(prevDaily.series)) if (byDay[d]) (series[key] ??= {})[d] = byDay[d]; if (prevDaily.dayRuns?.[d] != null) dayRuns[d] = prevDaily.dayRuns[d]; continue; }
     const h = d === day ? hist : JSON.parse(await readFile(path.join(DATA, 'history', `${d}.json`), 'utf8'));
-    for (const [key, row] of dayRows(h)) (series[key] ??= {})[d] = row;
+    const rows = dayRows(h); dayRuns[d] = rows.runs;
+    for (const [key, row] of rows) (series[key] ??= {})[d] = row;
   }
-  await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series }));
+  await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series, dayRuns }));
 }
 
 // Abdeckung: Städte laut Anbieter-Website (data/operator-cities.json, liegt auf main im Checkout) gegen Feeds mit und ohne Fahrzeuge
@@ -595,9 +665,23 @@ try {
   if (TRACK_DIR) await rm(path.join(DATA, 'track'), { recursive: true, force: true }); // Zustand liegt privat im Cache, nicht mehr auf dem Datenzweig
   else await mkdir(path.join(DATA, 'track'), { recursive: true });
   await writeFile(stateFile, gzipSync(JSON.stringify(tr.state)));
+  // Ereignisse je Stunde (M-11 Datenschutz): mit TRACK_DIR liegt der laufende Tag privat (events-work.json.gz) und wird beim Stundenwechsel
+  // veröffentlicht – vor dem Einrechnen dieses Laufs, dann sind alle enthaltenen Stunden abgeschlossen –, nach Tagesende vollständig
+  // (published.complete). Ohne TRACK_DIR wie bisher je Lauf.
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
-  const evDoc = T.mergeHourly(existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes, gap: tr.gap });
-  await writeFile(evFile, JSON.stringify(evDoc));
+  const evWorkFile = TRACK_DIR ? path.join(TRACK_DIR, 'events-work.json.gz') : null;
+  const evPublish = async (doc, complete) => { const str = JSON.stringify({ ...doc, published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } }); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
+  let evWork = null, evPub = null, evFinal = null; // evPub: veröffentlichter Stand des laufenden Tags, evFinal: in diesem Lauf abgeschlossener Vortag
+  if (evWorkFile) {
+    evWork = await readState(evWorkFile);
+    if (!evWork && existsSync(evFile)) evWork = JSON.parse(await readFile(evFile, 'utf8')); // Umstieg: bisher je Lauf veröffentlicht
+    if (evWork && evWork.day !== tr.day) { evFinal = await evPublish(evWork, true); evWork = null; }
+    else if (evWork) { const last = evWork.runs?.at(-1)?.[0]; if (last != null && T.hourOf(last) !== tr.hour) evPub = await evPublish(evWork, false); }
+  }
+  const evDoc = T.mergeHourly(evWorkFile ? evWork : existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes, gap: tr.gap, rule: RULE });
+  if (evWorkFile) await writeFile(evWorkFile, gzipSync(JSON.stringify(evDoc)));
+  else { await writeFile(evFile, JSON.stringify(evDoc)); evPub = evDoc; }
+  if (!evPub && existsSync(evFile)) evPub = JSON.parse(await readFile(evFile, 'utf8')); // in dieser Stunde schon veröffentlichter Stand
   // Gruppen-Ereignisse (≥ T.GROUP_MIN = 4 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt): dauerhaft je Monat in
   // groups/<JJJJ-MM>.json (Monat nach Europe/Berlin, nie gekürzt) mit Verzeichnis groups/index.json; groups.json (30 Tage) bleibt als
   // Rückfall für Briefing/Signale und ältere Seitenstände. Erster Lauf mit Monatsdateien übernimmt die Ereignisse aus groups.json.
@@ -629,38 +713,100 @@ try {
     if (tr.groups?.length) log(`Gruppen: ${tr.groups.filter(g => g.kind === 'deploy').length} ausgebracht, ${tr.groups.filter(g => g.kind === 'collect').length} eingesammelt (groups/: ${months.length} Monat${months.length === 1 ? '' : 'e'}, ${Object.values(counts).reduce((a, b) => a + b, 0)} Ereignisse)`);
   }
   { const s = (a) => (a || []).reduce((x, y) => x + (y || 0), 0); runEv = { start: 0, end: 0, rot: 0 }; for (const h of tr.hourly.values()) { runEv.start += s(h.start); runEv.end += s(h.end); runEv.rot += s(h.rot); } }
-  // Langzeit-Archiv: Tageswerte je Gemeinde|Anbieter|Art, eine Datei je Monat, wird nie gekürzt
+  // Langzeit-Archiv: Tageswerte je Gemeinde|Anbieter|Art, eine Datei je Monat, wird nie gekürzt. Grundlage ist der veröffentlichte Stand der
+  // Ereignisse (M-11: laufender Tag nur abgeschlossene Stunden; abgeschlossener Vortag vollständig), sonst verrieten die Tageswerte je Lauf mehr.
   {
     const arDir = path.join(DATA, 'archive'); await mkdir(arDir, { recursive: true });
-    const month = tr.day.slice(0, 7), arFile = path.join(arDir, `${month}.json`);
-    const ar = existsSync(arFile) ? JSON.parse(await readFile(arFile, 'utf8')) : { month, days: {} };
-    ar.fields = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
-    // gestörte Stunden (Lauf nach Lücke, auch Altbestand) zählen weder mit Ereignissen noch mit Beobachtungszeit
-    const obsH = E.observedMinutes(evDoc.runs);
-    const s = (a) => (a || []).reduce((x, y, h) => x + (obsH[h] > 0 ? (y || 0) : 0), 0);
-    const obsMin = obsH.reduce((a, b) => a + b, 0);
-    const vminOk = (evDoc.runs || []).every(r => r[1] == null || r[2] === 1 || r[2] === 0);
-    const rows = {};
-    for (const [k, g] of Object.entries(evDoc.groups || {})) {
-      const hs = hist.series[k]?.total?.filter(x => x != null) || [];
-      const fleet = vminOk && obsMin > 0 && s(g.vminTot) > 0 ? s(g.vminTot) / obsMin : hs.length ? hs.reduce((a, b) => a + b, 0) / hs.length : null;
-      rows[k] = [fleet == null ? null : +fleet.toFixed(1), s(g.start), s(g.end), s(g.rot), s(g.reloc), s(g.swap), s(g.pickup), s(g.disOn), Math.round(obsMin)];
+    const AR_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
+    const arRows = (doc, h) => {
+      // gestörte Stunden (Lauf nach Lücke, auch Altbestand) zählen weder mit Ereignissen noch mit Beobachtungszeit
+      const obsH = E.observedMinutes(doc.runs);
+      const s = (a) => (a || []).reduce((x, y, hh) => x + (obsH[hh] > 0 ? (y || 0) : 0), 0);
+      const obsMin = obsH.reduce((a, b) => a + b, 0);
+      const vminOk = (doc.runs || []).every(r => r[1] == null || r[2] === 1 || r[2] === 0);
+      const rows = {};
+      for (const [k, g] of Object.entries(doc.groups || {})) {
+        const hs = h?.series?.[k]?.total?.filter((x, i) => x != null && h.f?.[i] !== 0) || [];
+        const countedRuns = h ? ((h.f || h.t).filter(x => x !== 0).length || h.t.length) : 0;
+        // Mittel über die Läufe mit Wert nur bei ausreichender Präsenz (≥ 50 % der zählenden Läufe), sonst keine Tagesflotte (lib/pulse-report.js MIN_PRESENCE)
+        const fleet = vminOk && obsMin > 0 && s(g.vminTot) > 0 ? s(g.vminTot) / obsMin : hs.length && hs.length >= R.MIN_PRESENCE * countedRuns ? hs.reduce((a, b) => a + b, 0) / hs.length : null;
+        rows[k] = [fleet == null ? null : +fleet.toFixed(1), s(g.start), s(g.end), s(g.rot), s(g.reloc), s(g.swap), s(g.pickup), s(g.disOn), Math.round(obsMin)];
+      }
+      return rows;
+    };
+    const put = [];
+    if (evFinal) { const hf = path.join(DATA, 'history', `${evFinal.day}.json`); put.push([evFinal.day, arRows(evFinal, existsSync(hf) ? JSON.parse(await readFile(hf, 'utf8')) : null)]); }
+    if (evPub?.day === tr.day) put.push([tr.day, arRows(evPub, hist)]);
+    let month = tr.day.slice(0, 7), ar = null;
+    for (const [d, rows] of put) {
+      const m = d.slice(0, 7), f = path.join(arDir, `${m}.json`);
+      const doc = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : { month: m, days: {} };
+      doc.fields = AR_FIELDS; doc.days[d] = rows; doc.updatedAt = now;
+      await writeFile(f, JSON.stringify(doc)); if (m === month) ar = doc;
     }
-    ar.days[tr.day] = rows; ar.updatedAt = now;
-    await writeFile(arFile, JSON.stringify(ar));
+    if (!ar) { const f = path.join(arDir, `${month}.json`); ar = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : { month, days: {}, fields: AR_FIELDS }; }
     // Index mit Tagen und erstem Tag (Vertrag 7), damit das Dashboard nicht alle Monatsdateien laden muss
     const months = (await readdir(arDir)).filter(f => /^\d{4}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 7)).sort();
     const allDays = []; for (const m of months) { const d = m === month ? ar : JSON.parse(await readFile(path.join(arDir, `${m}.json`), 'utf8')); allDays.push(...Object.keys(d.days || {})); }
     allDays.sort();
     await writeFile(path.join(arDir, 'index.json'), JSON.stringify({ months, fields: ar.fields, days: allDays.length, firstDay: allDays[0] || null, updatedAt: now }));
   }
+  // Zellen (M-11 Datenschutz): mit TRACK_DIR liegt der laufende Tag privat (cells-work.json.gz) und wird je Bundesland beim Wechsel des
+  // Tageszeit-Bands veröffentlicht (vor dem Einrechnen dieses Laufs: nur abgeschlossene Bänder), nach Tagesende vollständig. In jeder
+  // veröffentlichten Landesdatei ist Zelle × Band unter T.CELL_MIN (3) Ereignissen unterdrückt, die Summen stehen je Gemeinde in below.
+  // Ohne TRACK_DIR wie bisher je Lauf (Tagesdatei cells/<Tag>.json öffentlich), Landesdateien ebenfalls mit Unterdrückung.
   const cellsDir = path.join(DATA, 'cells');
   const cellFile = path.join(cellsDir, `${tr.day}.json`);
-  const cellDoc = T.mergeCells(existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day, { dt: tr.dt, hour: tr.hour, gap: tr.gap });
-  await writeFile(cellFile, JSON.stringify(cellDoc));
-  // je Bundesland aufgeteilt (kleinere Downloads)
-  await mkdir(path.join(cellsDir, tr.day), { recursive: true });
-  for (const [st, doc] of Object.entries(cellDoc.states)) await writeFile(path.join(cellsDir, tr.day, `${st}.json`), JSON.stringify({ day: tr.day, state: st, bandMin: cellDoc.bandMin, bandRuns: cellDoc.bandRuns, fields: 'start,end,present,reloc,start×6,present×6,end×6', munis: doc }));
+  const cellWorkFile = TRACK_DIR ? path.join(TRACK_DIR, 'cells-work.json.gz') : null;
+  // je Bundesland aufgeteilt (kleinere Downloads); bandTainted/taintChecked: Altläufe repariert (lib/pulse-track.js repairCells)
+  const cellMeta = (d) => ({ bandMin: d.bandMin, bandRuns: d.bandRuns, ...(d.bandTainted ? { bandTainted: d.bandTainted } : {}), ...(d.taintChecked ? { taintChecked: d.taintChecked } : {}), ...(d.relocUnrepaired ? { relocUnrepaired: true } : {}) });
+  const CELL_FIELDS = 'start,end,present,reloc,start×6,present×6,end×6', BELOW_FIELDS = 'start×6,end×6,start_ohne_Band,end_ohne_Band';
+  const publishCells = async (doc, complete) => {
+    await mkdir(path.join(cellsDir, doc.day), { recursive: true });
+    for (const [st, m] of Object.entries(doc.states || {})) {
+      const sp = T.suppressCells(m);
+      await writeFile(path.join(cellsDir, doc.day, `${st}.json`), JSON.stringify({ day: doc.day, state: st, ...cellMeta(doc), fields: CELL_FIELDS, munis: sp.munis, below: sp.below, belowFields: BELOW_FIELDS, minCount: T.CELL_MIN, published: { at: now, through: doc.lastAt ?? null, complete } }));
+    }
+  };
+  let cellWork = null;
+  if (cellWorkFile) {
+    cellWork = await readState(cellWorkFile);
+    let migratedCells = false;
+    if (!cellWork && existsSync(cellFile)) { cellWork = JSON.parse(await readFile(cellFile, 'utf8')); migratedCells = true; } // Umstieg: bisher öffentliche Tagesdatei
+    if (cellWork && cellWork.day !== tr.day) { await publishCells(cellWork, true); cellWork = null; }
+    else if (cellWork) {
+      if (migratedCells) T.repairCells(cellWork, evDoc.runs, { exclude: now });
+      const last = cellWork.lastAt;
+      if (migratedCells || (last != null && T.bandOf(T.hourOf(last)) !== T.bandOf(tr.hour))) await publishCells(cellWork, false);
+    }
+  }
+  const cellDoc = T.mergeCells(cellWorkFile ? cellWork : existsSync(cellFile) ? JSON.parse(await readFile(cellFile, 'utf8')) : null, tr.cells, muniOut, tr.day, { dt: tr.dt, hour: tr.hour, gap: tr.gap, runs: evDoc.runs, at: now });
+  cellDoc.lastAt = now;
+  if (cellWorkFile) {
+    await writeFile(cellWorkFile, gzipSync(JSON.stringify(cellDoc)));
+    for (const f of (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))) await rm(path.join(cellsDir, f)); // Tagesdateien nicht mehr öffentlich
+  } else { await writeFile(cellFile, JSON.stringify(cellDoc)); await publishCells(cellDoc, false); }
+  // frühere Tage (14 Tage Landesdateien, 3 Tage Tagesdateien) einmalig reparieren: Bänder mit Altlauf laut events/<Tag>.json fallen aus
+  try {
+    for (const d of (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}(\.json)?$/.test(f))) {
+      const dayD = d.slice(0, 10); if (dayD === tr.day) continue;
+      const evF = path.join(DATA, 'events', `${dayD}.json`); if (!existsSync(evF)) continue;
+      const files = d.endsWith('.json') ? [path.join(cellsDir, d)] : (await readdir(path.join(cellsDir, d))).filter(f => f.endsWith('.json')).map(f => path.join(cellsDir, d, f));
+      let runsD = null;
+      for (const f of files) {
+        const doc = JSON.parse(await readFile(f, 'utf8')); const perState = !d.endsWith('.json');
+        if (doc.taintChecked && (!perState || doc.minCount)) continue;
+        if (!doc.taintChecked) {
+          runsD ??= JSON.parse(await readFile(evF, 'utf8')).runs || [];
+          const { bands } = T.repairCells(doc, runsD);
+          if (bands.length && perState && f.endsWith('BE.json')) log(`Zellen ${dayD}: Altläufe neutralisiert (Bänder ${bands.map(b => T.BANDS[b].label).join(', ')})`);
+        }
+        // ältere Landesdateien: Unterdrückung kleiner Zellen nachträglich (M-11)
+        if (perState && !doc.minCount) { const sp = T.suppressCells(doc.munis); doc.munis = sp.munis; doc.below = sp.below; doc.belowFields = BELOW_FIELDS; doc.minCount = T.CELL_MIN; }
+        await writeFile(f, JSON.stringify(doc));
+      }
+    }
+  } catch (e) { log(`Zellen-Reparatur: ${e.message}`); }
   // Start-Ziel-Ströme (nur stabile Kennungen; lib/pulse-track.js publishFlows): Tagessumme privat in TRACK_DIR, veröffentlicht wird ein Tag
   // erst nach Tagesende (flows/<Tag>.json, ≥ 2 Fahrten je Zeile, Top 300 je Gemeinde, 30 Tage) – ohne privates Verzeichnis keine Ströme
   if (TRACK_DIR) {
@@ -709,14 +855,14 @@ try {
       const st = muniOut[v.ags]?.state; if (!st) continue; const o = S(st);
       const e = tr.state.v[vkey(v.operator, v.rawId)];
       const idleMin = e ? Math.round((now - e[8]) / 60e3) : null;
-      o.vehicles.push([+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags)]);
+      o.vehicles.push([+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0]);
     }
     for (const s of ds.stations) {
       const st = muniOut[s.ags]?.state; if (!st) continue; const o = S(st);
-      o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0]);
+      o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0, s.isVirtual === true ? 1 : s.isVirtual === false ? 0 : null]);
     }
     let bytes = 0;
-    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
   }
   // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
@@ -773,6 +919,21 @@ if (boundaries) {
   const activeAgs = new Set(munis.keys());
   const feats = boundaries.features.filter(f => activeAgs.has(f.properties.ags));
   await writeFile(path.join(DATA, 'boundaries-active.json'), JSON.stringify({ type: 'FeatureCollection', attribution: boundaries.attribution, license: boundaries.license, generatedAt: latest.generatedAt, features: feats }));
+  // je Bundesland (Q-6): boundaries/<Land>.json mit bbox je Gemeinde [minLon, minLat, maxLon, maxLat], dazu boundaries/index.json; Altdatei bleibt
+  try {
+    const bDir = path.join(DATA, 'boundaries'); await mkdir(bDir, { recursive: true });
+    const byState = new Map();
+    for (const f of feats) { const st = f.properties?.state || 'XX'; if (!byState.has(st)) byState.set(st, []); byState.get(st).push({ ...f, bbox: C.geomBounds(f.geometry) }); }
+    for (const f of await readdir(bDir)) if (/^[A-Z]{2}\.json$/.test(f) && !byState.has(f.slice(0, 2))) await rm(path.join(bDir, f));
+    const states = {};
+    for (const [st, list] of [...byState].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const doc = JSON.stringify({ type: 'FeatureCollection', state: st, attribution: boundaries.attribution, license: boundaries.license, generatedAt: latest.generatedAt, features: list });
+      await writeFile(path.join(bDir, `${st}.json`), doc);
+      const bb = list.map(f => f.bbox).filter(Boolean);
+      states[st] = { features: list.length, bytes: doc.length, bbox: bb.length ? [Math.min(...bb.map(b => b[0])), Math.min(...bb.map(b => b[1])), Math.max(...bb.map(b => b[2])), Math.max(...bb.map(b => b[3]))] : null, ags: list.map(f => f.properties.ags) };
+    }
+    await writeFile(path.join(bDir, 'index.json'), JSON.stringify({ version: 1, generatedAt: latest.generatedAt, attribution: boundaries.attribution, license: boundaries.license, bboxFields: 'minLon,minLat,maxLon,maxLat', states }));
+  } catch (e) { log(`Grenzen je Land: ${e.message}`); }
   log(`Aktive Gemeinden: ${feats.length}`);
 }
 // Namensnennung und Lizenzen des Datenstands (DATA-LICENSE.md im Datenzweig)
@@ -787,6 +948,8 @@ if (boundaries) {
     '# Daten und Lizenzen', '',
     `Stand: ${new Date(now).toISOString()} · erzeugt vom Sammler (scripts/collect.mjs) bei jedem Lauf.`, '',
     'Dieser Datenzweig enthält aus offenen Quellen abgeleitete Daten: Bestände, Ereignisse (Fahrten, Umsetzungen, Akkutausch), Zellen, Archiv und Momentaufnahmen. Die Lizenzangaben stammen aus den Feeds (GBFS `system_information`: `license_id`, `license_url`, `attribution_organization_name`) bzw. aus den Verzeichnissen; maßgeblich sind die Bedingungen der jeweiligen Quelle. Je Quelle stehen sie auch in `latest.json` → `sources[]` (`licenseId`, `licenseUrl`, `attribution`, `attributionUrl`).', '',
+    '## Veröffentlichung von Ereignissen und Zellen', '',
+    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht; Kennungen bleiben privat (HMAC mit privatem Salt).', '',
     '## Grundlagen', '',
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
@@ -806,9 +969,10 @@ if (boundaries) {
 {
   const f = path.join(DATA, 'runs.json');
   const doc = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : { runs: [] };
-  doc.fields = ['at', 'dauer_ms', 'quellen', 'aktuell', 'verzoegert', 'veraltet', 'fehler', 'fahrzeuge', 'stationen', 'fahrten', 'fahrtenden', 'kennungswechsel', 'ausloeser'];
+  doc.fields = ['at', 'dauer_ms', 'quellen', 'aktuell', 'verzoegert', 'veraltet', 'fehler', 'fahrzeuge', 'stationen', 'fahrten', 'fahrtenden', 'kennungswechsel', 'ausloeser', 'zaehlt', 'regelstand'];
   const st = statusCounts;
-  doc.runs.push([now, Date.now() - now, sourceOut.length, st.live || 0, st.delayed || 0, st.stale || 0, failing, dv.vehicles.length, ds.stations.length, runEv?.start ?? null, runEv?.end ?? null, runEv?.rot ?? null, process.env.GITHUB_EVENT_NAME || 'lokal']);
+  // zaehlt: 1 = Lauf zählt Ereignisse, 0 = Lauf nach Lücke bzw. Umzugslauf (ohne Zählung); regelstand wie events/<Tag>.json → runs[k][3]
+  doc.runs.push([now, Date.now() - now, sourceOut.length, st.live || 0, st.delayed || 0, st.stale || 0, failing, dv.vehicles.length, ds.stations.length, runEv?.start ?? null, runEv?.end ?? null, runEv?.rot ?? null, process.env.GITHUB_EVENT_NAME || 'lokal', tr.gap ? 0 : 1, RULE]);
   doc.runs = doc.runs.filter(r => now - r[0] <= 7 * 86400e3).slice(-600);
   await writeFile(f, JSON.stringify(doc));
 }

@@ -48,6 +48,10 @@ const extra = [
   { id: 'citybikes_stadtrad-stuttgart', name: 'RegioRadStuttgart', operator: 'DB Connect', api: 'citybikes', url: `${ex.base}/cb/x`, directories: ['citybikes'], priority: 3 },
   { id: 'auth_test', name: 'Auth', operator: 'Bolt', api: 'gbfs', url: `${ex.base}/auth/gbfs.json`, directories: ['db_api'], auth: { type: 'header', provider: 't' } },
 ];
+// M-1: Spiegelpaar mit umgeschlüsselten Kennungen (direkt vs. Landesfeed als Manifest-Kind); M-6/M-2: Manifest mit Kind (Lime, Ladestand ≤ 35 %)
+extra.push({ id: 'rk_direct', name: 'RK direkt', operator: 'nextbike', api: 'gbfs', url: `${ex.base}/rk/a/gbfs.json`, directories: ['mobilitydata'], priority: 2 },
+  { id: 'rk_land:source-rk', parent: 'rk_land', name: 'RK Land', operator: 'nextbike', api: 'gbfs', url: `${ex.base}/rk/b/gbfs.json`, directories: ['mobidrom_nrw'], priority: 2 },
+  { id: 'mf_test', name: 'Manifest Test', operator: 'Lime', api: 'gbfs', url: `${ex.base}/mf/manifest.json`, directories: ['mobidrom_nrw'], priority: 2 });
 const slow = [{ id: 'slow_test', name: 'Langsam', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/slow/gbfs.json`, directories: ['mobilitydata'] }, { id: 'big_test', name: 'Groß', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/big/gbfs.json`, directories: ['mobilitydata'] }];
 const auth_sources = { t: { host: new URL(ex.base).host, headers: { 'x-api-key': 'MP_TEST_KEY' }, env: ['MP_TEST_KEY'] } };
 await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, ...slow] }));
@@ -62,7 +66,13 @@ const t3 = Date.now();
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's3.json') });
 const l3 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const S3 = (id) => l3.sources.find(s => s.id === id);
-const ev3 = JSON.parse(await readFile(`test/out/events/${JSON.parse(await readFile('test/out/events/index.json', 'utf8')).days.slice(-1)[0]}.json`, 'utf8'));
+// mit TRACK_DIR liegt der laufende Tag privat (M-11); veröffentlicht wird er erst beim Stundenwechsel
+const evWork = async () => JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, 'events-work.json.gz'))).toString('utf8'));
+const ev3 = await evWork();
+{
+  const pub3 = JSON.parse(await readFile(`test/out/events/${ev3.day}.json`, 'utf8'));
+  assert(pub3.runs.length === ev3.runs.length - 1 && !existsSync(`test/out/cells/${ev3.day}.json`) && existsSync(path.join(TRACK_DIR, 'cells-work.json.gz')), 'M-11: Lauf dieser Stunde nur privat (events-work), öffentliche Tagesdatei der Zellen entfernt');
+}
 const st3 = JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, 'state.json.gz'))).toString('utf8'));
 const runs3 = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs;
 // M10: Umzug auf gesalzene Schlüssel – privater Zustand, kein out/track, Umzugslauf zählt nichts
@@ -101,13 +111,38 @@ assert(Math.abs(l3.municipalities['08111000'].areaKm2 - 0.25 * 0.17 * 111.2 * 11
 assert(l3.counts.errorCauses.timeout === 1 && l3.counts.errorCauses.tooLarge === 1 && l3.counts.errorCauses.http404 === 1 && S3('slow_test').errorCause === 'timeout', 'Fehler nach Ursache in latest.json counts.errorCauses');
 assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1380, 'Tagesdokument mit hourMin');
 
-// Lauf 4: normaler Lauf mit TRACK_DIR (Flag 1, keine Scheinereignisse), Tarifänderung, Quelle seit > 14 Tagen weg
-ex.st.price = 1.5;
+// M-1: Landesfeed mit umgeschlüsselten Kennungen zählt nicht (30 statt 60 Räder), Quelle als Kopie geführt; M-2: Ladestand-Skala unplausibel
+{
+  const rkL = S3('rk_land:source-rk'), kid = S3('mf_test:mfkid');
+  assert(rkL?.status === 'duplicate' && rkL.duplicateOf === 'rk_direct' && rkL.duplicateKind === 'rekeyed' && rkL.feedStatus === 'live' && l3.dedupe.mirrorDropped === 30 && l3.mirrors.some(m => m.of === 'rk_direct' && m.source === 'rk_land:source-rk' && m.seen === l3.at),
+    `M-1: Spiegelquelle mit umgeschlüsselten Kennungen verworfen (${l3.dedupe.mirrorDropped} Fahrzeuge), Status duplicate (rekeyed), Paar in latest.json → mirrors`);
+  const ops3 = JSON.parse(await readFile('test/out/ops/BW.json', 'utf8'));
+  const nbRk = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'nextbike' && Math.abs(v[1] - 9.10) < 1e-6).length;
+  assert(nbRk === 30, `M-1: Disposition (ops/BW.json) mit 30 statt 60 Rädern (${nbRk})`);
+  assert(kid?.parent === 'mf_test' && kid.batteryScale?.suspect && kid.batteryScale.p99 < 60 && kid.checks.items[0]?.msg?.startsWith('Ladestand-Skala unplausibel') && ops3.vehicles.filter(v => ops3.ops[v[2]] === 'Lime').every(v => v[5] === null),
+    `M-2: Ladestand-Skala unplausibel (p99 ${kid?.batteryScale?.p99} %) → in der Feed-Prüfung, Ladestand nicht verwendet`);
+  // Q-2: Energie je Gruppe in latest.json (Regel wie R.energyLow), Lime nur über die Reichweite; ready = buchbar und Energie ausreichend
+  const R2 = await import('../lib/pulse-report.js');
+  const eOps = R2.energyFromOps(ops3, { rangeOnly: (op) => l3.energy.rangeOnlyOps.includes(op) }), rOps = R2.readinessFromOps(ops3, { rangeOnly: (op) => l3.energy.rangeOnlyOps.includes(op) });
+  const gk = Object.keys(l3.groups).filter(k => k.startsWith('08') && l3.groups[k].energyKnown != null);
+  assert(l3.energy?.version === 1 && l3.energy.fields.join() === 'energyKnown,energyLow,energyRangeOnly,energyRangeOnlyLow,ready' && gk.length > 0 && gk.every(k => { const e = eOps.get(k); return !k.startsWith('08111000') || (e && e.known === l3.groups[k].energyKnown && e.low === l3.groups[k].energyLow); }),
+    `Q-2: latest.json groups mit energyKnown/energyLow (gleich energyFromOps aus ops/BW.json, ${gk.length} Gruppen)`);
+  const kidKey = Object.keys(l3.groups).find(k => k.includes('|Lime|scooter'));
+  assert(kidKey && l3.groups[kidKey].energyKnown == null && S3('mf_test:mfkid').counts.batteryNative === 0, 'Q-2: Lime-Kind ohne verwendbaren Ladestand (Skala unplausibel, keine Reichweite) → keine Energieangabe; counts.batteryNative = 0');
+  // Q-6: Grenzen je Land mit bbox
+  const bIdx = JSON.parse(await readFile('test/out/boundaries/index.json', 'utf8')), bBW = JSON.parse(await readFile('test/out/boundaries/BW.json', 'utf8'));
+  assert(bIdx.version === 1 && bIdx.states.BW.features === bBW.features.length && bBW.features.every(f => Array.isArray(f.bbox) && f.bbox.length === 4 && f.bbox[0] <= f.bbox[2]) && bBW.features.some(f => f.properties.ags === '08416041' && f.bbox.join() === '9,48.49,9.12,48.56') && existsSync('test/out/boundaries-active.json'),
+    'Q-6: boundaries/<Land>.json mit bbox je Gemeinde, boundaries/index.json; boundaries-active.json bleibt');
+  assert(ops3.vehicleFields.endsWith(',gemeinde,reichweiteAbgeleitet') && ops3.vehicles.every(v => v.length === 10 && (v[9] === 0 || v[9] === 1)), 'M-16: ops/<Land>.json Fahrzeugfeld 10 „reichweiteAbgeleitet“ (1/0)');
+  assert(ops3.stationFields.endsWith(',physisch,virtuell') && ops3.stations.every(r => r.length === 12 && [0, 1, null].includes(r[11])) && ops3.stations.some(r => r[11] === 1), 'ops/<Land>.json: Stationsfeld 12 „virtuell“ (1/0/null)');
+}
+// Lauf 4: normaler Lauf mit TRACK_DIR (Flag 1, keine Scheinereignisse), Tarifänderung, Quelle seit > 14 Tagen weg; Manifest fällt aus (M-6)
+ex.st.price = 1.5; ex.st.manifestUp = false;
 l3.sources.find(s => s.id === 'gone_test').goneSince = Date.now() - 15 * 86400e3;
 await writeFile('test/out/latest.json', JSON.stringify(l3));
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json') });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
-const ev4 = JSON.parse(await readFile(`test/out/events/${JSON.parse(await readFile('test/out/events/index.json', 'utf8')).days.slice(-1)[0]}.json`, 'utf8'));
+const ev4 = await evWork();
 const runs4 = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs;
 assert(!existsSync('test/out/track') && ev4.runs.slice(-1)[0][2] === 1 && runs4.slice(-1)[0][9] === 0 && runs4.slice(-1)[0][10] === 0 && runs4.slice(-1)[0][11] === 0, 'Lauf mit gesalzenem Zustand: Flag 1, keine Scheinereignisse');
 const clog = JSON.parse(await readFile('test/out/caps-log.json', 'utf8'));
@@ -118,7 +153,7 @@ assert(clog.fields.join() === 'at,ags,operator,count,limit,dtMs' && clog.rules.l
   const row = (k, a) => cov.rows.find(r => r.opKey === k && r.ags === a);
   const boltTue = l4.municipalities['08416041']?.operators?.Bolt?.total || 0, boltStr = l4.municipalities['08111000']?.operators?.Bolt?.total || 0, dottTue = l4.municipalities['08416041']?.operators?.Dott?.total || 0;
   assert(cov.version === 1 && row('bolt', '08416041')?.cat === (boltTue ? 'abgedeckt' : 'feed-still') && row('bolt', '08111000')?.cat === (boltStr ? 'abgedeckt' : row('bolt', '08111000')?.src ? 'feed-still' : 'kein-feed')
-    && row('dott', '08416041')?.claimed === true && row('dott', '08416041').cat === (dottTue ? 'abgedeckt' : 'feed-still') && row('bolt', '08416041').lastActive != null === !!boltTue,
+    && row('dott', '08416041')?.claimed === true && row('dott', '08416041').cat === (dottTue ? 'abgedeckt' : 'gesperrt') /* M-17: bekannte Lücke vor veralteter Quelle */ && row('bolt', '08416041').lastActive != null === !!boltTue,
     `coverage.json: Bolt Tübingen ${row('bolt', '08416041')?.cat}, Bolt Stuttgart ${row('bolt', '08111000')?.cat}, Dott „Tubingen“ ${row('dott', '08416041')?.cat}`);
 }
 {
@@ -129,7 +164,13 @@ assert(clog.fields.join() === 'at,ags,operator,count,limit,dtMs' && clog.rules.l
 }
 const plog = JSON.parse(await readFile('test/out/pricing-log.json', 'utf8'));
 assert(plog.fields.join() === 'at,sourceId,operator,planId,field,old,new' && plog.changes.some(c => c[1] === 'p_test' && c[3] === 'std' && c[4] === 'unlock' && c[5] === 1 && c[6] === 1.5), 'pricing-log.json: Entsperrpreis 1 → 1,5');
-assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.counts.byStatus.gone && l4.counts.retired === 1 && l4.counts.failing === 0 && runs4.slice(-1)[0][6] === 0, 'über 14 Tage weg → retired, kein Fehler (latest.counts.failing, runs.json)');
+{
+  const kid4 = l4.sources.find(s => s.id === 'mf_test:mfkid');
+  assert(kid4?.status === 'error' && kid4.errors[0] === 'Manifest ausgefallen' && kid4.parent === 'mf_test' && kid4.manifestMissingSince > 0 && l4.sources.find(s => s.id === 'mf_test')?.status === 'error', 'M-6: Kind eines ausgefallenen Manifests aus dem vorigen Stand mit Status error (keine Scheinfahrten, siehe runs.json oben)');
+  const cellsDay = JSON.parse(await readFile(`test/out/cells/${T.dayOf(Date.now())}/BW.json`, 'utf8'));
+  assert(cellsDay.taintChecked === T.CELLS_TAINT_VERSION && !(cellsDay.bandTainted || []).some(Boolean) && cellsDay.minCount === 3 && cellsDay.below, 'M-3/M-11: Zellendatei geprüft (taintChecked, kein Altlauf), kleine Zellen unterdrückt (minCount 3, below)');
+}
+assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.counts.byStatus.gone && l4.counts.retired === 1 && l4.counts.failing === 2 && runs4.slice(-1)[0][6] === 2, 'über 14 Tage weg → retired, kein Fehler (latest.counts.failing, runs.json: nur Manifest und Kind aus M-6)');
 
 // Lauf 4b: Start-Ziel-Ströme. Zustand: alle Quellen stabil, Positionen 1,45 km südlich, 20 Min. alt → Versätze = Fahrten (Tagessumme privat).
 // Tagessumme von gestern untergeschoben → dieser Lauf veröffentlicht gestern mit Mindestschwelle; heute bleibt bis Tagesende privat.
@@ -172,8 +213,32 @@ assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.co
   s5.at -= 2 * 3600e3; await writeFile(f, gzipSync(JSON.stringify(s5)));
 }
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
-const ev5 = JSON.parse(await readFile(`test/out/events/${JSON.parse(await readFile('test/out/events/index.json', 'utf8')).days.slice(-1)[0]}.json`, 'utf8'));
+const ev5 = await evWork();
 const h5 = JSON.parse(await readFile(`test/out/history/${T.dayOf(Date.now())}.json`, 'utf8')); // Tagesschnitt Europe/Berlin
 assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(-1)[0] === 0, 'Lauf nach Lücke: runs-Flag 0, gapHours, history f = 0');
+// M-11: Stundenwechsel → veröffentlicht wird der Stand vor diesem Lauf (nur abgeschlossene Stunden); Bandwechsel → Zellen; Tageswechsel → vollständig
+{
+  const gz = async (f) => JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, f))).toString('utf8'));
+  const put = async (f, d) => writeFile(path.join(TRACK_DIR, f), gzipSync(JSON.stringify(d)));
+  const ew = await gz('events-work.json.gz'), cw = await gz('cells-work.json.gz');
+  for (const r of ew.runs) r[0] -= 3600e3; cw.lastAt -= 6 * 3600e3; await put('events-work.json.gz', ew); await put('cells-work.json.gz', cw);
+  await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
+  const day = T.dayOf(Date.now());
+  const pub = JSON.parse(await readFile(`test/out/events/${day}.json`, 'utf8')), ew2 = await gz('events-work.json.gz');
+  assert(pub.runs.length === ew.runs.length && pub.published?.complete === false && pub.published.through === ew.runs.at(-1)[0] && ew2.runs.length === ew.runs.length + 1, 'M-11: Stundenwechsel – veröffentlicht sind nur die Läufe der abgeschlossenen Stunden, der neue Lauf bleibt privat');
+  const cBW = JSON.parse(await readFile(`test/out/cells/${day}/BW.json`, 'utf8'));
+  const tot = (d) => { let a = 0; for (const m of Object.values(d.munis)) for (const c of Object.values(m)) a += c[0] + c[1]; for (const b of Object.values(d.below || {})) a += b.reduce((x, y) => x + y, 0); return a; };
+  const workTot = (() => { let a = 0; for (const m of Object.values(cw.states.BW || {})) for (const c of Object.values(m)) a += c[0] + c[1]; return a; })();
+  assert(cBW.published?.complete === false && cBW.published.through === cw.lastAt && cBW.minCount === 3 && tot(cBW) === workTot && Object.values(cBW.munis).every(m => Object.values(m).every(c => [0, 1, 2, 3, 4, 5].every(b => !(c[4 + b] + c[16 + b]) || c[4 + b] + c[16 + b] >= 3))),
+    `M-11: Bandwechsel – Zellen veröffentlicht, Zelle × Band unter 3 Ereignissen unterdrückt, Summe mit below = privater Stand (${workTot})`);
+  // Tageswechsel: privater Stand von „gestern“ wird vollständig veröffentlicht, heute beginnt neu
+  const yd = T.dayOf(Date.now() - 86400e3);
+  const ew3 = await gz('events-work.json.gz'), cw3 = await gz('cells-work.json.gz'); ew3.day = yd; cw3.day = yd; await put('events-work.json.gz', ew3); await put('cells-work.json.gz', cw3);
+  await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
+  const pubY = JSON.parse(await readFile(`test/out/events/${yd}.json`, 'utf8')), cY = JSON.parse(await readFile(`test/out/cells/${yd}/BW.json`, 'utf8')), ew4 = await gz('events-work.json.gz');
+  const arY = JSON.parse(await readFile(`test/out/archive/${yd.slice(0, 7)}.json`, 'utf8'));
+  assert(pubY.published?.complete === true && pubY.runs.length === ew3.runs.length && cY.published?.complete === true && ew4.day === day && ew4.runs.length === 1 && arY.days[yd],
+    'M-11: Tageswechsel – Vortag vollständig veröffentlicht (Ereignisse, Zellen, Archiv), heute neu begonnen');
+}
 ex.close(); srv.kill();
 await rm(tmp, { recursive: true, force: true });

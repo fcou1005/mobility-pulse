@@ -356,7 +356,14 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const rc = O.runsCsv(two.runs, D2);
   assert(/Spot 2 \(Bedarf 6, Bestand 0, Fehlmenge 6\)/.test(rc), 'Touren-CSV nennt Bedarf, Bestand, Fehlmenge');
   const rcEn = O.runsCsv(two.runs, D2, 'en');
-  assert(rcEn.split('\n')[0] === 'run,type,stop,kind,lat,lng,count,info' && /Spot 2 \(need 6, fleet 0, shortfall 6\)/.test(rcEn) && rcEn.split('\n')[1].includes(',depot,'), 'Touren-CSV englisch: Spalten und Info-Text, Komma-Trennung');
+  assert(rcEn.split('\n')[0] === 'run,type,stop,kind,lat,lng,count,info,priority,priority_rank,reason' && /Spot 2 \(need 6, fleet 0, shortfall 6\)/.test(rcEn) && rcEn.split('\n')[1].includes(',depot,'), 'Touren-CSV englisch: Spalten und Info-Text, Komma-Trennung');
+  // Priorität, Rang und Grund je Stopp (wie die Stoppliste der Disposition), auch im GeoJSON
+  const dropLine = rc.split('\n').find(l => l.includes('Fehlmenge 6)'));
+  const st0 = two.runs[0].stops.find(s => s.type === 'drop');
+  assert(rc.split('\n')[0].endsWith(';prioritaet;prio_rang;grund') && dropLine.endsWith(`;${st0.prio};${st0.rank};${O.stopReason(st0)}`) && /Fehlmenge 6|Spot leer/.test(O.stopReason(st0)), 'Touren-CSV: Priorität, Rang und Grund je Stopp');
+  const gjr = O.planGeoJson([], two.runs, D2).features.find(f => f.properties.kind === 'stop' && f.properties.type === 'drop');
+  assert(gjr.properties.priority === st0.prio && gjr.properties.priorityRank === st0.rank && gjr.properties.reason === O.stopReason(st0), 'GeoJSON: Priorität, Rang und Grund je Stopp');
+  assert(O.stopReason({ type: 'swap', why: { battery: 12, idleH: 30 } }, 'en') === 'battery 12 %, idle 30 h' && O.stopReason({ type: 'pickup', station: 'X', why: { full: true } }) === 'Station voll', 'Grundtext: Akku und Standzeit, volle Station');
 }
 // --- Analyse-CSV mit allen Zahlen
 {
@@ -404,4 +411,97 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const big = { fields: F, events: [...Array(20000)].map((_, i) => e(i / 10, rnd() < 0.7 ? 'deploy' : 'collect', rnd() < 0.5 ? 'Dott' : 'Voi', 48.5 + rnd() * 0.012, 9.05 + rnd() * 0.017, 4 + Math.floor(rnd() * 6))) };
   const t0 = performance.now(); const gb = O.groupPlaces(big, { ags: AGS }); const ms = performance.now() - t0;
   assert(gb.events.deploy + gb.events.collect === 20000 && ms < 400, `20.000 Ereignisse → ${gb.deploy.length + gb.collect.length} Orte in ${ms.toFixed(0)} ms`);
+}
+// --- Reihenfolge nach Kilometern und Priorität (Nutzerwunsch 01.11.2026: kilometeroptimiert, lange Standzeit / niedriger Akku früher)
+{
+  let seed = 41; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const LAT = 48.78, LON = 9.18, KX = 111320 * Math.cos(LAT * Math.PI / 180);
+  const P = (x, y, extra = {}) => ({ lat: LAT + y / 111320, lon: LON + x / KX, ...extra }), XY = (p) => ({ x: (p.lon - LON) * KX, y: (p.lat - LAT) * 111320 });
+  const D0 = P(0, 0);
+  const perms = (a) => a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map(p => [x, ...p]));
+  // Ziel wie in lib (unabhängig nachgerechnet): L + λ · Σ w·d ÷ Σ w, w = Priorität − kleinste Priorität
+  const score = (seq, cost, lam) => { const mn = Math.min(...seq.map(s => s.prio)), W = seq.reduce((a, s) => a + s.prio - mn, 0); let L = 0, wd = 0, p = D0;
+    for (const s of seq) { L += cost(p, s); wd += (s.prio - mn) * L; p = s; } L += cost(p, D0); return { L, J: L + (W > 1e-9 && lam > 0 ? lam * wd / W : 0) }; };
+  const inst = (n) => [...Array(n)].map((_, i) => P((rnd() - 0.5) * 8000, (rnd() - 0.5) * 6000, { i, prio: +(rnd() < 0.3 ? 1 + rnd() * 0.5 : rnd() * 0.6).toFixed(3) }));
+  const asym = (a, b) => O.dist(a, b) * (b.lat > a.lat ? 1.3 : 1);
+  // 1) λ = 0: kürzeste Tour gegen Brute-Force über alle 5040 Reihenfolgen von 7 Punkten (exakt und Heuristik, symmetrisch und asymmetrisch)
+  let okExact = true, okHeur = 0, okKm = true;
+  for (let k = 0; k < 8; k++) {
+    const st = inst(7), cost = k % 2 ? asym : O.makeCost(), best = Math.min(...perms(st).map(q => score(q, cost, 0).L));
+    const ex = O.orderTour([st], { start: D0, end: D0, cost, weight: s => s.prio, lambda: 0 }), he = O.orderTour([st], { start: D0, end: D0, cost, weight: s => s.prio, lambda: 0, exact: false });
+    if (Math.abs(score(ex.stops, cost, 0).L - best) > 1e-6 || Math.abs(ex.L - best) > 1e-6) okExact = false;
+    if (Math.abs(score(he.stops, cost, 0).L - best) < 1e-6) okHeur++;
+    if (O.sequenceRun([st], { depot: D0, cost, lambda: 0 }).km !== +(best / 1000).toFixed(1)) okKm = false;
+  }
+  assert(okExact && okKm, 'λ = 0: exakte Reihenfolge = kürzeste Tour laut Brute-Force (7 Punkte, 8 Instanzen, auch asymmetrisch), km stimmen');
+  assert(okHeur >= 7, `λ = 0: Heuristik findet die kürzeste Tour in ${okHeur} von 8 Instanzen`);
+  // 2) λ > 0: exakt (Held-Karp mit Prioritätsaufschlag) = Brute-Force des Ziels, auch mit Gruppen (3 Abholungen, dann 4 Ausbringungen)
+  let okJ = true, okG = true, okHJ = 0, cnt = 0;
+  for (let k = 0; k < 8; k++) {
+    const st = inst(7), cost = k % 2 ? asym : O.makeCost(), lam = [0.5, 1, 2, 4][k % 4];
+    const best = Math.min(...perms(st).map(q => score(q, cost, lam).J));
+    const ex = O.orderTour([st], { start: D0, end: D0, cost, weight: s => s.prio, lambda: lam });
+    if (Math.abs(score(ex.stops, cost, lam).J - best) > 1e-6 || Math.abs(ex.J - best) > 1e-6) okJ = false;
+    const he = O.orderTour([st], { start: D0, end: D0, cost, weight: s => s.prio, lambda: lam, exact: false }); cnt++;
+    if (score(he.stops, cost, lam).J <= best * 1.01 + 1e-6) okHJ++;
+    const pk = st.slice(0, 3), dr = st.slice(3), bestG = Math.min(...perms(pk).flatMap(a => perms(dr).map(b => score([...a, ...b], cost, lam).J)));
+    const g = O.orderTour([pk, dr], { start: D0, end: D0, cost, weight: s => s.prio, lambda: lam });
+    if (Math.abs(g.J - bestG) > 1e-6 || !g.stops.slice(0, 3).every(s => pk.includes(s))) okG = false;
+  }
+  assert(okJ, 'λ > 0: exakte Reihenfolge = Minimum von Strecke + λ · gewichtete Anfahrt laut Brute-Force (7 Punkte, 8 Instanzen)');
+  assert(okG, 'Gruppen (erst 3 Abholungen, dann 4 Ausbringungen): exakt = Brute-Force über 3! · 4! Reihenfolgen, Abholungen zuerst');
+  assert(okHJ >= cnt - 1, `λ > 0: Heuristik höchstens 1 % über dem Optimum in ${okHJ} von ${cnt} Instanzen`);
+  // 3) Regler: mit wachsendem λ nie kürzer, gewichtete Anfahrt der dringenden Stopps nie später (exakt, 10 Punkte)
+  let mono = true; for (let k = 0; k < 6; k++) { const st = inst(10); let prev = null;
+    for (const lam of O.PRIO_LEVELS) { const r = O.orderTour([st], { start: D0, end: D0, weight: s => s.prio, lambda: lam }); if (prev && (r.L < prev.L - 1e-6 || r.reach > prev.reach + 1e-6)) mono = false; prev = r; } }
+  assert(mono && O.PRIO_LEVELS[0] === 0 && O.PRIO_LEVELS[O.PRIO_LEVEL_DEFAULT] === O.DEFAULTS.prioLambda, 'Regler Priorität ↔ Strecke: Stufe 0 = nur km; höhere Stufe → Strecke steigt nie, dringende Stopps kommen nie später');
+  // 4) Ring mit 10 Stopps, Depot unten außerhalb; im Uhrzeigersinn 4 % günstiger (Einbahnstraßen). U = dringend (1,5), Rest 0,2
+  const C = { x: 0, y: 2000 };
+  const ring = (uAng) => [...Array(10)].map((_, i) => { const a = -90 + 36 * i, r = a * Math.PI / 180; return P(C.x + 1500 * Math.cos(r), C.y + 1500 * Math.sin(r), { i, prio: Math.abs(a - uAng) < 1 ? 1.5 : 0.2 }); });
+  const cw = (a, b) => { const A = XY(a), B = XY(b), cr = (A.x - C.x) * (B.y - C.y) - (A.y - C.y) * (B.x - C.x); return O.dist(a, b) * (cr > 1e3 ? 1.04 : 1); };
+  const at = (lam, uAng, exact = true) => { const r = O.orderTour([ring(uAng)], { start: D0, end: D0, cost: cw, weight: s => s.prio, lambda: lam, exact }); return { pos: r.stops.findIndex(s => s.prio === 1.5) + 1, L: r.L }; };
+  const near0 = at(0, -54), near1 = at(1, -54), near1h = at(1, -54, false);
+  assert(near0.pos >= 9 && near1.pos === 1 && near1h.pos === 1 && near1.L / near0.L < 1.05, `dringender Stopp nahe am Depot: ohne Priorität als ${near0.pos}. angefahren, mit λ = 1 als ${near1.pos}. (Umweg ${((near1.L / near0.L - 1) * 100).toFixed(1)} %, Heuristik ebenso)`);
+  const far1 = at(1, 90), far4 = at(4, 90);
+  assert(far1.pos === at(0, 90).pos && Math.abs(far1.L - at(0, 90).L) < 1e-6 && far4.pos < far1.pos && far4.L > far1.L * 1.2, `dringender Stopp gegenüber: großer Umweg → bei λ = 1 bleibt er an Stelle ${far1.pos}, erst bei λ = 4 an Stelle ${far4.pos} (+${((far4.L / far1.L - 1) * 100).toFixed(0)} % km)`);
+  // gleiche Prioritäten: reine Kilometer-Optimierung unabhängig von λ
+  const flat = inst(9).map(s => ({ ...s, prio: 0.7 })), f0 = O.orderTour([flat], { start: D0, end: D0, weight: s => s.prio, lambda: 0 }), f4 = O.orderTour([flat], { start: D0, end: D0, weight: s => s.prio, lambda: 4 });
+  assert(Math.abs(f0.L - f4.L) < 1e-6 && f4.reach === null, 'gleiche Prioritäten: λ ändert nichts (kürzeste Tour)');
+  // 5) Matrix statt Luftlinie: C–D liegen nah, aber durch einen Fluss getrennt (Straße 9 km); Matrix wird genutzt, fehlende Werte → Luftlinie × 1,35
+  const A = P(1000, 0, { prio: 0, n: 'A' }), B = P(1000, 300, { prio: 0, n: 'B' }), Cc = P(2000, 0, { prio: 0, n: 'C' }), Dd = P(2000, 300, { prio: 0, n: 'D' });
+  const pts = [D0, A, B, Cc, Dd], air = O.makeCost();
+  const Dm = pts.map(p => pts.map(q => p === q ? 0 : air(p, q)));
+  Dm[3][4] = Dm[4][3] = 9000; Dm[0][4] = null; // C–D nur über eine ferne Brücke; Depot → D fehlt in der Matrix
+  const mcost = O.matrixCost(pts, Dm);
+  const viaAir = O.sequenceRun([[A, B, Cc, Dd]], { depot: D0, cost: air, lambda: 0 }), viaRoad = O.sequenceRun([[A, B, Cc, Dd]], { depot: D0, cost: mcost, lambda: 0 });
+  const adj = (r, x, y) => r.stops.some((s, i) => i > 0 && ((s.n === x.n && r.stops[i - 1].n === y.n) || (s.n === y.n && r.stops[i - 1].n === x.n)));
+  const roadKm = (seq) => { let m = 0, p = D0; for (const s of seq) { m += mcost(p, s); p = s; } return m + mcost(p, D0); };
+  assert(adj(viaAir, Cc, Dd) && !adj(viaRoad, Cc, Dd) && viaRoad.km === +(roadKm(viaRoad.stops) / 1000).toFixed(1), `Straßenmatrix statt Luftlinie: Reihenfolge meidet die Flussquerung (${viaRoad.km} km nach Matrix)`);
+  assert(Math.abs(mcost(D0, Dd) - air(D0, Dd)) < 1e-9 && Math.abs(mcost(D0, Dd) / O.dist(D0, Dd) - 1.35) < 1e-9 && mcost({ ...Cc }, { ...Dd }) === 9000, 'Matrix: fehlender Wert → Luftlinie × 1,35; Punkte auch über Koordinaten gefunden');
+  // 6) Prioritätswerte und Gründe
+  const pv = O.vehiclePrio('swap', { battery: 8, rangeKm: 4, idleMin: 31 * 60 }, { swapThreshold: 20, swapRangeKm: 5 });
+  assert(Math.abs(pv.prio - (0.7 * 0.6 + 0.3 + 0.5)) < 1e-9 && pv.why.battery === 8 && pv.why.idleH === 31, `Akkutausch: Akku 8 %, steht 31 h → Priorität ${pv.prio} (0,7 × Energie-Lücke 0,6 + 0,3 × Standzeit + 0,5 ab 24 h)`);
+  const pr = O.vehiclePrio('swap', { battery: 18, rangeKm: 0.5, idleMin: 60 }, { swapThreshold: 20, swapRangeKm: 5 });
+  assert(Math.abs(pr.prio - (0.7 * 0.9 + 0.3 / 24)) < 1e-3, 'Akkutausch: größere Lücke von Ladestand und Reichweite zählt (Reichweite 0,5 km)');
+  const w23 = O.vehiclePrio('pickup_disabled', { idleMin: 23 * 60 }), w25 = O.vehiclePrio('pickup_disabled', { idleMin: 25 * 60 });
+  assert(w25.prio - w23.prio > 0.5 && w23.prio < 1 && w25.why.idleH === 25, `Werkstatt: über 24 h gesperrt deutlich dringender (${w23.prio} → ${w25.prio})`);
+  assert(O.dropPrio(6, 0).prio === 1.5 && O.dropPrio(3, 2).prio === 0.5 && O.dropPrio(3, 0).why.empty === true, 'Ausbringen: Fehlmenge ÷ 6, Spot leer im Umkreis +0,5');
+  // 7) Nebenbedingungen bleiben mit starker Priorität (λ = 4): Abholungen vor Ausbringungen, Kapazität, Einsatz ≤ 4 h
+  const D1 = { lat: 48.78, lon: 9.18 };
+  const cells = new Map(); const spotsR = [];
+  for (let i = 0; i < 24; i++) { const lat = D1.lat + (rnd() - 0.5) * 0.09, lon = D1.lon + (rnd() - 0.5) * 0.13, cell = O.cellOf(lat, lon); spotsR.push({ rank: i + 1, cell, lat, lon, score: 1 - i / 30, target: 6 }); cells.set(cell, { startsPerHour: 0 }); }
+  const sur = [...Array(120)].map(() => V(D1.lat + (rnd() - 0.5) * 0.12, D1.lon + (rnd() - 0.5) * 0.17, { idleMin: Math.floor(rnd() * 3000) }));
+  const rb4 = O.planRebalance({ spots: spotsR, vehicles: sur, model: { cells }, depot: D1, vanCapacity: 30, maxRuns: 8, prioLambda: 4 });
+  const okOrder = rb4.runs.every(r => { const fd = r.stops.findIndex(s => s.type === 'drop'); return fd > 0 && r.stops.slice(fd).every(s => s.type === 'drop'); });
+  assert(okOrder && rb4.runs.every(r => r.vehicles <= 30 && r.totalMin <= 240) && rb4.runs.reduce((s, r) => s + r.vehicles, 0) + rb4.unplanned === rb4.moves, 'Umsetzen mit λ = 4: erst einsammeln, dann ausbringen; Kapazität 30; jede Tour ≤ 4 h; eingeplant + nicht eingeplant = Umsetzungen');
+  const spreadV = [...Array(200)].map(() => V(D1.lat + (rnd() - 0.5) * 0.11, D1.lon + (rnd() - 0.5) * 0.16, { battery: 2 + Math.floor(rnd() * 17), idleMin: Math.floor(rnd() * 4000) }));
+  const sw4 = O.planSwaps({ vehicles: spreadV, model: m, depot: D1, swapThreshold: 20, maxRuns: 6, prioLambda: 4 }), sw0 = O.planSwaps({ vehicles: spreadV, model: m, depot: D1, swapThreshold: 20, maxRuns: 6, prioLambda: 0 });
+  assert(sw4.runs.every(r => r.totalMin <= 240 && r.vehicles <= 50) && sw4.runs.reduce((s, r) => s + r.vehicles, 0) + sw4.unplanned === sw4.below, 'Akkutausch mit λ = 4: jede Tour ≤ 4 h, ≤ 50 Akkus, nichts verloren');
+  const reach = (p) => p.runs.reduce((s, r) => s + (r.reachKm ?? 0), 0), kmOf = (p) => p.runs.reduce((s, r) => s + r.km, 0);
+  assert(reach(sw4) < reach(sw0) && sw0.runs.every(r => r.km === r.kmMin), `Akkutausch: mit Priorität erreicht die Tour dringende Fahrzeuge früher (Σ gewichtete Anfahrt ${reach(sw4).toFixed(1)} statt ${reach(sw0).toFixed(1)} km, Strecke ${kmOf(sw4).toFixed(1)} statt ${kmOf(sw0).toFixed(1)} km); λ = 0 = kürzeste`);
+  const r1 = sw4.runs[0], s1 = r1.stops[0];
+  assert(r1.stops.every((s, i) => s.seq === i + 1 && s.rank >= 1 && s.why && Number.isFinite(s.prio)) && r1.kmNN >= r1.kmMin && r1.kmPrio >= r1.kmMin && s1.atKm > 0, `Tour nennt je Stopp Position, Rang, Priorität, Grund und Strecke bis dahin; Vergleich: kürzeste ${r1.kmMin} · Nächster Nachbar ${r1.kmNN} · reine Prioritätsfolge ${r1.kmPrio} km`);
+  // Rechenzeit: 50 Stopps mit Priorität < 150 ms
+  const big = inst(50); const t0 = performance.now(); O.orderTour([big], { start: D0, end: D0, weight: s => s.prio, lambda: 1 }); const ms = performance.now() - t0;
+  assert(ms < 150, `Reihenfolge mit Priorität: 50 Stopps in ${ms.toFixed(0)} ms (< 150 ms)`);
 }

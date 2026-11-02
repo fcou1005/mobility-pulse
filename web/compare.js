@@ -10,7 +10,8 @@ import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js';
 const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
 const CACHE = new Map();
 const S = new WeakMap();
-const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, type: 'all', radius: P.DEFAULT_RADIUS, hide: new Set(), mode: 'stations', show: 'all', sort: { key: 'vehicles', dir: 'desc' }, ssort: { key: 'operator', dir: 'asc' }, limit: 100 }; S.set(el, s); } return s; };
+// grp: sichtbare Spaltengruppe der Kennzahlen (fleet | stations | area | all); alle 16 Spalten passen auch bei 1440 px nicht in das Panel
+const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, type: 'all', radius: P.DEFAULT_RADIUS, hide: new Set(), mode: 'stations', show: 'all', grp: 'fleet', sort: { key: 'vehicles', dir: 'desc' }, ssort: { key: 'operator', dir: 'asc' }, limit: 100 }; S.set(el, s); } return s; };
 /** Zwischenspeicher leeren (neuer Sammler-Lauf) */
 export function resetCompareCache() { CACHE.clear(); }
 
@@ -34,7 +35,11 @@ const STYLE = `
 .cmp-legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);align-items:center;font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
 .cmp-legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px;border:2px solid var(--fg-2)}
 .cmp-legend i.fill{background:var(--fg-2)}.cmp-legend .cmp-op i{border:0;width:9px;height:9px;margin:0;background:var(--c)}
-.cmp-h3{font-size:14px;font-weight:600;margin:var(--s4) 0 var(--s2)}
+.cmp-legend button.cmp-hl{all:unset;cursor:pointer;border-radius:4px;padding:0 2px}.cmp-legend button.cmp-hl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cmp-legend button.cmp-hl[aria-pressed="true"] .cmp-op{text-decoration:underline;text-underline-offset:3px}
+.panel .cmp-h3{font-size:14px;font-weight:600;margin:var(--s5) 0 var(--s2)}
+.cmp-kpi[data-grp="fleet"] :is(.g-st,.g-area),.cmp-kpi[data-grp="stations"] :is(.g-fleet,.g-area),.cmp-kpi[data-grp="area"] :is(.g-fleet,.g-st),.cmp-kpi:not([data-grp="all"]) .cmp-grp{display:none}
+@media print{.cmp-kpi :is(.g-fleet,.g-st,.g-area){display:table-cell!important}.cmp-kpi .cmp-grp{display:table-row!important}}
 .cmp-op{display:inline-flex;align-items:center;gap:6px;font-weight:500;white-space:nowrap}.cmp-op i{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none}
 .cmp-mx td.v{text-align:right;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--accent) var(--a),transparent)}
 .cmp-mx td.self{color:var(--muted);text-align:center}
@@ -49,11 +54,23 @@ const css = () => { if (cssDone || typeof document === 'undefined') return; cssD
 const stamp = (ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(ms)) : '–');
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// ops/<Land>.json und stations-quota.json ohne Anhang laden: dann teilt ctx.getJson den Download mit Karte und Disposition (gleicher Cache, je Lauf neu)
 function load(ctx, land) {
-  const at = ctx.state?.latest?.at || '';
-  const url = `${ctx.CFG.DATA}ops/${land}.json${at ? `?t=${at}` : ''}`;
-  if (!CACHE.has(url)) CACHE.set(url, Promise.resolve(ctx.getJson(url, { timeout: 90000 })).then((r) => (r?.ok && r.json ? decodeFleet(r.json) : null), () => null));
-  return CACHE.get(url);
+  const key = `${ctx.state?.latest?.at || ''}|${land}`;
+  if (!CACHE.has(key)) CACHE.set(key, Promise.resolve(ctx.getJson(`${ctx.CFG.DATA}ops/${land}.json`, { timeout: 90000 })).then((r) => (r?.ok && r.json ? decodeFleet(r.json) : null), () => null));
+  return CACHE.get(key);
+}
+function loadQuota(ctx) {
+  const key = `${ctx.state?.latest?.at || ''}|quota`;
+  if (!CACHE.has(key)) CACHE.set(key, Promise.resolve(ctx.getJson(`${ctx.CFG.DATA}stations-quota.json`, { timeout: 60000 })).then((r) => (r?.ok && r.json?.stations ? r.json : null), () => null));
+  return CACHE.get(key);
+}
+/** Text für „weitere Zeilen“: bis 100 alle auf einmal, sonst 100 und der Rest */
+const moreText = (rest, fmt) => (rest <= 100 ? t('common.showAllMore', { n: fmt(rest) }) : t('common.show100More', { n: fmt(rest - 100) }));
+/** Leaflet-Bedienelemente in der Sprache der Seite */
+function langControls(map) {
+  L.control.zoom({ zoomInTitle: t('common.zoomIn'), zoomOutTitle: t('common.zoomOut') }).addTo(map);
+  map.attributionControl?.setPrefix(`<a href="https://leafletjs.com" title="${t('common.leafletTitle')}" lang="en">Leaflet</a>`);
 }
 
 // ---------- Bausteine ----------
@@ -62,43 +79,46 @@ const num = (ctx, x, d = 0) => (x == null ? '–' : ctx.fmt(x, d));
 const hours = (ctx, min) => (min == null ? '–' : min < 120 ? t('cmp.min', { v: ctx.fmt(min) }) : t('cmp.h', { v: ctx.fmt(min / 60, 1) }));
 const opCell = (ctx, op) => `<span class="cmp-op" style="--c:${ctx.esc(ctx.opColor(op))}"><i></i>${ctx.esc(op)}</span>`;
 function sortHead(cols, sort, attr) {
-  return cols.map(([k, l, n, title]) => { if (!k) return `<th${n ? ' class="n"' : ''}>${l}</th>`; const on = sort.key === k; return `<th class="${n ? 'n' : ''}" aria-sort="${on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="rp-sort${on ? ' on' : ''}" data-${attr}="${k}"${title ? ` title="${title}"` : ''}>${l}<span aria-hidden="true">${on ? (sort.dir === 'asc' ? '▲' : '▼') : ''}</span></button></th>`; }).join('');
+  return cols.map(([k, l, n, title, g = '']) => { if (!k) return `<th${n ? ' class="n"' : ''}>${l}</th>`; const on = sort.key === k; return `<th class="${[n ? 'n' : '', g].filter(Boolean).join(' ')}" aria-sort="${on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="rp-sort${on ? ' on' : ''}" data-${attr}="${k}"${title ? ` title="${title}"` : ''}>${l}<span aria-hidden="true">${on ? (sort.dir === 'asc' ? '▲' : '▼') : ''}</span></button></th>`; }).join('');
 }
 const cmpBy = (key, dir) => (a, b) => { const x = a[key], y = b[key]; const r = typeof x === 'string' || typeof y === 'string' ? String(x ?? '').localeCompare(String(y ?? ''), 'de') : (x ?? -Infinity) - (y ?? -Infinity); return dir === 'asc' ? r : -r; };
 
 function kpiTable(ctx, res, s) {
   const rows = res.rows.filter(r => !s.hide.has(r.op)).map(r => ({ ...r, disabledShare: r.vehicles ? r.disabled / r.vehicles : null, share: res.total.vehicles ? r.vehicles / res.total.vehicles : null, uniqueCellShare: r.cells ? r.uniqueCells / r.cells : null }));
   rows.sort(cmpBy(s.sort.key, s.sort.dir));
-  const cols = [['op', t('cmp.operator')], ['vehicles', t('cmp.vehicles'), true], ['share', t('cmp.share'), true, t('cmp.shareTip')], ['available', t('cmp.available'), true], ['disabledShare', t('cmp.disabled'), true],
-    ['lowEnergy', t('cmp.lowEnergy'), true, t('cmp.lowEnergyTip')], ['idleMedian', t('cmp.idle'), true, t('cmp.idleTip')],
-    ['stations', t('cmp.stations'), true, t('cmp.stationsTip')], ['emptyStations', t('cmp.empty'), true], ['uniqueStations', t('cmp.uniqueSt'), true, t('cmp.uniqueStTip', { r: s.radius })], ['sharedStations', t('cmp.sharedSt'), true],
-    ['cells', t('cmp.cells'), true, t('cmp.cellsTip')], ['uniqueCellShare', t('cmp.uniqueCells'), true, t('cmp.uniqueCellsTip')], ['areaKm2', t('cmp.area'), true], ['density', t('cmp.density'), true, t('cmp.densityTip')], ['nearOther', t('cmp.nearOther'), true, t('cmp.nearOtherTip', { r: s.radius })]];
+  // Spalte 5: Gruppe (g-fleet, g-st, g-area); Anbieter und Bestand stehen immer
+  const cols = [['op', t('cmp.operator')], ['vehicles', t('cmp.vehicles'), true], ['share', t('cmp.share'), true, t('cmp.shareTip'), 'g-fleet'], ['available', t('cmp.available'), true, '', 'g-fleet'], ['disabledShare', t('cmp.disabled'), true, '', 'g-fleet'],
+    ['lowEnergy', t('cmp.lowEnergy'), true, t('cmp.lowEnergyTip'), 'g-fleet'], ['idleMedian', t('cmp.idle'), true, t('cmp.idleTip'), 'g-fleet'],
+    ['stations', t('cmp.stations'), true, t('cmp.stationsTip'), 'g-st'], ['emptyStations', t('cmp.empty'), true, '', 'g-st'], ['uniqueStations', t('cmp.uniqueSt'), true, t('cmp.uniqueStTip', { r: s.radius }), 'g-st'], ['sharedStations', t('cmp.sharedSt'), true, '', 'g-st'],
+    ['cells', t('cmp.cells'), true, t('cmp.cellsTip'), 'g-area'], ['uniqueCellShare', t('cmp.uniqueCells'), true, t('cmp.uniqueCellsTip'), 'g-area'], ['areaKm2', t('cmp.area'), true, '', 'g-area'], ['density', t('cmp.density'), true, t('cmp.densityTip'), 'g-area'], ['nearOther', t('cmp.nearOther'), true, t('cmp.nearOtherTip', { r: s.radius }), 'g-area']];
+  const c = (g, v) => `<td class="n ${g}">${v}</td>`;
   const body = rows.map(r => `<tr><td>${opCell(ctx, r.op)}<div class="sub-line">${ctx.esc(Object.entries(r.types).sort((a, b) => b[1] - a[1]).map(([ty, n]) => `${TYPE[ty] || ty} ${ctx.fmt(n)}`).join(' · '))}</div></td>
-    <td class="n">${num(ctx, r.vehicles)}</td><td class="n">${pct(ctx, r.share)}</td><td class="n">${num(ctx, r.available)}</td><td class="n">${pct(ctx, r.disabledShare)}</td><td class="n">${pct(ctx, r.lowEnergy)}</td><td class="n">${hours(ctx, r.idleMedian)}</td>
-    <td class="n">${num(ctx, r.stations)}${r.stations ? `<div class="sub-line">${t('cmp.physVirt', { p: ctx.fmt(r.physical), v: ctx.fmt(r.virtual) })}</div>` : ''}</td><td class="n">${r.stations ? num(ctx, r.emptyStations) : '–'}</td><td class="n">${r.stations ? num(ctx, r.uniqueStations) : '–'}</td><td class="n">${r.stations ? num(ctx, r.sharedStations) : '–'}</td>
-    <td class="n">${num(ctx, r.cells)}</td><td class="n">${pct(ctx, r.uniqueCellShare)}<div class="sub-line">${t('cmp.ofCells', { n: ctx.fmt(r.uniqueCells) })}</div></td><td class="n">${num(ctx, r.areaKm2, 1)}</td><td class="n">${num(ctx, r.density)}</td><td class="n">${pct(ctx, r.nearOther)}</td></tr>`).join('');
-  const T = res.total;
-  const sum = `<tr class="cmp-sum"><td>${t('cmp.all')}</td><td class="n">${num(ctx, T.vehicles)}</td><td class="n">100 %</td><td colspan="5"></td><td class="n">${num(ctx, T.stations)}</td><td colspan="3"></td><td class="n">${num(ctx, T.cells)}</td><td></td><td class="n">${num(ctx, T.areaKm2, 1)}</td><td colspan="2"></td></tr>`;
-  const grp = `<tr class="cmp-grp"><td></td><th colspan="6">${t('cmp.grpFleet')}</th><th colspan="4">${t('cmp.grpStations')}</th><th colspan="5">${t('cmp.grpArea')}</th></tr>`;
-  return `<div class="tbl" tabindex="0" role="region" aria-label="${t('cmp.kpiAria')}"><table><thead>${grp}<tr>${sortHead(cols, s.sort, 'cmp-sort')}</tr></thead><tbody>${body}${sum}</tbody></table></div>`;
+    <td class="n">${num(ctx, r.vehicles)}</td>${c('g-fleet', pct(ctx, r.share))}${c('g-fleet', num(ctx, r.available))}${c('g-fleet', pct(ctx, r.disabledShare))}${c('g-fleet', pct(ctx, r.lowEnergy))}${c('g-fleet', hours(ctx, r.idleMedian))}
+    ${c('g-st', `${num(ctx, r.stations)}${r.stations ? `<div class="sub-line">${t('cmp.physVirt', { p: ctx.fmt(r.physical), v: ctx.fmt(r.virtual) })}</div>` : ''}`)}${c('g-st', r.stations ? num(ctx, r.emptyStations) : '–')}${c('g-st', r.stations ? num(ctx, r.uniqueStations) : '–')}${c('g-st', r.stations ? num(ctx, r.sharedStations) : '–')}
+    ${c('g-area', num(ctx, r.cells))}${c('g-area', `${pct(ctx, r.uniqueCellShare)}<div class="sub-line">${t('cmp.ofCells', { n: ctx.fmt(r.uniqueCells) })}</div>`)}${c('g-area', num(ctx, r.areaKm2, 1))}${c('g-area', num(ctx, r.density))}${c('g-area', pct(ctx, r.nearOther))}</tr>`).join('');
+  const T = res.total, e = (g, n = 1) => Array.from({ length: n }, () => `<td class="${g}"></td>`).join('');
+  const sum = `<tr class="cmp-sum"><td>${t('cmp.all')}</td><td class="n">${num(ctx, T.vehicles)}</td>${c('g-fleet', '100 %')}${e('g-fleet', 4)}${c('g-st', num(ctx, T.stations))}${e('g-st', 3)}${c('g-area', num(ctx, T.cells))}${e('g-area')}${c('g-area', num(ctx, T.areaKm2, 1))}${e('g-area', 2)}</tr>`;
+  const grp = `<tr class="cmp-grp"><td></td><td></td><th colspan="5">${t('cmp.grpFleet')}</th><th colspan="4">${t('cmp.grpStations')}</th><th colspan="5">${t('cmp.grpArea')}</th></tr>`;
+  const tog = `<div class="cmp-ctl rp-noprint"><div class="cmp-tog" role="group" aria-label="${t('cmp.colGroup')}">${[['fleet', t('cmp.grpFleet')], ['stations', t('cmp.grpStations')], ['area', t('cmp.grpArea')], ['all', t('cmp.grpAll')]].map(([k, l]) => `<button type="button" data-cmp-grp="${k}" aria-pressed="${s.grp === k}">${l}</button>`).join('')}</div></div>`;
+  return `${tog}<div class="tbl cmp-kpi" data-grp="${s.grp}" tabindex="0" role="region" aria-label="${t('cmp.kpiAria')}"><table><thead>${grp}<tr>${sortHead(cols, s.sort, 'cmp-sort')}</tr></thead><tbody>${body}${sum}</tbody></table></div>`;
 }
 function overlapTable(ctx, res, s) {
   const ops = res.rows.filter(r => !s.hide.has(r.op) && r.cells).map(r => r.op);
   if (ops.length < 2) return '';
   const head = `<tr><th>${t('cmp.mxRowsCols')}</th>${ops.map(o => `<th class="n">${opCell(ctx, o)}</th>`).join('')}</tr>`;
   const body = ops.map(a => `<tr><th scope="row">${opCell(ctx, a)}</th>${ops.map(b => { if (a === b) return '<td class="self">—</td>'; const v = res.overlap[a]?.[b]; return v == null ? '<td class="v">–</td>' : `<td class="v" style="--a:${Math.round(v * 45)}%" title="${ctx.esc(t('cmp.mxTip', { a, b, v: ctx.fmt(v * 100) }))}">${ctx.fmt(v * 100)} %</td>`; }).join('')}</tr>`).join('');
-  return `<h3 class="cmp-h3">${t('cmp.mxTitle')}</h3><p class="muted small" style="margin:0 0 var(--s2)">${t('cmp.mxSub')}</p><div class="tbl cmp-mx"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  return `<h3 class="cmp-h3">${t('cmp.mxTitle')}</h3><p class="muted small" style="margin:0 0 var(--s2)">${t('cmp.mxSub')}</p><div class="tbl cmp-mx" tabindex="0" role="region" aria-label="${ctx.esc(t('cmp.mxTitle'))}"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
 function stationRows(res, s) {
   return res.stations.filter(x => !s.hide.has(x.operator) && (s.show === 'all' || (s.show === 'unique' ? x.unique : !x.unique)));
 }
 function stationTable(ctx, res, s) {
-  const list = stationRows(res, s).map(x => ({ ...x, other: x.nearestOther?.operator || '', d: x.nearestOther?.d ?? null, kind: x.physical === 1 ? 1 : 0 }));
+  const list = stationRows(res, s).map(x => ({ ...x, other: x.nearestOther?.operator || '', d: x.nearestOther?.d ?? null, kind: x.virtual ? 0 : 1 }));
   list.sort(cmpBy(s.ssort.key, s.ssort.dir));
   const cols = [['name', t('cmp.station')], ['operator', t('cmp.operator')], ['kind', t('cmp.kind')], ['bookable', t('cmp.bookable'), true], ['capacity', t('cmp.capacity'), true], ['unique', t('cmp.status')], ['other', t('cmp.nearestOther')], ['d', t('cmp.distance'), true]];
-  const body = list.slice(0, s.limit).map(x => `<tr><td>${ctx.esc(x.name || '–')}</td><td>${opCell(ctx, x.operator)}</td><td>${x.physical === 1 ? t('cmp.physical') : t('cmp.virtual')}</td><td class="n">${num(ctx, x.bookable)}</td><td class="n">${num(ctx, x.capacity)}</td>
+  const body = list.slice(0, s.limit).map(x => `<tr><td translate="no">${ctx.esc(x.name || '–')}</td><td>${opCell(ctx, x.operator)}</td><td>${x.virtual ? t('cmp.virtual') : t('cmp.physical')}</td><td class="n">${num(ctx, x.bookable)}</td><td class="n">${num(ctx, x.capacity)}</td>
     <td>${x.unique ? `<span class="rp-status ok"><i aria-hidden="true">●</i>${t('cmp.unique')}</span>` : `<span class="rp-status none"><i aria-hidden="true">○</i>${t('cmp.shared')}</span>`}</td><td>${x.other ? opCell(ctx, x.other) : '–'}</td><td class="n">${x.d == null ? '–' : `${ctx.fmt(x.d)} m`}</td></tr>`).join('');
-  const more = list.length > s.limit ? `<div class="rp-ctl rp-noprint" style="margin-top:var(--s2)"><button type="button" data-cmp-act="more">${t('cmp.more', { n: Math.min(100, list.length - s.limit), m: list.length - s.limit })}</button></div>` : '';
+  const more = list.length > s.limit ? `<div class="rp-ctl rp-noprint" style="margin-top:var(--s2)"><button type="button" data-cmp-act="more">${moreText(list.length - s.limit, ctx.fmt)}</button></div>` : '';
   return `<h3 class="cmp-h3">${t('cmp.stTitle', { n: ctx.fmt(list.length) })}</h3>${list.length ? `<div class="tbl" tabindex="0" role="region" aria-label="${t('cmp.stTitle', { n: list.length })}"><table><thead><tr>${sortHead(cols, s.ssort, 'cmp-ssort')}</tr></thead><tbody>${body}</tbody></table></div>${more}` : `<div class="empty">${t('cmp.noStations')}</div>`}`;
 }
 function controls(ctx, res, s, types) {
@@ -122,7 +142,8 @@ function drawMap(el, ctx, res, s) {
   if (!s.map || s.map.getContainer() !== box) {
     s.map?.remove();
     const still = reduced();
-    s.map = L.map(box, { zoomControl: true, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, preferCanvas: true });
+    s.map = L.map(box, { zoomControl: false, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, preferCanvas: true });
+    langControls(s.map);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.map);
     s.layer = L.layerGroup().addTo(s.map); s.fitKey = null;
   }
@@ -132,15 +153,15 @@ function drawMap(el, ctx, res, s) {
   const esc = ctx.esc;
   if (s.mode === 'stations') {
     for (const x of stationRows(res, s)) {
-      const c = ctx.opColor(x.operator);
-      const tip = `<b>${esc(x.name || t('cmp.station'))}</b><div>${esc(x.operator)} · ${x.physical === 1 ? t('cmp.physical') : t('cmp.virtual')} · ${t('cmp.bookableN', { n: ctx.fmt(x.bookable ?? 0) })}</div><div>${x.unique ? t('cmp.uniqueTip', { r: s.radius }) : t('cmp.sharedTip', { op: esc(x.nearestOther.operator), d: ctx.fmt(x.nearestOther.d) })}</div>`;
-      L.circleMarker([x.lat, x.lon], { renderer, radius: x.unique ? 6 : 5, color: c, weight: 2.5, fillColor: x.unique ? c : '#ffffff', fillOpacity: x.unique ? 0.9 : 1 }).bindTooltip(tip, { className: 'cmp-tip', sticky: true }).addTo(s.layer);
+      const c = ctx.opColor(x.operator), dim = s.focus && s.focus !== x.operator;
+      const tip = `<b translate="no">${esc(x.name || t('cmp.station'))}</b><div>${esc(x.operator)} · ${x.virtual ? t('cmp.virtual') : t('cmp.physical')} · ${t('cmp.bookableN', { n: ctx.fmt(x.bookable ?? 0) })}</div><div>${x.unique ? t('cmp.uniqueTip', { r: s.radius }) : t('cmp.sharedTip', { op: esc(x.nearestOther.operator), d: ctx.fmt(x.nearestOther.d) })}</div>`;
+      L.circleMarker([x.lat, x.lon], { renderer, radius: x.unique ? 6 : 5, color: c, weight: 2.5, opacity: dim ? 0.2 : 1, fillColor: x.unique ? c : '#ffffff', fillOpacity: dim ? 0.1 : x.unique ? 0.9 : 1 }).bindTooltip(tip, { className: 'cmp-tip', sticky: true }).addTo(s.layer);
       pts.push([x.lat, x.lon]);
     }
   } else {
     for (const v of res.vehicles) {
       if (s.hide.has(v.operator)) continue;
-      L.circleMarker([v.lat, v.lon], { renderer, radius: 2.5, color: ctx.opColor(v.operator), weight: 0, fillColor: ctx.opColor(v.operator), fillOpacity: 0.8, interactive: false }).addTo(s.layer);
+      L.circleMarker([v.lat, v.lon], { renderer, radius: 2.5, color: ctx.opColor(v.operator), weight: 0, fillColor: ctx.opColor(v.operator), fillOpacity: s.focus && s.focus !== v.operator ? 0.12 : 0.8, interactive: false }).addTo(s.layer);
       pts.push([v.lat, v.lon]);
     }
   }
@@ -148,7 +169,9 @@ function drawMap(el, ctx, res, s) {
   if (pts.length && s.fitKey !== key) { s.map.fitBounds(L.latLngBounds(pts), { padding: [24, 24], maxZoom: 15, animate: false }); s.fitKey = key; }
   setTimeout(() => s.map?.invalidateSize(), 0);
   const ops = res.rows.filter(r => !s.hide.has(r.op) && (s.mode === 'vehicles' ? r.vehicles : r.stations));
-  el.querySelector('[data-cmp-legend]').innerHTML = ops.map(r => `<span>${opCell(ctx, r.op)}</span>`).join('')
+  // Legende: Klick hebt einen Anbieter hervor und blendet die übrigen ab (zweite Kodierung neben der Farbe)
+  if (s.focus && !ops.some(r => r.op === s.focus)) s.focus = null;
+  el.querySelector('[data-cmp-legend]').innerHTML = ops.map(r => `<button type="button" class="cmp-hl" data-cmp-hl="${ctx.esc(r.op)}" aria-pressed="${s.focus === r.op}" title="${ctx.esc(t('cmp.highlightTip', { op: r.op }))}">${opCell(ctx, r.op)}</button>`).join('')
     + (s.mode === 'stations' ? `<span><i class="fill"></i>${t('cmp.legendUnique', { r: s.radius })}</span><span><i></i>${t('cmp.legendShared')}</span>` : `<span>${t('cmp.legendVehicles')}</span>`);
 }
 
@@ -170,7 +193,7 @@ function pickMunicipality(el, ctx) {
 }
 function draw(el, ctx, s) {
   const { fleet, ags } = s;
-  const res = s.res = P.compareOperators(fleet, { ags, type: s.type, radiusM: s.radius });
+  const res = s.res = P.compareOperators(fleet, { ags, type: s.type, radiusM: s.radius, quota: s.quota });
   const types = [...new Set(fleet.vehicles.filter(v => v.ags === ags).map(v => v.type))].sort();
   const name = ctx.muniName?.(ags) || ags;
   if (!res.rows.length) { el.innerHTML = `<div class="panel-head"><div><h2>${t('cmp.title')} · ${ctx.esc(name)}</h2></div></div>${controls(ctx, res, s, types)}<div class="empty">${t('cmp.none')}</div>`; return; }
@@ -201,10 +224,13 @@ export async function renderCompare(el, ctx) {
       const so = e.target.closest('button[data-cmp-sort]'), ss = e.target.closest('button[data-cmp-ssort]');
       if (so || ss) { const which = so ? 'sort' : 'ssort', k = (so || ss).dataset[so ? 'cmpSort' : 'cmpSsort']; s[which] = s[which].key === k ? { key: k, dir: s[which].dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: ['op', 'name', 'operator', 'other', 'kind'].includes(k) ? 'asc' : 'desc' }; draw(el, s.ctx, s); el.querySelector(`button[data-cmp-${so ? 'sort' : 'ssort'}="${k}"]`)?.focus(); return; }
       const op = e.target.closest('button[data-cmp-op]'); if (op) { const o = op.dataset.cmpOp; if (s.hide.has(o)) s.hide.delete(o); else s.hide.add(o); draw(el, s.ctx, s); el.querySelector(`button[data-cmp-op="${CSS.escape(o)}"]`)?.focus(); return; }
-      const md = e.target.closest('button[data-cmp-mode]'); if (md) { s.mode = md.dataset.cmpMode; draw(el, s.ctx, s); return; }
-      const sh = e.target.closest('button[data-cmp-show]'); if (sh) { s.show = sh.dataset.cmpShow; s.limit = 100; draw(el, s.ctx, s); return; }
+      const gr = e.target.closest('button[data-cmp-grp]'); if (gr) { s.grp = gr.dataset.cmpGrp; const k = el.querySelector('.cmp-kpi'); if (k) k.dataset.grp = s.grp; for (const b of el.querySelectorAll('button[data-cmp-grp]')) b.setAttribute('aria-pressed', String(b.dataset.cmpGrp === s.grp)); return; }
+      const hl = e.target.closest('button[data-cmp-hl]'); if (hl) { const o = hl.dataset.cmpHl; s.focus = s.focus === o ? null : o; drawMap(el, s.ctx, s.res, s); el.querySelector(`button[data-cmp-hl="${CSS.escape(o)}"]`)?.focus(); return; }
+      const md = e.target.closest('button[data-cmp-mode]'); if (md) { s.mode = md.dataset.cmpMode; draw(el, s.ctx, s); el.querySelector(`button[data-cmp-mode="${s.mode}"]`)?.focus(); return; }
+      const sh = e.target.closest('button[data-cmp-show]'); if (sh) { s.show = sh.dataset.cmpShow; s.limit = 100; draw(el, s.ctx, s); el.querySelector(`button[data-cmp-show="${s.show}"]`)?.focus(); return; }
       const a = e.target.closest('button[data-cmp-act]');
-      if (a?.dataset.cmpAct === 'more') { s.limit += 100; draw(el, s.ctx, s); }
+      // weitere Zeilen: bis 100 Rest alle auf einmal; Fokus auf die erste neue Zeile, damit die Tastatur nicht oben neu beginnt
+      if (a?.dataset.cmpAct === 'more') { const n = s.limit; s.limit = stationRows(s.res, s).length - n <= 100 ? Infinity : n + 100; draw(el, s.ctx, s); const td = el.querySelectorAll('[data-cmp-st] tbody tr')[n]?.querySelector('td'); if (td) { td.tabIndex = -1; td.focus(); } }
       if (a?.dataset.cmpAct === 'csv') download(`${t('cmp.file')}_${s.ags}_${new Date(s.fleet.at || Date.now()).toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`, csv(s.res, s));
     });
   }
@@ -213,8 +239,9 @@ export async function renderCompare(el, ctx) {
   if (!land) { s.fleet = null; el.innerHTML = `<div class="panel-head"><div><h2>${t('cmp.title')}</h2></div></div><div class="empty">${t('cmp.none')}</div>`; return; }
   if (s.ags !== ags) { s.hide.clear(); s.fitKey = null; }
   if (!s.fleet || s.ags !== ags) { s.map?.remove(); s.map = null; el.innerHTML = `<div class="panel-head"><div><h2>${t('cmp.title')}</h2></div></div><div class="empty">${t('cmp.loading')}</div>`; }
-  const fleet = await load(ctx, land);
+  const [fleet, quota] = await Promise.all([load(ctx, land), loadQuota(ctx)]);
   if (tok !== s.tok) return;
+  s.quota = quota; // virtuell/physisch, wenn die Station selbst kein Merkmal trägt (lib/pulse-compare.js isVirtualStation)
   if (!fleet) { s.fleet = null; el.innerHTML = `<div class="panel-head"><div><h2>${t('cmp.title')}</h2></div></div><div class="empty">${t('cmp.loadError')}</div>`; return; }
   s.fleet = fleet; s.ags = ags;
   if (s.map && !el.querySelector('[data-cmp-map]')) { s.map.remove(); s.map = null; }

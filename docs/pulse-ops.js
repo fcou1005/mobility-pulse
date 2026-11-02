@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM } from './pulse-core.js?v=mvy6blnf';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvy6blnf';
+import { haversineM } from './pulse-core.js?v=mvyuri2c';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mvyuri2c';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS };
 
@@ -45,7 +45,13 @@ export const DEFAULTS = {
   detour: 1.35, speedKmh: 18, pickupMin: 1.5, dropMin: 1.0, swapMin: 2.5, workshopMin: 3,
   swapThreshold: 20, swapRangeKm: 5, minBatteryForMove: 30, idleSurplusMin: 24 * 60,
   maxRunMin: 240, // Einsatz je Tour höchstens 4 h (Fahrt + vor Ort); was nicht passt, bildet weitere Touren oder bleibt „nicht eingeplant“
+  // detour: Rückfall ohne Straßenmatrix = Luftlinie × 1,35 (Umwegfaktor Stadtverkehr). prioLambda: Gewicht der Priorität in der Reihenfolge (PRIO_LEVELS)
+  prioLambda: 1,
 };
+// Regler „Priorität ↔ Strecke“: Stufe → λ (0 = nur Kilometer). Standard Stufe 2 = λ 1: ein Meter, den die dringenden Stopps im Mittel
+// früher erreicht werden, ist einen Meter Umweg wert. Stufe 4 (λ 4) kommt der reinen Prioritätsfolge nahe, ohne Zickzack.
+export const PRIO_LEVELS = [0, 0.5, 1, 2, 4];
+export const PRIO_LEVEL_DEFAULT = 2;
 
 const sum = (a) => a.reduce((x, y) => x + y, 0);
 const quantile = (arr, q) => { const v = arr.filter(Number.isFinite).sort((a, b) => a - b); if (!v.length) return null; const i = Math.min(v.length - 1, Math.max(0, Math.floor(q * (v.length - 1)))); return v[i]; };
@@ -162,11 +168,14 @@ export function pickCkanResource(pkg, typeNames = null) {
 // ---------- Flotte ----------
 // ops/<Land>.json → Fahrzeuge als Objekte
 export function decodeFleet(doc) {
-  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idleMin, m]) => ({
-    lat, lon, operator: doc.ops[op], type: doc.types[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), battery: bat, rangeKm: range, idleMin, ags: doc.munis[m],
+  // rangeDerived = Feld 10 „reichweiteAbgeleitet“ (Reichweite aus dem Ladestand gerechnet, M-16; ältere Dateien ohne Feld → false)
+  const vehicles = (doc?.vehicles || []).map(([lat, lon, op, ty, flags, bat, range, idleMin, m, rd]) => ({
+    lat, lon, operator: doc.ops[op], type: doc.types[ty] ?? 'unknown', reserved: !!(flags & 1), disabled: !!(flags & 2), battery: bat, rangeKm: range, idleMin, ags: doc.munis[m], rangeDerived: rd === 1,
   }));
-  const stations = (doc?.stations || []).map(([lat, lon, op, name, bookable, docks, capacity, m, renting, returning, physical]) => ({
+  // physical = physischer Bestand an der Station (Fahrzeuge), virtual = Merkmal der Station (Feld 12 „virtuell“: 1/0; ältere Dateien ohne Feld → null)
+  const stations = (doc?.stations || []).map(([lat, lon, op, name, bookable, docks, capacity, m, renting, returning, physical, virtual]) => ({
     lat, lon, operator: doc.ops[op], name, bookable, docks, capacity, ags: doc.munis[m], renting: !!renting, returning: !!returning, physical,
+    virtual: virtual === 1 || virtual === true ? 1 : virtual === 0 || virtual === false ? 0 : null,
   }));
   return { at: doc?.at ?? null, vehicles, stations };
 }
@@ -412,6 +421,188 @@ export function orderStops(stops, { start = null, end = null, cost = makeCost(),
   }
   return best.map(i => stops[i]);
 }
+// ---------- Priorität je Stopp ----------
+// Skala: 0 = nicht dringend, 1 = dringend, bis 1,5 mit Zuschlag. Ein Stopp mit mehreren Fahrzeugen zählt mit dem dringendsten (Grund = dessen Werte).
+// Begründung der Konstanten:
+//  energyW 0,7 / idleW 0,3 – Akkutausch: ein fast leeres Fahrzeug fällt als Nächstes aus (kein Umsatz, Kunden stranden); die Standzeit zeigt
+//    zusätzlich, dass es an der Stelle niemand nimmt. Energie-Lücke = 1 − Ladestand ÷ Tauschschwelle bzw. 1 − Reichweite ÷ Schwelle (die größere
+//    von beiden; 0 an der Schwelle, 1 bei leer).
+//  idleRefH 24 – Standzeit zählt linear bis 24 h voll (Einsammeln: Standzeit des Überschuss-Fahrzeugs; Werkstatt: Sperrdauer = Standzeit seit der
+//    letzten Bewegung, der Feed meldet keinen Sperrbeginn).
+//  longIdleBonus 0,5 ab longIdleH 24 h – länger als einen Tag ungenutzt bzw. gesperrt ist deutlich dringender (Beschwerden, Vandalismus, Auflagen).
+//  needRef 6 – Ausbringen (Umsetzen, Stationsausgleich): Fehlmenge ÷ 6 Fahrzeuge, höchstens 1 (6 ≈ ein Drittel einer Transporterladung).
+//  emptyBonus 0,5 – Spot ohne verfügbares Fahrzeug im Umkreis (150 m) bzw. leere Station: dort geht gerade jede Fahrt verloren.
+//  fullStation 0,5 – Abholen an einer Station ohne freien Platz (keine Rückgabe möglich); sonst ist Abholen nicht dringend (0).
+export const PRIO = { energyW: 0.7, idleW: 0.3, idleRefH: 24, longIdleH: 24, longIdleBonus: 0.5, needRef: 6, emptyBonus: 0.5, fullStation: 0.5 };
+const r3 = (x) => Math.round(x * 1000) / 1000;
+const idleH = (v) => Math.max(0, v.idleMin ?? 0) / 60;
+const idlePart = (h) => Math.min(1, h / PRIO.idleRefH) + (h >= PRIO.longIdleH ? PRIO.longIdleBonus : 0);
+/** Priorität eines Fahrzeugs für einen Stopp-Typ ('swap' | 'pickup' | 'pickup_disabled') mit Grund { battery, rangeKm, idleH }. */
+export function vehiclePrio(type, v, opts = {}) {
+  const o = { ...DEFAULTS, ...opts }, h = idleH(v), why = { idleH: v.idleMin == null ? null : Math.round(h) };
+  if (type !== 'swap') return { prio: r3(idlePart(h)), why };
+  const gaps = [v.battery != null ? 1 - v.battery / o.swapThreshold : null, v.rangeKm != null ? 1 - v.rangeKm / o.swapRangeKm : null].filter(x => x != null);
+  const gap = gaps.length ? Math.min(1, Math.max(0, ...gaps)) : 0;
+  return { prio: r3(PRIO.energyW * gap + PRIO.idleW * Math.min(1, h / PRIO.idleRefH) + (h >= PRIO.longIdleH ? PRIO.longIdleBonus : 0)), why: { battery: v.battery ?? null, rangeKm: v.rangeKm ?? null, ...why } };
+}
+/** Priorität eines Ausbring-Stopps nach Fehlmenge (need) und Bestand im Umkreis (have; 0 = leer). */
+export function dropPrio(need, have, target = null) {
+  const n = Math.max(0, need || 0);
+  return { prio: r3(Math.min(1, n / PRIO.needRef) + (have === 0 ? PRIO.emptyBonus : 0)), why: { need: n, have, target, empty: have === 0 } };
+}
+// dringendstes Fahrzeug eines Stopps
+const maxPrio = (list) => list.reduce((b, x) => (x.prio > b.prio ? x : b), list[0]);
+
+// ---------- Reihenfolge mit Priorität ----------
+/**
+ * Reihenfolge einer Tour aus Gruppen in fester Folge (Umsetzen: erst alle Abholungen, dann alle Ausbringungen) mit Priorität.
+ * Ziel J = L + λ · Σ wᵢ·dᵢ ÷ Σ wᵢ
+ *   L = Tourlänge (Start → Stopps → Ende), dᵢ = Strecke vom Start bis Stopp i, wᵢ = Priorität − kleinste Priorität der Tour (≥ 0).
+ * Der zweite Term ist die nach Dringlichkeit gewichtete mittlere Anfahrstrecke in Metern (wie L): dringende Stopps kommen früh, wenn der Umweg
+ * klein ist. λ = 0 oder gleiche Prioritäten (alle wᵢ = 0) ergeben die kürzeste Tour. Weil wᵢ ≥ 0, macht ein Umweg J nie kleiner.
+ * Exakt (Held-Karp je Gruppe, Gruppen verkettet), solange jede Gruppe ≤ EXACT_MAX Stopps hat: jede Kante zählt für alle noch offenen Stopps,
+ * der Aufschlag hängt also nur von der Menge der besuchten Stopps ab und die DP über (Menge, letzter Stopp) bleibt exakt. Darüber Heuristik:
+ * Startlösungen (kürzeste Tour wie bisher, Nächster Nachbar mit Priorität, reine Prioritätsfolge, Nächster Nachbar ab anderen Stopps), dann
+ * 2-opt und Or-opt innerhalb der Gruppen auf dem vollen Ziel. cost(a, b) darf asymmetrisch sein (OSRM-Matrix).
+ * Rückgabe { stops, J, L, reach } (reach = Σ wᵢ·dᵢ ÷ Σ wᵢ oder null, Einheiten von cost).
+ */
+export function orderTour(groups, { start = null, end = null, cost = makeCost(), weight = null, lambda = 0, exact = true, starts: maxStarts = 6 } = {}) {
+  const G0 = groups.filter(g => g?.length), stops = G0.flat(), n = stops.length;
+  if (!n) return { stops: [], J: 0, L: 0, reach: null };
+  const pts = stops.slice(); const S = start ? pts.push(start) - 1 : -1, E = end ? pts.push(end) - 1 : -1, N = pts.length;
+  const M = new Float64Array(N * N); for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) M[i * N + j] = i === j ? 0 : cost(pts[i], pts[j]);
+  const raw = stops.map(s => (weight ? +weight(s) || 0 : 0)), wmin = Math.min(...raw), w = Float64Array.from(raw, x => x - wmin);
+  const W = w.reduce((a, b) => a + b, 0), lam = lambda > 0 && W > 1e-9 ? lambda / W : 0;
+  const ranges = []; { let a = 0; for (const g of G0) { ranges.push([a, a + g.length]); a += g.length; } } // Stopps der Gruppe g = Indizes ranges[g]
+  // Tourwerte einer Folge t (Stopp-Indizes): L, Σ w·d, J
+  const evalT = (t) => { let R = W, J = 0, L = 0, wd = 0, d = 0, p = S;
+    for (let i = 0; i < n; i++) { const x = t[i]; if (p >= 0) { const c = M[p * N + x]; L += c; d += c; J += c * (1 + lam * R); } wd += w[x] * d; R -= w[x]; p = x; }
+    if (E >= 0) { const c = M[p * N + E]; L += c; J += c; }
+    return { J, L, reach: W > 1e-9 ? wd / W : null }; };
+  const done = (t) => { const v = evalT(t); return { stops: Array.from(t, i => stops[i]), J: v.J, L: v.L, reach: v.reach }; };
+  const pix = new Map(); pts.forEach((p, i) => { if (!pix.has(p)) pix.set(p, i); });
+  const mc = (a, b) => M[pix.get(a) * N + pix.get(b)], ix = new Map(stops.map((s, i) => [s, i]));
+  // eine Gruppe ohne Priorität: bisherige Reihenfolge (Held-Karp bis 12, sonst Nächster Nachbar + 2-opt + Or-opt mit Delta-Bewertung)
+  if (G0.length === 1 && lam === 0) return done(Int32Array.from(orderStops(stops, { start, end, cost: mc, starts: maxStarts, exact }), s => ix.get(s)));
+  // ---- exakt: Held-Karp je Gruppe, verkettet über den letzten Stopp der vorigen Gruppe
+  if (exact && ranges.every(([a, b]) => b - a <= EXACT_MAX)) {
+    let prevNodes = [S], prevCost = [0], Wrest = W; const back = [];
+    for (const [a, b] of ranges) {
+      const m = b - a, F = 1 << m, Gn = Array.from({ length: m }, (_, j) => a + j);
+      let Wg = 0; for (const x of Gn) Wg += w[x]; Wrest -= Wg;
+      const Wm = new Float64Array(F); for (let mk = 1; mk < F; mk++) { const lb = mk & -mk; Wm[mk] = Wm[mk ^ lb] + w[Gn[31 - Math.clz32(lb)]]; }
+      const dp = new Float64Array(F * m).fill(Infinity), par = new Int8Array(F * m).fill(-1), seed = new Int32Array(m);
+      for (let j = 0; j < m; j++) for (let e = 0; e < prevNodes.length; e++) {
+        const pe = prevNodes[e], c = prevCost[e] + (pe < 0 ? 0 : M[pe * N + Gn[j]] * (1 + lam * (Wg + Wrest)));
+        if (c < dp[(1 << j) * m + j]) { dp[(1 << j) * m + j] = c; seed[j] = e; }
+      }
+      for (let mk = 1; mk < F; mk++) { const mult = 1 + lam * (Wg - Wm[mk] + Wrest);
+        for (let j = 0; j < m; j++) { const v = dp[mk * m + j]; if (v === Infinity || !(mk & (1 << j))) continue;
+          for (let k = 0; k < m; k++) if (!(mk & (1 << k))) { const T = mk | (1 << k), c = v + M[Gn[j] * N + Gn[k]] * mult; if (c < dp[T * m + k]) { dp[T * m + k] = c; par[T * m + k] = j; } } } }
+      back.push({ Gn, m, F, par, seed }); prevNodes = Gn; prevCost = Gn.map((_, j) => dp[(F - 1) * m + j]);
+    }
+    let bj = 0, bv = Infinity; for (let j = 0; j < prevNodes.length; j++) { const c = prevCost[j] + (E >= 0 ? M[prevNodes[j] * N + E] : 0); if (c < bv) { bv = c; bj = j; } }
+    const seq = []; let j = bj;
+    for (let g = back.length - 1; g >= 0; g--) { const { Gn, m, F, par, seed } = back[g]; const part = []; let mk = F - 1, jj = j, first = j;
+      while (jj >= 0) { part.push(Gn[jj]); first = jj; const pj = par[mk * m + jj]; mk &= ~(1 << jj); jj = pj; }
+      seq.push(...part); j = seed[first]; }
+    return done(Int32Array.from(seq.reverse()));
+  }
+  // ---- Heuristik
+  // Nächster Nachbar über die Gruppen nacheinander; score(x) skaliert den Abstand (Priorität: dringende wirken näher), first = erster Stopp
+  const nnFrom = (score, first = null) => { const t = []; let cur = S;
+    for (const [a, b] of ranges) { const left = []; for (let x = a; x < b; x++) left.push(x);
+      if (first != null && a === 0) { left.splice(left.indexOf(first), 1); t.push(first); cur = first; }
+      while (left.length) { let bi = 0, bv = Infinity; for (let i = 0; i < left.length; i++) { const c = (cur < 0 ? 0 : M[cur * N + left[i]]) * score(left[i]); if (c < bv - 1e-12) { bv = c; bi = i; } } cur = left.splice(bi, 1)[0]; t.push(cur); } }
+    return Int32Array.from(t); };
+  const seeds = [];
+  // 1) kürzeste Tour wie bisher: je Gruppe orderStops (Start = Ende der vorigen Gruppe, Ende nur bei der letzten) → nie länger als vorher
+  { const t = []; let st = start;
+    ranges.forEach(([a, b], g) => { const part = orderStops(stops.slice(a, b), { start: st, end: g === ranges.length - 1 ? end : null, cost: mc, starts: Math.min(maxStarts, 6), exact }); t.push(...part.map(s => ix.get(s))); st = part[part.length - 1]; });
+    seeds.push(Int32Array.from(t)); }
+  if (lam > 0) {
+    const wMean = W / n;
+    seeds.push(nnFrom(x => 1 / (1 + lambda * w[x] / wMean)));                                                     // 2) Nächster Nachbar mit Priorität
+    if (maxStarts > 1) seeds.push(Int32Array.from(ranges.flatMap(([a, b]) => Array.from({ length: b - a }, (_, k) => a + k).sort((x, y) => w[y] - w[x] || x - y)))); // 3) reine Prioritätsfolge
+  }
+  for (let s = 1; seeds.length < maxStarts && s < n; s++) seeds.push(nnFrom(() => 1, (s * 7919) % (ranges[0][1] - ranges[0][0]))); // 4) andere erste Stopps
+  // Lokale Suche. Jeder Zug ergibt eine Folge aus höchstens vier Blöcken der aktuellen Folge t (vorwärts oder rückwärts); mit Präfixsummen
+  // der Kanten vorwärts (Fw) und rückwärts (Bw, für asymmetrische Kosten), der Gewichte (PW) und Gewicht × Strecke (PWF, PWB) kostet die
+  // Bewertung eines Zugs O(1): je Block Länge, Gewicht und Σ w × Anfahrt innerhalb des Blocks.
+  let t = null; const Fw = new Float64Array(n), Bw = new Float64Array(n), PW = new Float64Array(n + 1), PWF = new Float64Array(n + 1), PWB = new Float64Array(n + 1);
+  const prefix = () => { for (let x = 1; x < n; x++) { Fw[x] = Fw[x - 1] + M[t[x - 1] * N + t[x]]; Bw[x] = Bw[x - 1] + M[t[x] * N + t[x - 1]]; }
+    for (let x = 0; x < n; x++) { const wx = w[t[x]]; PW[x + 1] = PW[x] + wx; PWF[x + 1] = PWF[x] + wx * Fw[x]; PWB[x + 1] = PWB[x] + wx * Bw[x]; } };
+  const bl = new Int32Array(12); let nb = 0; const blk = (s, e, rv) => { if (s <= e) { bl[3 * nb] = s; bl[3 * nb + 1] = e; bl[3 * nb + 2] = rv; nb++; } };
+  const evalBl = () => { let D = 0, L = 0, WD = 0, prev = S;
+    for (let k = 0; k < nb; k++) { const s = bl[3 * k], e = bl[3 * k + 1], rv = bl[3 * k + 2], Wb = PW[e + 1] - PW[s];
+      if (prev >= 0) { const c = M[prev * N + (rv ? t[e] : t[s])]; D += c; L += c; }
+      const len = rv ? Bw[e] - Bw[s] : Fw[e] - Fw[s];
+      WD += Wb * D + (rv ? Bw[e] * Wb - (PWB[e + 1] - PWB[s]) : (PWF[e + 1] - PWF[s]) - Fw[s] * Wb); D += len; L += len; prev = rv ? t[s] : t[e]; }
+    if (E >= 0) L += M[prev * N + E];
+    return L + lam * WD; };
+  const applyBl = () => { const u = new Int32Array(n); let q = 0; for (let k = 0; k < nb; k++) { const s = bl[3 * k], e = bl[3 * k + 1]; if (bl[3 * k + 2]) for (let x = e; x >= s; x--) u[q++] = t[x]; else for (let x = s; x <= e; x++) u[q++] = t[x]; } t = u; prefix(); };
+  const improve = (t0) => { t = Int32Array.from(t0); prefix(); nb = 0; blk(0, n - 1, 0); let cur = evalBl(), improved = true, guard = 0;
+    const tryMove = () => { const c = evalBl(); if (c < cur - 1e-6) { applyBl(); cur = c; return true; } return false; };
+    while (improved && guard++ < 60) { improved = false;
+      for (const [a, b] of ranges) {
+        // 2-opt: t[i..k] umkehren
+        for (let i = a; i < b - 1; i++) for (let k = i + 1; k < b; k++) { nb = 0; blk(0, i - 1, 0); blk(i, k, 1); blk(k + 1, n - 1, 0); if (tryMove()) improved = true; }
+        // Or-opt: Abschnitt t[i..i+L−1] (vorwärts oder umgekehrt) an Stelle p der übrigen Folge einsetzen, innerhalb der Gruppe
+        for (let L = 1; L <= 3; L++) for (let i = a; i + L <= b; i++) for (let p = a; p <= b - L; p++) {
+          if (p === i) continue; let hit = false;
+          for (let rv = 0; rv <= (L > 1 ? 1 : 0) && !hit; rv++) {
+            nb = 0;
+            if (p < i) { blk(0, p - 1, 0); blk(i, i + L - 1, rv); blk(p, i - 1, 0); blk(i + L, n - 1, 0); }
+            else { blk(0, i - 1, 0); blk(i + L, p + L - 1, 0); blk(i, i + L - 1, rv); blk(p + L, n - 1, 0); }
+            hit = tryMove();
+          }
+          if (hit) { improved = true; break; }
+        }
+      } }
+    return { c: cur, t }; };
+  let best = null, bc = Infinity;
+  for (const s of seeds) { const r = improve(s); if (r.c < bc - 1e-9) { bc = r.c; best = r.t; } }
+  return done(best);
+}
+/** Kostenfunktion aus einer übergebenen Matrix (Meter; Zeile/Spalte = Reihenfolge von points); fehlende Werte (null) → Luftlinie × Umwegfaktor. */
+const ptKey = (p) => `${(+p.lat).toFixed(5)},${(+p.lon).toFixed(5)}`;
+export function matrixCost(points, D, { detour = DEFAULTS.detour } = {}) {
+  const idx = new Map(); points.forEach((p, i) => { if (!idx.has(p)) idx.set(p, i); const k = ptKey(p); if (!idx.has(k)) idx.set(k, i); });
+  const at = (p) => idx.get(p) ?? idx.get(ptKey(p)), air = makeCost({ detour });
+  return (a, b) => { const i = at(a), j = at(b), v = i != null && j != null ? D?.[i]?.[j] : null; return Number.isFinite(v) ? v : air(a, b); };
+}
+/** Stopp-Gruppen einer fertigen Tour: Umsetzen/Stationen erst alle Abholungen, dann alle Ausbringungen; sonst eine Gruppe. */
+export function runGroups(stops) {
+  const pick = stops.filter(s => s.type === 'pickup'), drop = stops.filter(s => s.type === 'drop');
+  return pick.length && drop.length && pick.length + drop.length === stops.length ? [pick, drop] : [stops.slice()];
+}
+/**
+ * Reihenfolge und Kennzahlen einer Tour (Planung mit Luftlinie × Umwegfaktor; im Browser erneut mit der OSRM-Straßenmatrix als cost).
+ * Jeder Stopp trägt prio (Priorität) und why (Grund). Rückgabe: stops in Fahrreihenfolge mit seq (Position), rank (Rang der Priorität in der
+ * Tour, 1 = dringendster), atKm (Strecke vom Depot bis zum Stopp); km (gefahren), kmMin (kürzeste Tour ohne Priorität), kmNN (Nächster Nachbar
+ * ohne Verbesserung), kmPrio (reine Prioritätsfolge), reachKm / reachKmMin (nach Priorität gewichtete mittlere Anfahrstrecke dieser bzw. der
+ * kürzesten Tour), obj (Zielwert J in m), lambda. quick: schnelle Rechnung (Probe der Einsatzzeit: ein Start, ohne exakte Lösung).
+ */
+export function sequenceRun(groups, { depot, cost = makeCost(), lambda = DEFAULTS.prioLambda, quick = false } = {}) {
+  const G = groups.filter(g => g?.length), opt = { start: depot, end: depot, cost, weight: s => s.prio ?? 0 };
+  const res = orderTour(G, { ...opt, lambda, starts: quick ? 1 : 6, exact: !quick });
+  const km = (m) => +(m / 1000).toFixed(1);
+  const pv = res.stops.map(s => s.prio ?? 0), rankOf = (p) => 1 + pv.filter(x => x > p + 1e-9).length;
+  let d = 0, prev = depot;
+  const stops = res.stops.map((s, i) => { d += cost(prev, s); prev = s; return { ...s, seq: i + 1, rank: rankOf(s.prio ?? 0), atKm: km(d) }; });
+  const out = { stops, L: res.L, obj: res.J, km: km(res.L), lambda, reachKm: res.reach == null ? null : km(res.reach) };
+  // Vergleichswerte auch in der Probe (sie kann als Tour übernommen werden), dort mit der schnellen Rechnung
+  let base = lambda > 0 && res.reach != null ? orderTour(G, { ...opt, lambda: 0, starts: quick ? 1 : 6, exact: !quick }) : res;
+  if (res.L < base.L) base = res; // Heuristik: die Prioritätstour ist zufällig kürzer → sie ist die kürzeste bekannte
+  const len = (seq) => { let m = 0, p = depot; for (const s of seq) { m += cost(p, s); p = s; } return m + cost(p, depot); };
+  // Nächster Nachbar ohne Verbesserung (Gruppen nacheinander) und reine Prioritätsfolge (absteigend, Gleichstand in Planungsfolge)
+  const nn = []; { let cur = depot; for (const g of G) { const left = g.slice(); while (left.length) { let bi = 0, bv = Infinity; left.forEach((x, i) => { const c = cost(cur, x); if (c < bv) { bv = c; bi = i; } }); cur = left.splice(bi, 1)[0]; nn.push(cur); } } }
+  const byPrio = G.flatMap(g => g.map((s, i) => [s, i]).sort((a, b) => (b[0].prio ?? 0) - (a[0].prio ?? 0) || a[1] - b[1]).map(x => x[0]));
+  return { ...out, kmMin: km(base.L), reachKmMin: base.reach == null ? null : km(base.reach), kmNN: km(len(nn)), kmPrio: km(len(byPrio)) };
+}
+// Fahrstrecke und -zeit einer Tour aus sequenceRun (Luftlinie × Umweg bei speedKmh); Kennzahlen der Reihenfolge für die Anzeige
+const seqSummary = (sq, o) => ({ km: sq.km, driveMin: Math.round((sq.L / 1000) / o.speedKmh * 60), obj: sq.obj, lambda: sq.lambda, kmMin: sq.kmMin ?? null, kmNN: sq.kmNN ?? null, kmPrio: sq.kmPrio ?? null, reachKm: sq.reachKm, reachKmMin: sq.reachKmMin ?? null });
+
 // Stopps in Läufe gleicher Kapazität bündeln: Sweep vom Depot aus (weitester zuerst), dann die dem Tour-Mittelpunkt nächsten auffüllen.
 // fit(run) → { back, ok }: Einsatzzeit prüfen; ein zu langer Lauf behält nur einen Teil (in place), back geht in den Vorrat zurück,
 // ok = false: schon der nächstgelegene Auftrag allein ist zu lang (nicht eingeplant).
@@ -445,14 +636,11 @@ function timeCap(build, maxMin, spread = (x, c) => dist(c, x)) {
     let lo = 0, hi = ranked.length - 1, probe = null;
     while (lo < hi) { const k = (lo + hi + 1) >> 1, r = build(ranked.slice(0, k), true); if (r.totalMin <= maxMin) { lo = k; probe = r; } else hi = k - 1; }
     const k = Math.max(1, lo); run.length = 0; run.push(...ranked.slice(0, k));
-    if (probe) { const r = build(run); memo.set(run, r.totalMin <= probe.totalMin ? r : probe); }
+    // volle Rechnung, wenn sie die Grenze hält und im Ziel (Strecke + Priorität, ohne Priorität = Strecke) nicht schlechter ist als die Probe
+    if (probe) { const r = build(run); memo.set(run, r.totalMin <= maxMin && r.obj <= probe.obj + 1e-6 ? r : probe); }
     return { back: ranked.slice(k), ok: !!probe };
   };
   return { fit, built: (run) => memo.get(run) || build(run) };
-}
-function routeSummary(seq, o, cost) {
-  let m = 0; for (let i = 0; i < seq.length - 1; i++) m += cost(seq[i], seq[i + 1]);
-  return { km: +(m / 1000).toFixed(1), driveMin: Math.round((m / 1000) / o.speedKmh * 60) };
 }
 // gleiche Position (≤ 30 m) zu einem Stopp zusammenfassen
 function groupStops(points, keyFn = () => '', maxM = 30) {
@@ -501,17 +689,18 @@ export function planRebalance({ spots, vehicles, model, share = 1, depot, ...opt
   // Touren nach dem Mittelpunkt aus Abhol- und Zielort bündeln: jede Tour bleibt in einem Stadtbereich; Lage = weiterer der beiden Orte
   const mids = moves.map(m => ({ lat: (m.lat + m.spot.lat) / 2, lon: (m.lon + m.spot.lon) / 2, m }));
   const spread = (x, c) => Math.max(dist(c, x.m), dist(c, x.m.spot));
+  // Reihenfolge: erst alle Abholungen, dann alle Ausbringungen, beide zusammen optimiert (sequenceRun); Priorität Abholen = Standzeit,
+  // Ausbringen = Fehlmenge des Spots (leer im Umkreis = Zuschlag)
   const build = (run, quick) => {
-    const g = run.map(x => x.m), st = quick ? 1 : 6;
-    const pickups = groupStops(g, () => 'p');
-    const drops = groupStops(g.map(m => ({ ...m.spot, move: m })), s => s.cell, 5);
-    const pOrd = orderStops(pickups, { start: depot, cost, starts: st, exact: !quick });
-    const dOrd = orderStops(drops, { start: pOrd[pOrd.length - 1], end: depot, cost, starts: st, exact: !quick });
-    const r = routeSummary([depot, ...pOrd, ...dOrd, depot], o, cost);
+    const g = run.map(x => x.m);
+    const pickups = groupStops(g, () => 'p').map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.vehicle.idleMin ?? 0)) / 60), battery: s.items.map(x => x.vehicle.battery).filter(b => b != null), ...maxPrio(s.items.map(x => vehiclePrio('pickup', x.vehicle, o))) }));
+    const drops = groupStops(g.map(m => ({ ...m.spot, move: m })), s => s.cell, 5).map(s => { const mv = s.items[0].move;
+      return { type: 'drop', lat: s.lat, lon: s.lon, count: s.count, spotRank: s.items[0].rank, target: s.items[0].target, have: mv.have, need: mv.need, ...dropPrio(mv.need, mv.have, s.items[0].target) }; });
+    const sq = sequenceRun([pickups, drops], { depot, cost, lambda: o.prioLambda, quick });
+    const r = seqSummary(sq, o);
     const handle = g.length * (o.pickupMin + o.dropMin);
-    const dStops = dOrd.map(s => ({ type: 'drop', lat: s.lat, lon: s.lon, count: s.count, spotRank: s.items[0].rank, target: s.items[0].target, have: s.items[0].move.have, need: s.items[0].move.need }));
-    return { kind: 'rebalance', vehicles: g.length, shortfall: sum(dStops.map(d => d.need)), prio: Math.max(0, ...dStops.map(d => d.need)), stops: [...pOrd.map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.vehicle.idleMin ?? 0)) / 60), battery: s.items.map(x => x.vehicle.battery).filter(b => b != null) })),
-      ...dStops], ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
+    return { kind: 'rebalance', vehicles: g.length, shortfall: sum(drops.map(d => d.need)), prio: Math.max(0, ...drops.map(d => d.need)), stops: sq.stops,
+      ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
   };
   const cap = timeCap(build, o.maxRunMin, spread), cl = clusterRuns(mids, o.vanCapacity, depot, o.maxRuns, undefined, cap.fit, (a, b) => b.m.need - a.m.need);
   // R1 = Tour zum Spot mit der größten Fehlmenge, dann absteigend
@@ -527,7 +716,8 @@ export const MAX_SWAP = 50; // höchstens 50 Akkus je Tour (Ladekapazität eines
 // von beiden, entscheidet dieses; ohne Energieangabe kein Tausch.
 export function needsSwap(v, { swapThreshold = DEFAULTS.swapThreshold, swapRangeKm = DEFAULTS.swapRangeKm } = {}) {
   if (v.disabled) return false;
-  const bat = v.battery != null ? v.battery < swapThreshold : null, rng = v.rangeKm != null ? v.rangeKm < swapRangeKm : null;
+  // Reichweite aus dem Ladestand gerechnet (v.rangeDerived, M-16): nur der Ladestand entscheidet; sonst UND-Regel (Nutzervorgabe)
+  const bat = v.battery != null ? v.battery < swapThreshold : null, rng = v.rangeKm != null && !(v.rangeDerived && v.battery != null) ? v.rangeKm < swapRangeKm : null;
   if (bat == null && rng == null) return false;
   return (bat ?? true) && (rng ?? true);
 }
@@ -542,13 +732,13 @@ export function planSwaps({ vehicles, model, depot, ...opts }) {
     v.priority = +(0.6 * Math.max(0, energyGap(v, o)) + 0.4 * Math.min(1, d) + ((v.idleMin ?? 0) > 360 ? 0.05 : 0)).toFixed(3);
   }
   const chosen = low.sort((a, b) => b.priority - a.priority).slice(0, o.swapCapacity * o.maxRuns);
+  // priority (Auswahl, wer überhaupt getauscht wird: Energie + Nachfrage am Ort) bleibt; die Reihenfolge nutzt prio (Energie + Standzeit, PRIO)
   const build = (g, quick) => {
-    const st = quick ? 1 : 6;
-    const stops = groupStops(g, () => 's', 25);
-    const ord = orderStops(stops, { start: depot, end: depot, cost, starts: st, exact: !quick });
-    const r = routeSummary([depot, ...ord, depot], o, cost);
+    const stops = groupStops(g, () => 's', 25).map(s => ({ type: 'swap', lat: s.lat, lon: s.lon, count: s.count, battery: s.items.map(x => x.battery), priority: Math.max(...s.items.map(x => x.priority)), ...maxPrio(s.items.map(x => vehiclePrio('swap', x, o))) }));
+    const sq = sequenceRun([stops], { depot, cost, lambda: o.prioLambda, quick });
+    const r = seqSummary(sq, o);
     const handle = g.length * o.swapMin;
-    return { kind: 'swap', vehicles: g.length, stops: ord.map(s => ({ type: 'swap', lat: s.lat, lon: s.lon, count: s.count, battery: s.items.map(x => x.battery), priority: Math.max(...s.items.map(x => x.priority)) })), ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
+    return { kind: 'swap', vehicles: g.length, stops: sq.stops, ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
   };
   const cap = timeCap(build, o.maxRunMin), { runs: groups, unplanned } = clusterRuns(chosen, o.swapCapacity, depot, o.maxRuns, undefined, cap.fit);
   const runs = groups.map((g, i) => ({ id: `S${i + 1}`, ...cap.built(g) }));
@@ -560,13 +750,13 @@ export function planWorkshop({ vehicles, depot, ...opts }) {
   const o = { ...DEFAULTS, ...opts };
   const cost = makeCost(o);
   const dis = vehicles.filter(v => v.disabled).sort((a, b) => (b.idleMin ?? 0) - (a.idleMin ?? 0));
+  // Priorität = Sperrdauer (Standzeit seit der letzten Bewegung), ab 24 h Zuschlag
   const build = (g, quick) => {
-    const st = quick ? 1 : 6;
-    const stops = groupStops(g, () => 'w', 25);
-    const ord = orderStops(stops, { start: depot, end: depot, cost, starts: st, exact: !quick });
-    const r = routeSummary([depot, ...ord, depot], o, cost);
+    const stops = groupStops(g, () => 'w', 25).map(s => ({ type: 'pickup_disabled', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.idleMin ?? 0)) / 60), ...maxPrio(s.items.map(x => vehiclePrio('pickup_disabled', x, o))) }));
+    const sq = sequenceRun([stops], { depot, cost, lambda: o.prioLambda, quick });
+    const r = seqSummary(sq, o);
     const handle = g.length * o.workshopMin;
-    return { kind: 'workshop', vehicles: g.length, stops: ord.map(s => ({ type: 'pickup_disabled', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.idleMin ?? 0)) / 60) })), ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
+    return { kind: 'workshop', vehicles: g.length, stops: sq.stops, ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
   };
   const cap = timeCap(build, o.maxRunMin), { runs: groups, unplanned } = clusterRuns(dis, o.workshopCapacity, depot, o.maxRuns, undefined, cap.fit);
   const runs = groups.map((g, i) => ({ id: `W${i + 1}`, ...cap.built(g) }));
@@ -597,16 +787,17 @@ export function planStationBalance({ stations, depot, low = 0.2, high = 0.8, fil
   }
   const mids = moves.map(m => ({ lat: (m.lat + m.to.lat) / 2, lon: (m.lon + m.to.lon) / 2, m }));
   const spread = (x, c) => Math.max(dist(c, x.m), dist(c, x.m.to));
+  // Priorität: Ausbringen nach Fehlmenge der Station (leer = Zuschlag), Abholen nur dringend, wenn die Station keinen freien Platz mehr hat
   const build = (run, quick) => {
-    const g = run.map(x => x.m), st = quick ? 1 : 6;
-    const pickups = groupStops(g, m => m.from.name || '', 5);
-    const drops = groupStops(g.map(m => ({ lat: m.to.lat, lon: m.to.lon, to: m.to })), x => x.to.name || '', 5);
-    const pOrd = orderStops(pickups, { start: depot, cost, starts: st, exact: !quick });
-    const dOrd = orderStops(drops, { start: pOrd[pOrd.length - 1], end: depot, cost, starts: st, exact: !quick });
-    const r = routeSummary([depot, ...pOrd, ...dOrd, depot], o, cost);
+    const g = run.map(x => x.m);
+    const pickups = groupStops(g, m => m.from.name || '', 5).map(s => { const f = s.items[0].from, full = f.docks === 0 || f.bookable >= f.cap;
+      return { type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, station: f.name, fill: `${f.bookable}/${f.cap}`, prio: full ? PRIO.fullStation : 0, why: { fill: `${f.bookable}/${f.cap}`, full } }; });
+    const drops = groupStops(g.map(m => ({ lat: m.to.lat, lon: m.to.lon, to: m.to })), x => x.to.name || '', 5).map(s => { const to = s.items[0].to, need = Math.max(0, Math.max(1, Math.round(to.cap * fill)) - to.bookable), dp = dropPrio(need, to.bookable);
+      return { type: 'drop', lat: s.lat, lon: s.lon, count: s.count, station: to.name, fill: `${to.bookable}/${to.cap}`, prio: dp.prio, why: { ...dp.why, fill: `${to.bookable}/${to.cap}` } }; });
+    const sq = sequenceRun([pickups, drops], { depot, cost, lambda: o.prioLambda, quick });
+    const r = seqSummary(sq, o);
     const handle = g.length * (o.pickupMin + o.dropMin) * 0.6; // an Stationen schneller als frei abgestellt
-    return { kind: 'station', vehicles: g.length, stops: [...pOrd.map(s => ({ type: 'pickup', lat: s.lat, lon: s.lon, count: s.count, station: s.items[0].from.name, fill: `${s.items[0].from.bookable}/${s.items[0].from.cap}` })),
-      ...dOrd.map(s => ({ type: 'drop', lat: s.lat, lon: s.lon, count: s.count, station: s.items[0].to.name, fill: `${s.items[0].to.bookable}/${s.items[0].to.cap}` }))], ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
+    return { kind: 'station', vehicles: g.length, stops: sq.stops, ...r, handleMin: Math.round(handle), totalMin: r.driveMin + Math.round(handle) };
   };
   const cap = timeCap(build, o.maxRunMin, spread), cl = clusterRuns(mids, o.vanCapacity, depot, o.maxRuns, undefined, cap.fit);
   const runs = cl.runs.map((g, i) => ({ id: `B${i + 1}`, ...cap.built(g) }));
@@ -651,7 +842,7 @@ const OPS_CSV_EN = { rang: 'rank', starts_je_h_anbieter: 'starts_per_h_operator'
   netto_abfluss_fehler_je_h: 'net_outflow_error_per_h', starts_markt: 'starts_market', enden_markt: 'ends_market', messstunden: 'measured_hours', horizont_h: 'horizon_h', grundbestand: 'base_stock',
   abfluss_im_horizont: 'outflow_in_horizon', bedarf_rechnerisch: 'need_calculated', bedarf_fzg: 'need_veh', bestand_umkreis: 'fleet_nearby', fehlmenge: 'shortfall', stroeme_ab: 'flows_out', stroeme_an: 'flows_in',
   f_netto_abfluss: 'f_net_outflow', f_nachfrage: 'f_demand', f_oepnv: 'f_transit', f_abstellflaeche: 'f_parking', stabilitaet: 'stability', abstellflaeche: 'parking_area',
-  tour: 'run', art: 'type', stopp: 'stop', typ: 'kind', anzahl: 'count', info: 'info', stabil: 'stable', mittel: 'medium', unsicher: 'uncertain',
+  tour: 'run', art: 'type', stopp: 'stop', typ: 'kind', anzahl: 'count', info: 'info', prioritaet: 'priority', prio_rang: 'priority_rank', grund: 'reason', stabil: 'stable', mittel: 'medium', unsicher: 'uncertain',
   anbieter: 'operator', lage: 'location', fahrzeuge_summe: 'vehicles_total', fahrzeuge_mittel: 'vehicles_mean', fahrzeugarten: 'vehicle_types', erstmals: 'first', zuletzt: 'last', arten: 'types', naechster_spot: 'nearest_spot', abstand_m: 'distance_m' };
 const opsCsvText = (v, lang) => (lang === 'en' && typeof v === 'string' ? OPS_CSV_EN[v] ?? v : v);
 const opsCsv = (rows, lang = 'de') => (lang === 'en' ? csvRows([rows[0].map(h => opsCsvText(h, lang)), ...rows.slice(1)], ',') : csvRows(rows));
@@ -671,13 +862,24 @@ export function spotsAnalysisCsv(spots, needs = null, { horizonH = DEFAULTS.hori
     s.score, s.factors.outflow, s.factors.demand, s.factors.transit ?? null, s.factors.parking ?? null, prelim ? `${lang === 'en' ? 'preliminary' : 'vorläufig'} (${opsCsvText(s.stabilityLabel, lang)})` : opsCsvText(s.stabilityLabel, lang), s.park ? `${s.park.cat}${s.park.name ? ' ' + s.park.name : ''}` : '']; });
   return opsCsv([SPOTS_ANALYSIS_FIELDS, ...rows], lang);
 }
+/** Grund eines Stopps als kurzer Text (wie die Stoppliste der Disposition): Akku/Reichweite, Standzeit, Fehlmenge, leer/voll */
+export function stopReason(s, lang = 'de') {
+  const w = s?.why || {}, en = lang === 'en', out = [];
+  if (s.type === 'swap') { if (w.battery != null) out.push(en ? `battery ${w.battery} %` : `Akku ${w.battery} %`); else if (w.rangeKm != null) out.push(en ? `range ${w.rangeKm} km` : `Reichweite ${w.rangeKm} km`); }
+  if (w.idleH != null && s.type !== 'drop' && !s.station) out.push(en ? `idle ${w.idleH} h` : `steht ${w.idleH} h`);
+  if (s.type === 'drop') { if (s.station) out.push(w.empty ? (en ? 'station empty' : 'Station leer') : (en ? `shortfall ${w.need}` : `Fehlmenge ${w.need}`)); else if (w.empty) out.push(en ? 'spot empty' : 'Spot leer'); else if (w.need) out.push(en ? `shortfall ${w.need}` : `Fehlmenge ${w.need}`); }
+  if (s.type === 'pickup' && s.station && w.full) out.push(en ? 'station full' : 'Station voll');
+  return out.join(', ');
+}
+/** Touren-CSV: je Stopp Reihenfolge, Typ, Lage, Anzahl, Info sowie Priorität (0–1+), Rang der Priorität in der Tour und Grund */
 export function runsCsv(runs, depot, lang = 'de') {
-  const head = ['tour', 'art', 'stopp', 'typ', 'lat', 'lng', 'anzahl', 'info'];
+  const head = ['tour', 'art', 'stopp', 'typ', 'lat', 'lng', 'anzahl', 'info', 'prioritaet', 'prio_rang', 'grund'];
   const rows = [];
   for (const r of runs) {
-    rows.push([r.id, r.kind, 0, 'depot', depot.lat.toFixed(6), depot.lon.toFixed(6), '', `${r.km} km · ${r.totalMin} min`]);
+    rows.push([r.id, r.kind, 0, 'depot', depot.lat.toFixed(6), depot.lon.toFixed(6), '', `${r.km} km · ${r.totalMin} min`, '', '', '']);
     const en = lang === 'en';
-    r.stops.forEach((s, i) => rows.push([r.id, r.kind, i + 1, s.type, s.lat.toFixed(6), s.lon.toFixed(6), s.count, s.type === 'drop' ? (en ? `Spot ${s.spotRank} (need ${s.target}${s.need != null ? `, fleet ${s.have}, shortfall ${s.need}` : ''})` : `Spot ${s.spotRank} (Bedarf ${s.target}${s.need != null ? `, Bestand ${s.have}, Fehlmenge ${s.need}` : ''})`) : s.battery?.length ? `${en ? 'Battery' : 'Akku'} ${s.battery.join('/')} %` : s.idleMaxH != null ? `${en ? 'idle' : 'steht'} ${s.idleMaxH} h` : '']));
+    r.stops.forEach((s, i) => rows.push([r.id, r.kind, i + 1, s.type, s.lat.toFixed(6), s.lon.toFixed(6), s.count, s.type === 'drop' ? (en ? `Spot ${s.spotRank} (need ${s.target}${s.need != null ? `, fleet ${s.have}, shortfall ${s.need}` : ''})` : `Spot ${s.spotRank} (Bedarf ${s.target}${s.need != null ? `, Bestand ${s.have}, Fehlmenge ${s.need}` : ''})`) : s.battery?.length ? `${en ? 'Battery' : 'Akku'} ${s.battery.join('/')} %` : s.idleMaxH != null ? `${en ? 'idle' : 'steht'} ${s.idleMaxH} h` : '',
+      s.prio ?? '', s.rank ?? '', stopReason(s, lang)]));
   }
   return opsCsv([head, ...rows], lang);
 }
@@ -756,7 +958,7 @@ export function planGeoJson(spots, runs, depot) {
   for (const s of spots) f.push({ type: 'Feature', properties: { kind: 'spot', rank: s.rank, target: s.target, score: s.score, stability: s.stabilityLabel }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } });
   for (const r of runs) {
     f.push({ type: 'Feature', properties: { kind: 'run', id: r.id, run: r.kind, km: r.km, minutes: r.totalMin, vehicles: r.vehicles }, geometry: { type: 'LineString', coordinates: [[depot.lon, depot.lat], ...r.stops.map(s => [s.lon, s.lat]), [depot.lon, depot.lat]] } });
-    r.stops.forEach((s, i) => f.push({ type: 'Feature', properties: { kind: 'stop', run: r.id, seq: i + 1, type: s.type, count: s.count }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } }));
+    r.stops.forEach((s, i) => f.push({ type: 'Feature', properties: { kind: 'stop', run: r.id, seq: i + 1, type: s.type, count: s.count, priority: s.prio ?? null, priorityRank: s.rank ?? null, reason: stopReason(s), why: s.why ?? null }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } }));
   }
   f.push({ type: 'Feature', properties: { kind: 'depot' }, geometry: { type: 'Point', coordinates: [depot.lon, depot.lat] } });
   return { type: 'FeatureCollection', features: f };

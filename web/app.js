@@ -7,6 +7,8 @@ import * as R from './pulse-report.js';
 import * as Fl from './flows.js';
 import * as Cov from './coverage.js';
 import * as Cmp from './compare.js';
+import * as Sp from './spots.js';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
@@ -14,14 +16,17 @@ const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 const QS = new URLSearchParams(location.search);
 const DEMO = QS.get('demo') === '1'; // eingefrorener Demo-Stand (Branch demo), ohne Live-Abruf und ohne Nachladen
 const DATA_DEFAULT = DEMO ? 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/demo/' : 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/';
-// ?data=… nur von erlaubter Herkunft: absoluter Pfad gleicher Herkunft, localhost/127.0.0.1 (Tests) oder ein Branch dieses Repos auf raw.githubusercontent.com
+// ?data=… nur von erlaubter Herkunft: absoluter Pfad gleicher Herkunft, localhost/127.0.0.1 nur, wenn die Seite selbst lokal läuft (Tests),
+// oder die Branches data/demo dieses Repos auf raw.githubusercontent.com (keine Commit-SHAs: GitHub liefert über den Repo-Pfad auch Commits aus Forks aus).
+// Ein abweichender Datenstand steht dauerhaft als Hinweisband über den Ansichten (auch im Druck).
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 function dataOrigin(d) {
   if (!d) return null;
   try {
     const u = new URL(d, location.href);
     if (/^\/[^/\\]/.test(d) && u.origin === location.origin) return d;
-    if (/^https?:$/.test(u.protocol) && /^(localhost|127\.0\.0\.1)$/.test(u.hostname)) return d;
-    if (u.origin === 'https://raw.githubusercontent.com' && u.pathname.startsWith('/fcou1005/mobility-pulse/')) return u.href;
+    if (/^https?:$/.test(u.protocol) && LOCAL_HOST.test(u.hostname) && LOCAL_HOST.test(location.hostname)) return d;
+    if (u.origin === 'https://raw.githubusercontent.com' && /^\/fcou1005\/mobility-pulse\/(data|demo)\//.test(u.pathname) && !u.search && !u.hash) return u.href;
   } catch { /* keine URL */ }
   console.warn(`?data=${d} hat keine erlaubte Herkunft – Standard-Datenstand wird verwendet.`);
   return null;
@@ -56,23 +61,28 @@ const dateTimeText = (ms, opts = { dateStyle: 'medium', timeStyle: 'short' }) =>
 const TYPE = tMap('type', C.VEHICLE_TYPE_LABEL);
 const STATUS = tMap('fresh', { ...C.FRESHNESS_LABEL, collector: 1 });
 const DIRS = { get mobilitydata() { return t('app.mobilitydataOperators'); }, mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', get dott_direct() { return t('app.dottDirectFeed'); }, get lime_direct() { return t('app.limeDirectFeed'); }, get zeus_direct() { return t('app.zeusDirectFeed'); }, get bird_direct() { return t('app.birdDirectFeed'); }, db_api: 'DB API Marketplace' };
-// Anbieterfarben: 8 Farben der geprüften Palette (Validator hell/dunkel bestanden) plus 4 Nebenfarben. Die Farbe folgt dem Anbieter, nie seinem Rang:
-// feste Plätze für die acht größten Anbieter, so gewählt, dass Anbieter, die in denselben Gemeinden fahren, gewichtet nach gemeinsamer Flotte möglichst
-// weit auseinanderliegen (Suche über alle 8! Zuordnungen mit validate_palette, Datenstand 01.11.2026). Vorher waren Lime, Bolt und RegioRad drei Grüntöne.
-const PAL8 = { light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'], dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'] };
+// Anbieterfarben [hell, dunkel], je Anbieter ein Farbton in beiden Themen. Auf Karten und im Streudiagramm stehen alle Anbieter einer Gemeinde
+// nebeneinander, deshalb gilt dort „alle Paare“: Für jedes Paar, das in einer Gemeinde gemeinsam fährt (≥ 5 Fahrzeuge je Anbieter, latest.json
+// vom 01.11.2026), besteht validate_palette.js --pairs all (Normalsicht ΔE ≥ 15, Protan/Deutan ΔE ≥ 8) hell und dunkel; Kontrast ≥ 3:1 gegen
+// Fläche (#fff / #161d26) und entsättigten Kartengrund (#efefef / #1a1a1a). Anbieter, die nie zusammen fahren, dürfen sich eine Farbe teilen
+// (Bolt/Zeus). Abstand zu den Statusfarben als Nebenbedingung. Suche: scratchpad pal/opt2.mjs. Unbekannte Anbieter: PAL_MORE (Hash).
+const OP_COLORS = { nextbike: ['#de5778', '#f4517e'], Dott: ['#9e3a93', '#ab46a0'], Voi: ['#5d1fbe', '#9a7bf9'], Lime: ['#5285f8', '#2b62ef'], Donkey: ['#1f600c', '#258101'], Bolt: ['#15959b', '#04a3aa'], 'DB Connect': ['#7a4306', '#a35e16'], Zeus: ['#15959b', '#04a3aa'], Yoio: ['#5633a3', '#795bce'], 'swabi - augsburg': ['#9b54b6', '#9654af'], 'RegioRad Stuttgart': ['#839007', '#869225'], 'Hopp Konstanz': ['#703485', '#9a4eb6'], 'LastenVelo Freiburg': ['#9c8a04', '#9c8a04'], zeo: ['#854494', '#9c4fae'], sigo: ['#978c0d', '#9d921a'], 'LaRa to go': ['#ab63c6', '#b367d1'], 'esel.ac': ['#9c8a04', '#7e6f08'], 'AB mit Lara': ['#c066c9', '#ad53b5'], 'ALF - das Affstätter Lastenfahrrad': ['#8c1060', '#ad4d83'], 'FaRe - das Bananologen Lastenrad': ['#6a9708', '#5e8221'], 'Gülf - das Gültsteiner Lastenrad': ['#4e4092', '#7260cb'], StadtRAD: ['#be5ebc', '#cb6ac9'] };
+// Reihen ohne Anbieter (Fahrzeugarten im Deutschland-Verlauf): Nachbarpaare reichen; hell die Stufen ≥ 3:1 auf Weiß (Gelb, Aqua, Magenta, Orange dunkler)
+const PAL8 = { light: ['#2a78d6', '#d4572a', '#118a5f', '#a87200', '#c4517f', '#008300', '#6250d6', '#e34948'], dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'] };
 const PAL_MORE = { light: ['#0f8fa8', '#a0652b', '#b05090', '#5b8f2b'], dark: ['#2aa3bd', '#c48244', '#cc6fae', '#6fa02a'] };
-const OP_SLOT = { 'DB Connect': 0, Zeus: 1, nextbike: 2, Dott: 3, Donkey: 4, Bolt: 5, Voi: 6, Lime: 7 };
-const OP_MORE = { 'swabi - augsburg': 0, 'RegioRad Stuttgart': 1, Yoio: 2, 'esel.ac': 3 };
 const DISABLED_COL = '#7d8794'; // gesperrt: neutrales Grau statt Rot (Rot ist eine Anbieterfarbe)
 const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
 const palette = (i) => PAL8[isDark() ? 'dark' : 'light'][i % 8];
 function opColor(op) {
-  const m = isDark() ? 'dark' : 'light';
-  if (op in OP_SLOT) return PAL8[m][OP_SLOT[op]];
-  return PAL_MORE[m][op in OP_MORE ? OP_MORE[op] : parseInt(C.hashStr(String(op)), 36) % PAL_MORE[m].length];
+  const m = isDark() ? 1 : 0;
+  if (Object.hasOwn(OP_COLORS, op)) return OP_COLORS[op][m];
+  const more = PAL_MORE[m ? 'dark' : 'light'];
+  return more[parseInt(C.hashStr(String(op)), 36) % more.length];
 }
 // Rand der Kartenpunkte in der Hintergrundfarbe (1,5 px), damit sich Punkte voneinander absetzen
 const bgColor = () => getComputedStyle(document.documentElement).getPropertyValue('--panel').trim() || (isDark() ? '#161d26' : '#ffffff');
+// Farbe aus einem Themen-Token (index.html :root), damit Kartenebenen hell und dunkel die passende Stufe tragen
+const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888888';
 // Begriffe, die eine kurze Erklärung brauchen (als <abbr title>)
 const GLOSS = {
   get rvd() { return t('app.tripsPerVehiclePerDayTvd'); },
@@ -161,17 +171,30 @@ const resetCache = () => { REQ.clear(); FAILED.clear(); };
 const getJsonShared = (url, opt = {}) => typeof url === 'string' && url.startsWith(CFG.DATA) && !url.includes('?') ? cached(url.slice(CFG.DATA.length), opt.timeout) : getJson(url, opt);
 const failedText = (file) => { const f = FAILED.get(file); return f === 404 ? t('app.fileMissing', { file }) : f ? t('app.fileNotLoadable', { file, f }) : t('app.noData'); };
 const emptyRow = (cols, msg, hint = '') => `<tr><td colspan="${cols}" class="empty"><b>${esc(msg)}</b>${esc(hint)}</td></tr>`;
+// Chip-Gruppe neu aufbauen, ohne dass der Tastaturfokus auf <body> fällt: der Knopf mit demselben Wert (attr) bekommt den Fokus zurück
+function setChips(el, attr, html) {
+  if (!el) return;
+  const a = document.activeElement, v = a && el.contains(a) ? a.getAttribute(attr) : null;
+  el.innerHTML = html;
+  if (v != null) el.querySelector(`[${attr}="${CSS.escape(v)}"]`)?.focus();
+}
 // html: Text oder Funktion, die den Text liefert (Funktion = beim Sprachwechsel neu erzeugt)
+// #notice ist eine höfliche Live-Region (index.html); Fehler (kind 'bad') werden zusätzlich als role="alert" sofort angesagt
 function notice(html, kind = '', id = null) {
   const box = $('#notice');
   const el = id && $(`#notice [data-id="${id}"]`) || document.createElement('div');
-  el.className = `note ${kind}`; if (id) el.dataset.id = id; el._html = typeof html === 'function' ? html : null; el.innerHTML = el._html ? el._html() : html; if (!el.parentNode) box.appendChild(el); return el;
+  el.className = `note ${kind}`; if (id) el.dataset.id = id; if (kind === 'bad') el.setAttribute('role', 'alert'); else el.removeAttribute('role');
+  el._html = typeof html === 'function' ? html : null; el.innerHTML = el._html ? el._html() : html; if (!el.parentNode) box.appendChild(el); return el;
 }
 const refreshNotices = () => $$('#notice .note').forEach(el => { if (el._html) try { el.innerHTML = el._html(); } catch (e) { console.error('Hinweis', e); } });
 const clearNotice = (id) => $(`#notice [data-id="${id}"]`)?.remove();
 
+// latest.json mit dem Zeitpunkt aus status.json als Anhang: unveränderter Lauf = gleiche Adresse, der Browser fragt nur nach (304) statt 1 MB neu zu laden
+const latestUrl = (status) => (status?.at ? `${CFG.DATA}latest.json?t=${encodeURIComponent(status.at)}` : fresh('latest.json'));
 async function loadBase() {
-  const [status, latest, sources, hist] = await Promise.all([getJson(fresh('status.json')), getJson(fresh('latest.json')), cached('sources.json', 25000), cached('history/index.json', 25000)]);
+  const pSrc = cached('sources.json', 25000), pHist = cached('history/index.json', 25000);
+  const status = await getJson(fresh('status.json'));
+  const [latest, sources, hist] = await Promise.all([getJson(latestUrl(status.json)), pSrc, pHist]);
   state.status = status.json; state.latest = latest.json; state.histIndex = hist.json;
   if (!latest.ok) FAILED.set('latest.json', latest.status || latest.error); // für die Leerzeilen der Tabellen
   state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
@@ -185,20 +208,42 @@ async function loadBase() {
     return;
   }
   if (!state.latest) {
-    notice(() => t('app.collectorHasNotPublishedData', { REPO: CFG.REPO }), 'warn', 'nolatest');
+    // Ursache nennen: 404 = noch kein Stand, 200 ohne JSON = Datei beschädigt, sonst Netz/Timeout
+    const f = FAILED.get('latest.json');
+    notice(() => f === 404 ? t('app.collectorHasNotPublishedData', { REPO: CFG.REPO }) : f === t('app.notJson') || latest.status === 200 ? t('app.latestBroken') : t('app.latestUnreachable', { err: esc(String(f ?? latest.error ?? '')) }), f === 404 ? 'warn' : 'bad', 'nolatest');
     state.mode = 'live'; $('#sel-mode').value = 'live';
   }
 }
 // Gemeindegrenzen (2,5 MB) nur, wenn sie gebraucht werden: Grenz-Ebene, Live-Zuordnung, Haltestellen; Mittelpunkte kommen aus latest.json (municipalities[].c)
-let boundariesReq = null;
-function loadBoundaries() {
-  if (state.bIndex) return Promise.resolve(state.bIndex);
+// Je Bundesland (boundaries/<Land>.json, bbox je Gemeinde vom Sammler vorberechnet, ≈ 1/15 der Größe): für ein Gebiet reicht sein Land;
+// Gemeinden eines Landes kommen zum Bestand dazu, der Index wird neu gebaut. Ohne boundaries/index.json (älterer Datenstand) oder für
+// „Deutschlandweit“: die ganze Datei wie bisher.
+let boundariesReq = null; const bLands = new Map();
+const bboxOf = (f) => { if (!f.bbox) { const c = JSON.stringify(f.geometry?.coordinates || []).match(/-?\d+(\.\d+)?/g) || []; let x0 = 999, y0 = 999, x1 = -999, y1 = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } f.bbox = [x0, y0, x1, y1]; } return f; };
+function loadAllBoundaries() {
   return boundariesReq ??= cached('boundaries-active.json', 60000).then(r => {
-    if (!r.ok) return null;
-    for (const f of r.json.features || []) if (!f.bbox) { const c = JSON.stringify(f.geometry?.coordinates || []).match(/-?\d+(\.\d+)?/g) || []; let x0 = 999, y0 = 999, x1 = -999, y1 = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } f.bbox = [x0, y0, x1, y1]; }
-    state.boundaries = r.json; state.bIndex = C.buildMunicipalityIndex(r.json);
+    if (!r.ok) return state.bIndex || null;
+    for (const f of r.json.features || []) bboxOf(f);
+    state.boundaries = r.json; state.bIndex = C.buildMunicipalityIndex(r.json); state.bFull = true;
     return state.bIndex;
   });
+}
+function loadBoundaries(land = state.scope !== 'DE' ? scopeState() : null) {
+  if (state.bFull) return Promise.resolve(state.bIndex);
+  if (!land) return loadAllBoundaries();
+  if (!bLands.has(land)) bLands.set(land, cached('boundaries/index.json', 25000).then(ix => {
+    if (!ix.ok || !ix.json?.states?.[land]) return loadAllBoundaries();
+    return cached(`boundaries/${land}.json`, 60000).then(r => {
+      if (!r.ok || !Array.isArray(r.json?.features)) return loadAllBoundaries();
+      if (state.bFull) return state.bIndex;
+      const fc = state.boundaries || { type: 'FeatureCollection', attribution: r.json.attribution, features: [] };
+      const have = new Set(fc.features.map(f => f.properties?.ags));
+      for (const f of r.json.features) if (!have.has(f.properties?.ags)) fc.features.push(bboxOf(f));
+      state.boundaries = fc; state.bIndex = C.buildMunicipalityIndex(fc);
+      return state.bIndex;
+    });
+  }));
+  return bLands.get(land);
 }
 const hasCenters = () => Object.values(state.latest?.municipalities || {}).some(m => Array.isArray(m.c));
 async function loadHistory(day) {
@@ -209,6 +254,14 @@ async function loadHistory(day) {
 // Tagesmittel über bis zu 30 Tage (history/daily.json, Vertrag 6); null bei altem Datenstand
 let dailyReq = null;
 const loadDaily = () => dailyReq ??= cached('history/daily.json', 60000).then(r => r.ok && r.json?.days && r.json?.series ? r.json : null);
+// Reihen je „Gemeinde|Anbieter“ einmal je Datei indizieren (daily.json, history/<Tag>.json; Schlüssel Gemeinde|Anbieter|Art): Signale fragen je Paar
+// nach, und ein Durchlauf über alle Reihen je Paar war quadratisch (Deutschland: 723 Paare × 1.400 Reihen)
+const SER_IX = new WeakMap();
+function seriesOf(doc, ags, op) {
+  let m = SER_IX.get(doc);
+  if (!m) { m = new Map(); for (const [k, ser] of Object.entries(doc?.series || {})) { const j = k.indexOf('|', k.indexOf('|') + 1); const key = j < 0 ? k : k.slice(0, j); (m.get(key) || m.set(key, []).get(key)).push(ser); } SER_IX.set(doc, m); }
+  return m.get(`${ags}|${op}`) || [];
+}
 // Mittel je Gemeinde|Anbieter über die vorigen Tage (ohne den gezeigten Tag): Anteil gesperrt und Anteil Energie niedrig am Bestand
 function dailyBaseline(daily, ags, op, excludeDay) {
   if (!daily) return null;
@@ -217,8 +270,7 @@ function dailyBaseline(daily, ags, op, excludeDay) {
   const days = (daily.days || []).filter(d => d !== excludeDay).slice(-7);
   if (!days.length) return null;
   let total = 0, disabled = 0, low = 0, stations = 0, emptyDock = 0, n = 0;
-  for (const [k, ser] of Object.entries(daily.series)) {
-    const [a, o] = k.split('|'); if (a !== ags || o !== op) continue;
+  for (const ser of seriesOf(daily, ags, op)) {
     for (const d of days) { const v = ser[d]; if (!v) continue; n++; total += v[fi.total] || 0; disabled += v[fi.disabled] || 0; low += v[fi.lowBattery] || 0; if (fi.stations != null) { stations += v[fi.stations] || 0; emptyDock += v[fi.stationsEmptyDock ?? fi.stationsEmpty] || 0; } }
   }
   if (!n || !total) return null;
@@ -322,6 +374,10 @@ function keyMatchesOp(k, op) { const [ags, o, ty] = k.split('|'); if (ags === 'D
 // Automatischer Live-Abruf nach Gebietswahl/Deep-Link nur in der Übersicht (dort sind Positionen zu sehen); in anderen Ansichten erst beim
 // Öffnen der Übersicht – spart Grenzen (2,4 MB) und Feed-Abrufe, wenn z. B. direkt „Nutzung“ geöffnet wird. „Live abrufen“ wirkt sofort.
 let pendingLive = false;
+// Momentaufnahme des Sammlers (snapshot/<id>.json) gibt es nur für Zugangsquellen und Quellen ohne CORS-Freigabe, die beim Lauf aktuell oder
+// verzögert waren (scripts/collect.mjs); für alle anderen nicht anfragen (sonst 404 je ausgefallenem Feed)
+const snapshotOf = (r, auth = false) => (r && (auth || r.auth || r.cors !== true) && (r.status == null || ['live', 'delayed'].includes(r.status))
+  ? getJson(CFG.DATA + `snapshot/${r.id.replace(/[^\w.-]+/g, '_')}.json`) : Promise.resolve({ ok: false, status: 0, json: null }));
 function autoLive() {
   if (DEMO || !state.latest || state.scope === 'DE') return;
   if (currentView === 'live') { pendingLive = false; liveFetch(); } else pendingLive = true;
@@ -335,7 +391,7 @@ async function liveFetch() {
   let targets = cat.filter(s => !s.disabled && (state.scope === 'DE' && !state.latest ? true : idSet.has(s.id) || idSet.has(`${s.id}`) || recs.some(r => r.parent === s.id)));
   if (state.scope !== 'DE' && !targets.length) targets = cat.filter(s => !s.disabled);
   const btn = $('#btn-live'); btn.disabled = true;
-  const n = notice(() => `${t('app.liveFetch')} <span class="mono" id="live-prog">0 / ${targets.length}</span> ${t('app.sources')} <div class="progress"><i></i></div>`, '', 'live');
+  const n = notice(() => `${t('app.liveFetch')} <span class="mono" id="live-prog" aria-live="off">0 / ${targets.length}</span> ${t('app.sources')} <div class="progress"><i></i></div>`, '', 'live');
   await loadBoundaries();
   const systems = new Map(), recsOut = new Map();
   let done = 0; const now = Date.now();
@@ -345,7 +401,7 @@ async function liveFetch() {
       if (src.auth || subs.length) {
         // Zugangsquellen (MOBIDROM): Momentaufnahme des Sammlers
         for (const r of subs.length ? subs : [src]) {
-          const snap = await getJson(CFG.DATA + `snapshot/${r.id.replace(/[^\w.-]+/g, '_')}.json`);
+          const snap = await snapshotOf(r, true);
           if (snap.ok) { systems.set(r.id, snapshotToSystem(snap.json, r)); recsOut.set(r.id, summarizeSnapshot(src, r, snap.json, now)); }
           else recsOut.set(r.id, { ...r, status: 'collector', checkedAt: r.checkedAt });
         }
@@ -354,7 +410,7 @@ async function liveFetch() {
       const known = recs.find(x => x.id === src.id);
       if (known?.cors === false) {
         // Sammler hat festgestellt: kein CORS-Header → gar nicht erst im Browser versuchen
-        const snap = await getJson(CFG.DATA + `snapshot/${src.id.replace(/[^\w.-]+/g, '_')}.json`);
+        const snap = await snapshotOf(known);
         if (snap.ok) { systems.set(src.id, snapshotToSystem(snap.json, src)); recsOut.set(src.id, summarizeSnapshot(src, known, snap.json, now)); return; }
         if (['live', 'delayed'].includes(known.status)) { recsOut.set(src.id, { ...known, status: 'collector', corsBlocked: true }); return; }
       }
@@ -363,7 +419,7 @@ async function liveFetch() {
       if (sys.httpStatus === 0 && !sys.vehicles.length && !sys.stations.length) {
         // Browser darf die Quelle nicht lesen (kein CORS): Momentaufnahme des Sammlers
         const r = recs.find(x => x.id === src.id);
-        const snap = await getJson(CFG.DATA + `snapshot/${src.id.replace(/[^\w.-]+/g, '_')}.json`);
+        const snap = await snapshotOf(r || src);
         if (snap.ok) { systems.set(src.id, snapshotToSystem(snap.json, src)); recsOut.set(src.id, summarizeSnapshot(src, r, snap.json, now)); return; }
         if (r && ['live', 'delayed'].includes(r.status)) { recsOut.set(src.id, { ...r, status: 'collector', corsBlocked: true }); return; }
       }
@@ -395,6 +451,14 @@ async function liveFetch() {
   }
   vehicles.sort((a, b) => a.priority - b.priority);
   const dv = C.dedupeVehicles(vehicles), ds = C.dedupeStations(stations);
+  // Spiegelquellen mit umgeschlüsselten Kennungen (z. B. MOBIDROM ↔ nextbike direkt): wie der Sammler die schwächere Quelle verwerfen;
+  // bekannte Paare aus latest.mirrors, Paare der Konsistenzprüfung, falls geladen
+  if (typeof C.dropMirrorVehicles === 'function') {
+    const recOf = new Map((state.latest?.sources || []).map(r => [r.id, r]));
+    const rank = (id) => { const r = recOf.get(id) || recsOut.get(id) || {}; return [r.priority ?? 2, r.parent ? 1 : 0, (r.directories || []).includes('citybikes') ? 1 : 0]; };
+    const mr = C.dropMirrorVehicles(dv.vehicles, { pairs: state.usage.consistency?.pairs || [], rank, extra: state.latest?.mirrors || [] });
+    dv.vehicles = mr.vehicles; dv.stats.mirrorDropped = mr.dropped.length;
+  }
   const groups = C.aggregateGroups(dv.vehicles, ds.stations, { chargeThreshold: state.thresholds.charge, rangeThreshold: state.thresholds.range });
   // Quellen ohne Browserzugang und ohne Momentaufnahme: Sammler-Summen übernehmen
   const have = new Set([...groups.keys()].map(k => k.split('|').slice(0, 2).join('|')));
@@ -405,7 +469,8 @@ async function liveFetch() {
   state.live = { at: now, systems, groups, vehicles: dv.vehicles, stations: ds.stations, recs: recsOut, dedupe: { ...dv.stats, stationDuplicates: ds.duplicates }, targets: targets.length };
   clearNotice('live'); btn.disabled = false;
   const failed = [...recsOut.values()].filter(r => !['live', 'delayed', 'collector'].includes(r.status));
-  if (failed.length) notice(() => t('app.ofSourcesDeliveredNoUsable', { length: failed.length, size: recsOut.size, join: esc([...new Set(failed.map(r => STATUS[r.status] || r.status))].join(', ')) }), 'warn', 'livefail'); else clearNotice('livefail');
+  // Kundenansicht: ohne „Sammler“ und Quellenzustände, nur wie viele Anbieter gerade keine aktuellen Daten haben
+  if (failed.length) notice(() => cl(t('app.ofSourcesDeliveredNoUsable', { length: failed.length, size: recsOut.size, join: esc([...new Set(failed.map(r => STATUS[r.status] || r.status))].join(', ')) }), t('app.someOperatorsNoCurrentData', { n: fmt(new Set(failed.map(r => r.operator)).size) })), 'warn', 'livefail'); else clearNotice('livefail');
   if (!state.bIndex) notice(() => t('app.withoutMunicipalBoundaries'), 'warn', 'nob');
   state.mode = 'live'; $('#sel-mode').value = 'live';
   renderAll();
@@ -431,8 +496,12 @@ function summarizeSnapshot(src, rec, snap, now) {
     status: C.freshness(age), feedAgeMs: age, vehicleFeedAgeMs: age, stationFeedAgeMs: age, snapshot: true, snapshotAt: snap.at, errors: [], httpStatus: rec?.httpStatus ?? null, quality: rec?.quality ?? null, fingerprint: rec?.fingerprint ?? null, license: rec?.license ?? null, checkedAt: snap.at, counts: { vehicles: (snap.vehicles || []).length, stations: (snap.stations || []).length } };
 }
 function snapshotToSystem(snap, rec) {
+  const vehicles = (snap.vehicles || []).map(([lat, lon, type, flags, battery, range], i) => ({ rawId: `${rec.id}#${i}`, lat, lon, type, reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: battery, rangeKm: range, geoStatus: 'ok', geoOrigin: 'vehicle', reportedAt: snap.at, positionAgeMs: Date.now() - snap.at }));
+  // Reichweite aus dem Ladestand gerechnet (M-16, wie C.readGbfsSystem für Live-Feeds): dann zählt für Energie nur der Ladestand
+  const rc = C.rangeDerivedCheck?.(vehicles);
+  if (rc?.derived) { const ty = new Set(rc.derivedTypes); for (const v of vehicles) if (v.rangeKm != null && ty.has(v.vtId ?? '')) v.rangeDerived = true; }
   return {
-    vehicles: (snap.vehicles || []).map(([lat, lon, type, flags, battery, range], i) => ({ rawId: `${rec.id}#${i}`, lat, lon, type, reserved: !!(flags & 1), disabled: !!(flags & 2), batteryPct: battery, rangeKm: range, geoStatus: 'ok', geoOrigin: 'vehicle', reportedAt: snap.at, positionAgeMs: Date.now() - snap.at })),
+    vehicles,
     stations: (snap.stations || []).map(([lat, lon, name, phys, bookable, docks, renting, returning], i) => ({ id: `${rec.id}#s${i}`, name, lat, lon, physicalAvailable: phys, bookable, docksAvailable: docks, renting: !!renting, returning: !!returning, installed: true, reportedAt: snap.at, typeHint: 'unknown' })),
     vehicleListPresent: (snap.vehicles || []).length > 0, feedAges: {}, errors: [], systemInfo: {},
   };
@@ -440,21 +509,29 @@ function snapshotToSystem(snap, rec) {
 
 // ---------- Rendering ----------
 // Drei Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
-const VIEWS = ['live', 'lab', 'usage', 'ops', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
+// „Städte“: die bundesweiten Vergleiche (Gebietsvergleich, Verfügbarkeit je Stadt, Rangliste, Dichte) aus „Leistung“ ausgelagert
+const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
 const GROUPS_DEF = () => [
-  { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['usage', t('app.usage')], ['coverage', t('app.operators')], ['vergleich', t('app.compare')], ['bericht', t('app.report')]] },
-  { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')]] },
+  { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['staedte', t('app.citiesSeg')], ['usage', t('app.usage')], ['coverage', t('app.coverageSeg')], ['vergleich', t('app.compare')], ['bericht', t('app.report')]] },
+  { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')]] },
   { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')]] },
 ];
-const VIEW_ALIAS = { compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', vertrauen: 'sources', datenvertrauen: 'sources' };
+const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources' };
 const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 let currentView = 'live', urlReady = false;
 const resolveView = (h) => { let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
+// Welche Filter der Leiste in welcher Ansicht wirken; die übrigen werden ausgeblendet (Disposition und Vergleich haben eigene Auswahl im Panel)
+const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
+let viewShown = false;
 function setView(name) {
   name = resolveView(name);
   if (name !== 'usage') { const fl = document.getElementById('fl-panel'); if (fl) Fl.abortFlows?.(fl); }
   const group = GROUPS_DEF().find(g => g.segs.some(([v]) => v === name));
+  const changed = viewShown && name !== currentView; viewShown = true;
   currentView = name;
+  const fs = (FILTERS[name] || 'scope op type mode').split(' ');
+  $$('.filters label[data-f]').forEach(l => { l.hidden = !fs.includes(l.dataset.f); });
+  renderFilterSum();
   $$('section.view').forEach(s => s.classList.toggle('active', s.id === `view-${name}`));
   $$('#nav a').forEach(a => { const on = a.dataset.group === group.id; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $('#crumb-group').textContent = group.label;
@@ -467,6 +544,11 @@ function setView(name) {
   else if (name === 'ops') renderOps(); // prüft selbst, ob der Plan neu gerechnet werden muss
   if (name === 'live' && pendingLive && dataReady) { pendingLive = false; liveFetch(); }
   syncUrl();
+  // echter Wechsel: an den Anfang der neuen Ansicht und Fokus auf ihre Überschrift (Screenreader hören den Namen der Ansicht)
+  if (changed) {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const h = $(`#view-${name} h1`); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+  }
 }
 // ---------- Ansichten zeichnen: nur die sichtbare ----------
 // Hook für weitere Module (z. B. web/report.js): VIEW_RENDER[name] = [fn, …] ergänzen; renderAll() markiert alle Ansichten als veraltet
@@ -489,6 +571,9 @@ function renderSegments(group, name) {
   seg.hidden = false;
   $$('a', seg).forEach(a => { if (a.dataset.v === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   placeSeg();
+  // schmale Leiste, die scrollt (statt umzubrechen): aktives Segment in den sichtbaren Bereich holen
+  const cur = seg.querySelector('a[aria-current]');
+  if (cur && seg.scrollWidth > seg.clientWidth + 1) seg.scrollLeft = Math.max(0, cur.offsetLeft - (seg.clientWidth - cur.offsetWidth) / 2);
   requestAnimationFrame(() => requestAnimationFrame(() => seg.classList.remove('instant')));
 }
 // Gleitender Indikator: Position und Breite des aktiven Segments; ohne Messung bleibt der schlichte Hintergrund
@@ -515,7 +600,7 @@ function applyUrlParams() {
   const has = (sel, v) => v != null && [...$(sel).options].some(o => o.value === v);
   const sc = QS.get('scope');
   if (has('#sel-scope', sc)) { state.scope = sc; $('#sel-scope').value = sc; }
-  else if (sc && sc !== 'DE') notice(() => t('app.areaFromLinkIsNotInCurrent', { sc: esc(sc) }), 'warn', 'scope');
+  else if (sc && sc !== 'DE' && state.latest) notice(() => t('app.areaFromLinkIsNotInCurrent', { sc: esc(sc) }), 'warn', 'scope'); // ohne Datenstand ist der Schlüssel nicht prüfbar (Meldung dazu: nolatest)
   populateOperators();
   const op = QS.get('op'), ty = QS.get('type');
   if (resolveView(location.hash.slice(1)) === 'ops') applyOpsParams({ op, type: ty });
@@ -575,7 +660,7 @@ function onLanguage() {
   renderLangSwitch(); clearNotice('lang'); refreshNotices();
   if (state.map && state.tiles) { const prev = state.tiles.options.attribution, next = t('app.openstreetmapContributors'); if (prev !== next) { state.tiles.options.attribution = next; state.map.attributionControl?.removeAttribution(prev).addAttribution(next); } }
   if (state.latest) { populateScope(); populateOperators(); }
-  safe(() => Ops.relabelOps?.()); safe(() => Fl.relabelFlows?.()); safe(() => Cmp.relabelCompare?.(document.getElementById('cmp-panel'))); // Disposition behält den Plan, Fahrtrouten bauen ihr Gerüst neu
+  safe(() => Ops.relabelOps?.()); safe(() => Fl.relabelFlows?.()); safe(() => Cmp.relabelCompare?.(document.getElementById('cmp-panel'))); safe(() => Sp.relabelSpots?.(document.getElementById('spots-panel'))); // Disposition behält den Plan, Fahrtrouten bauen ihr Gerüst neu
   if (dataReady) { safe(renderHeader); for (const v of VIEWS) dirty.add(v); }
   setView(currentView); // Kopf, Seitentitel, Segmente; zeichnet die aktive Ansicht neu
 }
@@ -585,9 +670,10 @@ const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, opColor, mu
   setScope: (ags) => { const sel = $('#sel-scope'); if (![...sel.options].some(o => o.value === ags)) return; sel.value = ags; sel.dispatchEvent(new Event('change')); } });
 const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) return fn(el, rpCtx()); };
 VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
-VIEW_RENDER.lab.push(rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter'));
+VIEW_RENDER.staedte = [() => renderCities(), rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter')];
 VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
 VIEW_RENDER.vergleich = [rp(Cmp.renderCompare, 'cmp-panel')];
+VIEW_RENDER.spots = [() => { const el = document.getElementById('spots-panel'); if (el) return Sp.renderSpots(el, { ...rpCtx(), loadOnce }); }]; // Spot-Abgleich braucht dazu stations-quota und Zonen-Index
 VIEW_RENDER.sources.push(rp(Cov.renderCoverage, 'cov-panel'), rp(Rp.renderFeedChecks, 'rp-feedchecks'), rp(Rp.renderPriceLog, 'rp-pricelog'), () => renderCalibPanel());
 function renderAll() {
   dataReady = true;
@@ -614,9 +700,9 @@ function renderHeader() {
   const h = dataHealth();
   const el = $('#filter-count');
   el.innerHTML = isClient() ? `<span class="health ${h.level}"><i></i>${h.label}${h.staleRun ? ` · ${t('app.dataOld', { v0: ageText(Date.now() - state.latest.at) })}` : ''}</span>`
-    : `<span class="health ${h.level}"><i></i>${h.label}${h.counted ? ` · ${t('app.ofReachableSourcesCurrent', { fresh: fmt(h.fresh), counted: fmt(h.counted) })}` : ''}${h.staleRun ? ` · ${t('app.collectorRunOld', { v0: ageText(Date.now() - state.latest.at) })}` : ''}</span>`;
+    : `<span class="health ${h.level}"><i></i>${h.label}${h.counted ? ` · ${t('app.ofReachableSourcesCurrent', { usable: fmt(h.usable), fresh: fmt(h.fresh), counted: fmt(h.counted) })}` : ''}${h.staleRun ? ` · ${t('app.collectorRunOld', { v0: ageText(Date.now() - state.latest.at) })}` : ''}</span>`;
   el.title = isClient() ? gl('fresh') : h.detail;
-  renderAttribution();
+  renderAttribution(); renderFilterSum();
 }
 // Ampel zur Datenlage im Gebiet: nicht erreichbare Quellen und geprüfte Kandidaten ohne Feed zählen nicht als Fehler; ebenso Dubletten
 // (gleiches System über eine zweite Adresse) und länger als 14 Tage verschwundene Quellen (retired)
@@ -706,7 +792,7 @@ function renderLive() {
     const d = r.delta ? `<span style="color:var(--${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : 'muted'})">${r.delta.diff > 0 ? '+' : ''}${fmt(r.delta.diff)}</span><div class="sub-line">${ageText(r.delta.sinceMs)}</div>` : '—';
     if (r.gap) return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${t('app.since', { city: esc(r.gap.city), since: esc(r.gap.since) })}</div></td><td colspan="${cols - 2}" class="sub-line">${esc(r.gap.note)}</td><td><span class="pill gap">${t('app.dataGap2')}</span></td></tr>`;
     const e = energyOfOp(r.op);
-    const eCell = e.pending ? '…' : !e.known ? 'k. A.' : `${energyVal(e)}<div class="sub-line">${t('app.withData', { known: fmt(e.known), v1: e.rangeOnly === e.known ? ` · ${t('app.rangeOnly')}` : e.rangeOnly ? ` · ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : '' })}</div>`;
+    const eCell = e.pending ? '…' : !e.known ? t('common.na') : `${energyVal(e)}<div class="sub-line">${t('app.withData', { known: fmt(e.known), v1: e.rangeOnly === e.known ? ` · ${t('app.rangeOnly')}` : e.rangeOnly ? ` · ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : '' })}</div>`;
     return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line internal">${r.sources.length} ${r.sources.length === 1 ? t('app.source') : t('app.sources')}${r.changed ? ` · ${t('app.sourceChange')}` : ''}${r.sources.some(x => x.snapshot) ? ` · ${t('app.collectorSnapshot3')}` : ''}${r.sources.some(x => x.status === 'collector') ? ` · ${t('app.collectorSnapshot')}` : ''}</div></td>
       <td class="internal">${r.dirs.map(dirLabel).join(' · ') || '–'}<div class="sub-line">${t('app.quality100', { v0: esc(r.quality ?? '–') })}</div></td>
       <td class="n">${fmt(s.available)}<div class="sub-line">${t('app.reported', { total: fmt(s.total) })}</div></td><td class="n">${fmt(s.disabled)}</td>${showDelta ? `<td class="n">${d}</td>` : ''}
@@ -721,8 +807,11 @@ function renderLive() {
 // Verwaiste Einträge (gesperrt, > 7 Tage ohne Signal) der Quellen im Gebiet/Anbieter-Filter
 function ghostsInScope() { return sourcesForScope().filter(r => state.operator === 'all' || r.operator === state.operator).reduce((a, r) => a + (r.counts?.ghosts || 0), 0); }
 // Briefing: je Karte Zahl + eine Zeile, Begründung unter „Warum?“
+// Handlungsbedarf zuerst: kritisch/auffällig; Hinweise füllen nur auf, wenn weniger als vier übrig sind. Kundenansicht ohne Datenqualität (interne Quellenlage).
 function renderBriefing() {
-  const items = computeSignals().slice(0, 4);
+  const all = computeSignals().filter(s => !(isClient() && s.cat === 'data'));
+  const act = all.filter(s => s.sev !== 'info');
+  const items = [...act, ...all.filter(s => s.sev === 'info')].slice(0, 4);
   $('#briefing').innerHTML = items.length ? items.map(s => sigCard(s, true)).join('') : `<div class="empty">${t('app.noNotableSignalsInAreaFleet')}</div>`;
 }
 
@@ -790,29 +879,30 @@ function renderMap() {
     if (layerMode === 'points') {
       if ($('#chk-vehicles').checked) for (let i = 0; i < vehicles.length; i += step) {
         const v = vehicles[i]; drawn++;
-        const col = v.disabled ? DISABLED_COL : opColor(v.operator);
-        L.circleMarker([v.lat, v.lon], { radius: 4.5, weight: 2, color: bg, fillColor: col, fillOpacity: v.disabled ? .7 : .95, opacity: 1 })
+        const col = v.disabled ? DISABLED_COL : opColor(v.operator), dim = state.mapFocus && state.mapFocus !== v.operator; // Legende: ein Anbieter hervorgehoben
+        L.circleMarker([v.lat, v.lon], { radius: 4.5, weight: 2, color: bg, fillColor: col, fillOpacity: dim ? .12 : v.disabled ? .7 : .95, opacity: dim ? .2 : 1 })
           .bindPopup(`<b>${esc(v.operator)}</b> · ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? ` · ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? ` · ${t('app.idleFor', { v0: durText(v.idleMin * 60e3) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : ` · ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? ` · ${t('app.idReused')}` : ''}${src === coll ? ` · ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
       }
       if ($('#chk-stations').checked) for (const s of stations) {
-        // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt, also in Anbieterfarbe
-        const near = s.nearbyVehicles || 0, empty = s.renting !== false && (s.bookable ?? 0) === 0 && !near;
-        L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: empty ? '#e3b341' : opColor(s.operator), fillOpacity: .2 })
+        // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt. Leer = gestrichelter Rand ohne Füllung (Form statt
+        // eigener Farbe: die Anbieterfarbe bleibt die Identität, die Warnfarbe kollidierte mit Dott)
+        const near = s.nearbyVehicles || 0, empty = s.renting !== false && (s.bookable ?? 0) === 0 && !near, dim = state.mapFocus && state.mapFocus !== s.operator;
+        L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: opColor(s.operator), opacity: dim ? .2 : 1, dashArray: empty ? '3 3' : null, fillOpacity: empty || dim ? 0 : .25 })
           .bindPopup(`${t('app.physicalBookableDocks', { v0: esc(s.name || t('app.station')), operator: esc(s.operator), physicalAvailable: fmt(s.physicalAvailable), bookable: fmt(s.bookable), docksAvailable: fmt(s.docksAvailable), v5: near ? t('app.withinM', { near: fmt(near), v1: near === 1 ? t('app.vehicle') : t('app.vehicles'), v2: C.STATION_NEAR_M ?? 50 }) : '', v6: s.nearbyOther ? `<br><span class="muted">${t('app.plusFromOtherOperators', { nearbyOther: fmt(s.nearbyOther), join: esc((s.nearbyOtherOps || []).join(', ')) })}</span>` : '' })}<span class="muted">${s.renting === false ? t('app.rentalDisabled') : t('app.renting')} · ${s.returning === false ? t('app.returnDisabled') : t('app.returnPossible')}</span>`).addTo(L_.stations);
       }
-      const ops = [...new Set(vehicles.map(v => v.operator))].slice(0, 12);
-      legend.push(...ops.map(o => `<span><i class="dot" style="background:${opColor(o)}"></i>${esc(o)}</span>`), `<span><i class="dot" style="background:${DISABLED_COL}"></i>${t('app.disabled3')}</span>`, `<span><i class="sq"></i>${t('app.station')}</span>`, `<span><i class="sq" style="border-color:#e3b341"></i>${t('app.stationEmptyNoVehicleM', { v0: C.STATION_NEAR_M ?? 50 })}</span>`, `<span class="muted">${t('app.vehiclesDrawn', { drawn: fmt(drawn), length: fmt(vehicles.length), v2: step > 1 ? ` ${t('app.thinnedOut')}` : '' })}</span>`);
+      // Anbieterfarben stehen einmal, nach Bestand sortiert, in #map-legend-ops (renderOpLegend); hier nur Zustände und Formen
+      legend.push(`<span><i class="dot" style="background:${DISABLED_COL}"></i>${t('app.disabled3')}</span>`, `<span><i class="sq"></i>${t('app.station')}</span>`, `<span><i class="sq" style="border-style:dashed;background:transparent"></i>${t('app.stationEmptyNoVehicleM', { v0: C.STATION_NEAR_M ?? 50 })}</span>`, `<span class="muted">${t('app.vehiclesDrawn', { drawn: fmt(drawn), length: fmt(vehicles.length), v2: step > 1 ? ` ${t('app.thinnedOut')}` : '' })}</span>`);
     } else {
       // Rasterzellen ca. 500 m
       const cells = new Map();
       // Energie niedrig wie überall (energyLow): Grenzen des Live-Abrufs bzw. des Sammlers, je nachdem woher die Positionen stammen
       const lim = src === coll ? { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM } : { charge: state.thresholds.charge, range: state.thresholds.range };
-      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
+      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
       const max = Math.max(1, ...[...cells.values()].map(c => layerMode === 'energy' ? c.low : c.n));
       for (const c of cells.values()) {
         const val = layerMode === 'energy' ? c.low : c.n; if (!val) continue;
         const a = 0.15 + 0.7 * (val / max);
-        L.rectangle([[c.lat - .00225, c.lon - .0035], [c.lat + .00225, c.lon + .0035]], { weight: 0, fillColor: layerMode === 'energy' ? '#e3b341' : '#49c7b0', fillOpacity: a })
+        L.rectangle([[c.lat - .00225, c.lon - .0035], [c.lat + .00225, c.lon + .0035]], { weight: 0, fillColor: layerMode === 'energy' ? tok('--warn') : tok('--accent'), fillOpacity: a })
           .bindPopup(layerMode === 'energy' ? t('app.vehiclesWithLowEnergyCharge', { low: fmt(c.low), charge: fmt(lim.charge), range: fmt(lim.range), known: fmt(c.known) }) : t('app.availableVehiclesInThisCell', { n: fmt(c.n) })).addTo(L_.grid);
       }
       legend.push(`<span>${t('app.perDarkerMoreMax', { v0: layerMode === 'energy' ? t('app.lowEnergyChargeAndRangeKm', { charge: fmt(lim.charge), range: fmt(lim.range) }) : t('app.availableVehicles'), v1: cl('~500-m-Zelle', t('app.areaOfAbout500500M')), max: fmt(max) })}</span>`);
@@ -850,9 +940,9 @@ function renderMap() {
 function renderMuniLayer() {
   const L_ = state.layers; L_.muni.clearLayers();
   if (!$('#chk-muni').checked || state.scope === 'DE') return;
-  if (!state.boundaries) { loadBoundaries().then(b => { if (b && $('#chk-muni').checked) renderMuniLayer(); }); return; }
-  const f = state.boundaries.features.find(x => x.properties.ags === state.scope);
-  if (f) L.geoJSON(f, { style: { color: '#6aa9ff', weight: 1.5, fillOpacity: .04 } }).addTo(L_.muni);
+  const f = state.boundaries?.features.find(x => x.properties.ags === state.scope);
+  if (!f) { const sc = state.scope; if (!renderMuniLayer.tried?.has(sc)) { (renderMuniLayer.tried ??= new Set()).add(sc); loadBoundaries().then(b => { if (b && $('#chk-muni').checked && state.scope === sc) renderMuniLayer(); }); } return; }
+  if (f) L.geoJSON(f, { style: { color: tok('--info'), weight: 1.5, fillOpacity: .04 } }).addTo(L_.muni);
 }
 // Mittelpunkte: aus latest.json (municipalities[].c, Vertrag 1), sonst aus den Grenzen
 function muniCenters() {
@@ -898,7 +988,7 @@ async function loadWfs() {
     const cls = age == null ? 'unk' : age <= 30 * 60e3 ? 'fresh' : 'old';
     if (cls === 'fresh') fresh++; else if (cls === 'old') { old++; if (!$('#chk-wfs-old')?.checked) continue; } else unk++;
     n++;
-    L.circleMarker([lat, lon], { radius: 3, weight: 1, color: cls === 'fresh' ? '#2dd4bf' : cls === 'old' ? '#8b949e' : '#e3b341', fillOpacity: .7 })
+    L.circleMarker([lat, lon], { radius: 3, weight: 1, color: cls === 'fresh' ? tok('--accent') : cls === 'old' ? DISABLED_COL : tok('--warn'), fillOpacity: .7 })
       .bindPopup(`${t('app.mobidataMap', { v0: esc(p.provider_name || p.operator || p.system_id || ''), v1: esc(p.form_factor || p.vehicle_type || '') })}<span class="muted">${age == null ? t('app.freshnessUnclear') : t('app.reported2', { age: ageText(age) })}</span>`).addTo(L_.wfs);
   }
   notice(() => t('app.mobidataMapPointsInView', { n: fmt(n), fresh, unk, old, v4: r.json.features.length >= 4000 ? t('app.responseCapped') : '' }), '', 'wfs');
@@ -911,7 +1001,7 @@ async function loadWfs() {
 // (ops/<Land>.json; für Deutschland alle Länder, geteilter Cache mit Karte und Disposition). Fehlt die Datei: Rückfall auf die Zähler der
 // Gruppe – genau, wo nur eine Angabe vorliegt; mit beiden Angaben höchstens min(Ladestand niedrig, Reichweite niedrig), als „≈“ markiert.
 const RANGE_ONLY_OPS = new Set(R.RANGE_ONLY_OPS);
-const rangeOnly = (op) => RANGE_ONLY_OPS.has(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
+const rangeOnly = (op) => RANGE_ONLY_OPS.has(op) || !!state.latest?.energy?.rangeOnlyOps?.includes(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
 const energyLimits = () => (state.mode === 'live' && state.live ? { charge: state.thresholds.charge, range: state.thresholds.range } : { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM });
 const ENERGY = new Map(); let energyWait = 0; // `${Stand}|${Land}` → Map(Gruppe → Zähler) | 'loading' | null (Datei fehlt)
 function energyLand(land) {
@@ -930,7 +1020,7 @@ function liveEnergyGroups() {
   const lim = energyLimits(), key = `${state.live.at}|${lim.charge}|${lim.range}|${state.live.vehicles.length}`;
   if (liveEnergy?.key !== key) {
     const m = new Map();
-    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) }); m.set(k, e); }
+    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived }); m.set(k, e); }
     liveEnergy = { key, map: m };
   }
   return liveEnergy.map;
@@ -943,6 +1033,8 @@ function energyFromStats(op, st) {
 }
 function groupEnergy(k, st) {
   const live = liveEnergyGroups(); if (live?.has(k)) return live.get(k);
+  // Sammler zählt Energie je Gruppe selbst (latest.energy gesetzt: fehlendes Feld = 0) → keine ops/<Land>.json mehr für Kacheln, Signale, Leistung
+  if (state.latest?.energy) { const g = state.latest.groups?.[k] || st || {}; return { known: g.energyKnown || 0, low: g.energyLow || 0, rangeOnly: g.energyRangeOnly || 0, rangeOnlyLow: g.energyRangeOnlyLow || 0 }; }
   const land = state.latest?.municipalities?.[k.split('|')[0]]?.state;
   const m = land ? energyLand(land) : null;
   if (m === 'loading') return { pending: true };
@@ -957,22 +1049,26 @@ function energyFor(keep = null) {
 }
 const energyOfOp = (op) => energyFor(k => k.split('|')[1] === op);
 const energyRule = () => { const l = energyLimits(); return t('app.chargeAndRangeKm', { charge: fmt(l.charge), range: fmt(l.range) }); };
-const energyVal = (e) => (e.pending ? '…' : e.known ? `${e.approx ? '≈ ' : ''}${pctf(e.low, e.known)}` : 'k. A.');
+const energyVal = (e) => (e.pending ? '…' : e.known ? `${e.approx ? '≈ ' : ''}${pctf(e.low, e.known)}` : t('common.na'));
 const energySub = (e) => (e.pending ? t('app.evaluatingEnergyPerVehicle') : e.known ? t('app.ofWithEnergyData', { v0: energyRule(), low: fmt(e.low), known: fmt(e.known), v3: e.rangeOnly ? ` ${t('app.ofWhichRangeOnly', { rangeOnly: fmt(e.rangeOnly) })}` : '', v4: e.approx ? ` · ${t('app.upperBoundWithoutIndividual')}` : '' }) : t('app.noEnergyData'));
 function renderLab() {
   const groups = scopeGroups(); const st = sumStats([...groups.values()]);
   // Energie niedrig je Fahrzeug nach der Regel der Disposition; Anbieter nur mit Reichweite (Lime) zählen über die Reichweite mit
   const en = energyFor(); const lim = energyLimits();
+  // Kacheln ohne Doppelung zur Übersicht (dort: verfügbar, gesperrt, Stationen, Energie niedrig, Quellen): Reichweite, Rückgabeplätze, Datenalter, Quellenqualität
+  const recs = sourcesForScope().filter(r => state.operator === 'all' || r.operator === state.operator).map(r => liveRec(r.id) || r);
+  const eff = recs.map(effStatus), use = eff.filter(e => USABLE.has(e.status) && e.age != null).map(e => e.age).sort((a, b) => a - b);
+  const qual = recs.filter((r, i) => USABLE.has(eff[i].status) && Number.isFinite(r.quality)).map(r => r.quality);
   $('#lab-tiles').innerHTML = [
-    tile(t('app.bookableVehicles'), fmt(st.available), t('app.ofReported', { available: pctf(st.available, st.total), total: fmt(st.total) })),
-    tile(t('app.lowEnergy'), energyVal(en), energySub(en), !en.pending && en.known && en.low / en.known > 0.3 ? 'warn' : ''),
-    tile(t('app.rangeBelowKm', { range: fmt(lim.range) }), st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : 'k. A.', st.rangeKnown ? t('app.ofWithRangeRegardlessOf', { lowRange: fmt(st.lowRange), rangeKnown: fmt(st.rangeKnown) }) : t('app.noRangeData')),
-    tile(t('app.stationsWithVehicles'), st.stations ? `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}` : '—', st.stations ? t('app.bookableFreeDocks', { stationBookable: fmt(st.stationBookable), stationDocks: fmt(st.stationDocks) }) : t('app.noStationsInFilter'), '', st.stations ? emptyTip(st) : ''),
+    tile(t('app.rangeBelowKm', { range: fmt(lim.range) }), st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : t('common.na'), st.rangeKnown ? t('app.ofWithRangeRegardlessOf', { lowRange: fmt(st.lowRange), rangeKnown: fmt(st.rangeKnown) }) : t('app.noRangeData')),
+    tile(t('app.labFreeDocks'), st.stations ? fmt(st.stationDocks) : '—', st.stations ? t('app.labFreeDocksSub', { n: fmt(st.stations), full: fmt(st.stationsFull) }) : t('app.noStationsInFilter')),
+    tile(abbr(t('app.labDataAge'), 'fresh'), use.length ? ageText(use[Math.floor(use.length / 2)]) : '—', use.length ? t('app.labDataAgeSub', { n: fmt(use.length) }) : t('app.noSourcesInArea')),
+    tile(t('app.labQuality'), qual.length ? fmt(qual.reduce((a, b) => a + b, 0) / qual.length) : '—', qual.length ? t('app.labQualitySub', { n: fmt(qual.length) }) : t('app.noSourcesInArea')),
   ].join('');
   // Fahrzeugarten
   const byType = new Map();
   for (const [k, s] of groups) { const ty = k.split('|')[2]; byType.set(ty, [...(byType.get(ty) || []), s]); }
-  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = sumStats(list); const e = energyFor(k => k.split('|')[2] === ty); return `<tr><td>${esc(TYPE[ty] || ty)}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${energyVal(e)}<div class="sub-line">${!e.pending && e.known ? `n = ${fmt(e.known)}${e.rangeOnly ? ` · ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : ''}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : 'k. A.'}</td></tr>`; }).sort().join('') || emptyRow(6, t('app.noVehiclesInFilter'), t('app.setVehicleTypeOrOperatorTo'));
+  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = sumStats(list); const e = energyFor(k => k.split('|')[2] === ty); return `<tr><td>${esc(TYPE[ty] || ty)}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${energyVal(e)}<div class="sub-line">${!e.pending && e.known ? `n = ${fmt(e.known)}${e.rangeOnly ? ` · ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : ''}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : t('common.na')}</td></tr>`; }).sort().join('') || emptyRow(6, t('app.noVehiclesInFilter'), t('app.setVehicleTypeOrOperatorTo'));
   // Stationen je Anbieter
   const byOp = new Map();
   for (const [k, s] of groups) { const op = k.split('|')[1]; byOp.set(op, [...(byOp.get(op) || []), s]); }
@@ -984,22 +1080,25 @@ function renderLab() {
     const named = [[t('app.available2'), avail != null ? avail * 100 : null], [t('app.n100DisabledRate'), dis != null ? 100 - dis * 100 : null], [t('app.n100LowEnergy'), low != null ? 100 - low * 100 : null], [t('app.n100EmptyStations'), emp != null ? 100 - emp * 100 : null], [t('app.sourceQuality'), r.quality]].filter(x => x[1] != null);
     const score = named.length ? Math.round(named.reduce((a, x) => a + x[1], 0) / named.length) : null;
     const how = named.length ? t('app.weightEach', { v0: named.map(([l, v]) => `${l} ${fmt(v)}`).join(' · '), v1: fmt(100 / named.length) }) : '';
-    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${e.pending ? '…' : low == null ? 'k. A.' : energyVal(e)}</td><td class="n"${emp == null ? '' : ` title="${esc(emptyTip(s))}"`}>${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${esc(r.quality ?? '—')}</td><td class="n" title="${esc(how)}"><b>${score ?? '—'}</b><div class="sub-line">${t('app.partialScores', { length: named.length })}</div></td></tr>`; }).join('') || emptyRow(8, t('app.noOperatorsInFilter'), t('app.chooseAreaWithService'));
-  // Städtevergleich
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${e.pending ? '…' : low == null ? t('common.na') : energyVal(e)}</td><td class="n"${emp == null ? '' : ` title="${esc(emptyTip(s))}"`}>${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${esc(r.quality ?? '—')}</td><td class="n" title="${esc(how)}"><b>${score ?? '—'}</b><div class="sub-line">${t('app.partialScores', { length: named.length })}</div></td></tr>`; }).join('') || emptyRow(8, t('app.noOperatorsInFilter'), t('app.chooseAreaWithService'));
+  renderHistory();
+}
+// Ansicht „Städte“: Gebietsvergleich aller Gemeinden (Sammler-Stand); das gewählte Gebiet steht fett und immer in der Liste
+function renderCities() {
   const munis = state.latest?.municipalities || {};
   const src = new Map(Object.entries(state.latest?.groups || {})); // Gebietsvergleich immer aus dem Sammler-Stand (vollständig)
   const per = new Map();
   for (const [k, s] of src) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || ags === 'unbekannt') continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const m = per.get(ags) || { ags, available: 0, ops: new Set(), scooter: 0, bikes: 0 }; m.available += s.available; m.ops.add(op); if (ty === 'scooter') m.scooter += s.available; else m.bikes += s.available; per.set(ags, m); }
-  const list = [...per.values()].sort((a, b) => b.available - a.available).slice(0, 25);
+  const sorted = [...per.values()].sort((a, b) => b.available - a.available), list = sorted.slice(0, 25);
+  if (state.scope !== 'DE' && per.has(state.scope) && !list.includes(per.get(state.scope))) list.push(per.get(state.scope));
   $('#cities-title').textContent = state.scope === 'DE' ? t('app.cityAndAreaComparison') : t('app.areaComparisonInContext', { v0: muniName(state.scope) });
-  renderHistory();
   $('#tbl-cities tbody').innerHTML = list.map(m => { const mi = munis[m.ags]; const pop = mi?.pop; return `<tr${m.ags === state.scope ? ' style="font-weight:600"' : ''}><td><a href="#live" class="pick-muni" data-ags="${esc(m.ags)}">${esc(mi?.name || m.ags)}</a> <span class="muted">${esc(mi?.state || '')}</span></td><td class="n">${fmt(m.available)}</td><td class="n">${pop ? fmt((m.available / pop) * 1e4, 1) : '—'}</td><td class="n">${m.ops.size}</td><td class="n">${fmt(m.scooter)}</td><td class="n">${fmt(m.bikes)}</td></tr>`; }).join('') || emptyRow(6, t('app.noMunicipalitiesInFilter'), state.latest ? t('app.setOperatorOrVehicleTypeTo') : failedText('latest.json'));
 }
 async function renderHistory() {
   const idx = state.histIndex; const box = $('#chart-hist');
   if (!idx?.days?.length) { box.innerHTML = `<div class="empty">${t('app.noCollectorPointsYetHistory')}</div>`; return; }
   const day = state.histDay || idx.days[idx.days.length - 1];
-  $('#hist-days').innerHTML = idx.days.slice(-7).map(d => `<button class="chip ${d === day ? 'on' : ''}" aria-pressed="${d === day}" data-day="${esc(d)}">${esc(d.slice(8))}.${esc(d.slice(5, 7))}.</button>`).join('');
+  setChips($('#hist-days'), 'data-day', idx.days.slice(-7).map(d => `<button class="chip ${d === day ? 'on' : ''}" aria-pressed="${d === day}" data-day="${esc(d)}">${esc(d.slice(8))}.${esc(d.slice(5, 7))}.</button>`).join(''));
   const h = await loadHistory(day);
   if (!h) { box.innerHTML = `<div class="empty">${t('app.historyNotLoadableChoose', { failedText: esc(failedText(`history/${day}.json`)) })}</div>`; return; }
   const byOp = new Map();
@@ -1020,7 +1119,7 @@ async function renderHistory() {
   const utcStart = timeText(Date.parse(`${day}T00:00:00Z`));
   const sub = $('#hist-sub'); sub.innerHTML = isClient() ? t('app.availableVehiclesOn', { join: esc(day.split('-').reverse().join('.')), v1: timeText(h.t[0]), v2: timeText(h.t[h.t.length - 1]), v3: abbr(t('app.dataPoints', { length: fmt(h.t.length) }), 'point') })
     : t('app.onHistoryDayStartsUtcUsage', { v0: abbr(t('app.collectorPoints', { length: fmt(h.t.length) }), 'point'), join: esc(day.split('-').reverse().join('.')), v2: timeText(h.t[0]), v3: timeText(h.t[h.t.length - 1]), utcStart, v5: changes.length ? ` · ${t('app.sourceChangesComparison', { length: changes.length })}` : '' });
-  box.innerHTML = lineChart(h.t, series);
+  box.innerHTML = lineChart(h.t, series, chartWidth(box, () => renderHistory()));
   $('#chart-legend').innerHTML = series.map((s, i) => `<span><i class="dot" style="background:${s.color || palette(i)}"></i>${esc(s.name)} <span class="mono">${fmt(s.values.filter(x => x != null).pop())}</span></span>`).join('');
 }
 // Verlaufsreihe auf die Länge von t bringen: Die DE-Summen (DE||Art) haben im aktuellen Datenstand je Lauf einen zusätzlichen null-Eintrag
@@ -1038,8 +1137,18 @@ function niceTicks(max, n = 4) {
   const top = Math.ceil(max / step) * step;
   return { step, top, ticks: Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step) };
 }
-function lineChart(tq, series) {
-  const W = 900, H = 260, P = { l: 48, r: 12, t: 12, b: 26 };
+// Diagramme in echten Pixeln: Breite = Breite des Kastens, Schrift bleibt 11 px (statt mit dem viewBox auf 4–15 px zu skalieren).
+// Ändert sich die Breite um mehr als 24 px (Fenster, Drehen), zeichnet der Kasten sich neu.
+const CHART_RO = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => { for (const e of es) { const el = e.target, w = Math.round(e.contentRect.width); if (w > 0 && el._cw && Math.abs(el._cw - w) > 24) { el._cw = w; try { el._redraw?.(); } catch (err) { console.error('Diagramm', err); } } } }) : null;
+function chartWidth(box, redraw) {
+  const w = Math.round(box?.clientWidth || 0) || 900;
+  if (box) { box._cw = w; box._redraw = redraw; CHART_RO?.observe(box); }
+  return Math.max(280, w);
+}
+// Kurzfassung für Screenreader: je Reihe letzter Wert sowie Min/Max (die Werte stecken sonst nur in den Hover-Flächen)
+const seriesSummary = (series, f = (v) => fmt(v)) => series.map(s => { const v = s.values.filter(x => x != null); return v.length ? t('app.chartSeriesSummary', { name: s.name, last: f(v[v.length - 1]), min: f(Math.min(...v)), max: f(Math.max(...v)) }) : null; }).filter(Boolean).join('; ');
+function lineChart(tq, series, W = 900) {
+  const H = W < 520 ? 200 : 260, P = { l: 48, r: 12, t: 12, b: 26 };
   const vals = series.flatMap(s => s.values).filter(x => x != null);
   if (!vals.length) return `<div class="empty">${t('app.noPointsForThisFilterSet')}</div>`;
   const nt = niceTicks(Math.max(...vals) * 1.04 || 1), max = nt.top, min = 0;
@@ -1051,7 +1160,8 @@ function lineChart(tq, series) {
   for (let i = 1; i < tq.length; i++) if (tq[i] - tq[i - 1] > GAP) { const w = x(i) - x(i - 1); g += `<rect class="gap" x="${x(i - 1).toFixed(1)}" y="${P.t}" width="${w.toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.noCollectorRun', { v0: timeText(tq[i - 1]), v1: timeText(tq[i]) })}</title></rect>${w > 60 ? `<text x="${(x(i - 1) + w / 2).toFixed(1)}" y="${P.t + 12}" text-anchor="middle">${t('app.notMeasured')}</text>` : ''}`; }
   for (const v of nt.ticks) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v, nt.step < 1 ? 1 : 0)}</text>`;
   // volle Stunden (Berliner Zeit; Stundengrenzen fallen mit UTC zusammen)
-  const span = t1 - t0, stepH = span > 12 * 3600e3 ? 3 : span > 5 * 3600e3 ? 2 : 1;
+  // Abstand der Stundenmarken nach Breite: höchstens eine Beschriftung je ≈ 56 px
+  const span = t1 - t0, fit = Math.max(1, Math.floor((W - P.l - P.r) / 56)), stepH = [1, 2, 3, 4, 6, 12, 24].find(s => span / (s * 3600e3) <= fit) || 24;
   for (let ms = Math.ceil(t0 / 3600e3) * 3600e3; ms <= t1; ms += 3600e3) if (!(hourOf(ms) % stepH)) g += `<text x="${xt(ms).toFixed(1)}" y="${H - 8}" text-anchor="middle">${timeText(ms)}</text>`;
   if (span <= 3600e3 * 1.5) g += `<text x="${x(0).toFixed(1)}" y="${H - 8}" text-anchor="start">${timeText(t0)}</text>`;
   series.forEach(s => { if (s.values.length > tq.length) s.values = s.values.slice(0, tq.length); }); // nie über die Zeitachse hinaus
@@ -1059,7 +1169,7 @@ function lineChart(tq, series) {
   // Trefferflächen je Sammler-Punkt (von Mitte zu Mitte) mit allen Werten als Tooltip
   let hits = '';
   for (let i = 0; i < tq.length; i++) { const a = i ? (x(i - 1) + x(i)) / 2 : P.l, b = i < tq.length - 1 ? (x(i) + x(i + 1)) / 2 : W - P.r; const lines = series.filter(s => s.values[i] != null).sort((p, q) => q.values[i] - p.values[i]).map(s => `${s.name} ${fmt(s.values[i])}`); hits += `<rect class="hit" x="${a.toFixed(1)}" y="${P.t}" width="${Math.max(1, b - a).toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.text', { v0: timeText(tq[i]), v1: esc(lines.join('\n') || t('app.noData2')) })}</title></rect>`; }
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.historyOfAvailableVehicles')}">${g}${paths}${hits}</svg>`;
+  return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.historyOfAvailableVehicles')}. ${seriesSummary(series)}`)}">${g}${paths}${hits}</svg>`;
 }
 
 // ---------- Signale ----------
@@ -1076,15 +1186,25 @@ function severity(share, baseline, src = 'Vortage') { // src: Kennung 'Tag' | 'V
 function histBaseline(ags, op) {
   const h = state.hist[state.histIndex?.days?.slice(-1)[0]]; if (!h || h.t.length < 3) return null;
   const n = h.t.length - 1; let tot = 0, dis = 0, low = 0, sta = 0, emp = 0;
-  for (const [k, ser] of Object.entries(h.series)) { if (!k.startsWith(`${ags}|${op}|`)) continue; for (let i = 0; i < n; i++) { tot += ser.total?.[i] || 0; dis += ser.disabled?.[i] || 0; low += ser.lowBattery?.[i] || 0; sta += ser.stations?.[i] || 0; emp += ser.stationsEmptyDock?.[i] ?? ser.stationsEmpty?.[i] ?? 0; } }
+  for (const ser of seriesOf(h, ags, op)) { for (let i = 0; i < n; i++) { tot += ser.total?.[i] || 0; dis += ser.disabled?.[i] || 0; low += ser.lowBattery?.[i] || 0; sta += ser.stations?.[i] || 0; emp += ser.stationsEmptyDock?.[i] ?? ser.stationsEmpty?.[i] ?? 0; } }
   return tot || sta ? { src: 'Tag', disabled: tot ? dis / tot : null, low: tot ? low / tot : null, emptyDock: sta ? emp / sta : null } : null;
 }
+// Lede, Briefing und Signale lesen dasselbe Ergebnis: neu gerechnet nur, wenn sich Datenstand, Filter, Verlaufstag, Tagesmittel, Gruppen,
+// Energie-Stand, Live-Abruf, Kundenansicht oder Sprache geändert haben
+let sigMemo = null;
 function computeSignals() {
+  const key = [state.latest?.at, state.scope, state.operator, state.type, state.mode, state.live?.at, state.histDay, Object.keys(state.hist).length, !!state.daily, !!state.usage?.groups, !!state.usage?.consistency, ENERGY.size, energyWait, lang(), state.thresholds.charge, state.thresholds.range].join('|');
+  if (sigMemo?.key === key) return sigMemo.out;
+  const out = computeSignalsNow();
+  sigMemo = { key, out };
+  return out;
+}
+function computeSignalsNow() {
   const groups = scopeGroups(); const munis = state.latest?.municipalities || {};
   const by = new Map();
   const ebk = new Map(); // Energie je Gemeinde|Anbieter (Einzelfahrzeuge, Regel energyLow)
   for (const [k, s] of groups) {
-    const [ags, op] = k.split('|'); const key = `${ags}|${op}`; by.set(key, [...(by.get(key) || []), s]);
+    const [ags, op] = k.split('|'); const key = `${ags}|${op}`; (by.get(key) || by.set(key, []).get(key)).push(s);
     const g = groupEnergy(k, s), e = ebk.get(key) || { ...R.emptyEnergy(), pending: false, approx: false };
     if (g.pending) e.pending = true; else { if (g.approx) e.approx = true; for (const f of ['known', 'low', 'rangeOnly', 'rangeOnlyLow']) e[f] += g[f] || 0; }
     ebk.set(key, e);
@@ -1097,13 +1217,15 @@ function computeSignals() {
     const db = dailyBaseline(daily, ags, op, today), hb = histBaseline(ags, op);
     // Tagesmittel der Vortage, wo vorhanden; Stationen (nicht in daily.json) und alter Datenstand: Mittel des Tages bisher
     const base = { disabled: db?.disabled ?? hb?.disabled, low: db?.low ?? hb?.low, emptyDock: db?.emptyDock ?? hb?.emptyDock, src: db ? 'Vortage' : 'Tag', srcSt: db?.emptyDock != null ? 'Vortage' : 'Tag' };
-    if (s.total >= 5 && s.disabled / s.total >= 0.25) { const sv = severity(s.disabled / s.total, base.disabled, base.src); out.push({ cat: 'disabled', sev: sv.sev, w: s.disabled, n: fmt(s.disabled), title: t('app.disabled4', { op, ags: place(ags), disabled: fmt(s.disabled), disabled2: pctf(s.disabled, s.total) }), text: t('app.feedMarksVehiclesAsUnusable'), foot: t('app.reportedIsdisabledStation', { foot: sv.foot }) }); }
+    // short: Titel ohne die Zahl für die kompakte Briefing-Karte (dort steht n daneben)
+    const who = { op, ags: place(ags) };
+    if (s.total >= 5 && s.disabled / s.total >= 0.25) { const sv = severity(s.disabled / s.total, base.disabled, base.src); out.push({ cat: 'disabled', sev: sv.sev, w: s.disabled, n: fmt(s.disabled), short: t('app.sigShortDisabled', who), title: t('app.disabled4', { op, ags: place(ags), disabled: fmt(s.disabled), disabled2: pctf(s.disabled, s.total) }), text: t('app.feedMarksVehiclesAsUnusable'), foot: t('app.reportedIsdisabledStation', { foot: sv.foot }) }); }
     // Energie niedrig: feste Regel für alle Anbieter (auch Lime über die Reichweite), wie Kacheln und Disposition. Die Stufe misst die
     // Abweichung vom Vortagesmittel am Ladestand-Anteil am Bestand – die Tageswerte (history/daily.json) kennen nur diesen Zähler.
     const e = ebk.get(key);
     if (!e.pending && e.known >= 5 && e.low / e.known >= 0.3) {
       const sv = severity(s.total ? s.lowBattery / s.total : 0, base.low, base.src); const ro = e.rangeOnly === e.known;
-      out.push({ cat: 'energy', sev: sv.sev, w: e.low, n: energyVal(e), title: `${op}${place(ags)}: ${t('app.nLowEnergy', { n: energyVal(e) })}`, text: t('app.ofVehiclesWithEnergyData', { low: fmt(e.low), known: fmt(e.known), v2: energyRule(), v3: ro ? ` ${t('app.feedReportsRangeOnlyBelow')}` : e.rangeOnly ? t('app.withRangeOnly', { rangeOnly: fmt(e.rangeOnly) }) : '' }), foot: t('app.energyPerVehicleWorkOrderNot', { foot: sv.foot }) });
+      out.push({ cat: 'energy', sev: sv.sev, w: e.low, n: energyVal(e), short: t('app.sigShortEnergy', who), title: `${op}${place(ags)}: ${t('app.nLowEnergy', { n: energyVal(e) })}`, text: t('app.ofVehiclesWithEnergyData', { low: fmt(e.low), known: fmt(e.known), v2: energyRule(), v3: ro ? ` ${t('app.feedReportsRangeOnlyBelow')}` : e.rangeOnly ? t('app.withRangeOnly', { rangeOnly: fmt(e.rangeOnly) }) : '' }), foot: t('app.energyPerVehicleWorkOrderNot', { foot: sv.foot }) });
     }
     // Leer zählt nur effektiv: gemeldet leer und kein verfügbares Fahrzeug desselben Anbieters ≤ 50 m. Alarm nur für Docks; virtuelle Stationen getrennt (Vertrag 3)
     const nearM = C.STATION_NEAR_M ?? 50, nearN = s.stationsEmptyNearby || 0;
@@ -1111,28 +1233,29 @@ function computeSignals() {
     const nearTxt = (nearN ? ` ${t('app.anotherReportedEmptyBut', { nearN: fmt(nearN), nearM })}` : '') + (otherN ? ` ${t('app.atOfEmptyOnesVehiclesOfOther', { otherN: fmt(otherN), nearM })}` : '');
     const dockKnown = s.stationsEmptyDock != null;
     const docks = dockKnown ? s.stations - (s.stationsVirtual || 0) : s.stations, emptyDock = dockKnown ? s.stationsEmptyDock : s.stationsEmpty;
-    if (docks >= 3 && emptyDock / docks >= 0.3) { const sv = severity(emptyDock / docks, base.emptyDock, base.srcSt); out.push({ cat: 'stations', sev: sv.sev, w: emptyDock, n: fmt(emptyDock), title: t('app.emptyStations', { op, ags: place(ags), emptyDock: fmt(emptyDock), v3: dockKnown ? 'Dock-' : '', emptyDock2: pctf(emptyDock, docks) }), text: t('app.ofReportedStationsCurrently', { emptyDock: fmt(emptyDock), docks: fmt(docks), v2: dockKnown ? 'Dock-' : '', nearM, nearTxt }), foot: t('app.stationStatusAndVehicle', { foot: sv.foot }) }); }
-    else if (docks >= 3 && nearN / s.stations >= 0.3) out.push({ cat: 'data', sev: 'info', w: nearN, n: fmt(nearN), title: t('app.stationsReportedEmpty', { op, ags: place(ags), nearN: fmt(nearN) }), text: t('app.stationFeedReportsNoBookable', { nearM, stationsEmpty: fmt(s.stationsEmpty) }), foot: t('app.stationStatusAndVehicle2') });
-    if (dockKnown && s.stationsEmptyVirtual > 0) out.push({ cat: 'stations', sev: 'info', w: s.stationsEmptyVirtual, n: fmt(s.stationsEmptyVirtual), title: t('app.parkingZonesWithoutVehicle', { op, ags: place(ags), v2: fmt(s.stationsEmptyVirtual) }), text: t('app.ofVirtualStationsParking', { v0: fmt(s.stationsEmptyVirtual), stationsVirtual: fmt(s.stationsVirtual) }), foot: t('app.isvirtualstationInStation') });
-    if (s.stations >= 3 && s.stationsFull / s.stations >= 0.3) out.push({ cat: 'stations', sev: 'info', w: s.stationsFull, n: fmt(s.stationsFull), title: `${op}${place(ags)}: ${t('app.nFullStations', { n: fmt(s.stationsFull) })}`, text: t('app.returningVehiclesToThese'), foot: 'num_docks_available = 0' });
-    if (s.total >= 5 && s.geoStation / s.total >= 0.5) out.push({ cat: 'data', sev: 'info', w: s.geoStation, n: fmt(s.geoStation), title: t('app.positionsMostlyStation', { op, ags: place(ags) }), text: t('app.ofVehiclesWithoutOwn', { geoStation: fmt(s.geoStation), total: fmt(s.total) }), foot: t('app.geoCheck') });
+    if (docks >= 3 && emptyDock / docks >= 0.3) { const sv = severity(emptyDock / docks, base.emptyDock, base.srcSt); out.push({ cat: 'stations', sev: sv.sev, w: emptyDock, n: fmt(emptyDock), short: t('app.sigShortEmpty', who), title: t('app.emptyStations', { op, ags: place(ags), emptyDock: fmt(emptyDock), v3: dockKnown ? 'Dock-' : '', emptyDock2: pctf(emptyDock, docks) }), text: t('app.ofReportedStationsCurrently', { emptyDock: fmt(emptyDock), docks: fmt(docks), v2: dockKnown ? 'Dock-' : '', nearM, nearTxt }), foot: t('app.stationStatusAndVehicle', { foot: sv.foot }) }); }
+    else if (docks >= 3 && nearN / s.stations >= 0.3) out.push({ cat: 'data', sev: 'info', w: nearN, n: fmt(nearN), short: t('app.sigShortReportedEmpty', who), title: t('app.stationsReportedEmpty', { op, ags: place(ags), nearN: fmt(nearN) }), text: t('app.stationFeedReportsNoBookable', { nearM, stationsEmpty: fmt(s.stationsEmpty) }), foot: t('app.stationStatusAndVehicle2') });
+    if (dockKnown && s.stationsEmptyVirtual > 0) out.push({ cat: 'stations', sev: 'info', w: s.stationsEmptyVirtual, n: fmt(s.stationsEmptyVirtual), short: t('app.sigShortZones', who), title: t('app.parkingZonesWithoutVehicle', { op, ags: place(ags), v2: fmt(s.stationsEmptyVirtual) }), text: t('app.ofVirtualStationsParking', { v0: fmt(s.stationsEmptyVirtual), stationsVirtual: fmt(s.stationsVirtual) }), foot: t('app.isvirtualstationInStation') });
+    if (s.stations >= 3 && s.stationsFull / s.stations >= 0.3) out.push({ cat: 'stations', sev: 'info', w: s.stationsFull, n: fmt(s.stationsFull), short: t('app.sigShortFull', who), title: `${op}${place(ags)}: ${t('app.nFullStations', { n: fmt(s.stationsFull) })}`, text: t('app.returningVehiclesToThese'), foot: 'num_docks_available = 0' });
+    if (s.total >= 5 && s.geoStation / s.total >= 0.5) out.push({ cat: 'data', sev: 'info', w: s.geoStation, n: fmt(s.geoStation), short: t('app.sigShortGeo', who), title: t('app.positionsMostlyStation', { op, ags: place(ags) }), text: t('app.ofVehiclesWithoutOwn', { geoStation: fmt(s.geoStation), total: fmt(s.total) }), foot: t('app.geoCheck') });
   }
   // Quellenzustand; geprüfte Direktfeed-Kandidaten ohne Feed sind kein Ausfall (wie in der Ampel)
   const recs = sourcesForScope().map(r => liveRec(r.id) || r);
   for (const r of recs) {
     if (r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(r.status)) continue;
-    if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, n: STATUS[r.status], title: t('app.source2', { operator: r.operator, v1: (STATUS[r.status] || r.status).toLowerCase() }), text: `${r.name || r.id}${r.feedAgeMs != null ? ` · ${t('app.feedOld', { v0: ageText(r.feedAgeMs) })}` : ''}${r.errors?.length ? ` · ${esc(tx(r.errors[0]))}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}` });
-    if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, n: '1', title: t('app.sourceChangeDetected', { operator: r.operator }), text: t('app.endpointVersionFeedsOr', { v0: r.name || r.id }), foot: t('app.fingerprint') });
+    // Zustand statt Zahl: die Karte zeigt ein Zeichen, der Titel nennt den Zustand („Quelle: Fehler“)
+    if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, n: null, icon: true, title: t('app.source2', { operator: r.operator, v1: STATUS[r.status] || r.status }), text: `${r.name || r.id}${r.feedAgeMs != null ? ` · ${t('app.feedOld', { v0: ageText(r.feedAgeMs) })}` : ''}${r.errors?.length ? ` · ${esc(tx(r.errors[0]))}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}` });
+    if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.sourceChangeDetected', { operator: r.operator }), text: t('app.endpointVersionFeedsOr', { v0: r.name || r.id }), foot: t('app.fingerprint') });
   }
-  for (const e of state.usage?.consistency?.systems || []) { if (e.verdict !== 'divergent') continue; const r = (state.latest?.sources || []).find(x => x.id === e.sourceId); if (!r || (state.scope !== 'DE' && !(r.municipalities || []).includes(state.scope)) || (state.operator !== 'all' && e.operator !== state.operator)) continue; out.push({ cat: 'data', sev: 'warn', w: Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0)), n: fmt(Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0))), title: t('app.stateAndOperatorFeedDiffer', { operator: e.operator }), text: t('app.vsVehiclesMedianDistance', { sourceId: e.sourceId, v1: fmt(e.primary?.vehicles), v2: fmt(e.alt?.vehicles), v3: e.idOverlap == null ? '' : pctf(e.idOverlap, 1) + ` ${t('app.sharedIds')} `, v4: e.medianDistM == null ? '—' : fmt(e.medianDistM) + ' m' }), foot: t('app.consistencyCheck') }); }
-  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, n: t('app.gap'), title: t('app.publicDataMissingSince', { operator: g.operator, city: g.city, v2: String(g.since || '').split('-').reverse().join('.') }), text: g.note, foot: g.probeOk ? t('app.feedReachableAgain') : t('app.feedChecked', { v0: g.probeStatus ?? '–' }) });
+  for (const e of state.usage?.consistency?.systems || []) { if (e.verdict !== 'divergent') continue; const r = (state.latest?.sources || []).find(x => x.id === e.sourceId); if (!r || (state.scope !== 'DE' && !(r.municipalities || []).includes(state.scope)) || (state.operator !== 'all' && e.operator !== state.operator)) continue; out.push({ cat: 'data', sev: 'warn', w: Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0)), n: fmt(Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0))), short: t('app.sigShortDivergent', { op: e.operator }), title: t('app.stateAndOperatorFeedDiffer', { operator: e.operator }), text: t('app.vsVehiclesMedianDistance', { sourceId: e.sourceId, v1: fmt(e.primary?.vehicles), v2: fmt(e.alt?.vehicles), v3: e.idOverlap == null ? '' : pctf(e.idOverlap, 1) + ` ${t('app.sharedIds')} `, v4: e.medianDistM == null ? '—' : fmt(e.medianDistM) + ' m' }), foot: t('app.consistencyCheck') }); }
+  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.publicDataMissingSince', { operator: g.operator, city: g.city, v2: String(g.since || '').split('-').reverse().join('.') }), text: g.note, foot: g.probeOk ? t('app.feedReachableAgain') : t('app.feedChecked', { v0: g.probeStatus ?? '–' }) });
   // Bestandssprung gegen Verlauf
   const h = state.histDay ? state.hist[state.histDay] : state.hist[state.histIndex?.days?.slice(-1)[0]];
   if (h && h.t.length >= 3) {
     for (const [key, list] of by) {
       const [ags, op] = key.split('|'); let prev = 0, cur = 0, n = 0;
-      for (const [k, ser] of Object.entries(h.series)) { if (!k.startsWith(`${ags}|${op}|`)) continue; const a = ser.available; const lastIdx = a.length - 1; if (a[lastIdx] == null || a[lastIdx - 3] == null) continue; cur += a[lastIdx]; prev += a[lastIdx - 3]; n++; }
-      if (n && prev >= 20 && Math.abs(cur - prev) / prev >= 0.3) out.push({ cat: 'jump', sev: 'warn', w: Math.abs(cur - prev), n: `${cur > prev ? '+' : ''}${fmt(cur - prev)}`, title: t('app.fleetWithinHour', { op, ags: place(ags), v2: cur > prev ? '+' : '', v3: fmt(cur - prev) }), text: t('app.availableOverLastThree', { prev: fmt(prev), cur: fmt(cur) }), foot: t('app.collectorHistory') });
+      for (const ser of seriesOf(h, ags, op)) { const a = ser.available; const lastIdx = a.length - 1; if (a[lastIdx] == null || a[lastIdx - 3] == null) continue; cur += a[lastIdx]; prev += a[lastIdx - 3]; n++; }
+      if (n && prev >= 20 && Math.abs(cur - prev) / prev >= 0.3) out.push({ cat: 'jump', sev: 'warn', w: Math.abs(cur - prev), n: `${cur > prev ? '+' : ''}${fmt(cur - prev)}`, short: t('app.sigShortJump', { op, ags: place(ags) }), title: t('app.fleetWithinHour', { op, ags: place(ags), v2: cur > prev ? '+' : '', v3: fmt(cur - prev) }), text: t('app.availableOverLastThree', { prev: fmt(prev), cur: fmt(cur) }), foot: t('app.collectorHistory') });
     }
   }
   out.push(...groupSignals());
@@ -1164,22 +1287,24 @@ function groupSignals() {
     if ((state.scope !== 'DE' && ags !== state.scope) || (state.operator !== 'all' && op !== state.operator) || (state.type !== 'all' && !(e[ix.arten]?.[state.type] > 0))) continue;
     const a = by.get(`${ags}|${op}`) || { n: 0, veh: 0 }; a.n++; a.veh += e[ix.anzahl] || 0; by.set(`${ags}|${op}`, a);
   }
-  return [...by].map(([k, a]) => { const [ags, op] = k.split('|'); return { cat: 'deploy', sev: 'info', w: a.n, n: `${fmt(a.n)}×`, title: t('app.groupsDeployedTodayAvg', { op, ags: muniName(ags), n: fmt(a.n), v3: fmt(a.veh / a.n) }), text: t('app.atLeast5OfOperatorSVehicles'), foot: t('app.derivedFromObservationNo') }; });
+  return [...by].map(([k, a]) => { const [ags, op] = k.split('|'); return { cat: 'deploy', sev: 'info', w: a.n, n: `${fmt(a.n)}×`, short: t('app.sigShortDeploy', { op, ags: ` · ${muniName(ags)}` }), title: t('app.groupsDeployedTodayAvg', { op, ags: muniName(ags), n: fmt(a.n), v3: fmt(a.veh / a.n) }), text: t('app.atLeast5OfOperatorSVehicles', { n: GROUP_MIN, m: GROUP_M }), foot: t('app.derivedFromObservationNo') }; });
 }
 const CATS = { get all() { return t('app.all'); }, get disabled() { return t('app.disabled2'); }, get energy() { return t('app.energy'); }, get stations() { return t('app.stations'); }, get jump() { return t('app.fleetJump'); }, get deploy() { return t('app.deployment'); }, get data() { return t('app.dataQuality'); } };
 const SEV_LABEL = { get bad() { return t('app.critical'); }, get warn() { return t('app.notable'); }, get info() { return t('app.note'); } };
 // compact: Briefing-Karte mit Zahl + einer Zeile; Begründung und Grundlage unter „Warum?“
 function sigCard(s, compact = false) {
   const head = `<div class="k">${esc(CATS[s.cat] || s.cat)} · ${SEV_LABEL[s.sev] || esc(s.sev)}</div>`;
-  if (compact) return `<div class="card ${esc(s.sev)}">${head}<b><span class="num">${esc(s.n ?? '')}</span> ${esc(s.title)}</b><details><summary>${t('app.why')}</summary><p>${esc(s.text)}</p><div class="foot">${esc(s.foot)}</div></details></div>`;
+  // kompakt: Zahl + Kurztitel (ohne die Zahl ein zweites Mal); Zustandsmeldungen ohne Zahl tragen ein Zeichen
+  const lead = s.icon || s.n == null ? `<span class="num ico" aria-hidden="true">${s.sev === 'bad' ? '!' : s.sev === 'warn' ? '!' : 'i'}</span>` : `<span class="num">${esc(s.n)}</span>`;
+  if (compact) return `<div class="card ${esc(s.sev)}">${head}<b>${lead} ${esc(s.short || s.title)}</b><details><summary>${t('app.why')}</summary><p>${esc(s.text)}</p><div class="foot">${esc(s.foot)}</div></details></div>`;
   return `<div class="card ${esc(s.sev)}">${head}<b>${esc(s.title)}</b><p>${esc(s.text)}</p><div class="foot">${esc(s.foot)}</div></div>`;
 }
 function renderSignals() {
   const all = computeSignals();
   const counts = {}; for (const s of all) counts[s.cat] = (counts[s.cat] || 0) + 1;
-  $('#sig-filter').innerHTML = Object.entries(CATS).map(([k, l]) => `<button class="chip ${sigFilter === k ? 'on' : ''}" aria-pressed="${sigFilter === k}" data-cat="${k}">${l} <span class="mono">${k === 'all' ? all.length : counts[k] || 0}</span></button>`).join('');
+  setChips($('#sig-filter'), 'data-cat', Object.entries(CATS).map(([k, l]) => `<button class="chip ${sigFilter === k ? 'on' : ''}" aria-pressed="${sigFilter === k}" data-cat="${k}">${l} <span class="mono">${k === 'all' ? all.length : counts[k] || 0}</span></button>`).join(''));
   const list = (sigFilter === 'all' ? all : all.filter(s => s.cat === sigFilter)).slice(0, 60);
-  $('#signals').innerHTML = list.length ? list.map(s => sigCard(s)).join('') : `<div class="empty" style="grid-column:1/-1">${t('app.noSignalsInSelectedFilter', { v0: sigFilter !== 'all' ? t('app.chooseCategoryAll') : t('app.nothingNotableInAreaRightNow') })}</div>`;
+  $('#sig-cards').innerHTML = list.length ? list.map(s => sigCard(s)).join('') : `<div class="empty" style="grid-column:1/-1">${t('app.noSignalsInSelectedFilter', { v0: sigFilter !== 'all' ? t('app.chooseCategoryAll') : t('app.nothingNotableInAreaRightNow') })}</div>`;
   renderStability();
 }
 async function renderStability() {
@@ -1193,12 +1318,17 @@ async function renderStability() {
 }
 
 // ---------- Abdeckung ----------
+// Abdeckung folgt dem Gebiet und dem Anbieter oben; „Ganz Deutschland“ hebt die Gebietswahl für diese Tabelle auf (gilt, bis das Gebiet wechselt)
+let covAllFor = null;
 function renderCoverage() {
   const munis = state.latest?.municipalities || {}; const q = ($('#cov-search').value || '').toLowerCase(); const dir = $('#cov-dir').value;
   const recs = state.latest?.sources || [];
+  const local = state.scope !== 'DE' && covAllFor !== state.scope;
   const rows = [];
   for (const [ags, m] of Object.entries(munis)) {
+    if (local && ags !== state.scope) continue;
     for (const [op, o] of Object.entries(m.operators || {})) {
+      if (state.operator !== 'all' && op !== state.operator) continue;
       const srcs = recs.filter(r => r.operator === op && (r.municipalities || []).includes(ags));
       const dirs = [...new Set(srcs.flatMap(r => r.directories || []))];
       if (dir !== 'all' && !dirs.includes(dir)) continue;
@@ -1210,11 +1340,14 @@ function renderCoverage() {
   rows.sort((a, b) => a.m.name.localeCompare(b.m.name, 'de') || a.op.localeCompare(b.op));
   const opsAll = new Set(rows.map(r => r.op)), places = new Set(rows.map(r => r.ags));
   $('#cov-tiles').innerHTML = [tile(t('app.operatorsOnSite'), fmt(rows.length), cl(t('app.operatorMunicipalityWith'), t('app.operatorsPerMunicipality'))), tile(cl(t('app.operatorGroups'), t('app.operator')), fmt(opsAll.size), cl(t('app.acrossAllSources'), t('app.nationwide'))), tile(t('app.municipalities'), fmt(places.size), t('app.withAvailableVehicles')), isClient() ? '' : tile(t('app.unassigned'), fmt(recs.filter(r => ['foreign', 'empty'].includes(r.status)).length), t('app.sourcesOutsideGermanyOr'))].join('');
-  $('#cov-sub').textContent = t('app.rows', { length: fmt(rows.length), v1: cl(t('app.collectorSnapshot'), t('app.asOf2')), v2: timeText(state.latest?.at) });
-  const { show, rest } = pageRows('cov', rows, `${q}|${dir}|${state.latest?.at}`);
+  $('#cov-sub').innerHTML = `${esc(t('app.rows', { length: fmt(rows.length), v1: cl(t('app.collectorSnapshot'), t('app.asOf2')), v2: timeText(state.latest?.at) }))}${state.scope !== 'DE' ? ` · <button type="button" class="chip" data-cov-all aria-pressed="${!local}">${esc(local ? t('app.covShowGermany') : t('app.covShowOnly', { place: muniName(state.scope) }))}</button>` : ''}`;
+  const { show, rest } = pageRows('cov', rows, `${q}|${dir}|${state.latest?.at}|${local}|${state.operator}`);
   $('#tbl-cov tbody').innerHTML = show.map(r => `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${Object.entries(r.o.types || {}).filter(([, n]) => n).map(([tq, n]) => `${esc(TYPE[tq] || tq)} ${fmt(n)}`).join(' · ')}</div></td><td>${esc(r.m.name)} <span class="muted">${esc(r.m.state)}</span></td><td class="n">${fmt(r.o.total)}</td><td class="n">${fmt(r.o.available)}</td><td class="small internal">${r.dirs.map(dirLabel).join(' · ')}<div class="sub-line">${r.srcs.length} ${r.srcs.length === 1 ? t('app.source') : t('app.sources')}</div></td><td>${pillStatus(r.status)}</td><td><a href="#live" class="pick-muni" data-ags="${esc(r.ags)}">${t('app.openPlace2')}</a></td></tr>`).join('') || emptyRow(7, t('app.noMatches'), q || dir !== 'all' ? t('app.clearSearchOrChooseAll') : state.latest ? t('app.noOperatorsInCollector') : failedText('latest.json'));
   $('#cov-more').innerHTML = moreBtn('cov', rest, ` ${t('app.orNarrowSearch')}`);
-  $('#gaps').innerHTML = (state.latest?.gaps || []).map(g => `<div class="card info"><div class="k">${t('app.dataGap2')}</div><b>${esc(g.operator)} · ${esc(g.city)}</b><p>${esc(g.note)}</p><div class="foot">${t('app.sinceLastCheckedFeed', { since: esc(g.since), v1: timeText(g.checkedAt), v2: g.probeOk ? t('app.reachable') : t('app.notReachable', { v0: esc(g.probeStatus ?? '–') }) })}</div></div>`).join('') || `<div class="empty">${t('app.noKnownGapsAllKnownOperators')}</div>`;
+  // Lücken mit gleichem Anbieter und gleichem Text als eine Karte mit Städteliste (z. B. Ryde in zehn NRW-Städten)
+  const gb = new Map(); for (const g of state.latest?.gaps || []) { const k = `${g.operator}|${g.note}`; (gb.get(k) || gb.set(k, []).get(k)).push(g); }
+  $('#gaps').innerHTML = [...gb.values()].map(list => { const g = list[0]; const cities = [...new Set(list.map(x => x.city))].sort((a, b) => a.localeCompare(b, 'de')); const since = list.map(x => x.since).filter(Boolean).sort()[0] || g.since; const ok = list.filter(x => x.probeOk).length;
+    return `<div class="card info"><div class="k">${t('app.dataGap2')}</div><b>${esc(g.operator)} · ${cities.length > 1 ? esc(t('app.gapCities', { n: fmt(cities.length) })) : esc(g.city)}</b>${cities.length > 1 ? `<p translate="no">${esc(cities.join(', '))}</p>` : ''}<p>${esc(g.note)}</p><div class="foot">${cities.length > 1 ? t('app.gapGroupFoot', { since: esc(since), v1: timeText(Math.max(...list.map(x => x.checkedAt || 0)) || null), ok: fmt(ok), n: fmt(list.length) }) : t('app.sinceLastCheckedFeed', { since: esc(g.since), v1: timeText(g.checkedAt), v2: g.probeOk ? t('app.reachable') : t('app.notReachable', { v0: esc(g.probeStatus ?? '–') }) })}</div></div>`; }).join('') || `<div class="empty">${t('app.noKnownGapsAllKnownOperators')}</div>`;
 }
 // Lange Tabellen: erst 100 Zeilen, je Klick 100 weitere; neuer Filter (Schlüssel) setzt auf 100 zurück
 const MORE = {};
@@ -1222,7 +1355,9 @@ function pageRows(key, rows, filterKey) {
   const m = MORE[key]?.f === filterKey ? MORE[key] : (MORE[key] = { f: filterKey, n: 100 });
   return { show: rows.slice(0, m.n), rest: Math.max(0, rows.length - m.n) };
 }
-const moreBtn = (key, rest, hint = '') => rest ? `<button class="more-rows" data-more="${esc(key)}">${t('app.showMore', { min: fmt(Math.min(100, rest)) })}</button> <span class="muted">${t('app.notShown', { rest: fmt(rest), hint: esc(hint) })}</span>` : '';
+// eine Formulierung für „weitere Zeilen“ in allen Tabellen: bis 100 Rest alle auf einmal, sonst 100 und der verbleibende Rest
+const moreText = (rest) => (rest <= 100 ? t('common.showAllMore', { n: fmt(rest) }) : t('common.show100More', { n: fmt(rest - 100) }));
+const moreBtn = (key, rest, hint = '') => rest ? `<button class="more-rows" data-more="${esc(key)}">${moreText(rest)}</button>${hint ? ` <span class="muted">${esc(hint.trim())}</span>` : ''}` : '';
 const MORE_RENDER = { cov: () => renderCoverage(), src: () => renderSourceTable() };
 
 // ---------- Quellen ----------
@@ -1243,7 +1378,9 @@ function renderSources() {
      <div class="card warn"><div class="k">${t('app.notUsed')}</div>${t('app.dbApiMarketplaceVoiPartner')}<p>${t('app.bothRequirePersonal')}</p><div class="foot">${t('app.noPartnerAccess')}</div></div>`;
   loadOnce('reliability', 'reliability.json').then(() => renderSourceTable());
   renderConsistency(); renderMonitor().catch(e => console.error('Monitor', e)); renderQuality(); renderLicenses();
-  $('#method').innerHTML = METHOD();
+  // Methodik eingeklappt wie in der Disposition: sichtbar bleibt ein Satz, geöffnet bleibt geöffnet
+  const mOpen = $('#method details')?.open;
+  $('#method').innerHTML = `<h2>${t('app.analysisInDetail')}</h2><p>${t('app.methodLead')}</p><details class="more"${mOpen ? ' open' : ''}><summary>${t('app.methodSummary')}</summary>${METHOD()}</details>`;
 }
 // ---------- Datenvertrauen: Sammler-Monitor, Datenqualität, Lizenzen ----------
 const TRIGGER = { get schedule() { return t('app.scheduled'); }, get workflow_dispatch() { return t('app.manual'); }, get lokal() { return t('app.local'); }, push: 'Push' };
@@ -1261,15 +1398,17 @@ async function renderMonitor() {
   const gaps = []; for (let i = 1; i < runs.length; i++) { const a = runs[i - 1][ix.at], b = runs[i][ix.at]; if (b - a > GAP) gaps.push([a, b, false]); }
   if (!DEMO && now - last[ix.at] > GAP && now - last[ix.at] < 7 * 86400e3) gaps.push([last[ix.at], now, true]);
   const t0 = runs[0][ix.at], t1 = Math.max(gaps.some(g => g[2]) ? now : last[ix.at], t0 + 3600e3);
-  const W = 900, H = 150, P = { l: 40, r: 12, t: 14, b: 24 };
+  const W = chartWidth(box, () => renderMonitor().catch(e => console.error('Monitor', e))), H = W < 520 ? 180 : 150, P = { l: 44, r: 12, t: 14, b: 24 };
   const lo = Math.max(0, Math.floor(((shares[0] ?? 0) - 0.05) * 10) / 10), hi = Math.min(1, Math.ceil(((shares[shares.length - 1] ?? 1) + 0.02) * 10) / 10) || 1;
   const x = (tq) => P.l + ((tq - t0) / (t1 - t0)) * (W - P.l - P.r), y = (v) => P.t + (1 - ((v ?? lo) - lo) / Math.max(0.05, hi - lo)) * (H - P.t - P.b);
   const dt = (tq) => new Date(tq).toLocaleString(fmtLocale(), { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   let g = '';
   for (const v of [lo, (lo + hi) / 2, hi]) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v * 100)} %</text>`;
   const span = t1 - t0;
-  if (span > 30 * 3600e3) { const d = new Date(t0); d.setHours(24, 0, 0, 0); for (let tq = +d; tq < t1; tq += 86400e3) g += `<line class="grid" x1="${x(tq).toFixed(1)}" x2="${x(tq).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/><text x="${(x(tq) + 4).toFixed(1)}" y="${H - 8}">${new Date(tq).toLocaleDateString(fmtLocale(), { weekday: 'short', day: '2-digit', month: '2-digit' })}</text>`; }
-  else { const step = span > 12 * 3600e3 ? 6 : span > 4 * 3600e3 ? 2 : 1; for (let tq = Math.ceil(t0 / 3600e3) * 3600e3; tq < t1; tq += 3600e3) { if (hourOf(tq) % step) continue; g += `<text x="${x(tq).toFixed(1)}" y="${H - 8}" text-anchor="middle">${timeText(tq)}</text>`; } }
+  // Tagesmarken: Wochentag nur, wenn ein Tag ≥ 90 px breit ist; unter 48 px nur jeder zweite Tag
+  const dayPx = (W - P.l - P.r) / Math.max(1, span / 86400e3), dayOpt = dayPx >= 90 ? { weekday: 'short', day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit' };
+  if (span > 30 * 3600e3) { const d = new Date(t0); d.setHours(24, 0, 0, 0); let k = 0; for (let tq = +d; tq < t1; tq += 86400e3, k++) g += `<line class="grid" x1="${x(tq).toFixed(1)}" x2="${x(tq).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/>${dayPx >= 48 || !(k % 2) ? `<text x="${(x(tq) + 4).toFixed(1)}" y="${H - 8}">${new Date(tq).toLocaleDateString(fmtLocale(), dayOpt)}</text>` : ''}`; }
+  else { const fit = Math.max(1, Math.floor((W - P.l - P.r) / 56)), step = [1, 2, 3, 4, 6, 12].find(s => span / (s * 3600e3) <= fit) || 12; for (let tq = Math.ceil(t0 / 3600e3) * 3600e3; tq < t1; tq += 3600e3) { if (hourOf(tq) % step) continue; g += `<text x="${x(tq).toFixed(1)}" y="${H - 8}" text-anchor="middle">${timeText(tq)}</text>`; } }
   for (const [a, b, open] of gaps) { const w = Math.max(2, x(b) - x(a)); g += `<rect class="mon-gap" x="${x(a).toFixed(1)}" y="${P.t}" width="${w.toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.gapToWithoutRun', { a: dt(a), v1: open ? t('app.now') : dt(b), v2: durText(b - a) })}</title></rect>${w > 34 ? `<text class="mon-gap-t" x="${(x(a) + w / 2).toFixed(1)}" y="${P.t + 10}" text-anchor="middle">${t('app.gap')}</text>` : ''}`; }
   // Linie zwischen Läufen, an Lücken unterbrochen
   let d = ''; runs.forEach((r, i) => { const v = share(r); if (v == null) return; const brk = i === 0 || r[ix.at] - runs[i - 1][ix.at] > GAP; d += `${brk ? 'M' : 'L'}${x(r[ix.at]).toFixed(1)} ${y(v).toFixed(1)} `; });
@@ -1286,7 +1425,7 @@ async function renderMonitor() {
     <div>${t('app.triggersScheduledSchedule', { v0: fmt(trig.schedule || 0), v1: fmt(trig.workflow_dispatch || 0), v2: Object.keys(trig).filter(k => !['schedule', 'workflow_dispatch'].includes(k)).map(k => ` · ${fmt(trig[k])} ${esc(TRIGGER[k] || k)}`).join('') })}</div>
     <div>${t('app.gapsOver45Min')}<b style="color:var(--${gaps.length ? 'warn' : 'fg'})">${fmt(gaps.length)}</b>${gaps.length ? t('app.longest', { v0: durText(Math.max(longest, ...gaps.filter(gp => gp[2]).map(([a, b]) => b - a))), v1: gaps.some(gp => gp[2]) ? ` · ${t('app.openSinceLastRun')}` : '' }) : t('app.collectorRanWithoutGaps')}</div>
   </div>
-  <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.collectorRunsOfLast7Days')}">${g}</svg>
+  <svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.collectorRunsOfLast7Days')}. ${t('app.monitorSummary', { n: fmt(runs.length), med: med == null ? '–' : fmt(med * 100), gaps: fmt(gaps.length) })}`)}">${g}</svg>
   <div class="legend"><span><i class="dot" style="background:var(--ok)"></i>${t('app.usualShareOfCurrentSources', { v0: med == null ? '–' : fmt(med * 100) + ' %' })}</span><span><i class="dot" style="background:var(--warn)"></i>${t('app.n515PointsBelow')}</span><span><i class="dot" style="background:var(--bad)"></i>${t('app.moreThan15PointsBelow')}</span><span><i class="sq" style="background:color-mix(in srgb,var(--bad) 14%,transparent);border-color:transparent"></i>${t('app.gapOver45MinWithoutRun')}</span></div>`;
 }
 function renderQuality() {
@@ -1313,7 +1452,7 @@ function renderLicenses() {
   // Lizenz-Kennung (licenseId, z. B. CC0-1.0) vor URL; die URL bleibt Link
   const by = new Map(); for (const r of recs) { const k = r.licenseId || r.license || r.licenseUrl || ''; const e = by.get(k) || { n: 0, ops: new Set(), url: r.licenseUrl || (/^https?:/i.test(r.license || '') ? r.license : null) }; e.n++; e.ops.add(r.operator); by.set(k, e); }
   const rows = [...by].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
-  const label = (l, url) => !l ? '<span class="muted">k. A.</span>' : /^https?:\/\//i.test(l) ? link(l, `${esc(String(l).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))} ↗`) : url ? link(url, `${esc(l)} ↗`) : esc(l);
+  const label = (l, url) => !l ? `<span class="muted">${t('common.na')}</span>` : /^https?:\/\//i.test(l) ? link(l, `${esc(String(l).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))} ↗`) : url ? link(url, `${esc(l)} ↗`) : esc(l);
   box.innerHTML = `<div class="tbl" tabindex="0" role="region" aria-label="${t('app.licences')}"><table><thead><tr><th>${t('app.licence')}</th><th class="n">${t('app.sources2')}</th><th>${t('app.operator')}</th></tr></thead><tbody>${rows.slice(0, 20).map(([l, e]) => `<tr><td>${label(l, e.url)}</td><td class="n">${fmt(e.n)}</td><td class="small">${esc([...e.ops].sort((a, b) => a.localeCompare(b, 'de')).slice(0, 5).join(', '))}${e.ops.size > 5 ? ` +${e.ops.size - 5}` : ''}</td></tr>`).join('')}</tbody></table></div><div class="muted small" style="margin-top:var(--s2)">${t('app.checkCommercialUsePerLicence', { v0: rows.length > 20 ? ` ${t('app.moreLicenceEntries', { v0: rows.length - 20 })}` : '' })}</div>`;
 }
 function relCell(id) { const r = state.usage?.reliability?.sources?.[id]; if (!r || !r.runs) return '<span class="muted">–</span>'; const ok = (r.live + r.delayed) / r.runs; return `<span style="color:var(--${ok >= 0.95 ? 'ok' : ok >= 0.8 ? 'warn' : 'bad'})">${pctf(r.live + r.delayed, r.runs)}</span><div class="sub-line">${t('app.runsAvgMs', { runs: r.runs, latencyAvg: fmt(r.latencyAvg) })}</div>`; }
@@ -1325,7 +1464,7 @@ function renderSourceTable() {
   const recs = all.filter(r => !hidden.includes(r)).sort((a, b) => (['duplicate', 'retired'].includes(a.status) ? 1 : 0) - (['duplicate', 'retired'].includes(b.status) ? 1 : 0));
   const munis = state.latest?.municipalities || {};
   const { show, rest } = pageRows('src', recs, `${q}|${stf}|${state.latest?.at}`);
-  $('#tbl-src tbody').innerHTML = show.map(r => `<tr><td>${link(r.url, esc(r.name || r.id))}${r.attribution && r.attribution !== r.name ? `<div class="sub-line">${esc(r.attribution)}</div>` : ''}<div class="sub-line mono">${esc(r.id)}${r.sourceChanged ? ` · ${t('app.sourceChange2')}` : ''}</div></td><td>${esc(r.operator)}</td><td class="small">${(r.directories || []).map(dirLabel).join(' · ')}</td><td class="n">${esc(r.version || '–')}</td><td class="n">${fmt(r.counts?.vehicles)}<div class="sub-line">${[r.counts?.unassigned ? t('app.noMunicipality2', { unassigned: fmt(r.counts.unassigned) }) : '', r.counts?.outside ? t('app.outside2', { outside: fmt(r.counts.outside) }) : '', r.counts?.missing ? t('app.noCoord2', { missing: fmt(r.counts.missing) }) : ''].filter(Boolean).join(' · ')}</div></td><td class="n">${fmt(r.counts?.stations)}</td><td class="n" title="${esc((r.municipalities || []).slice(0, 12).map(a => munis[a]?.name || a).join(', '))}">${fmt((r.municipalities || []).length)}</td><td class="n">${ageText(r.feedAgeMs)}</td><td class="n">${esc(r.quality ?? '–')}</td><td class="n">${relCell(r.id)}</td><td>${pillStatus(r.status)}${r.status === 'duplicate' && r.duplicateOf ? `<div class="sub-line">${t('app.sameAs', { duplicateOf: esc(r.duplicateOf), v1: r.duplicateShare != null ? ` (${pctf(r.duplicateShare, 1)})` : '' })}</div>` : r.errorCause ? `<div class="sub-line">${esc(String(r.errorCause).slice(0, 60))}</div>` : r.errors?.length ? `<div class="sub-line">${esc(tx(String(r.errors[0])).slice(0, 60))}</div>` : ''}</td><td class="small">${r.licenseId ? (r.licenseUrl ? link(r.licenseUrl, `${esc(r.licenseId)} ↗`) : esc(r.licenseId)) : r.license ? (/^https?:\/\//i.test(r.license) ? link(r.license, t('app.licence2')) : esc(r.license)) : '<span class="muted">k. A.</span>'}</td></tr>`).join('') || emptyRow(12, t('app.noMatches'), q || stf !== 'all' ? t('app.clearSearchOrChooseAllStates') : state.latest ? t('app.noSourcesInCollectorSnapshot') : failedText('latest.json'));
+  $('#tbl-src tbody').innerHTML = show.map(r => `<tr><td>${link(r.url, esc(r.name || r.id))}${r.attribution && r.attribution !== r.name ? `<div class="sub-line">${esc(r.attribution)}</div>` : ''}<div class="sub-line mono">${esc(r.id)}${r.sourceChanged ? ` · ${t('app.sourceChange2')}` : ''}</div></td><td>${esc(r.operator)}</td><td class="small">${(r.directories || []).map(dirLabel).join(' · ')}</td><td class="n">${esc(r.version || '–')}</td><td class="n">${fmt(r.counts?.vehicles)}<div class="sub-line">${[r.counts?.unassigned ? t('app.noMunicipality2', { unassigned: fmt(r.counts.unassigned) }) : '', r.counts?.outside ? t('app.outside2', { outside: fmt(r.counts.outside) }) : '', r.counts?.missing ? t('app.noCoord2', { missing: fmt(r.counts.missing) }) : ''].filter(Boolean).join(' · ')}</div></td><td class="n">${fmt(r.counts?.stations)}</td><td class="n" title="${esc((r.municipalities || []).slice(0, 12).map(a => munis[a]?.name || a).join(', '))}">${fmt((r.municipalities || []).length)}</td><td class="n">${ageText(r.feedAgeMs)}</td><td class="n">${esc(r.quality ?? '–')}</td><td class="n">${relCell(r.id)}</td><td>${pillStatus(r.status)}${r.status === 'duplicate' && r.duplicateOf ? `<div class="sub-line">${t('app.sameAs', { duplicateOf: esc(r.duplicateOf), v1: r.duplicateShare != null ? ` (${pctf(r.duplicateShare, 1)})` : '' })}</div>` : r.errorCause ? `<div class="sub-line">${esc(String(r.errorCause).slice(0, 60))}</div>` : r.errors?.length ? `<div class="sub-line">${esc(tx(String(r.errors[0])).slice(0, 60))}</div>` : ''}</td><td class="small">${r.licenseId ? (r.licenseUrl ? link(r.licenseUrl, `${esc(r.licenseId)} ↗`) : esc(r.licenseId)) : r.license ? (/^https?:\/\//i.test(r.license) ? link(r.license, t('app.licence2')) : esc(r.license)) : `<span class="muted">${t('common.na')}</span>`}</td></tr>`).join('') || emptyRow(12, t('app.noMatches'), q || stf !== 'all' ? t('app.clearSearchOrChooseAllStates') : state.latest ? t('app.noSourcesInCollectorSnapshot') : failedText('latest.json'));
   $('#src-more').innerHTML = [moreBtn('src', rest, ` ${t('app.orNarrowSearch')}`), hidden.length ? t('app.checkedDirectFeedCandidates', { length: fmt(hidden.length) }) : ''].filter(Boolean).join(' ');
 }
 // ---------- Nutzung & Bewegung ----------
@@ -1345,15 +1484,18 @@ async function renderUsage() {
   const days = idx.days || [];
   const box = $('#usage-tiles');
   renderArchive().catch(() => {});
-  if (!days.length) { box.innerHTML = ''; $('#usage-note').textContent = t('app.noEventDataYetCollectorNeeds'); $('#chart-usage').innerHTML = `<div class="empty">${t('app.noMovementsMeasuredYetThey')}</div>`; $('#tbl-usage tbody').innerHTML = `<tr><td colspan="6" class="empty">${t('app.noDataYetMovementsAppear')}</td></tr>`; $('#tbl-usage-more tbody').innerHTML = `<tr><td colspan="7" class="empty">${t('app.noDataYet2')}</td></tr>`; return; }
+  if (!days.length) { renderIdle(days).catch(() => {}); renderQuota().catch(() => {}); box.innerHTML = ''; $('#usage-note').textContent = t('app.noEventDataYetCollectorNeeds'); $('#chart-usage').innerHTML = `<div class="empty">${t('app.noMovementsMeasuredYetThey')}</div>`; $('#tbl-usage tbody').innerHTML = `<tr><td colspan="6" class="empty">${t('app.noDataYetMovementsAppear')}</td></tr>`; $('#tbl-usage-more tbody').innerHTML = `<tr><td colspan="7" class="empty">${t('app.noDataYet2')}</td></tr>`; return; }
   const day = state.usage.day && days.includes(state.usage.day) ? state.usage.day : days[days.length - 1];
   state.usage.day = day;
-  $('#usage-days').innerHTML = days.slice(-7).map(d => { const note = dayNote(d); return `<button class="chip ${d === day ? 'on' : ''}${note ? ' special' : ''}" aria-pressed="${d === day}" data-uday="${esc(d)}"${note ? ` title="${esc(note)}"` : ''}>${esc(d.slice(8))}.${esc(d.slice(5, 7))}.${note ? '<span aria-hidden="true"> ✱</span>' : ''}</button>`; }).join('');
+  setChips($('#usage-days'), 'data-uday', days.slice(-7).map(d => { const note = dayNote(d); return `<button class="chip ${d === day ? 'on' : ''}${note ? ' special' : ''}" aria-pressed="${d === day}" data-uday="${esc(d)}"${note ? ` title="${esc(note)}"` : ''}>${esc(d.slice(8))}.${esc(d.slice(5, 7))}.${note ? '<span aria-hidden="true"> ✱</span>' : ''}</button>`; }).join(''));
   const doc = await loadEvents(day);
+  // Standzeiten (idle.json) und Stationsquote (stations-quota.json) hängen nicht an der Ereignisdatei: auch ohne sie zeichnen
+  renderIdle(days).catch(e => console.error('Standzeiten', e)); renderQuota().catch(e => console.error('Stationsquote', e));
   if (!doc) {
     box.innerHTML = ''; $('#usage-note').textContent = t('app.chooseAnotherDayOrReload', { v0: failedText(`events/${day}.json`) });
     $('#chart-usage').innerHTML = `<div class="empty">${t('app.eventFileNotLoadableChoose')}</div>`;
     for (const [id, n] of [['#tbl-usage', 6], ['#tbl-usage-more', 7], ['#tbl-cells', 5], ['#tbl-econ', 6], ['#tbl-econ-more', 7]]) { const tb = $(`${id} tbody`); if (tb) tb.innerHTML = emptyRow(n, t('app.noEventDataForThisDay'), t('app.chooseAnotherDay')); }
+    for (const id of ['#econ-tiles', '#econ-calib', '#econ-excl']) { const el = $(id); if (el) el.innerHTML = ''; }
     return;
   }
   const runs = doc.runs || [];
@@ -1384,20 +1526,23 @@ async function renderUsage() {
   if ($('#chk-weather').checked) weather = await loadWeather(day);
   state.usage.chartData = { doc, weather, runs, mask };
   usageChartOptions(doc); renderUsageChart();
-  // Standzeiten
-  const idle = await loadOnce('idle', 'idle.json');
-  const ib = [0, 0, 0, 0, 0]; let in_ = 0;
-  for (const [k, a] of Object.entries(idle?.groups || {})) { if (!groupInScope(k)) continue; for (let i = 0; i < 5; i++) ib[i] += a[i]; in_ += a[5]; }
-  const labels = (idle?.buckets || ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage']).map(tx); // Beschriftungen aus idle.json (Sammler, deutsch)
-  const imax = Math.max(1, ...ib);
-  $('#idle-bars').innerHTML = in_ ? labels.map((l, i) => `<div class="hbar"><span>${esc(l)}</span><div class="bar"><i style="width:${(ib[i] / imax) * 100}%;background:${i >= 3 ? 'var(--warn)' : 'var(--accent)'}"></i></div><span class="n mono">${pctf(ib[i], in_)}</span></div>`).join('') + `<div class="muted small" style="margin-top:6px">${t('app.availableVehiclesAsOfTime', { in_: fmt(in_), v1: timeText(idle.at), join: esc(days[0].split('-').reverse().join('.')) })}</div>` : `<div class="empty">${t('app.noIdleTimesInFilterSet')}</div>`;
   // Tabelle je Anbieter: sechs Standardspalten, der Rest unter „Weitere Spalten“
   const list = [...byOp].sort((a, b) => sum(b[1].start) - sum(a[1].start));
   const opCell = (name) => `<td><span class="op"><i style="background:${opColor(name)}"></i>${esc(name)}</span></td>`;
   $('#tbl-usage tbody').innerHTML = list.map(([name, a]) => `<tr>${opCell(name)}<td class="n">${fmt(sum(a.start))}</td><td class="n">${fmt(sum(a.end))}</td><td class="n">${fmt(sum(a.reloc))}</td><td class="n">${fmt(sum(a.swap))}</td><td class="n">${fmt(sum(a.pickup))}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">${t('app.noEventsInFilterSetOperator')}</td></tr>`;
-  $('#tbl-usage-more tbody').innerHTML = list.map(([name, a]) => { const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mode = modes.includes('stable') ? t('app.stableIds') : modes.includes('rotating') ? t('app.rotatingIds') : t('app.open');
-    return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mode === 'stabil' ? t('app.durationDistanceMeasurable') : mode === 'rotierend' ? t('app.startDestinationCountsOnly') : t('app.tooFewRunsYet')}</div></td></tr>`; }).join('') || `<tr><td colspan="7" class="empty">${t('app.noEventsInFilter')}</td></tr>`;
-  renderCellsTable(day); renderQuota(); if (!isClient()) { renderEcon(day, doc).catch(e => console.error('Umsatz', e)); renderCalibPanel().catch(e => console.error('Kalibrierung', e)); }
+  $('#tbl-usage-more tbody').innerHTML = list.map(([name, a]) => { const modes = Object.entries(doc.srcModes || {}).filter(([id]) => (state.latest?.sources || []).some(r => r.id === id && r.operator === name && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)))).map(([, m]) => m); const mk = modes.includes('stable') ? 'stable' : modes.includes('rotating') ? 'rotating' : 'open', mode = { stable: t('app.stableIds'), rotating: t('app.rotatingIds'), open: t('app.open') }[mk];
+    return `<tr>${opCell(name)}<td class="n">${a.tripDurN ? durText(a.tripDurSum / a.tripDurN) : '—'}</td><td class="n">${a.tripDistN ? `${fmt(a.tripDistSum / a.tripDistN / 1000, 1)} km` : '—'}</td><td class="n">${a.swapWaitN ? durText(a.swapWaitSum / a.swapWaitN) : '—'}</td><td class="n">${fmt(sum(a.disOff))}</td><td class="n">${a.disDurN ? durText(a.disDurSum / a.disDurN) : '—'}</td><td class="small">${mode}<div class="sub-line">${mk === 'stable' ? t('app.durationDistanceMeasurable') : mk === 'rotating' ? t('app.startDestinationCountsOnly') : t('app.tooFewRunsYet')}</div></td></tr>`; }).join('') || `<tr><td colspan="7" class="empty">${t('app.noEventsInFilter')}</td></tr>`;
+  renderCellsTable(day); if (!isClient()) renderEcon(day, doc).catch(e => console.error('Umsatz', e)); // Kalibrierung steht nur unter Datenvertrauen › Quellen
+}
+// Standzeiten der verfügbaren Fahrzeuge (idle.json, Sammler-Stand), unabhängig vom gewählten Tag
+async function renderIdle(days) {
+  const idle = await loadOnce('idle', 'idle.json');
+  if (!idle) { $('#idle-bars').innerHTML = `<div class="empty">${esc(failedText('idle.json'))}</div>`; return; }
+  const ib = [0, 0, 0, 0, 0]; let in_ = 0;
+  for (const [k, a] of Object.entries(idle.groups || {})) { if (!groupInScope(k)) continue; for (let i = 0; i < 5; i++) ib[i] += a[i]; in_ += a[5]; }
+  const labels = (idle.buckets || ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage']).map(tx); // Beschriftungen aus idle.json (Sammler, deutsch)
+  const imax = Math.max(1, ...ib);
+  $('#idle-bars').innerHTML = in_ ? labels.map((l, i) => `<div class="hbar"><span>${esc(l)}</span><div class="bar"><i style="width:${(ib[i] / imax) * 100}%;background:${i >= 3 ? 'var(--warn)' : 'var(--accent)'}"></i></div><span class="n mono">${pctf(ib[i], in_)}</span></div>`).join('') + `<div class="muted small" style="margin-top:6px">${t('app.availableVehiclesAsOfTime', { in_: fmt(in_), v1: timeText(idle.at), join: esc((days[0] || '').split('-').reverse().join('.')) })}</div>` : `<div class="empty">${t('app.noIdleTimesInFilterSet')}</div>`;
 }
 // Tagesgang-Filter: Anbieter und Arten mit Ereignissen im Gebiet am Tag; eigene Wahl bleibt, bis sich oben Gebiet, Anbieter oder Art ändern
 const inArea = (ags) => ags !== 'DE' && (state.scope === 'DE' || ags === state.scope);
@@ -1432,7 +1577,8 @@ function renderUsageChart() {
   // nicht gemessene Stunden und Stunden nach Messlücke: null (Linie unterbrochen), nicht 0
   const all = [...by].map(([name, raw]) => { const values = raw.map((v, h) => ok[h] ? v : null); return perType ? { name: TYPE[name] || name, values, color: palette(Math.max(0, order.indexOf(name))) } : { name, values, color: opColor(name) }; }).sort((x, y) => sum(y.values) - sum(x.values));
   const series = all.slice(0, 8), tyLabel = TYPE[type] || type;
-  $('#chart-usage').innerHTML = series.length ? hourChart(series, c.weather, c.runs, c.mask, dayNote(state.usage.day)) : `<div class="empty">${t('app.noTripStartsForThisSelection')}</div>`;
+  const box = $('#chart-usage');
+  box.innerHTML = series.length ? hourChart(series, c.weather, c.runs, c.mask, dayNote(state.usage.day), chartWidth(box, () => renderUsageChart())) : `<div class="empty">${t('app.noTripStartsForThisSelection')}</div>`;
   $('#usage-chart-sub').textContent = (perType ? t('app.tripStartsPerHourByVehicle', { op, v1: type !== 'all' ? ` ${t('app.only', { tyLabel })}` : '' }) : t('app.tripStartsPerHourAndOperator', { v0: type !== 'all' ? ` · ${tyLabel}` : '', v1: all.length > 8 ? ` · ${t('app.top8Of', { length: all.length })}` : '' })) + (c.weather ? ` · ${t('app.weather', { name: c.weather.name })}` : '');
   $('#usage-legend').innerHTML = series.map((x, i) => `<span><i class="dot" style="background:${x.color || palette(i)}"></i>${esc(x.name)} <span class="mono">${fmt(sum(x.values))}</span></span>`).join('') + (c.weather && series.length ? `<span><i class="sq rain-key"></i>${t('app.precipitationBarsTemperature')}</span>` : '') +(series.length && ok.some(v => !v) ? `<span><i class="sq gap-key"></i>${abbr(t('app.notMeasuredAfterMeasurement'), 'gap')}</span>` : '');
 }
@@ -1473,8 +1619,10 @@ async function econGroups(day, keep) {
     const chk = K.checkMeasured(E.kpis({ g: maskG(g), obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, assume, realization: o.realization, net: o.net, hourMin: doc.hourMin || null }), ty, calib?.limits);
     const m = chk.kpi;
     const fac = K.factorFor(ty, { manual: calibFor(op), k: calib?.k, mode: 'kal', suspended: chk.suspended });
-    const cal = K.applyFactor(m, fac.f);
-    out.set(k, { ...(mode === 'kal' ? cal : m), m, cal, lo: K.applyFactor(m, fac.lo), hi: K.applyFactor(m, fac.hi), fac, plan: pl, op, ty, ags });
+    // kalibrierte Fahrten je Fahrzeug und Tag höchstens bis zur Plausibilitätsgrenze der Art (lib/pulse-calib.js cappedFactor)
+    const lim = { limit: calib?.limits?.[ty] ?? null };
+    const cal = K.applyFactor(m, fac.f, lim);
+    out.set(k, { ...(mode === 'kal' ? cal : m), m, cal, lo: K.applyFactor(m, fac.lo, lim), hi: K.applyFactor(m, fac.hi, lim), fac, plan: pl, op, ty, ags });
   }
   return { out, doc, obsMin, profile: prof, gapH: mask.gap.filter(Boolean).length, calib };
 }
@@ -1560,7 +1708,11 @@ async function renderEcon(day) {
   const aTxt = sc?.calibrated ? t('app.avgEScooterTripMinInsteadOf', { min: fmt(sc.min, 1), min2: fmt(sc.previous.min), from: esc(sc.from), to: esc(sc.to) }) : t('app.avgEScooterTripMinAssumption', { v0: fmt(sc?.min ?? 12) });
   $('#econ-calib').innerHTML = `<div><b>${kal ? t('app.calibrated4') : t('app.measured4')}</b> · ${kTxt}</div><div>${t('app.bikesEBikesCargoBikes', { aTxt, v1: r.calib?.limits?.scooter ? ` · ${t('app.aboveTripsVehDayCalibration', { scooter: fmt(r.calib.limits.scooter, 2) })}` : '', v2: calOps.length ? ` · ${t('app.correctionOverriddenFor', { join: esc(calOps.join(', ')) })}` : '' })} · <span class="muted">${t('app.derivationInCalibrationPanel')}</span></div>`;
   const excludedN = rows.length - good.length;
-  $('#econ-note').innerHTML = t('app.tripsDisappearedAvailable', { v0: abbr(t('app.idRotation'), 'rot'), source: esc(tx(r.profile.source)), v2: prelim ? t('app.measuredValuesUnder3Full') : '', v3: o.rideMin ? t('app.defaultMin', { rideMin: fmt(o.rideMin) }) : t('app.measuredWhereIdsAreStable20', { v0: sc?.calibrated ? t('app.minFromBerlinQuarterlyValues', { min: fmt(sc.min, 1) }) : t('app.n12Min') }), v4: o.net ? `${t('app.excluding19Vat')} ` : '', v5: abbr(t('app.realisationRate'), 'real'), v6: r.gapH ? ` ${t('app.afterMeasurementGapOver45Min', { gapH: r.gapH, v1: r.gapH === 1 ? t('app.hour') : t('app.hours') })}` : '', v7: excludedN ? ` ${t('app.withImplausibleTripCountAre', { excludedN, v1: excludedN === 1 ? t('app.row') : t('app.rows2') })}` : '', v8: calOps.length ? ` ${t('app.activeFor', { join: esc(calOps.join(', ')) })}` : '' });
+  // sichtbar bleibt der erste Satz (was als Fahrt zählt), die Methodik steht aufklappbar darunter
+  const noteHtml = t('app.tripsDisappearedAvailable', { v0: abbr(t('app.idRotation'), 'rot'), source: esc(tx(r.profile.source)), v2: prelim ? t('app.measuredValuesUnder3Full') : '', v3: o.rideMin ? t('app.defaultMin', { rideMin: fmt(o.rideMin) }) : t('app.measuredWhereIdsAreStable20', { v0: sc?.calibrated ? t('app.minFromBerlinQuarterlyValues', { min: fmt(sc.min, 1) }) : t('app.n12Min') }), v4: o.net ? `${t('app.excluding19Vat')} ` : '', v5: abbr(t('app.realisationRate'), 'real'), v6: r.gapH ? ` ${t('app.afterMeasurementGapOver45Min', { gapH: r.gapH, v1: r.gapH === 1 ? t('app.hour') : t('app.hours') })}` : '', v7: excludedN ? ` ${t('app.withImplausibleTripCountAre', { excludedN, v1: excludedN === 1 ? t('app.row') : t('app.rows2') })}` : '', v8: calOps.length ? ` ${t('app.activeFor', { join: esc(calOps.join(', ')) })}` : '' });
+  const m = noteHtml.match(/^([\s\S]*?\)\.)\s+([\s\S]+)$/);
+  const keepOpen = $('#econ-note details')?.open;
+  $('#econ-note').innerHTML = m ? `${m[1]} <details class="more"${keepOpen ? ' open' : ''}><summary>${t('app.methodSummary')}</summary><p style="margin:0">${m[2]}</p></details>` : noteHtml;
 }
 // ---------- Kalibrierung: Referenzwerte (data/reference.json, Branch main) gegen die eigene Messung, Regeln in lib/pulse-calib.js ----------
 // Voi: Umsatz je Fahrzeug und Tag (gemessen, netto × Realisierung) über die Tage der Kalibrierung, Flotte-Tage gewichtet
@@ -1660,8 +1812,8 @@ function hourMask(runs, gapHours = null) {
 }
 // Eine Achse: Wetter steht als eigenes Band unter dem Diagramm (Regenbalken und Temperatur als Text), nicht als zweite Skala im Diagramm.
 // Je Stunde eine unsichtbare Trefferfläche mit Tooltip (alle Werte der Stunde); Feiertag oben rechts.
-function hourChart(series, weather, runs, mask = null, holiday = null) {
-  const WB = weather ? 58 : 0, HT = holiday ? 16 : 0, W = 900, H = 260 + WB + HT, P = { l: 44, r: 12, t: 12 + HT, b: 26 + WB };
+function hourChart(series, weather, runs, mask = null, holiday = null, W = 900) {
+  const WB = weather ? 58 : 0, HT = holiday ? 16 : 0, H = (W < 520 ? 200 : 260) + WB + HT, P = { l: 54, r: 12, t: 12 + HT, b: 26 + WB }, HS = W < 520 ? 6 : 3; // Stundenmarken alle 3 h, schmal alle 6 h
   const vals = series.flatMap(s => s.values).filter(v => v != null);
   const nt = niceTicks(Math.max(1, ...vals) * 1.05), max = nt.top; // runde Achsenwerte statt 96/191/287/383
   const x = (h) => P.l + ((h + 0.5) / 24) * (W - P.l - P.r), cw = (W - P.l - P.r) / 24;
@@ -1673,7 +1825,7 @@ function hourChart(series, weather, runs, mask = null, holiday = null) {
   for (let h = 0; h < 24; h++) if (!m.ok[h] && (h === 0 || m.ok[h - 1])) { let e = h; while (e < 23 && !m.ok[e + 1]) e++; if (e - h >= 2) g += `<text x="${((x(h) + x(e)) / 2).toFixed(1)}" y="${P.t + 12}" text-anchor="middle">${t('app.notMeasured')}</text>`; }
   for (const v of nt.ticks) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v, nt.step < 1 ? 1 : 0)}</text>`;
   const yAx = H - WB - 8;
-  for (let h = 0; h < 24; h += 3) g += `<text x="${x(h).toFixed(1)}" y="${yAx}" text-anchor="middle">${t('app.n00', { h })}</text>`;
+  for (let h = 0; h < 24; h += HS) g += `<text x="${x(h).toFixed(1)}" y="${yAx}" text-anchor="middle">${t('app.n00', { h })}</text>`;
   if (holiday) g += `<text class="hol" x="${W - P.r}" y="${P.t - 6}" text-anchor="end">${esc(holiday)}</text>`; // über der Fläche, kollidiert nicht mit „nicht gemessen“
   let wx = '';
   if (weather) {
@@ -1681,14 +1833,14 @@ function hourChart(series, weather, runs, mask = null, holiday = null) {
     const b0 = H - WB + 6, bh = 26, rmax = Math.max(1, ...weather.rain.map(v => v || 0));
     wx += `<text x="${P.l - 6}" y="${b0 + 12}" text-anchor="end">${t('app.weather2')}</text><line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${b0 + bh}" y2="${b0 + bh}"/>`;
     for (let h = 0; h < 24; h++) if (weather.rain[h] > 0) { const hh = Math.max(2, (weather.rain[h] / rmax) * bh); wx += `<rect class="rain" x="${(x(h) - cw / 2 + 2).toFixed(1)}" y="${(b0 + bh - hh).toFixed(1)}" width="${(cw - 4).toFixed(1)}" height="${hh.toFixed(1)}"><title>${t('app.n00MmPrecipitation', { h, v1: fmt(weather.rain[h], 1) })}</title></rect>`; }
-    for (let h = 0; h < 24; h += 3) if (weather.temp[h] != null) wx += `<text x="${x(h).toFixed(1)}" y="${b0 + bh + 14}" text-anchor="middle">${fmt(weather.temp[h])}°</text>`;
+    for (let h = 0; h < 24; h += HS) if (weather.temp[h] != null) wx += `<text x="${x(h).toFixed(1)}" y="${b0 + bh + 14}" text-anchor="middle">${fmt(weather.temp[h])}°</text>`;
   }
   // Linie an fehlenden Stunden unterbrochen; einzelne gemessene Stunden als Punkt (≥ 8 px)
   const paths = series.map((s, i) => { const col = s.color || palette(i); let d = '', open = false, dots = ''; s.values.forEach((v, h) => { if (v == null) { open = false; return; } const alone = (h === 0 || s.values[h - 1] == null) && (h === 23 || s.values[h + 1] == null); if (alone) dots += `<circle cx="${x(h).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${col}" stroke="var(--panel)" stroke-width="2"/>`; d += `${open ? 'L' : 'M'}${x(h).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); return `<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>${dots}`; }).join('');
   // Trefferflächen je Stunde mit allen Werten (Tooltip)
   let hits = '';
   for (let h = 0; h < 24; h++) { const lines = m.ok[h] ? series.filter(s => s.values[h] != null).sort((a, b) => b.values[h] - a.values[h]).map(s => `${s.name} ${fmt(s.values[h])}`) : [m.gap[h] ? t('app.afterMeasurementGapNot') : t('app.notMeasured')]; if (weather && weather.temp[h] != null) lines.push(`${fmt(weather.temp[h])} °C · ${fmt(weather.rain[h] || 0, 1)} mm`); hits += `<rect class="hit" x="${(x(h) - cw / 2).toFixed(1)}" y="${P.t}" width="${cw.toFixed(1)}" height="${H - P.t - 8}"><title>${t('app.text3', { h, v1: h + 1, join: esc(lines.join('\n')) })}</title></rect>`; }
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.tripStartsPerHourGreyNot', { v0: holiday ? `; ${esc(holiday)}` : '' })}">${g}${wx}${paths}${hits}</svg>`;
+  return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.tripStartsPerHourGreyNot', { v0: holiday ? `; ${esc(holiday)}` : '' })}. ${esc(seriesSummary(series))}">${g}${wx}${paths}${hits}</svg>`;
 }
 // Feiertage lokal berechnet (kein Abruf): Ostern nach Gauß/Meeus, dazu feste und bewegliche Feiertage je Bundesland
 const easter = (y) => { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return Date.UTC(y, mo - 1, da); };
@@ -1770,13 +1922,14 @@ async function renderFlowLayer() {
   clearNotice('flow');
   const list = Object.entries(cells).map(([cell, v]) => ({ cell, start: v[0], end: v[1], net: v[1] - v[0], reloc: v[3] })).filter(r => r.start + r.end > 0);
   const max = Math.max(1, ...list.map(r => Math.abs(r.net)), ...list.map(r => r.start));
+  const flowIn = tok('--info'), flowOut = tok('--bad'); // Farben aus den Themen-Tokens (hell/dunkel), divergierend Blau ↔ Rot
   for (const r of list) {
     const [lat, lon] = cellCenterOf(r.cell);
-    const col = r.net > 0 ? '#6aa9ff' : r.net < 0 ? '#ef6b6b' : '#8b949e';
+    const col = r.net > 0 ? flowIn : r.net < 0 ? flowOut : DISABLED_COL;
     L.rectangle([[lat - CELL_LAT / 2, lon - CELL_LON / 2], [lat + CELL_LAT / 2, lon + CELL_LON / 2]], { weight: 0, fillColor: col, fillOpacity: 0.15 + 0.65 * (Math.max(Math.abs(r.net), r.start * 0.5) / max) })
       .bindPopup(t('app.cellTripStartsTripEndsNet', { start: fmt(r.start), end: fmt(r.end), v2: r.net > 0 ? '+' : '', net: fmt(r.net), reloc: fmt(r.reloc) })).addTo(L_.grid);
   }
-  $('#map-legend').innerHTML = `<span><i class="dot" style="background:#ef6b6b"></i>${t('app.netOutflowMoreStarts')}</span><span><i class="dot" style="background:#6aa9ff"></i>${t('app.netInflowMoreDestinations')}</span><span class="muted">${t('app.cellsWithMovement', { v0: day.split('-').reverse().join('.'), length: fmt(list.length) })}</span>`;
+  $('#map-legend').innerHTML = `<span><i class="dot" style="background:var(--bad)"></i>${t('app.netOutflowMoreStarts')}</span><span><i class="dot" style="background:var(--info)"></i>${t('app.netInflowMoreDestinations')}</span><span class="muted">${t('app.cellsWithMovement', { v0: day.split('-').reverse().join('.'), length: fmt(list.length) })}</span>`;
 }
 async function renderServedLayer() {
   const L_ = state.layers; L_.grid.clearLayers();
@@ -1787,15 +1940,15 @@ async function renderServedLayer() {
   const agg = new Map();
   for (const d of days) { const doc = await loadCells(d, st); const cells = doc?.munis?.[state.scope]; if (!cells) continue; for (const [cell, v] of Object.entries(cells)) { if (!v[2]) continue; const a = agg.get(cell) || { present: 0, days: 0 }; a.present += v[2]; a.days++; agg.set(cell, a); } }
   const maxP = Math.max(1, ...[...agg.values()].map(a => a.present));
-  for (const [cell, a] of agg) { const [lat, lon] = cellCenterOf(cell); L.rectangle([[lat - CELL_LAT / 2, lon - CELL_LON / 2], [lat + CELL_LAT / 2, lon + CELL_LON / 2]], { weight: 0, fillColor: '#49c7b0', fillOpacity: 0.12 + 0.6 * (a.present / maxP) }).bindPopup(t('app.servedOnOfDaysVehicle', { days: a.days, length: days.length, present: fmt(a.present) })).addTo(L_.grid); }
-  $('#map-legend').innerHTML = `<span><i class="dot" style="background:#49c7b0"></i>${t('app.cellWithAvailableVehicleIn', { length: days.length })}</span><span class="muted">${t('app.cellsKm2', { size: fmt(agg.size), v1: fmt(agg.size * 0.07, 1) })}</span>`;
+  for (const [cell, a] of agg) { const [lat, lon] = cellCenterOf(cell); L.rectangle([[lat - CELL_LAT / 2, lon - CELL_LON / 2], [lat + CELL_LAT / 2, lon + CELL_LON / 2]], { weight: 0, fillColor: tok('--accent'), fillOpacity: 0.12 + 0.6 * (a.present / maxP) }).bindPopup(t('app.servedOnOfDaysVehicle', { days: a.days, length: days.length, present: fmt(a.present) })).addTo(L_.grid); }
+  $('#map-legend').innerHTML = `<span><i class="dot" style="background:var(--accent)"></i>${t('app.cellWithAvailableVehicleIn', { length: days.length })}</span><span class="muted">${t('app.cellsKm2', { size: fmt(agg.size), v1: fmt(agg.size * 0.07, 1) })}</span>`;
 }
 async function renderIdleLayer() {
   const L_ = state.layers; L_.grid.clearLayers();
   const d = await loadOnce('idleLong', 'idle-long.json'); if (!d) return;
   const pts = d.points.filter(p => (state.scope === 'DE' || p.ags === state.scope) && (state.operator === 'all' || p.op === state.operator) && (state.type === 'all' || p.ty === state.type));
-  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: '#e3b341', fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: fmt(p.hours), v3: p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '' })).addTo(L_.grid);
-  $('#map-legend').innerHTML = `<span><i class="dot" style="background:#e3b341"></i>${t('app.availableButNotMovedForMore')}</span><span class="muted">${t('app.shownAsOf', { length: fmt(pts.length), v1: d.total > d.points.length ? ` ${t('app.thinnedOutPerMunicipality', { total: fmt(d.total) })}` : '', v2: timeText(d.at) })}</span>`;
+  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: fmt(p.hours), v3: p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '' })).addTo(L_.grid);
+  $('#map-legend').innerHTML = `<span><i class="dot" style="background:var(--warn)"></i>${t('app.availableButNotMovedForMore')}</span><span class="muted">${t('app.shownAsOf', { length: fmt(pts.length), v1: d.total > d.points.length ? ` ${t('app.thinnedOutPerMunicipality', { total: fmt(d.total) })}` : '', v2: timeText(d.at) })}</span>`;
 }
 // Welche Farbe gehört zu welchem Anbieter: immer unter der Karte, sortiert nach verfügbaren Fahrzeugen im Gebiet
 function renderOpLegend(vehicles) {
@@ -1803,7 +1956,9 @@ function renderOpLegend(vehicles) {
   if (vehicles?.length) for (const v of vehicles) { if (!v.disabled) n.set(v.operator, (n.get(v.operator) || 0) + 1); }
   if (!n.size) for (const [k, st] of Object.entries(state.latest?.groups || {})) { if (!groupInScope(k)) continue; const op = k.split('|')[1]; n.set(op, (n.get(op) || 0) + st.available); }
   const ops = [...n].sort((a, b) => b[1] - a[1]);
-  $('#map-legend-ops').innerHTML = ops.length ? `<span class="muted">${t('app.operator')}</span>${ops.slice(0, 14).map(([o, c]) => `<span><i class="dot" style="background:${opColor(o)}"></i>${esc(o)} <span class="muted mono">${fmt(c)}</span></span>`).join('')}${ops.length > 14 ? `<span class="muted">${t('app.more2', { v0: ops.length - 14 })}</span>` : ''}` : '';
+  if (state.mapFocus && !n.has(state.mapFocus)) state.mapFocus = null;
+  // Einträge sind Knöpfe: ein Klick hebt den Anbieter auf der Karte hervor und blendet die übrigen ab (zweite Kodierung neben der Farbe)
+  $('#map-legend-ops').innerHTML = ops.length ? `<span class="muted">${t('app.operator')}</span>${ops.slice(0, 14).map(([o, c]) => `<button type="button" class="leg-hl" data-map-hl="${esc(o)}" aria-pressed="${state.mapFocus === o}" title="${esc(t('cmp.highlightTip', { op: o }))}"><i class="dot" style="background:${opColor(o)}"></i>${esc(o)} <span class="muted mono">${fmt(c)}</span></button>`).join('')}${ops.length > 14 ? `<span class="muted">${t('app.more2', { v0: ops.length - 14 })}</span>` : ''}` : '';
 }
 async function renderZonesLayer() {
   const L_ = state.layers; L_.zones.clearLayers();
@@ -1813,6 +1968,8 @@ async function renderZonesLayer() {
   if (state.scope === 'DE') { notice(() => t('app.operatingZonesPleaseChoose'), '', 'zones'); return; }
   list = list.slice(0, 8);
   let n = 0;
+  // Zonenarten aus den Themen-Tokens (hell ≥ 4,5:1 auf Weiß, dunkel die hellen Stufen); Tempolimit Violett je Thema
+  const zc = { noRide: tok('--bad'), noEnd: tok('--warn'), mpz: tok('--info'), slow: isDark() ? '#c084fc' : '#7c3aed' };
   for (const z of list) {
     if (!(z.file in state.usage.zones)) { const r = await cached(`zones/${z.file}`, 60000); state.usage.zones[z.file] = r.json || null; }
     const fc = state.usage.zones[z.file]; if (!fc) continue;
@@ -1822,7 +1979,7 @@ async function renderZonesLayer() {
       const ru = f.properties.rules || [];
       // GBFS 2.x: ride_allowed = Fahrt darf hier beginnen/enden; ride_through_allowed = Durchfahrt; station_parking = nur an Stationen abstellen
       const mpz = ru.some(r => r.parking === true), noRide = ru.some(r => r.rideThrough === false), noEnd = !mpz && ru.some(r => r.endAllowed === false || r.rideAllowed === false), slow = ru.find(r => r.maxSpeed != null)?.maxSpeed;
-      const col = noRide ? '#ef6b6b' : noEnd ? '#e3b341' : mpz ? '#60a5fa' : slow != null ? '#c084fc' : opColor(z.operator);
+      const col = noRide ? zc.noRide : noEnd ? zc.noEnd : mpz ? zc.mpz : slow != null ? zc.slow : opColor(z.operator);
       L.geoJSON(f, { style: { color: opColor(z.operator), weight: 1.5, opacity: .9, fillColor: col, fillOpacity: noRide ? .16 : .1, dashArray: (noEnd || mpz) && !noRide ? '4 3' : null } })
         .bindPopup(`<b>${esc(z.operator)}</b> · ${esc(f.properties.name || t('app.zone'))}<br>${noRide ? t('app.ridingProhibited') : t('app.ridingAllowed')}${noEnd ? ` · ${t('app.parkingProhibited')}` : ''}${mpz ? ` · ${t('app.parkingOnlyAtStations')}` : ''}${slow != null ? ` · ${t('app.maxKmH', { slow: fmt(slow) })}` : ''}`).addTo(L_.zones);
       n++;
@@ -1830,7 +1987,7 @@ async function renderZonesLayer() {
   }
   clearNotice('zones');
   const zops = [...new Set(list.map(z => z.operator))];
-  $('#map-legend-zones').innerHTML = `<span class="muted">${t('app.zones', { n: fmt(n) })}</span><span><i class="sq" style="background:#ef6b6b55;border-color:#ef6b6b"></i>${t('app.noRidingZone')}</span><span><i class="sq" style="background:#e3b34133;border-color:#e3b341;border-style:dashed"></i>${t('app.noParkingZone')}</span><span><i class="sq" style="background:#60a5fa33;border-color:#60a5fa;border-style:dashed"></i>${t('app.parkOnlyAtStations')}</span><span><i class="sq" style="background:#c084fc33;border-color:#c084fc"></i>${t('app.speedLimit')}</span><span class="muted">${t('app.outlineOperator')}</span>${zops.map(o => `<span><i class="sq" style="background:transparent;border-color:${opColor(o)}"></i>${esc(o)}</span>`).join('')}`;
+  $('#map-legend-zones').innerHTML = `<span class="muted">${t('app.zones', { n: fmt(n) })}</span><span><i class="sq" style="background:color-mix(in srgb,${zc.noRide} 33%,transparent);border-color:${zc.noRide}"></i>${t('app.noRidingZone')}</span><span><i class="sq" style="background:color-mix(in srgb,${zc.noEnd} 20%,transparent);border-color:${zc.noEnd};border-style:dashed"></i>${t('app.noParkingZone')}</span><span><i class="sq" style="background:color-mix(in srgb,${zc.mpz} 20%,transparent);border-color:${zc.mpz};border-style:dashed"></i>${t('app.parkOnlyAtStations')}</span><span><i class="sq" style="background:color-mix(in srgb,${zc.slow} 20%,transparent);border-color:${zc.slow}"></i>${t('app.speedLimit')}</span><span class="muted">${t('app.outlineOperator')}</span>${zops.map(o => `<span><i class="sq" style="background:transparent;border-color:${opColor(o)}"></i>${esc(o)}</span>`).join('')}`;
 }
 
 // ---------- Preise, Anteile an erfassten Fahrzeugen, Zuverlässigkeit ----------
@@ -1842,7 +1999,10 @@ async function renderPricing() {
   for (const src of list) for (const pl of src.plans) { const key = `${src.operator}|${pl.name}|${pl.unlock}|${pl.perMin[0]?.rate}`; if (seen.has(key)) continue; seen.add(key); rows.push({ op: src.operator, pl, src }); }
   rows.sort((a, b) => a.op.localeCompare(b.op) || (a.pl.unlock ?? 0) - (b.pl.unlock ?? 0));
   const money = (v, cur) => v == null ? '—' : esc(`${fmt(v, 2)} ${cur || '€'}`.replace(' EUR', ' €')); // Währung kommt aus dem Feed
-  tb.innerHTML = rows.slice(0, 60).map(({ op, pl, src }) => `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>${state.scope === 'DE' ? `<div class="sub-line">${esc(src.sourceId)}</div>` : ''}</td><td translate="no">${esc(pl.name || pl.id)}</td><td class="n">${money(pl.unlock, pl.currency)}</td><td class="n">${pl.perMin.length ? pl.perMin.map(x => `${money(x.rate, pl.currency)}${x.interval && x.interval !== 1 ? ` ${t('app.perMin', { interval: x.interval })}` : ''}${x.start ? ` ${t('app.fromMin', { start: x.start })}` : ''}`).join('<br>') : '—'}</td><td class="n">${pl.perKm.length ? pl.perKm.map(x => money(x.rate, pl.currency)).join('<br>') : '—'}</td><td class="small" translate="no">${esc(pl.desc || '')}${pl.surge ? ` · ${t('app.dynamic')}` : ''}</td></tr>`).join('') || `<tr><td colspan="6" class="empty">${t('app.noPricesForThisFilterNot')}</td></tr>`;
+  // Feed-Kennungen („LMG:PricingPlan:…“, „…-plan“) sind kein Tarifname: dann der erste Satz der Beschreibung bzw. „Tarif n“, die Kennung klein darunter
+  const looksId = (s) => /^[A-Z]{2,}:|PricingPlan|-plan$|^plan-|^[\w-]{24,}$/i.test(s || '');
+  const nth = new Map(); const planName = (op, pl) => { const raw = pl.name || pl.id || ''; if (!looksId(raw)) return { label: raw, id: '' }; const d = String(pl.desc || '').split(/[.;\n]/)[0].trim(); const n = (nth.get(op) || 0) + 1; nth.set(op, n); return { label: d && d.length <= 60 ? d : t('app.tariffN', { n }), id: raw }; };
+  tb.innerHTML = rows.slice(0, 60).map(({ op, pl, src }) => { const nm = planName(op, pl); return `<tr><td><span class="op"><i style="background:${opColor(op)}"></i>${esc(op)}</span>${state.scope === 'DE' ? `<div class="sub-line">${esc(src.sourceId)}</div>` : ''}</td><td translate="no">${esc(nm.label)}${nm.id ? `<div class="sub-line mono">${esc(nm.id)}</div>` : ''}</td><td class="n">${money(pl.unlock, pl.currency)}</td><td class="n">${pl.perMin.length ? pl.perMin.map(x => `${money(x.rate, pl.currency)}${x.interval && x.interval !== 1 ? ` ${t('app.perMin', { interval: x.interval })}` : ''}${x.start ? ` ${t('app.fromMin', { start: x.start })}` : ''}`).join('<br>') : '—'}</td><td class="n">${pl.perKm.length ? pl.perKm.map(x => money(x.rate, pl.currency)).join('<br>') : '—'}</td><td class="small" translate="no">${esc(pl.desc || '')}${pl.surge ? ` · ${t('app.dynamic')}` : ''}</td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">${t('app.noPricesForThisFilterNot')}</td></tr>`;
   $('#pricing-note').textContent = rows.length > 60 ? t('app.moreTariffsChooseAreaOr', { v0: rows.length - 60 }) : t('app.tariffsAsOf', { length: rows.length, v1: timeText(p.at) });
 }
 async function renderShareChart() {
@@ -1864,12 +2024,13 @@ function drawShare(box, days, perDay) {
   const ops = [...new Set(perDay.flatMap(m => m ? [...m.keys()] : []))];
   const totals = perDay.map(m => m ? [...m.values()].reduce((a, b) => a + b, 0) : 0);
   const series = ops.map(op => ({ name: op, color: opColor(op), values: perDay.map((m, i) => m && totals[i] ? ((m.get(op) || 0) / totals[i]) * 100 : null) })).sort((a, b) => (b.values.at(-1) || 0) - (a.values.at(-1) || 0)).slice(0, 8);
-  const W = 900, H = 220, P = { l: 44, r: 12, t: 12, b: 26 };
+  const W = chartWidth(box, () => renderShareChart()), H = W < 520 ? 190 : 220, P = { l: 48, r: 16, t: 12, b: 26 };
   const x = (i) => P.l + (i / Math.max(1, days.length - 1)) * (W - P.l - P.r), y = (v) => P.t + (1 - v / 100) * (H - P.t - P.b);
   let g = ''; for (let k = 0; k <= 4; k++) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(k * 25)}" y2="${y(k * 25)}"/><text x="${P.l - 6}" y="${y(k * 25) + 3}" text-anchor="end">${k * 25} %</text>`;
-  days.forEach((d, i) => { g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${d.slice(8)}.${d.slice(5, 7)}.</text>`; });
+  const every = (W - P.l - P.r) / Math.max(1, days.length - 1) < 44 ? 2 : 1; // schmal: jeder zweite Tag beschriftet
+  days.forEach((d, i) => { if (i % every && i !== days.length - 1) return; g += `<text x="${x(i)}" y="${H - 8}" text-anchor="${days.length > 1 && i === 0 ? 'start' : i === days.length - 1 && days.length > 1 ? 'end' : 'middle'}">${d.slice(8)}.${d.slice(5, 7)}.</text>`; });
   const paths = series.map(s => { let d = '', open = false; s.values.forEach((v, i) => { if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>` + s.values.map((v, i) => v == null ? '' : `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="${s.color}"/>`).join(''); }).join('');
-  box.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.shareOfRecordedVehicles')}">${g}${paths}</svg>`;
+  box.innerHTML = `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.shareOfRecordedVehicles')}. ${seriesSummary(series, (v) => `${fmt(v, 1)} %`)}`)}">${g}${paths}</svg>`;
   $('#share-legend').innerHTML = series.map(s => `<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)} <span class="mono">${s.values.at(-1) == null ? '—' : fmt(s.values.at(-1), 1) + ' %'}</span></span>`).join('');
 }
 
@@ -1894,7 +2055,6 @@ async function renderConsistency() {
 }
 
 const METHOD = () => `
-<h2>${t('app.analysisInDetail')}</h2>
 <h3>${t('app.counting')}</h3><p>${t('app.availableMeansBookableNot')}</p>
 <h3>${t('app.freshness')}</h3><p>${t('app.collectorRatesEveryFeed')}</p>
 <h3>${t('app.geoCheckAndPlaceAssignment')}</h3><p>${t('app.numberFormatsAreNormalised')}</p>
@@ -1907,7 +2067,7 @@ const METHOD = () => `
 <p>${t('app.chargeJumpsFromBelow40ToAt')}</p>
 <h3>${t('app.cellsZonesPrices')}</h3><p>${t('app.startAndDestinationCellsAre')}</p>
 <h3>${t('app.consistencyAndWalkingRoutes')}</h3><p>${t('app.ifSystemInCatalogueHasSecond')}</p>
-<h3>${t('app.calibration')}</h3><p>${t('app.estimatesAreAlignedWith')}</p>
+<h3>${t('app.calibration')}</h3>${(() => { const s = t('app.estimatesAreAlignedWith'), i = s.indexOf('. <b>'); return i < 0 ? `<p>${s}</p>` : `<p>${s.slice(0, i + 1)}</p><details class="more"><summary>${t('app.calibrationDetail')}</summary><p>${s.slice(i + 2)}</p></details>`; })()}
 <h3>${t('app.limits')}</h3><p>${t('app.openFeedsDoNotCoverAll')}</p>`;
 
 // ---------- Versorgung an Haltestellen ----------
@@ -1999,7 +2159,7 @@ async function walkMatrix(sources, targets) {
 }
 function renderSupplyLayer() {
   const L_ = state.layers; L_.supply.clearLayers(); if (!state.supply) return;
-  for (const s of state.supply.stops) { const d = state.supply.eff ? state.supply.eff(s) : s.dist; const gap = d == null || d > state.supply.radius; L.circleMarker([s.lat, s.lon], { radius: gap ? 6 : 4, weight: 2, color: gap ? '#ef6b6b' : '#6aa9ff', fillOpacity: .5 }).bindPopup(t('app.nearestAvailableVehicle', { name: esc(s.name), kind: s.kind, v2: s.dist == null ? '—' : t('app.mStraightLine', { n: fmt(s.dist) }), v3: s.walk != null ? ` · ${t('app.mWalkMin', { walk: fmt(s.walk), walkMin: fmt(s.walkMin) })}` : '', v4: esc(s.walkOp || s.op || '') })).addTo(L_.supply); }
+  for (const s of state.supply.stops) { const d = state.supply.eff ? state.supply.eff(s) : s.dist; const gap = d == null || d > state.supply.radius; L.circleMarker([s.lat, s.lon], { radius: gap ? 6 : 4, weight: 2, color: gap ? tok('--bad') : tok('--info'), fillOpacity: .5 }).bindPopup(t('app.nearestAvailableVehicle', { name: esc(s.name), kind: s.kind, v2: s.dist == null ? '—' : t('app.mStraightLine', { n: fmt(s.dist) }), v3: s.walk != null ? ` · ${t('app.mWalkMin', { walk: fmt(s.walk), walkMin: fmt(s.walkMin) })}` : '', v4: esc(s.walkOp || s.op || '') })).addTo(L_.supply); }
 }
 
 // ---------- Steuerung ----------
@@ -2024,7 +2184,12 @@ function populateOperators() {
 }
 function bind() {
   // Gebietswahl: Grenzen lädt erst der Live-Abruf (Ortszuordnung) bzw. die Grenz-Ebene; die Karte zeigt bis dahin die Sammler-Positionen
-  $('#sel-scope').addEventListener('change', async (e) => { state.scope = e.target.value; state.live = null; state.supply = null; pendingLive = false; clearNotice('scope'); if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; populateOperators(); syncUrl(); renderAll(); autoLive(); });
+  // Pfeiltasten auf der geschlossenen Liste lösen je Schritt „change“ aus: per Tastatur erst nach 400 ms Ruhe wechseln (Enter sofort),
+  // sonst startet jeder Schritt einen Gebietswechsel samt Live-Abruf aller Feeds
+  const applyScope = (v) => { if (v === state.scope) return; state.scope = v; state.live = null; state.supply = null; pendingLive = false; clearNotice('scope'); if (state.mode === 'live') state.mode = 'collector', $('#sel-mode').value = 'collector'; populateOperators(); syncUrl(); renderAll(); autoLive(); };
+  let scopeT = null, scopeByKey = false;
+  $('#sel-scope').addEventListener('keydown', (e) => { if (e.key === 'Enter' && scopeT) { clearTimeout(scopeT); scopeT = null; applyScope(e.target.value); return; } if (/^(Arrow|Page)|^(Home|End)$/.test(e.key) || e.key.length === 1) scopeByKey = true; });
+  $('#sel-scope').addEventListener('change', (e) => { clearTimeout(scopeT); scopeT = null; const v = e.target.value; if (scopeByKey) { scopeByKey = false; scopeT = setTimeout(() => { scopeT = null; applyScope(v); }, 400); } else applyScope(v); });
   $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; syncUrl(); renderAll(); });
   $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; syncUrl(); renderAll(); });
   $('#btn-share').addEventListener('click', copyLink);
@@ -2055,14 +2220,23 @@ function bind() {
   $('#in-charge').addEventListener('change', (e) => { state.thresholds.charge = +e.target.value || 20; if (state.live) recomputeLive(); renderAll(); });
   $('#in-range').addEventListener('change', (e) => { state.thresholds.range = +e.target.value || 5; if (state.live) recomputeLive(); renderAll(); });
   $('#hist-days').addEventListener('click', (e) => { const b = e.target.closest('[data-day]'); if (!b) return; state.histDay = b.dataset.day; renderHistory(); markDirty('signals', 'live'); });
-  document.addEventListener('click', (e) => { const b = e.target.closest('[data-more]'); if (!b || !MORE[b.dataset.more]) return; MORE[b.dataset.more].n += 100; MORE_RENDER[b.dataset.more]?.(); });
+  // weitere Zeilen: danach Fokus auf die erste neue Zeile (der Knopf selbst verschwindet beim Neuaufbau)
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-more]'); if (!b || !MORE[b.dataset.more]) return; const key = b.dataset.more, n = MORE[key].n; MORE[key].n += 100; MORE_RENDER[key]?.(); const td = $(`#tbl-${key} tbody`)?.rows[n]?.cells[0]; if (td) { td.tabIndex = -1; td.focus(); } });
+  // Kartenlegende: Anbieter hervorheben (erneuter Klick hebt auf)
+  $('#map-legend-ops').addEventListener('click', (e) => { const b = e.target.closest('[data-map-hl]'); if (!b) return; const o = b.dataset.mapHl; state.mapFocus = state.mapFocus === o ? null : o; renderMap(); $(`#map-legend-ops [data-map-hl="${CSS.escape(o)}"]`)?.focus(); });
+  // Abdeckung: Gebiet aufheben bzw. wieder anwenden
+  $('#cov-sub').addEventListener('click', (e) => { if (!e.target.closest('[data-cov-all]')) return; covAllFor = covAllFor === state.scope ? null : state.scope; renderCoverage(); $('#cov-sub [data-cov-all]')?.focus(); });
+  // Sprung in einen Abschnitt einer anderen Ansicht (z. B. Nutzung → Quellen › Kalibrierung)
+  document.addEventListener('click', (e) => { const a = e.target.closest('a[data-jump]'); if (!a) return; e.preventDefault(); location.hash = a.getAttribute('href'); setTimeout(() => { const el = document.getElementById(a.dataset.jump); if (el) { el.scrollIntoView({ block: 'start' }); el.tabIndex = -1; el.focus({ preventScroll: true }); } }, 250); });
   $('#sig-filter').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; sigFilter = b.dataset.cat; renderSignals(); });
   $('#cov-search').addEventListener('input', renderCoverage); $('#cov-dir').addEventListener('change', renderCoverage);
   $('#src-search').addEventListener('input', renderSourceTable); $('#src-status').addEventListener('change', renderSourceTable);
   $('#btn-supply').addEventListener('click', checkSupply);
   $('#btn-supply-map').addEventListener('click', () => { renderSupplyLayer(); location.hash = '#live'; });
   $('#btn-csv').addEventListener('click', exportCsv);
-  $('#btn-theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme; const next = cur === 'light' ? 'dark' : cur === 'dark' ? '' : 'light'; if (next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme; try { localStorage.setItem('mp-theme', next); } catch {} });
+  $('#btn-theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme; const next = cur === 'light' ? 'dark' : cur === 'dark' ? '' : 'light'; if (next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme; try { localStorage.setItem('mp-theme', next); } catch {} if (dataReady) renderAll(); });
+  // Anbieter- und Ebenenfarben haben je Thema eigene Stufen: bei Themenwechsel (Knopf oder System) neu zeichnen
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (dataReady && !document.documentElement.dataset.theme) renderAll(); });
   document.addEventListener('click', (e) => { const a = e.target.closest('.pick-muni'); if (!a) return; e.preventDefault(); $('#sel-scope').value = a.dataset.ags; $('#sel-scope').dispatchEvent(new Event('change')); location.hash = '#live'; window.scrollTo({ top: 0 }); });
   window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
 }
@@ -2077,12 +2251,80 @@ function exportCsv() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `mobility-pulse_${state.scope}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
+// Seitenweite Ergänzungen: Rahmenschutz, Hinweisband für abweichenden Datenstand, Höhe der Kopfleiste für scroll-padding,
+// Leaflet-Bedienelemente in der Sprache der Seite (alle Karten, auch die der Module), Schriftausgleich für Diagramme mit festem viewBox
+function relabelLeaflet(root = document) {
+  for (const [sel, key] of [['.leaflet-control-zoom-in', 'common.zoomIn'], ['.leaflet-control-zoom-out', 'common.zoomOut']]) for (const a of root.querySelectorAll(sel)) { a.title = t(key); a.setAttribute('aria-label', t(key)); }
+  for (const a of root.querySelectorAll('.leaflet-control-attribution a[href*="leafletjs.com"]')) { a.title = t('common.leafletTitle'); a.lang = 'en'; }
+}
+const K_RO = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => es.forEach(e => fixChartFont(e.target))) : null;
+// Diagramme mit festem viewBox (z. B. web/report.js): Schrift über --k auf ≈ 11 px halten, begrenzt auf 0,75–1,4, damit Achsentexte im Rand bleiben
+function fixChartFont(svg) { const vb = svg.viewBox?.baseVal, w = svg.clientWidth; if (!vb?.width || !w) return; svg.style.setProperty('--k', Math.min(1.4, Math.max(0.75, vb.width / w)).toFixed(3)); }
+// Tabellen-Rahmen (.tbl) scrollen am Telefon quer: per Tastatur erreichbar machen, benannt nach Beschriftung oder Überschrift des Abschnitts
+function scrollRegion(d) {
+  if (d.hasAttribute('tabindex')) return;
+  d.tabIndex = 0; d.setAttribute('role', 'region');
+  if (!d.hasAttribute('aria-label') && !d.hasAttribute('aria-labelledby')) {
+    const clean = (s) => (s || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+    const base = clean(d.querySelector('caption')?.textContent || d.closest('.panel,.rp-sec,.rp-cap,section')?.querySelector('h2,h3,h4')?.textContent);
+    if (!base) return;
+    // Bereichsnamen eindeutig halten (axe landmark-unique): sonst erste Spaltenüberschrift, dann laufende Nummer anhängen
+    const taken = (n) => [...document.querySelectorAll('[role="region"][aria-label]')].some(x => x !== d && x.getAttribute('aria-label') === n);
+    let name = base; const th = clean(d.querySelector('thead th')?.textContent);
+    if (taken(name) && th) name = `${base}: ${th}`;
+    for (let k = 2; taken(name); k++) name = `${base} (${k})`;
+    d.setAttribute('aria-label', name);
+  }
+}
+function enhanceUi() {
+  if (window.top !== window.self) { document.body.classList.add('framed'); notice(() => t('app.framedWarning'), 'bad', 'framed'); }
+  if (CFG.DATA_OK) {
+    const b = document.createElement('div'); b.className = 'note warn data-origin'; b.id = 'data-origin';
+    const put = () => { b.innerHTML = t('app.dataOriginBanner', { src: `<span class="mono">${esc(QS.get('data'))}</span>` }); };
+    put(); onLang(put); $('#notice')?.before(b);
+  }
+  const bar = $('.topbar'), setH = () => document.documentElement.style.setProperty('--topbar-h', `${Math.round(bar.getBoundingClientRect().height)}px`);
+  if (bar) { setH(); if (typeof ResizeObserver === 'function') new ResizeObserver(setH).observe(bar); }
+  const main = $('main');
+  if (main) new MutationObserver((ms) => {
+    let leaf = false;
+    for (const m of ms) for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.closest?.('.leaflet-control-container') || n.querySelector?.('.leaflet-control-zoom')) leaf = true;
+      for (const s of n.matches?.('svg.chart') ? [n] : n.querySelectorAll?.('svg.chart') || []) if (!s.dataset.px) { fixChartFont(s); K_RO?.observe(s); }
+      for (const d of n.matches?.('.tbl') ? [n] : n.querySelectorAll?.('.tbl') || []) scrollRegion(d);
+    }
+    if (leaf) relabelLeaflet(main);
+  }).observe(main, { childList: true, subtree: true });
+  main?.querySelectorAll('.tbl').forEach(scrollRegion);
+  relabelLeaflet(); onLang(() => relabelLeaflet());
+// Werkzeuge (Stand, Link kopieren, Kundenansicht, DE/EN, Hell/Dunkel): am Desktop in der Seitenleiste, am Telefon im Menü „⋯“.
+  // In der Kopfleiste bleiben Ort, Segmente und „Live abrufen“: sie bleibt in allen Bereichen einzeilig (vorher 2 Zeilen im Marktbild).
+  const mq = matchMedia('(max-width: 820px)');
+  const placeTools = () => {
+    const mob = mq.matches, side = $('#side-tools'), menu = $('#tools-m-body');
+    if (!side || !menu) return;
+    for (const id of ['stand-pill', 'btn-share', 'btn-client', 'lang-switch', 'btn-theme']) { const el = $(`#${id}`); if (el) (mob ? menu : side).appendChild(el); }
+    if (!mob) $('#tools-m')?.removeAttribute('open');
+  };
+  placeTools(); mq.addEventListener?.('change', placeTools);
+  document.addEventListener('click', (e) => { const m = $('#tools-m'); if (m?.open && !m.contains(e.target)) m.open = false; });
+  // Filter am Telefon eingeklappt: Zusammenfassung als Knopf
+  $('#filters-sum')?.addEventListener('click', () => { const f = $('#filters'), open = !f.classList.contains('open'); f.classList.toggle('open', open); $('#filters-sum').setAttribute('aria-expanded', String(open)); });
+}
+// Zusammenfassung der Filterleiste (Telefon): Gebiet · Anbieter · Fahrzeugart, nur die in der Ansicht wirksamen
+function renderFilterSum() {
+  const b = $('#filters-sum'); if (!b) return;
+  const fs = (FILTERS[currentView] || 'scope op type mode').split(' ');
+  const parts = [fs.includes('scope') ? scopeLabel() : null, fs.includes('op') ? (state.operator === 'all' ? t('app.allOperatorsOnSite') : state.operator) : null, fs.includes('type') ? (state.type === 'all' ? t('html.allVehicleTypes') : TYPE[state.type] || state.type) : null].filter(Boolean);
+  b.textContent = parts.join(' · ');
+}
 async function init() {
   try { const tq = localStorage.getItem('mp-theme'); if (tq) document.documentElement.dataset.theme = tq; } catch {}
   applyStatic(); renderLangSwitch(); bindLangSwitch(); onLang(onLanguage); renderLangHint();
   if (QS.get('kunde') === '1') { document.body.classList.add('mode-client'); $('#btn-client').setAttribute('aria-pressed', 'true'); $('#btn-share').textContent = t('app.copyClientLink'); }
   if (DEMO) document.body.classList.add('mode-demo');
-  initMap(); bind();
+  initMap(); bind(); enhanceUi();
   // getJsonShared: ops.js lädt ops/<Land>.json, Zonen, Zellen usw. über denselben Promise-Cache wie die Übersichtskarte
   initOps({ state, CFG, getJson: getJsonShared, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE, econFor, syncUrl });
   $$('abbr[data-gloss]').forEach(a => { a.title = gl(a.dataset.gloss); }); // Glossar-Tooltips aus einer Quelle
@@ -2098,11 +2340,11 @@ async function init() {
   // Sammler-Stand alle 2 Min. prüfen; bei neuem Lauf alles neu laden (Ereignis-, Zonen- und Flottendateien inklusive)
   setInterval(async () => {
     const s = await getJson(fresh('status.json')); if (!s.ok || s.json.at === state.status?.at) return;
-    const l = await getJson(fresh('latest.json')); if (!l.ok) return;
+    const l = await getJson(latestUrl(s.json)); if (!l.ok) return;
     state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
-    const keepB = REQ.get('boundaries-active.json'); resetCache(); if (keepB && state.bIndex) REQ.set('boundaries-active.json', keepB); // Grenzen ändern sich nicht je Lauf
-    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.(); Cmp.resetCompareCache?.();
+    const keepB = [...REQ].filter(([k]) => k.startsWith('boundaries')); resetCache(); if (state.bIndex) for (const [k, p] of keepB) REQ.set(k, p); // Grenzen ändern sich nicht je Lauf
+    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.(); Cmp.resetCompareCache?.(); Sp.resetSpotsCache?.();
     const hi = await cached('history/index.json', 25000); if (hi.ok) state.histIndex = hi.json;
     populateScope(); populateOperators(); clearNotice('stale'); renderAll();
   }, 2 * 60e3);

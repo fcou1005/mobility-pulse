@@ -27,12 +27,27 @@ export async function startExtra() {
     { name: 'free_bike_status', url: `${other}/leak/free_bike_status.json?via=${encodeURIComponent(base.replace(/^http:\/\//, ''))}` }, // anderer Host, Host-Name als Text in der URL
     { name: 'vehicle_types', url: `${base}/auth/redir` }, // Weiterleitung auf anderen Host
   ] } });
+  // Spiegelquelle mit umgeschlüsselten Kennungen (M-1): /rk/a = Betreiber direkt, /rk/b = Landesfeed, dieselben 30 Räder unter anderen Kennungen.
+  // /rk/c = Kind eines Manifests (/mf/manifest.json, abschaltbar über st.manifestUp, M-6) mit 60 E-Scootern, Ladestand höchstens 35 % (M-2).
+  st.manifestUp = true;
+  const rk = (v) => {
+    const veh = v === 'c' ? [...Array(60)].map((_, i) => ({ bike_id: `c-${i}`, lat: +(48.50 + i * 0.0007).toFixed(5), lon: 9.02, is_reserved: false, is_disabled: false, vehicle_type_id: 'sc', current_fuel_percent: Math.round(i * 0.6), last_reported: n() }))
+      : [...Array(30)].map((_, i) => ({ bike_id: `${v}-${i}`, lat: +(48.50 + i * 0.0015).toFixed(5), lon: 9.10, is_reserved: false, is_disabled: false, vehicle_type_id: 'bk', last_reported: n() }));
+    return {
+      'gbfs.json': () => head({ de: { feeds: ['system_information', 'vehicle_types', 'free_bike_status'].map(f => ({ name: f, url: `${base}/rk/${v}/${f}.json` })) } }),
+      'system_information.json': () => head(v === 'c' ? { system_id: 'mfkid', name: 'Lime Test', operator: 'Lime', timezone: 'Europe/Berlin' } : { system_id: `rk_${v}`, name: 'nextbike RK', operator: 'nextbike', timezone: 'Europe/Berlin' }),
+      'vehicle_types.json': () => head({ vehicle_types: [{ vehicle_type_id: 'bk', form_factor: 'bicycle', propulsion_type: 'human' }, { vehicle_type_id: 'sc', form_factor: 'scooter', propulsion_type: 'electric', max_range_meters: 40000 }] }),
+      'free_bike_status.json': () => head({ bikes: veh }),
+    };
+  };
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x'); const key = req.headers['x-api-key'] || null;
     log.push({ path: u.pathname, host: req.headers.host, key });
     const json = (b, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
     const [, kind, file] = u.pathname.split('/');
     if (kind === 'p' && p[file]) return json(p[file]());
+    if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
+    if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);
     if (kind === 'cb') return json(cb());
     if (kind === 'auth') {
       if (key !== 'geheim-123') return json({}, 401);

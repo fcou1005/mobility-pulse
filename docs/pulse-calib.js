@@ -6,11 +6,12 @@
 //  2. Methodenfaktor k = amtliche Fahrten je Fahrzeug und Tag Berlin (E-Scooter) im passenden Quartal ÷ eigene Messung Berlin
 //     (Zeitraum der Tagesdateien). Passendes Quartal: dasselbe Quartal, falls veröffentlicht, sonst dasselbe Kalenderquartal des
 //     Vorjahres, sonst das jüngste. Spanne aus dem kleinsten und größten Quartalswert. k gilt für E-Scooter bundesweit.
-//     „vorläufig“ unter 7 Messtagen oder unter 50 % beobachteter Tagesstunden; keine Kalibrierung ohne Berliner Messung.
+//     „vorläufig, nicht angewandt“ unter 7 vollen Messtagen oder unter 50 % beobachteter Tagesstunden (k wird nur angezeigt); keine Kalibrierung
+//     ohne Berliner Messung. Kalibrierte Fahrten je Fahrzeug und Tag höchstens bis zur Plausibilitätsgrenze (rvdLimits), gekennzeichnet (capped).
 //  3. Abdeckung = eigene E-Scooter ÷ amtliche Flotte (Stand und Art der Zahl laut Quelle).
 //  4. Plausibilität ohne Faktor: Frankfurt (Jahresfahrten ÷ Tage ÷ Obergrenze = Untergrenze), Europa, Voi Konzern.
-import { DEFAULT_RIDE } from './pulse-econ.js?v=mvy6blnf';
-import { capLimit, SUSPENDED } from './pulse-report.js?v=mvy6blnf';
+import { DEFAULT_RIDE } from './pulse-econ.js?v=mvyuri2c';
+import { capLimit, SUSPENDED } from './pulse-report.js?v=mvyuri2c';
 export { SUSPENDED };
 
 export const BERLIN = '11000000';
@@ -19,7 +20,8 @@ export const BERLIN = '11000000';
 const TXT = {
   de: { sameQ: 'gleiches Quartal', prevYearQ: 'Vorjahresquartal', latestQ: 'jüngstes Quartal', assumeNoRef: 'Annahme (keine amtlichen Belege)', assumeMissing: 'Annahme (Referenz fehlt)',
     noQuarters: 'keine amtlichen Berliner Quartalswerte in reference.json', noPlausible: 'keine plausible Berliner E-Scooter-Messung ({ops} ausgeschlossen: Überzählung wahrscheinlich)',
-    noMeasure: 'keine Berliner E-Scooter-Messung im Zeitraum', fewDays: 'erst {days} von {min} Messtagen', fewHours: '{a} % statt {b} % der Tagesstunden beobachtet',
+    noMeasure: 'keine Berliner E-Scooter-Messung im Zeitraum', fewDays: 'erst {days} von {min} vollen Messtagen',
+    prelimNot: 'vorläufiger Faktor k = {k} ({lo}–{hi}) nicht angewandt: {why}', fewHours: '{a} % statt {b} % der Tagesstunden beobachtet',
     source: 'aus {ops} Berlin, {rides} Fahrten, {hours} Messstunden', unknown: 'unbekannt', single: 'k stammt nur aus einem Anbieter ({op}); andere Anbieter können anders zählen (Kennungswechsel, Kettenfahrten)',
     outside: 'Faktor {k} außerhalb {min}–{max}: Messung prüfen, nicht angewandt', licensed: 'genehmigte Flotte', active: 'aktive Flotte', perSource: 'Flotte laut Quelle',
     shareLicensed: 'Anteil an der genehmigten Flotte (Untergrenze der Feed-Abdeckung)', shareActive: 'Anteil an der aktiven Flotte (laut Quelle gerundet)', sharePerSource: 'Anteil an der Flotte laut Quelle',
@@ -27,7 +29,8 @@ const TXT = {
     scopeVoi: 'Voi in offenen Feeds (Deutschland)', scopeAll: 'E-Scooter in offenen Feeds (Deutschland)', scopeRev: 'Voi in offenen Feeds (Deutschland), Schätzung netto' },
   en: { sameQ: 'same quarter', prevYearQ: 'same quarter of the previous year', latestQ: 'latest quarter', assumeNoRef: 'assumption (no official evidence)', assumeMissing: 'assumption (reference missing)',
     noQuarters: 'no official Berlin quarterly values in reference.json', noPlausible: 'no plausible Berlin e-scooter measurement ({ops} excluded: overcount likely)',
-    noMeasure: 'no Berlin e-scooter measurement in the period', fewDays: 'only {days} of {min} measurement days', fewHours: '{a} % instead of {b} % of the hours of the day observed',
+    noMeasure: 'no Berlin e-scooter measurement in the period', fewDays: 'only {days} of {min} full measurement days',
+    prelimNot: 'provisional factor k = {k} ({lo}–{hi}) not applied: {why}', fewHours: '{a} % instead of {b} % of the hours of the day observed',
     source: 'from {ops} Berlin, {rides} trips, {hours} measured hours', unknown: 'unknown', single: 'k comes from only one operator ({op}); other operators may count differently (ID rotation, chained trips)',
     outside: 'Factor {k} outside {min}–{max}: check the measurement, not applied', licensed: 'licensed fleet', active: 'active fleet', perSource: 'fleet according to source',
     shareLicensed: 'Share of the licensed fleet (lower bound of feed coverage)', shareActive: 'Share of the active fleet (rounded according to source)', sharePerSource: 'Share of the fleet according to source',
@@ -123,16 +126,20 @@ export function methodFactor(reference, measured, { day = null, opts = CALIB, la
   const k = pick.entry.wert / measured.rvd;
   const obsShare = measured.possibleMin > 0 ? measured.obsMin / measured.possibleMin : 0;
   const why = [];
-  if (measured.days < opts.minDays) why.push(tx(lang, 'fewDays', { days: measured.days, min: opts.minDays }));
+  // Kalibrierbasis: volle Messtage (≥ 20 Stunden mit ≥ 50 Min.); ältere Messungen ohne fullDays: Tage
+  const fullDays = Number.isFinite(measured.fullDays) ? measured.fullDays : measured.days;
+  if (!(fullDays >= opts.minDays)) why.push(tx(lang, 'fewDays', { days: fullDays ?? 0, min: opts.minDays }));
   if (obsShare < opts.minObsShare) why.push(tx(lang, 'fewHours', { a: Math.round(obsShare * 100), b: Math.round(opts.minObsShare * 100) }));
   const ok = k >= opts.kMin && k <= opts.kMax;
+  const kLow = Math.min(...vals) / measured.rvd, kHigh = Math.max(...vals) / measured.rvd;
   // Herkunft offenlegen: „aus Dott Berlin, n Fahrten, x Messstunden“; nur ein Anbieter = Einschränkung
   const ops = measured.operators || [];
   const source = tx(lang, 'source', { ops: ops.join(', ') || tx(lang, 'unknown'), rides: Math.round(measured.rides || 0), hours: dec(lang, measured.obsMin / 60, 1) });
   const single = ops.length === 1 ? tx(lang, 'single', { op: ops[0] }) : null;
-  return { applied: ok, k, kLow: Math.min(...vals) / measured.rvd, kHigh: Math.max(...vals) / measured.rvd, ref: pick.entry, rule: pick.rule, quarter: pick.entry.zeitraum, source, single,
-    refMin: Math.min(...vals), refMax: Math.max(...vals), refs, measured, obsShare, prelim: why.length > 0, prelimWhy: why,
-    reason: ok ? null : tx(lang, 'outside', { k: dec(lang, k, 2), min: dec(lang, opts.kMin), max: dec(lang, opts.kMax) }) };
+  // angewandt erst mit ausreichender Kalibrierbasis; vorläufig: k nur anzeigen (reason nennt Wert und Vorbehalte)
+  return { applied: ok && !why.length, k, kLow, kHigh, ref: pick.entry, rule: pick.rule, quarter: pick.entry.zeitraum, source, single,
+    refMin: Math.min(...vals), refMax: Math.max(...vals), refs, measured, obsShare, fullDays, prelim: why.length > 0, prelimWhy: why,
+    reason: !ok ? tx(lang, 'outside', { k: dec(lang, k, 2), min: dec(lang, opts.kMin), max: dec(lang, opts.kMax) }) : why.length ? tx(lang, 'prelimNot', { k: dec(lang, k, 2), lo: dec(lang, kLow, 2), hi: dec(lang, kHigh, 2), why: why.join('; ') }) : null };
 }
 /**
  * Faktor auf die gemessenen Fahrten einer Gruppe: Modus „gemessen“ immer 1; sonst übersteuert die eigene Korrektur (manual ≠ 1),
@@ -146,25 +153,34 @@ export function factorFor(type, { manual = 1, k = null, mode = 'kal', suspended 
   return { f: 1, lo: 1, hi: 1, source: 'gemessen' };
 }
 const LINEAR = ['rides', 'ridesDay', 'rvd', 'rvdAvail', 'utilization', 'revDay', 'revPerVehicleDay', 'revPerHour'];
-/** Kennzahlen (pulse-econ kpis/combine) mit Faktor f auf die Fahrten: alle fahrtabhängigen Werte skalieren linear */
-export function applyFactor(c, f) {
+/** Faktor so begrenzen, dass rvd × f die Plausibilitätsgrenze nicht übersteigt (keine kalibrierten Werte über der eigenen Überzählungsgrenze) */
+export function cappedFactor(f, rvd, limit) {
+  if (!(f > 1) || limit == null || !(rvd > 0) || rvd * f <= limit) return { f, capped: false };
+  return { f: Math.max(1, limit / rvd), capped: true };
+}
+/** Kennzahlen (pulse-econ kpis/combine) mit Faktor f auf die Fahrten: alle fahrtabhängigen Werte skalieren linear; limit: Grenze für rvd × f */
+export function applyFactor(c, f, { limit = null } = {}) {
   if (!c) return c; if (f === 1) return { ...c, factor: 1 };
-  const out = { ...c, factor: f };
+  const cf = cappedFactor(f, c.rvd, limit); f = cf.f;
+  const out = { ...c, factor: f, ...(cf.capped ? { capped: true } : {}) };
   for (const k of LINEAR) if (c[k] != null && Number.isFinite(c[k])) out[k] = c[k] * f;
   return out;
 }
 /**
- * Kommunal-Bericht kalibrieren: E-Scooter-Gruppen × k (Spanne kLow–kHigh), andere Arten unverändert.
- * Rückgabe { groups: Map key → { ridesDay, rvd, per1000Rides, lo, hi, factor }, totals: { ridesDay, rvd, per1000Rides, lo, hi }, applied }.
+ * Kommunal-Bericht kalibrieren: E-Scooter-Gruppen × k (Spanne kLow–kHigh), andere Arten unverändert. limits (rvdLimits): kalibrierte Fahrten je
+ * Fahrzeug und Tag höchstens bis zur Grenze (Faktor gekappt, capped: true).
+ * Rückgabe { groups: Map key → { ridesDay, rvd, per1000Rides, lo, hi, factor, capped }, totals: { ridesDay, rvd, per1000Rides, lo, hi }, applied, capped }.
  */
-export function calibrateReport(rep, k) {
+export function calibrateReport(rep, k, { limits = null } = {}) {
   const groups = new Map(); const on = !!k?.applied;
-  let rd = 0, lo = 0, hi = 0, fleet = 0, any = false;
+  let rd = 0, lo = 0, hi = 0, fleet = 0, any = false, cappedAny = false;
   for (const g of rep?.groups || []) {
     const suspended = (g.flags || []).includes(SUSPENDED);
-    const f = on && g.ty === 'scooter' && g.plausible ? { f: k.k, lo: k.kLow, hi: k.kHigh } : { f: 1, lo: 1, hi: 1 };
+    const lim = limits?.[g.ty] ?? null, cap = (x) => cappedFactor(x, g.rvd, lim);
+    const f = on && g.ty === 'scooter' && g.plausible ? { f: cap(k.k).f, lo: cap(k.kLow).f, hi: cap(k.kHigh).f, capped: cap(k.k).capped } : { f: 1, lo: 1, hi: 1, capped: false };
     const v = g.ridesDay;
-    const x = { factor: f.f, calibrated: f.f !== 1, suspended, ridesDay: v == null ? null : v * f.f, lo: v == null ? null : v * f.lo, hi: v == null ? null : v * f.hi };
+    const x = { factor: f.f, calibrated: f.f !== 1, suspended, capped: f.capped, ridesDay: v == null ? null : v * f.f, lo: v == null ? null : v * f.lo, hi: v == null ? null : v * f.hi };
+    if (f.capped) cappedAny = true;
     x.rvd = x.ridesDay != null && g.fleet > 0 ? x.ridesDay / g.fleet : null; x.rvdLo = x.lo != null && g.fleet > 0 ? x.lo / g.fleet : null; x.rvdHi = x.hi != null && g.fleet > 0 ? x.hi / g.fleet : null;
     x.per1000Rides = rep.pop > 0 && x.ridesDay != null ? (x.ridesDay / rep.pop) * 1000 : null;
     groups.set(g.key, x);
@@ -173,7 +189,7 @@ export function calibrateReport(rep, k) {
   const per = (v) => (rep?.pop > 0 && v != null ? (v / rep.pop) * 1000 : null);
   const totals = any ? { ridesDay: rd, lo, hi, rvd: fleet > 0 ? rd / fleet : null, rvdLo: fleet > 0 ? lo / fleet : null, rvdHi: fleet > 0 ? hi / fleet : null, per1000Rides: per(rd), per1000Lo: per(lo), per1000Hi: per(hi) } : null;
   // angewandt nur, wenn mindestens eine Zeile tatsächlich kalibriert ist (alle E-Scooter ausgesetzt → wie gemessen anzeigen)
-  return { groups, totals, applied: on && [...groups.values()].some(x => x.calibrated) };
+  return { groups, totals, applied: on && [...groups.values()].some(x => x.calibrated), capped: cappedAny };
 }
 
 // ---------- 3. Abdeckung ----------
@@ -199,7 +215,7 @@ const daysOfYear = (y) => ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366
 export function plausibilityChecks(reference, own = {}, k = null, lang = 'de') {
   const out = []; const f = k?.applied ? k.k : null; const lim = rvdLimits(reference).scooter ?? null;
   const over = (rvd) => rvd != null && lim != null && rvd > lim; // Überzählung: kein Faktor
-  const cal = (v, rvd = v) => (v != null && f != null && !over(rvd) ? v * f : null);
+  const cal = (v, rvd = v) => (v != null && f != null && !over(rvd) ? v * cappedFactor(f, rvd, lim).f : null); // höchstens bis zur Grenze
   // Frankfurt u. a.: Jahresfahrten ÷ Tage ÷ Obergrenze (gültig im Jahr der Fahrten) = Untergrenze der Fahrten je Fahrzeug und Tag
   for (const t of reference?.fahrten || []) {
     if (!t?.ags || t.type !== 'scooter' || !fin(t.wert)) continue;
