@@ -95,7 +95,7 @@ function cellCenter(S, cell) { const [a, b] = cell.split(':').map(Number); retur
 const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
 const ymd = (d) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), 12));
 const dmy = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(ymd(d)) : '–');
-const dm = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(ymd(d)) + (lang() === 'de' ? '.' : '') : '–');
+const dm = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(ymd(d)) : '–');
 const typeLabel = (tq) => (tq == null ? t('flows.severalTypes') : TYPE[tq] || tq);
 const bandLabel = (S, b) => { const x = S.bands[b]; return x ? t('flows.bandRange', { label: t(`band.${b}`), from: x.from, to: x.to }) : String(b); };
 function durText(ctx, sec) { if (sec == null || !Number.isFinite(sec)) return '—'; return sec < 3600 ? t('flows.min', { v0: ctx.fmt(sec / 60) }) : t('flows.h', { v0: ctx.fmt(sec / 3600, 1) }); }

@@ -387,6 +387,18 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   assert(sumH(q.hourly, 'pickup') === 0 && sumH(q.hourly, 'swap') === 0 && sumH(q.hourly, 'start') === 2 && sumH(q.hourly, 'end') === 1 && sumH(q.hourly, 'rot') === 1,
     'M-2: Ladestand 10 % → Fahrtbeginn statt Abholung; Sprung 30 → 90 kein Akkutausch; gleicher Fingerabdruck 80 m = Kennungswechsel');
 }
+// Abgeleiteter Ladestand (batteryDerived: Reichweite ÷ Maximalreichweite, Lime BW) wie die unplausible Skala: nur Fingerabdruck, keine Abholschwelle
+{
+  const u0 = Date.parse('2026-11-06T14:00:00Z'), dt = 20 * 60e3;
+  const S = (id, lat, b) => V(id, lat, 9.00, { operator: 'Lime', sourceId: 'lb', batteryPct: b, batteryDerived: true });
+  const recsS = [{ id: 'lb', status: 'live' }];
+  const base = [...Array(30)].map((_, i) => S('y' + i, 48.20 + i * 0.01, 25));
+  let q = T.trackRun(null, { vehicles: [...base, S('lo', 48.60, 10), S('sw', 48.61, 30)], stations: [], sourceRecs: recsS, now: u0 });
+  q = T.trackRun(q.state, { vehicles: [...base, S('lo', 48.60, 10), S('sw', 48.61, 30)], stations: [], sourceRecs: recsS, now: u0 + dt });
+  assert((q.state.v[T.vehicleKey('Lime', 'lo')][3] & 16) === 16 && q.state.v[T.vehicleKey('Lime', 'lo')][2] === 10, 'abgeleiteter Ladestand: Fingerabdruck im Zustand (F_BATREL)');
+  q = T.trackRun(q.state, { vehicles: [...base, S('sw2', 48.610045, 90)], stations: [], sourceRecs: recsS, now: u0 + 2 * dt });
+  assert(sumH(q.hourly, 'pickup') === 0 && sumH(q.hourly, 'swap') === 0 && sumH(q.hourly, 'start') === 2, 'abgeleiteter Ladestand 10 % → Fahrtbeginn statt Abholung; Sprung 30 → 90 kein Akkutausch');
+}
 // M-3: Altlauf (dt > 45 Min., vor der Lückenregel gezählt) in Zellendateien – Band fällt für den Tag aus
 {
   const day = '2026-11-01', at = (hm) => Date.parse(`${day}T${hm}:00Z`); // 07:25 UTC = 08:25 Uhr (Band Morgen)

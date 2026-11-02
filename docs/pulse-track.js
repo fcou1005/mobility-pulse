@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvyy3d52';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mvyywh5o';
 
 export const TRACK_VERSION = 2;
 // Regelstand der Ereigniszählung (M-19): ändert sich mit jeder Regeländerung; je Lauf in events/<Tag>.json → runs[k][3] und runs.json
@@ -182,8 +182,11 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     const key = vehicleKey(v.operator, v.rawId, hmac);
     seen.add(key);
     const lat = Math.round(v.lat * 1e5), lon = Math.round(v.lon * 1e5);
-    const bat = v.batteryPct != null ? Math.round(v.batteryPct) : null; // absolut verwendbar
-    const fp = bat ?? (v.batteryFp != null && Number.isFinite(v.batteryFp) ? Math.round(v.batteryFp) : null); // Fingerabdruck (auch bei unplausibler Skala)
+    // absolut verwendbar; ein aus Reichweite ÷ Maximalreichweite abgeleiteter Ladestand (batteryDerived, z. B. Lime BW) nur als Fingerabdruck wie die
+    // unplausible Skala: bis 02.11.2026 zählte die Abholschwelle 15 % darauf 40 % der Lime-Abgänge in Stuttgart als Abholung statt als Fahrt
+    const bat = v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null;
+    const fpRaw = v.batteryFp != null && Number.isFinite(v.batteryFp) ? v.batteryFp : v.batteryDerived && v.batteryPct != null ? v.batteryPct : null;
+    const fp = bat ?? (fpRaw != null ? Math.round(fpRaw) : null); // Fingerabdruck (auch bei unplausibler Skala bzw. abgeleitetem Ladestand)
     let flags = (v.disabled ? F_DISABLED : 0) | (v.reserved ? F_RESERVED : 0) | (bat == null && fp != null ? F_BATREL : 0);
     const op = D('op', v.operator), ags = D('ags', v.ags), src = D('src', v.sourceId || ''), ty = v.type || 'unknown';
     const e = state.v[key];

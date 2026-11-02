@@ -2,12 +2,12 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvyy3d52';
-import * as K from './pulse-calib.js?v=mvyy3d52';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyy3d52';
-import { decodeFleet } from './pulse-ops.js?v=mvyy3d52';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyy3d52';
-import { mapKeys } from './mapkeys.js?v=mvyy3d52';
+import * as R from './pulse-report.js?v=mvyywh5o';
+import * as K from './pulse-calib.js?v=mvyywh5o';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyywh5o';
+import { decodeFleet } from './pulse-ops.js?v=mvyywh5o';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyywh5o';
+import { mapKeys } from './mapkeys.js?v=mvyywh5o';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -16,7 +16,7 @@ const CACHE = new Map();
 const stamp = (ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: R.TZ }).format(new Date(ms)) : '–');
 const hhmm = (ms) => (ms ? dateFmt({ hour: '2-digit', minute: '2-digit', timeZone: R.TZ }).format(new Date(ms)) : '–');
 const dd = (day) => (/^\d{4}-\d{2}-\d{2}$/.test(day || '') ? dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`)) : R.dayLabel(day));
-const dm = (day) => (/^\d{4}-\d{2}-\d{2}$/.test(day || '') ? dateFmt({ day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`)) + (lang() === 'de' ? '.' : '') : String(day || ''));
+const dm = (day) => (/^\d{4}-\d{2}-\d{2}$/.test(day || '') ? dateFmt({ day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`)) : String(day || ''));
 const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
 const WD = () => (lang() === 'en' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : R.WEEKDAYS);
 const WDL = () => (lang() === 'en' ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : R.WEEKDAYS_LONG);
