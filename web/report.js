@@ -1165,7 +1165,7 @@ function availData(ctx, s) {
   const { state } = ctx; const scope = state.scope && state.scope !== 'DE' ? state.scope : null;
   const rows = R.availabilityRows(state.latest, { operator: s.op, type: s.type, minTotal: s.min, keepAgs: scope });
   const th = state.latest?.thresholds || {};
-  const rangeOnly = (op) => R.RANGE_ONLY_OPS.includes(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
+  const roSet = R.rangeOnlyOperators(state.latest?.sources), rangeOnly = (op) => roSet.has(op); // wie Sammler und app.js
   // Einsatzbereit: aus den Zählern je Gruppe in latest.json (energyKnown, ready; Sammler seit latest.energy), sonst je Land aus ops/<Land>.json
   const fromGroups = (k) => { if (!s.readyCache.has(k)) { const m = new Map(); for (const [key, g] of Object.entries(state.latest.groups || {})) { const [ags, op, ty] = key.split('|'); if (ags === 'DE' || (s.op !== 'all' && op !== s.op) || (s.type !== 'all' && ty !== s.type)) continue; const o = m.get(ags) || { total: 0, known: 0, ready: 0 }; o.total += g.total || 0; o.known += g.energyKnown || 0; o.ready += g.ready || 0; m.set(ags, o); } s.readyCache.set(k, m); } return s.readyCache.get(k); };
   const readyFor = (land) => { if (state.latest?.energy) return fromGroups(`groups|${s.op}|${s.type}`); const k = `${land}|${s.op}|${s.type}`; if (!s.readyCache.has(k) && s.ops.has(land)) s.readyCache.set(k, R.readinessFromOps(s.ops.get(land), { operator: s.op, type: s.type, charge: th.chargeThreshold ?? 20, range: th.rangeThreshold ?? 5, rangeOnly })); return s.readyCache.get(k) || null; };

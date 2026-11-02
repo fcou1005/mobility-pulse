@@ -10,8 +10,8 @@
 //     ohne Berliner Messung. Kalibrierte Fahrten je Fahrzeug und Tag höchstens bis zur Plausibilitätsgrenze (rvdLimits), gekennzeichnet (capped).
 //  3. Abdeckung = eigene E-Scooter ÷ amtliche Flotte (Stand und Art der Zahl laut Quelle).
 //  4. Plausibilität ohne Faktor: Frankfurt (Jahresfahrten ÷ Tage ÷ Obergrenze = Untergrenze), Europa, Voi Konzern.
-import { DEFAULT_RIDE } from './pulse-econ.js?v=mvyx0klq';
-import { capLimit, SUSPENDED } from './pulse-report.js?v=mvyx0klq';
+import { DEFAULT_RIDE } from './pulse-econ.js?v=mvyy1hb9';
+import { capLimit, SUSPENDED } from './pulse-report.js?v=mvyy1hb9';
 export { SUSPENDED };
 
 export const BERLIN = '11000000';

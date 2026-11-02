@@ -251,7 +251,7 @@ for (const { src, sys, probe, error } of results) {
   rec.cors = corsOk;
   if ((src.auth || !corsOk) && usable) {
     snapshots.push({ id: src.id, at: now, feedAgeMs: rec.feedAgeMs, operator: src.operator,
-      vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null]),
+      vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null]),
       stations: sys.stations.filter(s => C.validLatLon(s.lat, s.lon)).map(s => [+s.lat.toFixed(5), +s.lon.toFixed(5), s.name, s.physicalAvailable, s.bookable, s.docksAvailable, s.renting ? 1 : 0, s.returning ? 1 : 0]) });
   }
 }
@@ -489,12 +489,13 @@ for (const [k, v] of groups) groupsOut[k] = v;
 // der Quelle (v.rangeFlat, C.rangeFlatCheck) zählt nicht – ohne verwendbaren Ladestand ist die Energie dann unbekannt, nicht niedrig.
 // energyKnown = Fahrzeuge mit Energieangabe, energyLow = Energie niedrig, energyRangeOnly(Low) = davon nur über die Reichweite beurteilt,
 // ready = einsatzbereit (nicht gesperrt, nicht reserviert, Energieangabe vorhanden und nicht niedrig; wie R.readinessFromOps). Gesperrte zählen bei Energie mit.
-const rangeOnlyOps = new Set(R.RANGE_ONLY_OPS);
-for (const r of sourceOut) if (r.operator && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0 && ['live', 'delayed'].includes(r.feedStatus || r.status)) rangeOnlyOps.add(r.operator);
+// Nur Reichweite: je Fahrzeug, wenn der Anbieter nirgends einen Ladestand meldet (R.rangeOnlyOperators) oder der Ladestand des Fahrzeugs nur aus
+// Reichweite ÷ Maximalreichweite abgeleitet ist (batteryDerived); bis 02.11.2026 machte eine einzige Quelle ohne Ladestand den ganzen Anbieter dazu
+const rangeOnlyOps = R.rangeOnlyOperators(sourceOut);
 // Gruppen ohne Fahrzeug mit Energieangabe tragen die Felder nicht (latest.energy gesetzt = fehlendes Feld bedeutet 0)
 for (const v of dv.vehicles) {
   const st = groups.get(`${v.ags}|${v.operator}|${v.type}`); if (!st) continue;
-  const ro = rangeOnlyOps.has(v.operator), rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: rangeThreshold, rangeOnly: ro, rangeDerived: rd, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat });
+  const ro = rangeOnlyOps.has(v.operator) || !!v.batteryDerived, rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: rangeThreshold, rangeOnly: ro, rangeDerived: rd, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat });
   if (low == null) continue;
   if (st.energyKnown == null) Object.assign(st, { energyKnown: 0, energyLow: 0, energyRangeOnly: 0, energyRangeOnlyLow: 0, ready: 0 });
   st.energyKnown++; if (low) st.energyLow++;
@@ -866,7 +867,7 @@ try {
       const idleMin = e ? Math.round((now - e[8]) / 60e3) : null;
       // Feld 11 reichweiteSchwelleKm (null = Standard), Feld 12 reichweiteKonstant (1 = Reichweite der Quelle konstant); Felder am Zeilenende ohne
       // Wert entfallen (Leser werten fehlende Felder als null), explizites null nur vor einem späteren Wert
-      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null];
+      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null];
       while (row.length && row[row.length - 1] == null) row.pop();
       o.vehicles.push(row);
     }

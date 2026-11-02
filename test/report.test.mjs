@@ -637,3 +637,10 @@ assert(R.csvText('Flotte_Mittel', 'en') === 'Fleet_mean' && R.csvText('Flotte_Mi
   assert(d.known === 0 && d.low === 0 && nb.known === 3 && nb.low === 2 && rd.known === 3 && rd.okEnergy === 1 && fl.filter(v => O.needsSwap(v)).length === 2 && fl[0].rangeFlat && !fl[4].rangeFlat && O.fleetKpis(fl).batteryKnown === 3,
     'Feld 12: Donkey (1 km konstant, kein Ladestand) → Energie unbekannt, kein Tausch; nextbike 0 km konstant → Ladestand entscheidet (12 % niedrig, 40 % nicht); Zeile ohne Feld 11/12 normal (3 km niedrig)');
 }
+// Nur Reichweite je Anbieter: nicht mehr, sobald eine einzige Quelle keinen Ladestand meldet (02.11.2026: voi_de machte ganz Voi, Räder ohne Akku ganz nextbike dazu)
+{
+  const src = (id, operator, batteryNative, vehicles = 10, status = 'live') => ({ id, operator, status, counts: { vehicles, batteryNative } });
+  const ro = R.rangeOnlyOperators([src('voi_de', 'Voi', 0), src('voi_bw', 'Voi', 120), src('nb-rad', 'nextbike', 0), src('nb-e', 'nextbike', 3), src('zeus', 'Zeus', 0), src('zeus2', 'Zeus', 0),
+    src('alt', 'Bolt', undefined), src('tot', 'Dott', 5, 10, 'down'), src('tot2', 'Dott', 0), src('leer', 'Tier', 0, 0)]);
+  assert([...ro].sort().join() === 'Dott,Lime,Zeus', 'rangeOnlyOperators: Lime immer; Zeus (keine Quelle mit Ladestand) ja; Voi/nextbike (eine Quelle mit Ladestand) nein; fehlendes batteryNative zählt als gemeldet; Ausfälle und leere Quellen zählen nicht');
+}

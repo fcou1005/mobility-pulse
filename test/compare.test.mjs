@@ -67,3 +67,6 @@ const dec = decodeFleet(doc);
 assert(dec.stations[0].virtual === 1 && dec.stations[0].physical === 1 && dec.stations[1].virtual === null && dec.stations[1].physical === 2, 'decodeFleet: virtual aus Feld 12, physical bleibt der physische Bestand');
 const rd = P.compareOperators(dec, { ags: A });
 assert(rd.rows[0].virtual === 1 && rd.rows[0].physical === 1, 'Vergleich: „Neu“ virtuell laut Merkmal, „Alt“ physisch (Kapazität und Docks gemeldet)');
+// Ladestand nur abgeleitet (Reichweite ÷ Maximalreichweite, v.batteryDerived) → nur die Reichweite zählt
+assert(P.vehicleEnergyLow({ operator: 'Voi', battery: 30, rangeKm: 3, batteryDerived: true }) === true && P.vehicleEnergyLow({ operator: 'Voi', battery: 10, rangeKm: 12, batteryDerived: true }) === false,
+  'abgeleiteter Ladestand: nur Reichweite (30 % / 3 km niedrig, 10 % / 12 km nicht)');

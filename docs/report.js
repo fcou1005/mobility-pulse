@@ -2,12 +2,12 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvyx0klq';
-import * as K from './pulse-calib.js?v=mvyx0klq';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyx0klq';
-import { decodeFleet } from './pulse-ops.js?v=mvyx0klq';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyx0klq';
-import { mapKeys } from './mapkeys.js?v=mvyx0klq';
+import * as R from './pulse-report.js?v=mvyy1hb9';
+import * as K from './pulse-calib.js?v=mvyy1hb9';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvyy1hb9';
+import { decodeFleet } from './pulse-ops.js?v=mvyy1hb9';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvyy1hb9';
+import { mapKeys } from './mapkeys.js?v=mvyy1hb9';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
@@ -1165,7 +1165,7 @@ function availData(ctx, s) {
   const { state } = ctx; const scope = state.scope && state.scope !== 'DE' ? state.scope : null;
   const rows = R.availabilityRows(state.latest, { operator: s.op, type: s.type, minTotal: s.min, keepAgs: scope });
   const th = state.latest?.thresholds || {};
-  const rangeOnly = (op) => R.RANGE_ONLY_OPS.includes(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
+  const roSet = R.rangeOnlyOperators(state.latest?.sources), rangeOnly = (op) => roSet.has(op); // wie Sammler und app.js
   // Einsatzbereit: aus den Zählern je Gruppe in latest.json (energyKnown, ready; Sammler seit latest.energy), sonst je Land aus ops/<Land>.json
   const fromGroups = (k) => { if (!s.readyCache.has(k)) { const m = new Map(); for (const [key, g] of Object.entries(state.latest.groups || {})) { const [ags, op, ty] = key.split('|'); if (ags === 'DE' || (s.op !== 'all' && op !== s.op) || (s.type !== 'all' && ty !== s.type)) continue; const o = m.get(ags) || { total: 0, known: 0, ready: 0 }; o.total += g.total || 0; o.known += g.energyKnown || 0; o.ready += g.ready || 0; m.set(ags, o); } s.readyCache.set(k, m); } return s.readyCache.get(k); };
   const readyFor = (land) => { if (state.latest?.energy) return fromGroups(`groups|${s.op}|${s.type}`); const k = `${land}|${s.op}|${s.type}`; if (!s.readyCache.has(k) && s.ops.has(land)) s.readyCache.set(k, R.readinessFromOps(s.ops.get(land), { operator: s.op, type: s.type, charge: th.chargeThreshold ?? 20, range: th.rangeThreshold ?? 5, rangeOnly })); return s.readyCache.get(k) || null; };

@@ -195,10 +195,13 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   const { existsSync, readFileSync, readdirSync } = await import('node:fs');
   const D = new URL('../.realdata/', import.meta.url).pathname;
   if (existsSync(`${D}snapshot`) && existsSync(`${D}consistency.json`)) {
-    const flagged = [], ok = [];
-    for (const f of readdirSync(`${D}snapshot`)) { const sn = JSON.parse(readFileSync(`${D}snapshot/${f}`, 'utf8')); const bs = C.batteryScaleCheck(sn.vehicles.map(v => ({ batteryPct: v[4] }))); if (bs.n >= 50) (bs.suspect ? flagged : ok).push([sn.id, sn.operator, bs.p99]); }
-    assert(flagged.some(x => x[0] === 'lime_dresden') && flagged.some(x => /lime-dortmund/.test(x[0])) && ok.some(x => x[0] === 'lime_frankfurt') && ok.every(x => x[2] >= 60) && !flagged.some(x => x[1] === 'Voi' || x[1] === 'Bolt'),
-      `M-22 echte Daten: Ladestand-Skala unplausibel bei ${flagged.length} Quellen (${[...new Set(flagged.map(x => x[1]))].join(', ')}), alle übrigen mit p99 ≥ 60 %`);
+    const flagged = [], ok = [], none = new Set();
+    for (const f of readdirSync(`${D}snapshot`)) { const sn = JSON.parse(readFileSync(`${D}snapshot/${f}`, 'utf8')); const bs = C.batteryScaleCheck(sn.vehicles.map(v => ({ batteryPct: v[4] }))); if (bs.n >= 50) (bs.suspect ? flagged : ok).push([sn.id, sn.operator, bs.p99]); else if (sn.vehicles.length >= 50 && bs.n === 0) none.add(sn.id); }
+    // Seit dem Sammler mit M-2 steht in der Momentaufnahme kein Ladestand mehr, wo die Skala unplausibel ist (und seit 02.11.2026 auch keiner, der nur
+    // aus der Reichweite abgeleitet ist): dann zählt „ohne Ladestand“ als erkannt
+    const caught = (re) => flagged.some(x => re.test(x[0])) || [...none].some(id => re.test(id));
+    assert(caught(/^lime_dresden$/) && caught(/lime-dortmund/) && ok.every(x => x[2] >= 60) && !flagged.some(x => x[1] === 'Voi' || x[1] === 'Bolt'),
+      `M-22 echte Daten: Ladestand-Skala unplausibel bei ${flagged.length} Quellen (${[...new Set(flagged.map(x => x[1]))].join(', ')}), ohne Ladestand ${none.size}, alle übrigen mit p99 ≥ 60 %`);
     const l = JSON.parse(readFileSync(`${D}latest.json`, 'utf8')), cons = JSON.parse(readFileSync(`${D}consistency.json`, 'utf8'));
     const rec = new Map(l.sources.map(s => [s.id, s])), rank = (id) => { const r = rec.get(id) || {}; return [r.priority ?? 2, r.parent ? 1 : 0, (r.directories || []).includes('citybikes') ? 1 : 0]; };
     const { whole } = C.mirrorPairs(cons.pairs, C.compareSources(rank));

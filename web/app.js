@@ -899,7 +899,7 @@ function renderMap() {
       const cells = new Map();
       // Energie niedrig wie überall (energyLow): Grenzen des Live-Abrufs bzw. des Sammlers, je nachdem woher die Positionen stammen
       const lim = src === coll ? { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM } : { charge: state.thresholds.charge, range: state.thresholds.range };
-      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
+      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) || !!v.batteryDerived, rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
       const max = Math.max(1, ...[...cells.values()].map(c => layerMode === 'energy' ? c.low : c.n));
       for (const c of cells.values()) {
         const val = layerMode === 'energy' ? c.low : c.n; if (!val) continue;
@@ -1003,7 +1003,10 @@ async function loadWfs() {
 // (ops/<Land>.json; für Deutschland alle Länder, geteilter Cache mit Karte und Disposition). Fehlt die Datei: Rückfall auf die Zähler der
 // Gruppe – genau, wo nur eine Angabe vorliegt; mit beiden Angaben höchstens min(Ladestand niedrig, Reichweite niedrig), als „≈“ markiert.
 const RANGE_ONLY_OPS = new Set(R.RANGE_ONLY_OPS);
-const rangeOnly = (op) => RANGE_ONLY_OPS.has(op) || !!state.latest?.energy?.rangeOnlyOps?.includes(op) || (state.latest?.sources || []).some(r => r.operator === op && r.counts?.batteryNative === 0 && r.counts?.vehicles > 0);
+// Nur Reichweite je Anbieter: dieselbe Regel wie der Sammler (R.rangeOnlyOperators über latest.sources, = latest.energy.rangeOnlyOps); je Fahrzeug
+// zusätzlich, wenn der Ladestand nur abgeleitet ist (v.batteryDerived; ops/<Land>.json und Momentaufnahmen tragen dann keinen Ladestand)
+let roCache = null;
+const rangeOnly = (op) => { if (roCache?.at !== state.latest?.at) roCache = { at: state.latest?.at, set: R.rangeOnlyOperators(state.latest?.sources) }; return roCache.set.has(op); };
 const energyLimits = () => (state.mode === 'live' && state.live ? { charge: state.thresholds.charge, range: state.thresholds.range } : { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM });
 const ENERGY = new Map(); let energyWait = 0; // `${Stand}|${Land}` → Map(Gruppe → Zähler) | 'loading' | null (Datei fehlt)
 function energyLand(land) {
@@ -1022,7 +1025,7 @@ function liveEnergyGroups() {
   const lim = energyLimits(), key = `${state.live.at}|${lim.charge}|${lim.range}|${state.live.vehicles.length}`;
   if (liveEnergy?.key !== key) {
     const m = new Map();
-    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator), rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); m.set(k, e); }
+    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) || !!v.batteryDerived, rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); m.set(k, e); }
     liveEnergy = { key, map: m };
   }
   return liveEnergy.map;
