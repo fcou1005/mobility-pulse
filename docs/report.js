@@ -2,13 +2,13 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mvz5nwfe';
-import * as K from './pulse-calib.js?v=mvz5nwfe';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvz5nwfe';
-import { decodeFleet } from './pulse-ops.js?v=mvz5nwfe';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvz5nwfe';
-import { mapKeys } from './mapkeys.js?v=mvz5nwfe';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mvz5nwfe';
+import * as R from './pulse-report.js?v=mvz6zacg';
+import * as K from './pulse-calib.js?v=mvz6zacg';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mvz6zacg';
+import { decodeFleet } from './pulse-ops.js?v=mvz6zacg';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvz6zacg';
+import { mapKeys } from './mapkeys.js?v=mvz6zacg';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mvz6zacg';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };

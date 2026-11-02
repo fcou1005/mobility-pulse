@@ -605,30 +605,38 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const rect = ([lat, lon], h) => [[lon - mLon(h), lat - mLat(h)], [lon + mLon(h), lat - mLat(h)], [lon + mLon(h), lat + mLat(h)], [lon - mLon(h), lat + mLat(h)], [lon - mLon(h), lat - mLat(h)]];
   const feat = (coordinates, rules, name) => ({ type: 'Feature', properties: { name, rules }, geometry: { type: 'Polygon', coordinates } });
   // Verbotszone 400 × 400 m mit Loch 10 × 10 m 110–120 m nördlich der Mitte; Betriebsgebiet (größer) hebt nichts auf, kleiner Hub schon
+  // Pflicht-Abstellzone (Abstellen nur an Stationen) 600 × 600 m 2 km nördlich, darin ein kleiner Hub
   const mine = { operator: 'Bolt', sourceId: 'bolt_test', features: [feat([rect(at(0, 0), 5000)], OK, 'Betriebsgebiet'), feat([rect(at(0, 0), 200), rect(at(115, 0), 5)], NP, '=HYPERLINK("x")'),
-    feat([rect(at(-100, -100), 10)], MPZ, 'MPZ'), feat([rect(at(-100, 100), 6)], OK, 'Hub'), feat([rect(at(0, 1000), 200)], NR, 'Fahrverbot')] };
+    feat([rect(at(-100, -100), 10)], MPZ, 'MPZ'), feat([rect(at(-100, 100), 6)], OK, 'Hub'), feat([rect(at(0, 1000), 200)], NR, 'Fahrverbot'),
+    feat([rect(at(2000, 0), 300)], MPZ, 'Nur Stationen'), feat([rect(at(1900, -100), 6)], OK, 'Hub 2')] };
   const other = { operator: 'Lime', sourceId: 'lime_test', features: [feat([rect(at(0, -1000), 200)], NP, 'fremd')] };
   const V = (name, [lat, lon], o = {}) => ({ name, lat, lon, operator: 'Bolt', type: 'scooter', reserved: false, disabled: false, battery: 50, rangeKm: 20, idleMin: 600, ags: AGS, ...o });
   const vehicles = [V('A', at(0, 0)), V('B', at(0, 180)), V('C', at(-100, -100)), V('D', at(-60, 60)), V('E', at(-60, -60), { idleMin: 1500, idleCensored: true }), V('F', at(-100, 100)),
-    V('G', at(10, 10), { disabled: true }), V('H', at(10, -10), { reserved: true }), V('I', at(0, -1000)), V('J', at(100, 0)), V('K', at(0, 1000), { idleMin: null }), V('L', at(5, 5), { operator: 'Lime' }), V('M', at(0, 3000))];
+    V('G', at(10, 10), { disabled: true }), V('H', at(10, -10), { reserved: true }), V('I', at(0, -1000)), V('J', at(100, 0)), V('K', at(0, 1000), { idleMin: null }), V('L', at(5, 5), { operator: 'Lime' }), V('M', at(0, 3000)),
+    // N1 Mitte (Station 152 m), N2 20 m vor dem Rand, N3 Station 15 m, N4 Station 40 m (knapp daneben), N5 im Hub, N6 Station 70 m
+    V('N1', at(2000, 0)), V('N2', at(2000, 280)), V('N3', at(2100, 100)), V('N4', at(1900, 100)), V('N5', at(1900, -100)), V('N6', at(2100, -100), { idleMin: 900 })];
   const st = (p, operator) => ({ lat: p[0], lon: p[1], operator });
-  const stations = [st(at(-60, 70), 'Bolt'), st(at(-60, -50), 'Lime')];
-  const r = O.parkingViolations({ vehicles, stations }, [mine, other, mine], { operator: 'Bolt' }), c = r.counts;
-  const names = (l) => l.map(x => vehicles.find(v => v.lat === x.lat && v.lon === x.lon).name).join('');
-  assert(c.available === 10 && c.inZone === 8 && c.mpz === 1 && c.allowed === 1 && c.station === 1 && c.raw === 5, `Zählung: 10 verfügbar (gesperrt, reserviert, fremder Anbieter fehlen), 8 in Verbotszone, je 1 in MPZ, Hub, ≤ 25 m eigene Station → roh 5 (${JSON.stringify(c)})`);
-  assert(c.robust[15] === 4 && c.robust[25] === 4 && c.robust[50] === 4 && c.listed === 3 && names(r.list) === 'EAK',
-    `robust je Puffer 4/4/4, gelistet nur bei allen Puffern: B (20 m vor dem Rand) nur 15 m, J (Loch 15 m nördlich) nur 25/50 m → E, A, K nach Standzeit (${names(r.list)})`);
-  assert(!names(r.list).includes('I') && r.zones.ban === 2 && r.zones.mpz === 1 && r.zones.ok === 2, 'fremde Zone zählt nicht (I), doppelt geladene eigene Datei zählt einmal (2 Verbots-, 1 Pflicht-, 2 erlaubte Zonen)');
-  assert(names(r.list).includes('E') && c.mpzNoStation === 1, 'fremde Station neben E zählt nicht; C steht in der MPZ ohne eigene Station ≤ 25 m (nur Transparenz)');
-  const [e, a, k] = r.list;
+  const stations = [st(at(-60, 70), 'Bolt'), st(at(-60, -50), 'Lime'), st(at(2100, 115), 'Bolt'), st(at(1900, 140), 'Bolt'), st(at(2170, -100), 'Bolt')];
+  const r = O.parkingViolations({ vehicles, stations }, [mine, other, mine], { operator: 'Bolt' }), c = r.counts, cb = c.ban, cm = c.mpz;
+  const names = (l) => l.map(x => vehicles.find(v => v.lat === x.lat && v.lon === x.lon).name).join(',');
+  assert(c.available === 16 && cb.inZone === 8 && cb.mpz === 1 && cb.allowed === 1 && cb.station === 1 && cb.raw === 5, `Abstellverbot: 16 verfügbar (gesperrt, reserviert, fremder Anbieter fehlen), 8 in Verbotszone, je 1 in MPZ, Hub, ≤ 25 m eigene Station → roh 5 (${JSON.stringify(cb)})`);
+  assert(cb.robust[15] === 4 && cb.robust[25] === 4 && cb.robust[50] === 4 && cb.listed === 3 && names(r.list.filter(x => x.kind === 'ban')) === 'E,A,K',
+    `robust je Puffer 4/4/4, gelistet nur bei allen Puffern: B (20 m vor dem Rand) nur 15 m, J (Loch 15 m nördlich) nur 25/50 m → E, A, K`);
+  assert(!names(r.list).includes('I') && r.zones.ban === 2 && r.zones.mpz === 2 && r.zones.ok === 3, 'fremde Zone zählt nicht (I), doppelt geladene eigene Datei zählt einmal (2 Verbots-, 2 Pflicht-, 3 erlaubte Zonen)');
+  assert(O.COLLECT.mpzStationM === 50 && cm.inZone === 7 && cm.allowed === 1 && cm.station === 1 && cm.near === 1 && cm.raw === 4 && cm.robust[15] === 3 && cm.robust[25] === 2 && cm.robust[50] === 2 && cm.listed === 2,
+    `Pflicht-Abstellzone ohne Station: 7 in Zone, Hub 1, Station ≤ 25 m 1, knapp neben Station 25–50 m 1 (nur gezählt), roh 4 (C, N1, N2, N6), robust 3/2/2 → gelistet N1, N6 (${JSON.stringify(cm)})`);
+  assert(c.listed === 5 && names(r.list) === 'E,N6,A,N1,K' && r.list.map(x => x.kind).join() === 'ban,mpz,ban,mpz,ban', `eine Liste nach Standzeit, Art je Fahrzeug (${names(r.list)})`);
+  const [e, n6, a, n1, k] = r.list;
   assert(e.idleCensored === true && e.idleMin === 1500 && a.idleCensored === null && k.idleMin === null && k.zone.noRide === true && a.zone.id === 'bolt_test#1' && a.zone.name === '=HYPERLINK("x")' && a.battery === 50 && a.rangeKm === 20,
     'Liste: Standzeit (≥ über idleCensored, fehlend = null), Zone (ID, Name, Fahrverbot), Ladestand und Reichweite');
-  assert(r.zonesHit.length === 2 && r.zonesHit.find(z => z.id === 'bolt_test#1').n === 2 && r.zonesHit.find(z => z.noRide).n === 1 && r.zonesHit[0].geometry?.type === 'Polygon', 'betroffene Zonen mit Umriss und Anzahl (Kartenebene)');
+  assert(n6.stationDistM === 70 && n1.stationDistM === 152 && n1.zone.name === 'Nur Stationen' && e.stationDistM === 130, `Abstand zur nächsten eigenen Station (fremde Station neben E zählt nicht): N6 ${n6.stationDistM} m, N1 ${n1.stationDistM} m, E ${e.stationDistM} m`);
+  assert(O.parkingViolations({ vehicles, stations }, [mine], { operator: 'Bolt', mpzStationM: 30 }).counts.mpz.listed === 3, 'mpzStationM einstellbar: bei 30 m wird N4 (Station 40 m) gelistet');
+  assert(r.zonesHit.length === 3 && r.zonesHit.find(z => z.id === 'bolt_test#1').n === 2 && r.zonesHit.find(z => z.noRide).n === 1 && r.zonesHit.find(z => z.kind === 'mpz').n === 2 && r.zonesHit[0].geometry?.type === 'Polygon', 'betroffene Zonen mit Art, Umriss und Anzahl (Kartenebene)');
   assert(O.parkingViolations({ vehicles, stations }, [], { operator: 'Bolt' }).features === 0 && O.parkingViolations({ vehicles, stations }, other, { operator: 'Bolt' }).features === 0, 'keine eigenen Zonen: features 0 („Anbieter veröffentlicht keine Zonen“)');
   const none = O.parkingViolations({ vehicles: [vehicles[12]], stations }, mine, { operator: 'Bolt' });
-  assert(none.features === 5 && none.counts.listed === 0 && !none.list.length, 'Zonen vorhanden, kein Treffer („keine Fahrzeuge im Abstellverbot“)');
+  assert(none.features === 7 && none.counts.listed === 0 && !none.list.length, 'Zonen vorhanden, kein Treffer („keine Fahrzeuge im Abstellverbot“)');
   const csv = O.violationsCsv(r).split('\n'), en = O.violationsCsv(r, { lang: 'en' }).split('\n');
-  assert(csv[0] === O.COLLECT_CSV_FIELDS.join(';') && csv.length === 4 && csv[1].includes(`;"'=HYPERLINK(""x"")";Abstellverbot;1500;1;50;20;scooter`) && csv[2].includes(';600;;50;'),
-    'CSV: Formel-Schutz für Zonennamen aus dem Feed, Standzeit mindestens 1/leer');
-  assert(en[0].startsWith('rank,operator,lat,lon,zone_id,zone_name,zone_kind,idle_min,idle_at_least,battery_pct,range_km,vehicle_type') && en[3].includes('no-riding zone'), 'CSV englisch: Komma, englische Spalten und Zonenart');
+  assert(csv[0] === O.COLLECT_CSV_FIELDS.join(';') && csv.length === 6 && csv[1].startsWith('1;Bolt;Abstellverbot;') && csv[1].includes(`;"'=HYPERLINK(""x"")";Abstellverbot;130;1500;1;50;20;scooter`) && csv[2].startsWith('2;Bolt;Pflicht-Abstellzone ohne Station;') && csv[2].includes(';Nur Stationen;Pflicht-Abstellzone;70;900;;50;'),
+    'CSV: Spalte art, Formel-Schutz für Zonennamen aus dem Feed, Stationsabstand, Standzeit mindestens 1/leer');
+  assert(en[0] === 'rank,operator,kind,lat,lon,zone_id,zone_name,zone_kind,station_distance_m,idle_min,idle_at_least,battery_pct,range_km,vehicle_type' && en[2].includes('mandatory parking zone without station') && en[5].includes('no-riding zone'), 'CSV englisch: Komma, englische Spalten, Art und Zonenart');
 }

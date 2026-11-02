@@ -1,16 +1,16 @@
-import * as C from './pulse-core.js?v=mvz5nwfe';
-import * as Ops from './ops.js?v=mvz5nwfe';
-import * as E from './pulse-econ.js?v=mvz5nwfe';
-import * as K from './pulse-calib.js?v=mvz5nwfe';
-import * as Rp from './report.js?v=mvz5nwfe';
-import * as R from './pulse-report.js?v=mvz5nwfe';
-import * as Fl from './flows.js?v=mvz5nwfe';
-import * as Cov from './coverage.js?v=mvz5nwfe';
-import * as Cmp from './compare.js?v=mvz5nwfe';
-import * as Sp from './spots.js?v=mvz5nwfe';
-import { mapKeys } from './mapkeys.js?v=mvz5nwfe';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mvz5nwfe';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvz5nwfe';
+import * as C from './pulse-core.js?v=mvz6zacg';
+import * as Ops from './ops.js?v=mvz6zacg';
+import * as E from './pulse-econ.js?v=mvz6zacg';
+import * as K from './pulse-calib.js?v=mvz6zacg';
+import * as Rp from './report.js?v=mvz6zacg';
+import * as R from './pulse-report.js?v=mvz6zacg';
+import * as Fl from './flows.js?v=mvz6zacg';
+import * as Cov from './coverage.js?v=mvz6zacg';
+import * as Cmp from './compare.js?v=mvz6zacg';
+import * as Sp from './spots.js?v=mvz6zacg';
+import { mapKeys } from './mapkeys.js?v=mvz6zacg';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mvz6zacg';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mvz6zacg';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 

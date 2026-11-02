@@ -1,8 +1,8 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mvz5nwfe';
-import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvz5nwfe';
-import { mapKeys } from './mapkeys.js?v=mvz5nwfe';
-import { mbBadge, mbBase } from './report.js?v=mvz5nwfe';
+import * as O from './pulse-ops.js?v=mvz6zacg';
+import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mvz6zacg';
+import { mapKeys } from './mapkeys.js?v=mvz6zacg';
+import { mbBadge, mbBase } from './report.js?v=mvz6zacg';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -955,7 +955,8 @@ async function routeRuns() {
     if (S.plan === p) { status(t('ops.roadRoutingOsrmOfRunsByRoad', { v0: base(), done, length: allRuns().length, v3: done < allRuns().length ? t('ops.restStraightLine135') : '' }) + (osrmDown() ? ` · ${t('ops.osrmUnreachable')}` : '')); renderTiles(); }
   } finally { if (S.routing === p) S.routing = null; }
 }
-// ---------- Einsammelliste: Fahrzeuge im eigenen Abstellverbot (lib/pulse-ops.js parkingViolations) ----------
+// ---------- Einsammelliste: im eigenen Abstellverbot oder ohne Station in einer Pflicht-Abstellzone (lib/pulse-ops.js parkingViolations) ----------
+// Zwei Arten je Fahrzeug (kind 'ban' | 'mpz'), getrennt ausgewiesen: Kopfzeile, Spalte „Art · Zone“, Marker (Schrägstrich bzw. „P“), CSV-Spalte art.
 // Intern für die Flotte der Disposition (Anbieter und Fahrzeugart wie der Plan), kein Anbieter-Vergleich, im Kunden-Modus ausgeblendet (.internal).
 // Zonen: die GBFS-Geofencing-Dateien des Datenstands (zones/<Datei>.json, nur Dateien mit dieser Gemeinde laut zones/index.json) über den
 // gemeinsamen Cache (X.getJson, dieselben Downloads wie Übersichtskarte und Abstellverbote der Spots); nichts davon wird gespeichert.
@@ -967,8 +968,13 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const colValid = () => { const c = S.col; return c && c.ags === X.state.scope && c.op === S.op && c.type === $('#ops-type')?.value ? c : null; };
 const idleText = (v) => v.idleMin == null ? '–' : `${v.idleCensored ? '≥ ' : ''}${X.fmt(v.idleMin / 60, 1)} h`;
 const zoneLabel = (z) => z.name || t('col.zoneId', { id: z.id });
-const zoneKindText = (z) => (z.noRide ? t('col.kindNoRide') : t('col.kindNoPark'));
-const violSvg = (c, bg, size = 20, css = '') => `<svg viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true" style="${css}overflow:visible"><circle cx="10" cy="10" r="7.5" fill="${bg}" stroke="${c}" stroke-width="3"/><path d="M4.7 4.7 15.3 15.3" stroke="${c}" stroke-width="3"/></svg>`;
+// Art je Fahrzeug bzw. betroffener Zone: Pflicht-Abstellzone ohne Station (Blau wie „Abstellen nur an Stationen“ der Übersichtskarte), Fahrverbot (Rot), Abstellverbot
+const colKind = (x) => (x.kind === 'mpz' ? 'mpz' : x.noRide ?? x.zone?.noRide ? 'noRide' : 'noPark');
+const kindText = (x) => t({ mpz: 'col.kindMpz', noRide: 'col.kindNoRide', noPark: 'col.kindNoPark' }[colKind(x)]);
+const kindColor = (x) => tok({ mpz: '--info', noRide: '--bad', noPark: '--warn' }[colKind(x)]);
+// Marker: Kreis mit Schrägstrich (Verbot) bzw. mit „P“ (Pflicht-Abstellzone ohne Station); Form trägt die Art auch ohne Farbe
+const violSvg = (c, bg, size = 20, css = '', mpz = false) => `<svg viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true" style="${css}overflow:visible"><circle cx="10" cy="10" r="7.5" fill="${bg}" stroke="${c}" stroke-width="3"/>${mpz ? `<text x="10" y="14" text-anchor="middle" font-size="11" font-weight="700" font-family="sans-serif" fill="${c}">P</text>` : `<path d="M4.7 4.7 15.3 15.3" stroke="${c}" stroke-width="3"/>`}</svg>`;
+const stationText = (v) => (v.stationDistM != null ? t('col.stationDist', { m: X.fmt(v.stationDistM) }) : t('col.stationNone', { km: X.fmt(O.COLLECT.stationSearchM / 1000) }));
 function initCollect() {
   if ($('#ops-col-panel')) return;
   if (S.show.viol == null) S.show.viol = true;
@@ -1015,7 +1021,7 @@ function renderCollect() {
   const head = $('#ops-col-head'), sub = $('#ops-col-sub'), tbl = panel.querySelector('.tbl'), empty = $('#ops-col-empty');
   const show = (msg) => { tbl.hidden = !!msg; empty.hidden = !msg; empty.innerHTML = msg || ''; if (msg) panel.querySelector('tbody').innerHTML = ''; };
   $('#ops-col-h').textContent = t('col.title'); $('#ops-col-csv').title = t('col.csvTitle');
-  $('#ops-col-note').textContent = t('col.method', { buffers: B.join('/'), stationM: O.COLLECT.stationM });
+  $('#ops-col-note').textContent = t('col.method', { buffers: B.join('/'), stationM: O.COLLECT.stationM, mpzStationM: O.COLLECT.mpzStationM });
   $('#ops-col-csv').disabled = !(c?.state === 'ok' && c.res.list.length);
   syncViolToggle(); drawViol();
   if (S.plan && c && S.plan.ags === c.ags && S.plan.op === c.op) legend();
@@ -1025,17 +1031,21 @@ function renderCollect() {
   if (c.state === 'fail') { show(`${t('col.failed')} <button type="button" class="chip" data-col-retry>${t('ops.tryAgain')}</button>`); return; }
   const r = c.res, k = r.counts;
   if (!r.features) { show(esc(t('col.noZones', { op: c.op }))); return; }
-  head.innerHTML = `${t(k.listed === 1 ? 'col.headOne' : 'col.head', { n: `<b>${f(k.listed)}</b>`, buffers: B.join('/'), raw: f(k.raw) })}<br><span class="small muted">${esc(t('col.counts', { available: f(k.available), inZone: f(k.inZone), mpz: f(k.mpz), allowed: f(k.allowed), stationM: r.stationM, station: f(k.station), raw: f(k.raw), robust: B.map(b => `${b} m ${f(k.robust[b])}`).join(', '), ban: f(r.zones.ban), mpzZones: f(r.zones.mpz), files: f(c.files) }))}`
-    + `${k.mpzNoStation ? ` · ${esc(t('col.mpzNoStation', { n: f(k.mpzNoStation), stationM: r.stationM }))}` : ''}</span>${c.failed ? `<br><span class="warn-text small">${esc(t('col.partial', { failed: f(c.failed), files: f(c.files) }))}</span>` : ''}`;
-  if (!k.listed) { show(esc(t('col.none')) + (r.zones.ban ? '' : ` ${esc(t('col.noBanZones'))}`)); return; }
+  // Kopfzeile: Summe und je Art (roh, robust gelistet); darunter die Zählung je Art zur Transparenz
+  const kb = k.ban, km = k.mpz, rob = (x) => B.map(b => `${b} m ${f(x.robust[b])}`).join(', '), st = { stationM: r.stationM, mpzStationM: r.mpzStationM };
+  head.innerHTML = `${t(k.listed === 1 ? 'col.headOne' : 'col.head', { n: `<b>${f(k.listed)}</b>`, buffers: B.join('/'), ban: f(kb.listed), raw: f(kb.raw), mpz: f(km.listed), mraw: f(km.raw), near: f(km.near), ...st })}`
+    + `<br><span class="small muted">${esc(t('col.counts', { available: f(k.available), inZone: f(kb.inZone), mpz: f(kb.mpz), allowed: f(kb.allowed), station: f(kb.station), raw: f(kb.raw), robust: rob(kb), ...st }))}</span>`
+    + (r.zones.mpz ? `<br><span class="small muted">${esc(t('col.countsMpz', { inZone: f(km.inZone), allowed: f(km.allowed), station: f(km.station), near: f(km.near), raw: f(km.raw), robust: rob(km), ...st }))}</span>` : '')
+    + `<br><span class="small muted">${esc(t('col.zonesLine', { ban: f(r.zones.ban), mpzZones: f(r.zones.mpz), files: f(c.files) }))}</span>${c.failed ? `<br><span class="warn-text small">${esc(t('col.partial', { failed: f(c.failed), files: f(c.files) }))}</span>` : ''}`;
+  if (!k.listed) { show(esc(t('col.none')) + (r.zones.ban + r.zones.mpz ? '' : ` ${esc(t('col.noBanZones'))}`)); return; }
   show(null);
-  // 5 Spalten (am Telefon schmal): Rang · Standzeit, Lage, Zone mit Art und Fahrzeugart, Ladestand · Reichweite, Karte
-  tbl.querySelector('thead').innerHTML = `<tr><th class="n"># · ${t('col.idle')}</th><th>${t('ops.location')}</th><th>${t('col.zone')}</th><th class="n">${t('col.battery')} · ${t('col.range')}</th><th>${t('col.map')}</th></tr>`;
+  // 5 Spalten (am Telefon schmal): Rang · Standzeit, Lage, Art · Zone (mit Fahrzeugart, bei Pflicht-Abstellzone nächste Station), Ladestand · Reichweite, Karte
+  tbl.querySelector('thead').innerHTML = `<tr><th class="n"># · ${t('col.idle')}</th><th>${t('ops.location')}</th><th>${t('col.kindZone')}</th><th class="n">${t('col.battery')} · ${t('col.range')}</th><th>${t('col.map')}</th></tr>`;
   tbl.querySelector('tbody').innerHTML = r.list.map((v, i) => {
     const g = geoKey(v.lat, v.lon), geo = GEO.get(g);
     const main = i < COL_GEO_TOP ? `<span class="geo-main" translate="no" data-geo="${g}" data-fallback="${esc(t('ops.addressNotFound'))}">${geo ? esc(geo) : geo === null ? t('ops.addressNotFound') : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span><div class="sub-line">${osmLink(v.lat, v.lon)}</div>` : osmLink(v.lat, v.lon);
     const energy = [v.battery != null ? `${f(v.battery)} %` : null, v.rangeKm != null ? `${f(v.rangeKm, 1)} km` : null].filter(Boolean).join(' · ') || '–';
-    return `<tr><td class="n"><span class="mono muted">${i + 1} ·</span> <b>${idleText(v)}</b>${v.idleMin != null ? `<div class="sub-line">${f(v.idleMin)} min</div>` : ''}</td><td>${main}</td><td>${esc(zoneLabel(v.zone))}<div class="sub-line">${zoneKindText(v.zone)} · ${esc(X.TYPE[v.type] || v.type)}</div></td>
+    return `<tr><td class="n"><span class="mono muted">${i + 1} ·</span> <b>${idleText(v)}</b>${v.idleMin != null ? `<div class="sub-line">${f(v.idleMin)} min</div>` : ''}</td><td>${main}</td><td>${violSvg(kindColor(v), tok('--panel'), 14, 'display:inline-block;vertical-align:-2px;margin-right:4px;', v.kind === 'mpz')}<b>${kindText(v)}</b><div class="sub-line">${esc(zoneLabel(v.zone))} · ${esc(X.TYPE[v.type] || v.type)}${v.kind === 'mpz' ? ` · ${stationText(v)}` : ''}</div></td>
       <td class="n">${energy}</td><td><button type="button" class="chip" data-col-fly="${i}">${t('ops.onMap')}</button></td></tr>`;
   }).join('');
   queueGeo(r.list.slice(0, COL_GEO_TOP));
@@ -1046,20 +1056,22 @@ function drawViol() {
   if (!S.vl) S.vl = { zones: L.featureGroup().addTo(S.map), pts: L.featureGroup().addTo(S.map) };
   S.vl.zones.clearLayers(); S.vl.pts.clearLayers(); S.violMk = [];
   const c = colValid(); if (!c || c.state !== 'ok' || !S.show.viol || isClient()) return;
-  const warn = tok('--warn'), bad = tok('--bad'), bg = tok('--panel');
-  for (const z of c.res.zonesHit) L.geoJSON(z.geometry, { interactive: false, style: { color: z.noRide ? bad : warn, weight: 1.5, dashArray: '5 4', fillColor: z.noRide ? bad : warn, fillOpacity: 0.07 } }).addTo(S.vl.zones);
+  const bg = tok('--panel');
+  for (const z of c.res.zonesHit) { const col = kindColor(z); L.geoJSON(z.geometry, { interactive: false, style: { color: col, weight: 1.5, dashArray: '5 4', fillColor: col, fillOpacity: 0.07 } }).addTo(S.vl.zones); }
   c.res.list.forEach((v, i) => {
-    S.violMk[i] = L.marker([v.lat, v.lon], { icon: L.divIcon({ className: 'ops-col-mk', html: violSvg(v.zone.noRide ? bad : warn, bg), iconSize: [20, 20] }), keyboard: false, zIndexOffset: 400, title: t('col.markerTitle', { i: i + 1, idle: idleText(v) }) })
-      .bindPopup(() => `<b>${t('col.popupTitle', { i: i + 1 })}</b><br>${X.esc(c.op)} · ${X.esc(X.TYPE[v.type] || v.type)} · ${X.esc(zoneLabel(v.zone))} (${zoneKindText(v.zone)})<br>${t('col.popupIdle', { idle: idleText(v) })}${v.battery != null ? ` · ${t('ops.battery', { battery: X.fmt(v.battery) })}` : ''}${v.rangeKm != null ? ` · ${X.fmt(v.rangeKm, 1)} km` : ''}<br><span style="color:var(--muted)">${t('col.popupNote', { buffers: O.COLLECT.buffers.join('/') })}</span>`).addTo(S.vl.pts);
+    S.violMk[i] = L.marker([v.lat, v.lon], { icon: L.divIcon({ className: 'ops-col-mk', html: violSvg(kindColor(v), bg, 20, '', v.kind === 'mpz'), iconSize: [20, 20] }), keyboard: false, zIndexOffset: 400, title: t('col.markerTitle', { i: i + 1, kind: kindText(v), idle: idleText(v) }) })
+      .bindPopup(() => `<b>${t('col.popupTitle', { i: i + 1, kind: kindText(v) })}</b><br>${X.esc(c.op)} · ${X.esc(X.TYPE[v.type] || v.type)} · ${X.esc(zoneLabel(v.zone))}${v.kind === 'mpz' ? ` · ${stationText(v)}` : ''}<br>${t('col.popupIdle', { idle: idleText(v) })}${v.battery != null ? ` · ${t('ops.battery', { battery: X.fmt(v.battery) })}` : ''}${v.rangeKm != null ? ` · ${X.fmt(v.rangeKm, 1)} km` : ''}<br><span style="color:var(--muted)">${t('col.popupNote', { buffers: O.COLLECT.buffers.join('/') })}</span>`).addTo(S.vl.pts);
   });
 }
 const violCount = () => { const c = colValid(); return c?.state === 'ok' ? c.res.list.length : 0; };
 function violToggle() { return `<label class="tog internal"${violCount() ? '' : ' hidden'}><input type="checkbox" data-l="viol"${S.show.viol ? ' checked' : ''}> ${violSvg(tok('--warn'), tok('--panel'), 12, 'display:inline-block;vertical-align:-1px;')}<span>${t('col.layer')}</span></label>`; }
 function syncViolToggle() { const i = $('#ops-layers input[data-l="viol"]'); if (!i) return; i.checked = !!S.show.viol; i.closest('label').hidden = !violCount(); }
+// Legende: je vorkommender Art Zeichen und Anzahl, dazu der Hinweis auf die gestrichelten Zonen
 function violLegend() {
-  const n = violCount(); if (!S.show.viol || !n) return '';
-  const nr = colValid().res.list.filter(v => v.zone.noRide).length, ic = (c) => violSvg(c, tok('--panel'), 12, 'display:inline-block;vertical-align:-1px;margin-right:6px;');
-  return `<span class="internal">${ic(tok('--warn'))}${t('col.legend', { n: X.fmt(n) })}</span>${nr ? `<span class="internal">${ic(tok('--bad'))}${t('col.legendNoRide', { n: X.fmt(nr) })}</span>` : ''}`;
+  if (!S.show.viol || !violCount()) return '';
+  const n = {}; for (const v of colValid().res.list) n[colKind(v)] = (n[colKind(v)] || 0) + 1;
+  const item = (k, x) => `<span class="internal">${violSvg(kindColor(x), tok('--panel'), 12, 'display:inline-block;vertical-align:-1px;margin-right:6px;', k === 'mpz')}${kindText(x)} (${X.fmt(n[k])})</span>`;
+  return [['noPark', { zone: {} }], ['noRide', { zone: { noRide: true } }], ['mpz', { kind: 'mpz' }]].filter(([k]) => n[k]).map(([k, x]) => item(k, x)).join('') + `<span class="internal muted">${t('col.legendZones')}</span>`;
 }
 // „Auf Karte“: Ebene einschalten, Karte auf das Fahrzeug, Popup öffnen, Fokus auf die Karte (dort weiter mit N/P, Esc)
 function flyViol(i) {

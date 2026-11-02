@@ -3,7 +3,7 @@
   "updatedAt": "2026-11-02",
   "kalibrierung": {
     "_hinweis": "Freigabe durch Felix: regelstand = METHOD_VERSION (lib/pulse-track.js, Teil vor „@“ in events runs[k][3]), ab dem k gelten darf; null = gesperrt. Format { \"regelstand\": \"2026-11-02a\", \"datum\": \"YYYY-MM-DD\" }. k wirkt erst, wenn der Regelstand der Berliner Messung gleich ist und 7 volle Messtage mit ihm vorliegen, und nur auf E-Scooter derselben Kennungsart wie Dott Berlin (lib/pulse-calib.js).",
-    "freigabe": null
+    "freigabe": { "regelstand": "2026-11-02a", "datum": "2026-11-02", "von": "Felix" }
   },
   "rvd": [
     {

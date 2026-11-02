@@ -197,6 +197,7 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   const dott = C.batteryFloorCheck(F(14));
   assert(dott.hides && dott.p005 === 14 && dott.n === 600, 'Z4: Ladestand ab 14 % (Dott-Muster) = Ausblendung, Untergrenze 14');
   assert(!C.batteryFloorCheck(F(0)).hides && C.batteryFloorCheck(F(0)).p005 === 0, 'Z4: Ladestand ab 0 % (Voi/Bolt-Muster) = keine Ausblendung');
+  assert(!C.batteryFloorCheck(F(11)).hides && C.batteryFloorCheck(F(12)).hides, 'Z4: Grenzfall p005 11 (Bolt Stuttgart, Dott Hannover) bleibt Fahrt, ab 12 % Ausblendung');
   const wup = C.batteryFloorCheck(F(14, 1100, [1, 1, 7, 7]));
   assert(wup.p005 >= 10 && !wup.hides, `Z4: einzelne 1–7 % (Voi Wuppertal) = Boden nicht sauber, keine Ausblendung (p005 ${wup.p005}, p001 ${wup.p001})`);
   assert(!C.batteryFloorCheck(F(14, 499)).hides && C.batteryFloorCheck(F(14, 499)).p005 === null, 'Z4: unter 500 Fahrzeugen keine Prüfung');

@@ -90,6 +90,7 @@ function noteCell(r, cov, esc) {
   if (r.partOf) out.push(t('cov.partOf', { c: esc(r.partOf) }));
   if (r.gap?.note != null && cov.notes?.[r.gap.note]) out.push(esc(cov.notes[r.gap.note]) + (r.gap.assumed ? ` ${t('cov.assumed')}` : ''));
   if (r.guessed) out.push(t('cov.guessed'));
+  if (r.named) out.push(t('cov.namedNoData', { f: esc(r.named) }));
   if (r.probes) out.push(t('cov.probes'));
   if (r.claimAmbiguous) out.push(t('cov.ambiguous', { n: r.claimAmbiguous }));
   if (r.unresolved) out.push(t('cov.unresolved'));
