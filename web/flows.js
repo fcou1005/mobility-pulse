@@ -350,7 +350,7 @@ function draw(S, refit = false) {
     const line = L.polyline(coords, { color: col, weight: w, opacity: routed ? 0.95 : 0.8, lineCap: 'round', lineJoin: 'round', interactive: false, dashArray: dash }).addTo(S.layer);
     const ends = [L.circleMarker(a, { radius: 4, color: col, weight: 2, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(S.layer), L.circleMarker(b, { radius: 4, color: '#ffffff', weight: 1.5, fillColor: col, fillOpacity: 1, interactive: false }).addTo(S.layer)];
     const hit = L.polyline(coords, { color: '#000000', weight: Math.max(16, w + 12), opacity: 0, lineCap: 'round' }).bindTooltip(tipHtml(S, f), { sticky: true, className: 'fl-tip', direction: 'auto', offset: [14, 0] }).addTo(S.layer);
-    hit.on('mouseover', () => { line.setStyle({ weight: w + 2 }); casing.setStyle({ weight: w + 5 }); casing.bringToFront(); line.bringToFront(); ends.forEach(e => e.bringToFront()); hit.bringToFront(); });
+    hit.on('mouseover', () => { line.setStyle({ weight: w + 2 }); casing.setStyle({ weight: w + 5 }); casing.bringToFront(); line.bringToFront(); ends.forEach(e => e.bringToFront()); }); // nie hit.bringToFront(): das setzt den überfahrenen Pfad im DOM um, der Browser meldet dann kein mouseout und die Info-Box bleibt offen
     hit.on('mouseout', () => { line.setStyle({ weight: w }); casing.setStyle({ weight: w + 3 }); });
     S.drawn.set(f.key, { f, casing, line, hit, w });
   }

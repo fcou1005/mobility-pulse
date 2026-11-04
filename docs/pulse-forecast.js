@@ -11,8 +11,8 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw2gm26d';
-import { hourOf, dayOf } from './pulse-track.js?v=mw2gm26d';
+import * as E from './pulse-econ.js?v=mw2gtctj';
+import { hourOf, dayOf } from './pulse-track.js?v=mw2gtctj';
 export const FORECAST_VERSION = 1;
 export const GATES = {
   minTrainDays: 2,        // weniger Tage: keine Prognose
