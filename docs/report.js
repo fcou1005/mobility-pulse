@@ -2,13 +2,13 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mw2bilwe';
-import * as K from './pulse-calib.js?v=mw2bilwe';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw2bilwe';
-import { decodeFleet } from './pulse-ops.js?v=mw2bilwe';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mw2bilwe';
-import { mapKeys } from './mapkeys.js?v=mw2bilwe';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mw2bilwe';
+import * as R from './pulse-report.js?v=mw2clza1';
+import * as K from './pulse-calib.js?v=mw2clza1';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw2clza1';
+import { decodeFleet } from './pulse-ops.js?v=mw2clza1';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mw2clza1';
+import { mapKeys } from './mapkeys.js?v=mw2clza1';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mw2clza1';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
@@ -827,7 +827,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const rate = (o, f) => (o.licensed === false ? null : own(o) ? o[f] : f === 'availShare' ? o.capShareAvail : o.capShare);
   const derivedOf = (o) => (own(o) ? o.derived : c.limitDerived);
   const shareNote = (o) => (o.licensed === false || own(o) ? '' : hasTotal ? `<div class="sub-line">${t('rep.shareOfTotalCap')}</div>` : '');
-  const limCell = (o) => (o.licensed === false ? '—' : own(o) ? `${fmt(o.limit)}${o.derived ? `<div class="sub-line">${DERIVED_TXT_DEF()}</div>` : ''}` : '—');
+  const limCell = (o) => (o.licensed === false ? '—' : own(o) ? `${fmt(o.limit)}${o.derived ? `<div class="sub-line">${DERIVED_TXT_DEF()}</div>` : ''}<div class="sub-line">${t('rep.headroom', { n: fmt(Math.max(0, o.limit - o.total)) })}</div>` : '—');
   // Ausschöpfung (gemeldet ÷ erlaubt) direkt am Balken; ohne eigene Grenze der Anteil an der Gesamtgrenze als Text
   const shareLbl = (o) => { const v = rate(o, 'share'); return v == null ? '' : `<div class="sub-line"><b>${rateTxt(ctx, v)}</b>${overMark(v, derivedOf(o))}${own(o) ? '' : ` ${t('rep.shareOfTotalCap')}`}</div>`; };
   const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) + shareLbl(o) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>${shareLbl(o)}`);
@@ -840,7 +840,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const listTxt = c.listed ? ` · ${t('rep.operatorsAccordingToSource', { join: esc(c.listed.join(', ')), v1: c.listComplete ? '' : ` ${t('rep.listIncompleteNoLicenceCheck')}` })}` : '';
   const head = hasTotal
     ? `<div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status === 'hint' ? 'near' : c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">${t('rep.of3', { limit: fmt(c.limit), v1: pctTxt(ctx, c.share, 0) })}</span></div></div>
-    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)}</div>`
+    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)} · ${t('rep.headroomTotal', { n: fmt(Math.max(0, c.limit - c.total)) })}</div>`
     : `<div class="small">${t('rep.reported', { total: fmt(c.total), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.noTotalCapCapPerOperatorSee') : t('rep.noCityWideCap') })}</div>`;
   return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · ${artTxt(esc, c)}` : ''}</span></h3>${badge(c.status)}</div>
     ${head}

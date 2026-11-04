@@ -114,6 +114,8 @@ Ohne vermutete Abgrenzung bleiben: Nürnberg (Zonen A/B/C sind Abstellregeln ohn
 - **Marktanteil und Konzentration** (Kommunalbericht): Anteil je Gruppe und Anbieter am Bestand (`fleetShare`), dazu `totals.hhi` (Herfindahl-Hirschman, 0–10.000, je Anbieter über alle Arten), `topOp`, `topShare`. Grundlage ist der Bestand, nicht die Fahrten: rotierende Kennungen verfälschen Fahrtenanteile, den Bestand nicht. Kachel nur bei mehr als einem Anbieter.
 - **Teilbare Ansicht:** `?period=` (Berichtszeitraum) und `?day=` (Nutzungstag) bleiben in der URL; unbekannte Werte fallen auf den Standard zurück. Am Handy öffnet „Link kopieren“ den nativen Teilen-Dialog.
 - **Tabellen-CSV:** jede Tabelle ab 5 Zeilen ohne eigenen Export bekommt einen „↓ CSV“-Knopf (Text der Zellen, Trennzeichen je Sprache); Berichtstabellen behalten ihre eigenen Exporte.
+- **Glossar per Touch/Tastatur:** Kürzel mit Erklärung (`abbr`) sind fokussierbar; Antippen oder Enter zeigt die Erklärung als Popover, Esc oder Tippen daneben schließt.
+- **Spielraum unter der Grenze:** in der Obergrenzen-Prüfung „N frei“ je Anbieter (Grenze − gemeldeter Bestand) und für die Gesamtgrenze; gemeldet, nicht buchbar, Herleitung der Grenze bleibt sichtbar.
 - **Datenschutz-Test:** zufällige Eingaben, feste Saat – keine veröffentlichte Zelle × Band unter der Schwelle (3), veröffentlicht + unterdrückt = Eingabe. Offen: `below` je Gemeinde nennt die unterdrückte Summe exakt; bei Gemeinden mit nur einer unterdrückten Zelle ließe sich deren Wert ablesen.
 
 ## Dashboard

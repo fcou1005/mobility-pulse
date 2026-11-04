@@ -827,7 +827,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const rate = (o, f) => (o.licensed === false ? null : own(o) ? o[f] : f === 'availShare' ? o.capShareAvail : o.capShare);
   const derivedOf = (o) => (own(o) ? o.derived : c.limitDerived);
   const shareNote = (o) => (o.licensed === false || own(o) ? '' : hasTotal ? `<div class="sub-line">${t('rep.shareOfTotalCap')}</div>` : '');
-  const limCell = (o) => (o.licensed === false ? '—' : own(o) ? `${fmt(o.limit)}${o.derived ? `<div class="sub-line">${DERIVED_TXT_DEF()}</div>` : ''}` : '—');
+  const limCell = (o) => (o.licensed === false ? '—' : own(o) ? `${fmt(o.limit)}${o.derived ? `<div class="sub-line">${DERIVED_TXT_DEF()}</div>` : ''}<div class="sub-line">${t('rep.headroom', { n: fmt(Math.max(0, o.limit - o.total)) })}</div>` : '—');
   // Ausschöpfung (gemeldet ÷ erlaubt) direkt am Balken; ohne eigene Grenze der Anteil an der Gesamtgrenze als Text
   const shareLbl = (o) => { const v = rate(o, 'share'); return v == null ? '' : `<div class="sub-line"><b>${rateTxt(ctx, v)}</b>${overMark(v, derivedOf(o))}${own(o) ? '' : ` ${t('rep.shareOfTotalCap')}`}</div>`; };
   const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) + shareLbl(o) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>${shareLbl(o)}`);
@@ -840,7 +840,7 @@ function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const listTxt = c.listed ? ` · ${t('rep.operatorsAccordingToSource', { join: esc(c.listed.join(', ')), v1: c.listComplete ? '' : ` ${t('rep.listIncompleteNoLicenceCheck')}` })}` : '';
   const head = hasTotal
     ? `<div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status === 'hint' ? 'near' : c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">${t('rep.of3', { limit: fmt(c.limit), v1: pctTxt(ctx, c.share, 0) })}</span></div></div>
-    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)}</div>`
+    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)} · ${t('rep.headroomTotal', { n: fmt(Math.max(0, c.limit - c.total)) })}</div>`
     : `<div class="small">${t('rep.reported', { total: fmt(c.total), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.noTotalCapCapPerOperatorSee') : t('rep.noCityWideCap') })}</div>`;
   return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · ${artTxt(esc, c)}` : ''}</span></h3>${badge(c.status)}</div>
     ${head}

@@ -625,6 +625,20 @@ function setClient(on) {
   $$('abbr[data-gloss]').forEach(a => { a.title = gl(a.dataset.gloss); });
   setView(currentView); if (dataReady) renderAll(); // alle Texte in der passenden Sprache (Kunde: ohne Methodik-Begriffe)
 }
+// Glossar auch per Touch und Tastatur: Kürzel (abbr mit Erklärung) antippen oder mit Enter öffnen; Esc oder außerhalb tippen schließt
+function bindGlossTips() {
+  const mark = () => $$('abbr[title], abbr[data-gloss]').forEach(a => { if (!a.hasAttribute('tabindex')) { a.tabIndex = 0; a.setAttribute('role', 'button'); } });
+  let pop = null; const close = () => { pop?.remove(); pop = null; };
+  const open = (a) => {
+    const txt = a.getAttribute('title') || (a.dataset.gloss ? gl(a.dataset.gloss) : ''); if (!txt) return; close();
+    pop = document.createElement('div'); pop.id = 'gloss-pop'; pop.setAttribute('role', 'tooltip'); pop.textContent = txt; document.body.appendChild(pop);
+    const r = a.getBoundingClientRect(), w = pop.offsetWidth;
+    pop.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left))}px`; pop.style.top = `${r.bottom + 6 + (r.bottom + 6 + pop.offsetHeight > innerHeight ? -(r.height + 12 + pop.offsetHeight) : 0)}px`;
+  };
+  document.addEventListener('click', (e) => { const a = e.target.closest('abbr[title], abbr[data-gloss]'); if (a) { e.preventDefault(); pop && pop._for === a ? close() : (open(a), pop && (pop._for = a)); } else close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); else if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('abbr')) { e.preventDefault(); e.target.click(); } });
+  let tm = 0; new MutationObserver(() => { clearTimeout(tm); tm = setTimeout(mark, 200); }).observe(document.querySelector('main') || document.body, { childList: true, subtree: true }); mark();
+}
 // CSV für jede Tabelle (.tbl) ohne eigenen Export: Zellen als Text, Sprache wie die Oberfläche; Berichtstabellen haben eigene Exporte
 function bindTableCsv() {
   const add = () => $$('.tbl:not([data-csv])').forEach(box => {
@@ -2476,7 +2490,7 @@ async function init() {
   await loadBase();
   populateScope();
   const deep = applyUrlParams(); // Deep-Link: Gebiet, Anbieter, Fahrzeugart aus der URL
-  bindTableCsv(); renderAll(); syncUrl();
+  bindTableCsv(); bindGlossTips(); renderAll(); syncUrl();
   if (deep) autoLive();
   if (DEMO) return; // Demo-Stand: kein Nachladen
   // Sammler-Stand alle 2 Min. prüfen; bei neuem Lauf alles neu laden (Ereignis-, Zonen- und Flottendateien inklusive)
