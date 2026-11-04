@@ -1,16 +1,16 @@
-import * as C from './pulse-core.js?v=mw2clza1';
-import * as Ops from './ops.js?v=mw2clza1';
-import * as E from './pulse-econ.js?v=mw2clza1';
-import * as K from './pulse-calib.js?v=mw2clza1';
-import * as Rp from './report.js?v=mw2clza1';
-import * as R from './pulse-report.js?v=mw2clza1';
-import * as Fl from './flows.js?v=mw2clza1';
-import * as Cov from './coverage.js?v=mw2clza1';
-import * as Cmp from './compare.js?v=mw2clza1';
-import * as Sp from './spots.js?v=mw2clza1';
-import { mapKeys } from './mapkeys.js?v=mw2clza1';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw2clza1';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw2clza1';
+import * as C from './pulse-core.js?v=mw2engyj';
+import * as Ops from './ops.js?v=mw2engyj';
+import * as E from './pulse-econ.js?v=mw2engyj';
+import * as K from './pulse-calib.js?v=mw2engyj';
+import * as Rp from './report.js?v=mw2engyj';
+import * as R from './pulse-report.js?v=mw2engyj';
+import * as Fl from './flows.js?v=mw2engyj';
+import * as Cov from './coverage.js?v=mw2engyj';
+import * as Cmp from './compare.js?v=mw2engyj';
+import * as Sp from './spots.js?v=mw2engyj';
+import { mapKeys } from './mapkeys.js?v=mw2engyj';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw2engyj';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw2engyj';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -705,7 +705,7 @@ function onLanguage() {
 const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells,
   setScope: (ags) => { const sel = $('#sel-scope'); if (![...sel.options].some(o => o.value === ags)) return; sel.value = ags; sel.dispatchEvent(new Event('change')); } });
 const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) return fn(el, rpCtx()); };
-VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
+VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderForecast, 'rp-fc'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
 VIEW_RENDER.staedte = [() => renderCities(), rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter')];
 VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
 VIEW_RENDER.vergleich = [rp(Cmp.renderCompare, 'cmp-panel')];

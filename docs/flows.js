@@ -3,9 +3,9 @@
 // Gemessen: nur Anbieter mit stabilen Kennungen (flows/). Geschätzt: Anbieter mit rotierenden Kennungen, erwartete Fahrten je ≈ 500-m-Zellenpaar
 // (flows-est/, lib/pulse-flowest.js, keine Einzelverknüpfung). Nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw2clza1';
-import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mw2clza1';
-import { mapKeys } from './mapkeys.js?v=mw2clza1';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw2engyj';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mw2engyj';
+import { mapKeys } from './mapkeys.js?v=mw2engyj';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)

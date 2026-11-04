@@ -705,7 +705,7 @@ function onLanguage() {
 const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells,
   setScope: (ags) => { const sel = $('#sel-scope'); if (![...sel.options].some(o => o.value === ags)) return; sel.value = ags; sel.dispatchEvent(new Event('change')); } });
 const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) return fn(el, rpCtx()); };
-VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
+VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderForecast, 'rp-fc'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
 VIEW_RENDER.staedte = [() => renderCities(), rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter')];
 VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
 VIEW_RENDER.vergleich = [rp(Cmp.renderCompare, 'cmp-panel')];

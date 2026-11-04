@@ -1062,7 +1062,8 @@ if (process.env.FORECAST !== '0') {
       const list = async (d, n) => (existsSync(d) ? (await readdir(d)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(-n).map(f => path.join(d, f)) : []);
       const docs = []; for (const f of await list(path.join(DATA, 'events'), 21)) docs.push(JSON.parse(await readFile(f, 'utf8')));
       const weather = []; for (const f of await list(path.join(DATA, 'weather'), 30)) weather.push(JSON.parse(await readFile(f, 'utf8')));
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, prevLog: await rd(fLog), now });
+      const red = new Set(Object.entries(latest.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k)); // rote Ampel: nicht plausibel gezählt
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, prevLog: await rd(fLog), now, exclude: red });
       await mkdir(dir, { recursive: true });
       await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log));
       const l = res.latest;

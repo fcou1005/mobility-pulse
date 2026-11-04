@@ -137,6 +137,13 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(Math.abs(got / tru - 1) < 0.12, `Regelwechsel (Zählung −40 %): Prognose ${got.toFixed(0)} folgt dem neuen Stand (Wahrheit ${tru.toFixed(0)})`);
 }
 
+// ---------- rote Gruppen (nicht plausibel gezählt) bleiben draußen
+{
+  const big = [...groups].sort((a, b) => b[1] * b[2] - a[1] * a[2])[0][0], NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`);
+  const r = F.runForecast({ docs, calendar: null, weather: WX, prevLog: null, now: NOW, exclude: new Set([big]) });
+  assert(r.latest.excluded === 1 && !(big in r.latest.groups) && Object.keys(r.latest.groups).length >= 20, 'Ausschluss: rote Gruppe fehlt in Training und Prognose, die übrigen bleiben');
+}
+
 // ---------- zu wenig Daten und leere Eingaben
 {
   const e = F.runForecast({ docs: [], now: Date.parse('2026-11-04T10:00:00Z') });

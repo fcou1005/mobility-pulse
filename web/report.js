@@ -1647,6 +1647,70 @@ export async function renderHotspotStability(el, ctx) {
 }
 
 // ======================================================================
+// Prognose (forecast/latest.json, forecast/log.json): erwartete Fahrtbeginne der nächsten 24 Stunden, Selbstprüfung, Live-Abgleich
+// ======================================================================
+const FC_MIN_FLEET = 5, FC_HIGH = 1.25, FC_LOW = 0.6;
+function fcBars(ctx, series, local, width) {
+  const W = Math.max(300, Math.min(1100, Math.round(width || 720))), H = 140, pl = 4, pb = 22, pt = 8, n = series.length, max = Math.max(1, ...series), bw = (W - 2 * pl) / n, total = series.reduce((a, b) => a + b, 0), every = W < 480 ? 6 : 3;
+  const bars = series.map((v, i) => { const h = Math.max(1, (H - pt - pb) * v / max); return `<rect class="fcb" style="fill:var(--accent)" x="${(pl + i * bw + 1.5).toFixed(1)}" y="${(H - pb - h).toFixed(1)}" width="${Math.max(2, bw - 3).toFixed(1)}" height="${h.toFixed(1)}" rx="2"><title>${local[i][1]}:00 · ${ctx.fmt(v, v < 10 ? 1 : 0)}</title></rect>`; }).join('');
+  const lab = local.map(([, h], i) => (i % every === 0 ? `<text x="${(pl + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" fill="currentColor" opacity=".75" font-size="11">${h}</text>` : '')).join('');
+  return `<div class="rp-chart"><svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:${W}px" role="img" aria-label="${ctx.esc(t('fc.chartAria', { total: ctx.fmt(total) }))}">${bars}${lab}</svg></div>`;
+}
+export async function renderForecast(el, ctx) {
+  if (!el) return;
+  const s = prep2(el, ctx); const { state, esc, fmt } = ctx; const tok = ++s.tok;
+  const title = head(t('fc.title'), t('fc.sub'));
+  el.classList.add('rp-busy');
+  try {
+    const [fc, lg] = await Promise.all([fetchJson(ctx, 'forecast/latest.json', true), fetchJson(ctx, 'forecast/log.json', true)]); if (tok !== s.tok) return;
+    if (!fc || fc.version !== 1) { el.innerHTML = title + emptyBox(t('fc.none'), t('fc.noneHint')); return; }
+    const G = fc.gates || {}, minTrain = G.minTrainDays ?? 2, minEval = G.minEvalDays ?? 3;
+    const modelName = (m) => (m ? t(`fc.model.${m}`) : '–');
+    const status = fc.status === 'active' ? t('fc.statusActive', { model: modelName(fc.active), reason: esc(fc.reason || '') })
+      : fc.status === 'learning' ? t('fc.statusLearning', { n: fc.evalDays || 0, min: minEval }) : t('fc.statusInsufficient', { n: fc.trainDays || 0, min: minTrain });
+    const badge = `<p class="note small" style="margin:0 0 var(--s3)"><span class="rp-status ${fc.status === 'active' ? 'ok' : 'near'}" style="white-space:normal;align-items:flex-start"><i aria-hidden="true" style="margin-top:2px">${fc.status === 'active' ? '✓' : '!'}</i>${esc(status)}</span></p>`;
+    if (!fc.horizon || !fc.totals) { el.innerHTML = title + badge + emptyBox(t('fc.none'), t('fc.noneHint')); return; }
+    const ags = state.scope && state.scope !== 'DE' ? state.scope : null;
+    const series = ags ? fc.municipalities?.[ags] : fc.totals, local = fc.horizon.local;
+    const pct = (v) => (v == null ? '–' : `${fmt(v * 100, 0)} %`);
+    // Live-Abgleich: Mittel der letzten bewerteten Prognosen
+    const live = (fc.live || []).slice(-6), avg = (k) => { const v = live.map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const ev = lg?.evals || {}, evDays = Object.keys(ev).sort().slice(-(G.evalWindow || 7));
+    const evAvg = (m) => { const v = evDays.map(d => ev[d]?.models?.[m]?.wapeGD).filter(x => x != null); return v.length >= minEval ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const wg = fc.weather?.gate || {};
+    const time = new Intl.DateTimeFormat(fmtLocale(), { hour: '2-digit', minute: '2-digit', timeZone: R.TZ }).format(new Date(fc.horizon.from));
+    const scopeTxt = ags ? esc(ctx.muniName?.(ags) || state.latest?.municipalities?.[ags]?.name || ags) : t('fc.scopeDE');
+    const tiles = `<div class="tiles">`
+      + tile(t('fc.expected'), series ? fmt(series.reduce((a, b) => a + b, 0), 0) : '—', t('fc.expectedSub', { time, scope: scopeTxt }))
+      + tile(t('fc.liveError'), avg('wapeOpH') == null ? '—' : pct(avg('wapeOpH')), live.length ? t('fc.liveErrorSub', { n: live.length, naive: pct(avg('naiveOpH')), skill: avg('skill') == null ? '–' : pct(avg('skill')) }) : t('fc.liveNone'))
+      + tile(t('fc.backtest'), evAvg(fc.active || 'pooled') == null ? '—' : pct(evAvg(fc.active || 'pooled')), evAvg('pooled') == null ? t('fc.backtestNone') : t('fc.backtestSub', { n: evDays.length, profile: pct(evAvg('profile')), pooled: pct(evAvg('pooled')) }))
+      + tile(t('fc.weather'), fc.weather?.used ? t('fc.weatherOn') : t('fc.weatherOff'), t('fc.weatherSub', { k: fmt(wg.tempRangeK ?? 0, 1), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, kmin: G.wxTempRangeK ?? 5, dmin: G.wxRainDays ?? 2 }))
+      + `</div>`;
+    const chart = series ? `<div style="margin-top:var(--s3)">${fcBars(ctx, series, local, el.clientWidth - 40)}</div>` : `<div class="note" style="margin-top:var(--s3)">${t('fc.noMuni')}</div>`;
+    // Auslastung: erwartete Fahrtbeginne je Fahrzeug gegen den Median der Fahrzeugart (Gruppen ab FC_MIN_FLEET Fahrzeugen)
+    const rows = Object.entries(fc.groups || {}).map(([k, g]) => { const [a, op, ty] = k.split('|'); return { k, ags: a, op, ty, fleet: g.fleet, starts: g.start.reduce((x, y) => x + y, 0), perVeh: g.perVeh }; });
+    const med = {}; for (const key of new Set(rows.map(r => `${r.op}|${r.ty}`))) { const v = rows.filter(r => `${r.op}|${r.ty}` === key && r.fleet >= FC_MIN_FLEET && r.perVeh != null).map(r => r.perVeh).sort((a, b) => a - b); if (v.length >= 3) med[key] = v[Math.floor(v.length / 2)]; }
+    for (const r of rows) { r.vs = med[`${r.op}|${r.ty}`] && r.fleet >= FC_MIN_FLEET && r.perVeh != null ? r.perVeh / med[`${r.op}|${r.ty}`] : null; r.cls = r.vs == null ? null : r.vs >= FC_HIGH ? 'high' : r.vs <= FC_LOW ? 'low' : 'mid'; }
+    const clsTxt = (c) => (c === 'high' ? `<span class="rp-status near"><i aria-hidden="true">▲</i>${t('fc.high')}</span>` : c === 'low' ? `<span class="rp-status over"><i aria-hidden="true">▼</i>${t('fc.low')}</span>` : c === 'mid' ? t('fc.mid') : '–');
+    const line = (r, withMuni) => `<tr><td>${withMuni ? `${esc(ctx.muniName?.(r.ags) || state.latest?.municipalities?.[r.ags]?.name || r.ags)} · ` : ''}${esc(r.op)} · ${esc(typeName(r.ty))}</td><td class="n">${fmt(r.fleet, 0)}</td><td class="n">${fmt(r.starts, 0)}</td><td class="n">${r.perVeh == null ? '–' : fmt(r.perVeh, 1)}</td><td class="n">${r.vs == null ? '–' : `${fmt(r.vs, 2)}×`}</td><td>${clsTxt(r.cls)}</td></tr>`;
+    const thead = (first) => `<thead><tr><th>${first}</th><th class="n">${t('fc.colFleet')}</th><th class="n">${t('fc.colStarts')}</th><th class="n">${t('fc.colPerVeh')}</th><th class="n">${t('fc.colVs')}</th><th>${t('fc.colClass')}</th></tr></thead>`;
+    let body = '';
+    if (ags) {
+      const mine = rows.filter(r => r.ags === ags).sort((a, b) => b.starts - a.starts);
+      if (mine.length) body = `<h3 style="margin:var(--s4) 0 var(--s1);font-size:14px">${t('fc.tableTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.tableTitle'))}"><table>${thead(t('fc.colOperator'))}<tbody>${mine.map(r => line(r, false)).join('')}</tbody></table></div>`;
+    } else {
+      const top = Object.entries(fc.municipalities || {}).map(([a, v]) => [a, v.reduce((x, y) => x + y, 0)]).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const big = rows.filter(r => r.fleet >= 20 && r.vs != null), hi = [...big].sort((a, b) => b.vs - a.vs).slice(0, 8), lo = [...big].sort((a, b) => a.vs - b.vs).slice(0, 8);
+      body = `<div class="grid" style="margin-top:var(--s4)"><div class="c4"><h3 style="margin:0 0 var(--s1);font-size:14px">${t('fc.topMunis')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topMunis'))}"><table><tbody>${top.map(([a, v]) => `<tr><td>${esc(ctx.muniName?.(a) || state.latest?.municipalities?.[a]?.name || a)}</td><td class="n">${fmt(v, 0)}</td></tr>`).join('')}</tbody></table></div></div>`
+        + `<div class="c8"><h3 style="margin:0 0 var(--s1);font-size:14px">${t('fc.topHigh', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topHigh', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${hi.map(r => line(r, true)).join('')}</tbody></table></div>`
+        + `<h3 style="margin:var(--s3) 0 var(--s1);font-size:14px">${t('fc.topLow', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topLow', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${lo.map(r => line(r, true)).join('')}</tbody></table></div></div></div>`;
+    }
+    el.innerHTML = title + badge + tiles + chart + body + `<div class="note small" style="margin-top:var(--s3)">${t('fc.note', { min: FC_MIN_FLEET })}</div>`;
+  } catch (e) { console.error('Prognose', e); if (tok === s.tok) el.innerHTML = title + emptyBox(t('rep.notComputable'), t('fc.noneHint')); }
+  finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
+}
+
+// ======================================================================
 // Messbasis: Reifegrad je Kennzahl (research Nr. 15) und Ampel der Ereignisregeln (datamine Nr. 18)
 // ======================================================================
 const mbEsc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
