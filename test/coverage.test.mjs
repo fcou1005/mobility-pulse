@@ -146,6 +146,9 @@ assert(V.rowId({ opKey: 'voi', ags: null, city: 'Flensburg' }) === 'voi|?flensbu
     municipalities: { '05315000': { ags: '05315000', name: 'Köln', state: 'NW', operators: { Bolt: { total: 1900, available: 1800, types: { scooter: 1900 } } } } },
     sources: [{ id: 'mobidrom_bolt-koeln-bonn:source-bolt-koeln-bonn', name: 'Bolt Köln-Bonn · source-bolt-koeln-bonn', operator: 'Bolt', status: 'live', municipalities: ['05315000'], counts: { vehicles: 1900 } }] };
   const cv = V.coverage({ claims: cl, latest: lt, features: feats, now: Date.parse('2026-11-02T10:00:00Z') });
+  const cg = V.coverage({ claims: cl, latest: { ...lt, gaps: [{ operator: 'Bolt', city: 'Bonn', since: '2026-11-02', note: 'Daten fehlen im Feed' }] }, features: feats, now: Date.parse('2026-11-04T10:00:00Z') });
+  const bg = cg.rows.find((r) => r.opKey === 'bolt' && r.ags === '05314000');
+  assert(bg?.cat === 'feed-still' && bg.gap && cg.notes?.[bg.gap.note] === 'Daten fehlen im Feed', 'bekannte Lücke bei Feed mit Stadtnamen: bleibt „Feed still“ (offen, unvollständig), Hinweis aus der Lücke');
   const bonn = cv.rows.find((r) => r.opKey === 'bolt' && r.ags === '05314000'), essen = cv.rows.find((r) => r.opKey === 'bolt' && r.ags === '05113000');
   assert(bonn?.cat === 'feed-still' && bonn.named === 'Bolt Köln-Bonn' && !bonn.gap && essen?.cat === 'gesperrt' && cv.rows.find((r) => r.opKey === 'bolt' && r.ags === '05315000')?.cat === 'abgedeckt',
     'Titel „Bolt Köln-Bonn“: Bonn → Feed still (named), Essen ohne Feed weiter „geschlossene Plattform“, Köln abgedeckt');
