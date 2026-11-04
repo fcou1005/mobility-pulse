@@ -136,6 +136,40 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(!Object.values(r3.log.issued).some(x => x.from === r.log.issued[Object.keys(r.log.issued)[0]].from), 'Live-Abgleich: bewertete Prognose wird aus der Warteliste genommen');
 }
 
+// ---------- Stundenreihen des Dashboards (series): Plan heute, Ist, Live-Prognose bis Ende morgen
+{
+  const TODAY = addDays(DAY0, NDAY), TOMORROW = addDays(DAY0, NDAY + 1), NOW = Date.parse(`${TODAY}T10:00:00Z`);
+  const r = F.runForecast({ docs, calendar: null, weather: WX, prevLog: null, now: NOW }), S = r.series;
+  assert(S.version === 1 && S.today === TODAY && S.tomorrow === TOMORROW && S.status === 'active', `Reihen: heute ${S.today}, morgen ${S.tomorrow}`);
+  const keys = Object.keys(S.days);
+  assert(keys.length <= F.SERIES_KEEP_DAYS + 1 && keys.includes(TODAY) && keys.includes(TOMORROW) && keys.includes(addDays(TODAY, -1)), `Reihen: höchstens ${F.SERIES_KEEP_DAYS} Tage + morgen (${keys.length})`);
+  const T = S.days[TODAY].DE, M = S.days[TOMORROW].DE;
+  assert(T.p?.length === 24 && T.p.every(x => x != null) && !T.a && T.l.slice(0, 12).every(x => x === null) && T.l.slice(12).every(x => x > 0), 'Heute ohne Tagesdatei: Plan für 24 Stunden, Live-Prognose nur ab 12 Uhr (nächste volle Ortsstunde), kein Ist');
+  assert(M.l.length === 24 && M.l.every(x => x != null) && !M.p && !M.a, 'Morgen: Live-Prognose für alle 24 Stunden, noch kein Plan');
+  const truth = (day, lvl = 1) => Array.from({ length: 24 }, (_, h) => groups.reduce((a, g) => a + trueMu(g, day, h, lvl), 0));
+  const werr = (x, y) => x.reduce((a, v, i) => a + Math.abs(v - y[i]), 0) / y.reduce((a, b) => a + b, 0);
+  assert(werr(T.p, truth(TODAY)) < 0.12, `Plan heute trifft die Wahrheit je Stunde (${(werr(T.p, truth(TODAY)) * 100).toFixed(1)} %)`);
+  assert(werr(M.l, truth(TOMORROW)) < 0.12, `Prognose morgen trifft die Wahrheit je Stunde (${(werr(M.l, truth(TOMORROW)) * 100).toFixed(1)} %)`);
+  const Y = S.days[addDays(TODAY, -1)].DE;
+  assert(Y.p && Y.a && werr(Y.p, Y.a) < 0.2, `Gestern: Plan gegen Ist je Stunde ${(werr(Y.p, Y.a) * 100).toFixed(1)} % (rückwirkend nur mit Tagen davor gerechnet)`);
+  // Gebiete summieren sich: Anbieter = Deutschland, Gemeinden = Deutschland, Arten = Deutschland (Plan, Rundung ±1 je Stunde und Gebiet)
+  const sumOf = (pre) => Array.from({ length: 24 }, (_, h) => Object.entries(S.days[TODAY]).filter(([k]) => k.startsWith(pre)).reduce((a, [, e]) => a + (e.p?.[h] || 0), 0));
+  assert(werr(sumOf('op:'), T.p) < 0.01 && werr(sumOf('ty:'), T.p) < 0.01, 'Gebiete: Anbieter und Arten ergeben je Stunde die Deutschland-Reihe');
+  assert(Object.keys(S.days[TODAY]).some(k => k.startsWith('ags:')) && Object.keys(S.days[TODAY]).some(k => k.startsWith('g:')) && Object.keys(S.days[TODAY]).length <= 1 + 5 + 2 + AGS.length + F.SERIES_MIN.groupMax, 'Gebiete: Gemeinden und große Gruppen sind dabei, die Zahl ist begrenzt');
+  // Plan bleibt eingefroren, Ist und Live folgen neuen Daten
+  const docs2 = [...docs, makeDoc(TODAY)], NOW2 = Date.parse(`${TODAY}T16:00:00Z`);
+  docs2.at(-1).published = { complete: false }; docs2.at(-1).groups = Object.fromEntries(Object.entries(docs2.at(-1).groups).map(([k, g]) => [k, { ...g, start: g.start.map((x, h) => (h < 16 ? x : 0)), vmin: g.vmin.map((x, h) => (h < 16 ? x : 0)) }]));
+  const r2 = F.runForecast({ docs: docs2, calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(r.log)), prevSeries: JSON.parse(JSON.stringify(S)), now: NOW2 }), T2 = r2.series.days[TODAY].DE;
+  assert(JSON.stringify(T2.p) === JSON.stringify(T.p), 'Plan heute bleibt über den Tag eingefroren (zweiter Lauf)');
+  assert(T2.a && T2.a.slice(0, 16).every(x => x != null && x >= 0) && T2.a.slice(16).every(x => x === null), 'Ist: Stunden mit Beobachtung gezählt, spätere Stunden null');
+  assert(T2.l.slice(0, 18).every(x => x === null) && T2.l.slice(18).every(x => x > 0), 'Live-Prognose beginnt mit der nächsten vollen Ortsstunde (18 Uhr bei 16:00 UTC)');
+  const A = F.actualOfDay(F.dayFromDoc(docs2.at(-1), null));
+  assert(A.get('DE').slice(0, 16).reduce((a, b) => a + b, 0) === T2.a.slice(0, 16).reduce((a, b) => a + b, 0) || Math.abs(A.get('DE').slice(0, 16).reduce((a, b) => a + b, 0) - T2.a.slice(0, 16).reduce((a, b) => a + b, 0)) < 20, 'actualOfDay: Summe stimmt mit der gespeicherten Ist-Reihe überein');
+  // zu wenig Daten: keine Pläne, kein Fehler
+  const e = F.runForecast({ docs: [docs[0]], now: Date.parse(`${docs[0].day}T20:00:00Z`) });
+  assert(e.series.version === 1 && Object.values(e.series.days).every(d => Object.values(d).every(x => !x.p && !x.l)), 'Ein Tag Daten: Reihen ohne Plan und Live-Prognose');
+}
+
 // ---------- Regelwechsel: Prognose folgt dem aktuellen Regelstand (Era 0), nicht dem Mittel
 {
   const ds = [];

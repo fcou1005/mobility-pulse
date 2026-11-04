@@ -8,6 +8,7 @@ import * as Fl from './flows.js';
 import * as Cov from './coverage.js';
 import * as Cmp from './compare.js';
 import * as Sp from './spots.js';
+import * as Fv from './forecast.js';
 import { mapKeys } from './mapkeys.js';
 import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js';
@@ -514,18 +515,18 @@ function snapshotToSystem(snap, rec) {
 // ---------- Rendering ----------
 // Drei Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
 // „Städte“: die bundesweiten Vergleiche (Gebietsvergleich, Verfügbarkeit je Stadt, Rangliste, Dichte) aus „Leistung“ ausgelagert
-const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
+const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
 const GROUPS_DEF = () => [
   { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['staedte', t('app.citiesSeg')], ['usage', t('app.usage')], ['coverage', t('app.coverageSeg')], ['vergleich', t('app.compare')], ['bericht', t('app.report')]] },
-  { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')]] },
+  { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')], ['prognose', t('app.forecast')], ['spots', t('app.spots')]] },
   { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')]] },
 ];
-const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources' };
+const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources' };
 const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 let currentView = 'live', urlReady = false;
 const resolveView = (h) => { let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 // Welche Filter der Leiste in welcher Ansicht wirken; die übrigen werden ausgeblendet (Disposition und Vergleich haben eigene Auswahl im Panel)
-const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
+const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
 let viewShown = false;
 function setView(name) {
   name = resolveView(name);
@@ -709,6 +710,7 @@ VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderForecast, '
 VIEW_RENDER.staedte = [() => renderCities(), rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter')];
 VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
 VIEW_RENDER.vergleich = [rp(Cmp.renderCompare, 'cmp-panel')];
+VIEW_RENDER.prognose = [() => { const el = document.getElementById('fv-panel'); if (el) return Fv.renderForecastView(el, { ...rpCtx(), loadOnce }); }];
 VIEW_RENDER.spots = [() => { const el = document.getElementById('spots-panel'); if (el) return Sp.renderSpots(el, { ...rpCtx(), loadOnce }); }]; // Spot-Abgleich braucht dazu stations-quota und Zonen-Index
 VIEW_RENDER.sources.push(rp(Cov.renderCoverage, 'cov-panel'), rp(Rp.renderFeedChecks, 'rp-feedchecks'), rp(Rp.renderPriceLog, 'rp-pricelog'), () => renderCalibPanel());
 function renderAll() {
@@ -2500,7 +2502,7 @@ async function init() {
     state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = [...REQ].filter(([k]) => k.startsWith('boundaries')); resetCache(); if (state.bIndex) for (const [k, p] of keepB) REQ.set(k, p); // Grenzen ändern sich nicht je Lauf
-    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.(); Cmp.resetCompareCache?.(); Sp.resetSpotsCache?.();
+    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.(); Cmp.resetCompareCache?.(); Fv.resetForecastCache?.(); Sp.resetSpotsCache?.();
     const hi = await cached('history/index.json', 25000); if (hi.ok) state.histIndex = hi.json;
     populateScope(); populateOperators(); clearNotice('stale'); renderAll();
   }, 2 * 60e3);

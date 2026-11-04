@@ -1052,20 +1052,21 @@ try {
 
 // Prognose-Engine (lib/pulse-forecast.js): ein gepooltes Modell über alle Anbieter und Gemeinden, Selbstprüfung per Rolling Origin (ein Tag voraus)
 // und Live-Abgleich ausgegebener Prognosen mit der Realität → forecast/latest.json (nächste 24 Stunden) und forecast/log.json. Höchstens alle
-// FORECAST_EVERY_MIN Minuten (Standard 170); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
+// FORECAST_EVERY_MIN Minuten (Standard 60); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
+// forecast/series.json: Stundenreihen fürs Dashboard (Plan heute eingefroren, Ist, Live-Prognose bis Ende morgen, je Anbieter, Art, Gemeinde und große Gruppe).
 if (process.env.FORECAST !== '0') {
   try {
-    const dir = path.join(DATA, 'forecast'), fLatest = path.join(dir, 'latest.json'), fLog = path.join(dir, 'log.json');
+    const dir = path.join(DATA, 'forecast'), fLatest = path.join(dir, 'latest.json'), fLog = path.join(dir, 'log.json'), fSeries = path.join(dir, 'series.json');
     const rd = async (f) => (existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null);
-    const prevLatest = await rd(fLatest), every = (process.env.FORECAST_EVERY_MIN != null ? +process.env.FORECAST_EVERY_MIN : 170) * 60e3;
+    const prevLatest = await rd(fLatest), every = (process.env.FORECAST_EVERY_MIN != null ? +process.env.FORECAST_EVERY_MIN : 60) * 60e3;
     if (!prevLatest || !(now - Date.parse(prevLatest.generatedAt) < every)) {
       const list = async (d, n) => (existsSync(d) ? (await readdir(d)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(-n).map(f => path.join(d, f)) : []);
       const docs = []; for (const f of await list(path.join(DATA, 'events'), 21)) docs.push(JSON.parse(await readFile(f, 'utf8')));
       const weather = []; for (const f of await list(path.join(DATA, 'weather'), 30)) weather.push(JSON.parse(await readFile(f, 'utf8')));
       const red = new Set(Object.entries(latest.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k)); // rote Ampel: nicht plausibel gezählt
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, prevLog: await rd(fLog), now, exclude: red });
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
       await mkdir(dir, { recursive: true });
-      await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log));
+      await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
       const l = res.latest;
       log(`Prognose: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, ${Date.now() - t0} ms`);
     }
@@ -1112,7 +1113,7 @@ if (boundaries) {
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
     '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
-    '- Prognose (`forecast/latest.json`, `forecast/log.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender und dem Wetter-Cache; statistisches Modell des Projekts, keine Betreiberdaten.',
+    '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender und dem Wetter-Cache; statistisches Modell des Projekts, keine Betreiberdaten.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',

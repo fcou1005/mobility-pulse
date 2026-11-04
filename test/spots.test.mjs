@@ -112,3 +112,39 @@ const f0 = gj.features[0];
 assert(gj.type === 'FeatureCollection' && gj.features.length === 3 && f0.geometry.coordinates[0] === 9.20005 && f0.properties.operators.join() === 'Bolt,Dott' && f0.properties.members.length === 2 && f0.properties.reason === 'Rang 1' && gj.meta.at === '2026-11-01T12:00:00.000Z',
   'GeoJSON: Punkte [lon, lat], Anbieter, Mitglieder, Begründung, Stand');
 assert(S.analyzeSpots({ vehicles: [], stations: [] }, { ags: A }).rows.length === 0 && S.analyzeSpots({ vehicles: [], stations: [] }, { ags: A }).own === null, 'leere Flotte: keine Zeilen, kein eigener Anbieter');
+
+
+// ---------- Spot-Bewertung mit Prognose (rateSpots) ----------
+{
+  const grp = { deploy: [
+    { op: 'Voi', lat: 48.79005, lon: 9.20005, count: 12, vehicles: 90, avg: 7.5, last: Date.UTC(2026, 10, 3, 6), first: Date.UTC(2026, 10, 1, 6), rank: 1 },   // in der Zelle mit 2,0 Fahrtbeginnen/h, kein Parkspot dabei
+    { op: 'Voi', lat: 48.7800, lon: 9.1800, count: 3, vehicles: 12, avg: 4, last: Date.UTC(2026, 10, 2, 6), first: Date.UTC(2026, 10, 1, 6), rank: 2 },        // ≤ 60 m neben Parkspot „Marktplatz“ → ein Ort („beides“)
+    { op: 'Bolt', lat: 48.79, lon: 9.2, count: 5, vehicles: 30, avg: 6, last: 1, first: 1, rank: 1 },                                                              // anderer Anbieter: zählt nicht
+  ] };
+  const fc = { day24: Array.from({ length: 24 }, (_, h) => (h < 12 ? 40 : 20)) }; // 720 Fahrtbeginne in den nächsten 24 Stunden, 40/h in den nächsten 3
+  const r = S.rateSpots(fleet, { ags: A, op: 'Voi', demand, groups: grp, quota, fc });
+  const byLabel = (l) => r.items.find(x => x.label === l);
+  const hub = r.items.find(x => x.deploy?.count === 12), market = r.items.find(x => x.kind === 'both');
+  assert(r.items.length === r.total.spots && r.total.deploy === 2 && r.total.both === 1 && !r.items.some(x => x.deploy?.count === 5), `Spot-Bewertung: ${r.items.length} Orte (2 Deploy-Orte, einer davon mit Parkspot verbunden, fremder Anbieter fehlt)`);
+  assert(hub && hub.demandPerH === 2 && hub.importance === 1 && hub.cls === 'A', 'Wichtigkeit: der Ort mit der größten Nachfrage hat 100 % (Klasse A)');
+  const share = 2.0 + 0.2 + 0.5 + 1.0; // Σ Fahrtbeginne/h der vier Zellen
+  assert(Math.abs(hub.cellShare - 2 / share) < 1e-9 && Math.abs(hub.expected24 - 720 * 2 / share) < 1e-6 && Math.abs(hub.expectedH - 120 * 2 / share) < 1e-6, 'Erwartung: Zellenanteil × Prognose des Anbieters (24 h und nächste 3 h)');
+  assert(market.cls === 'D' && market.target === 0 && market.missing === 0, 'Ort ohne gemessene Nachfrage: Klasse D, kein Soll, kein Fehlbestand');
+  assert(hub.have === 0 && hub.missing === hub.targetFc && hub.targetFc >= 2, `Ist/Soll: ohne Fahrzeuge am Ort fehlt das ganze Soll (${hub.targetFc})`);
+  assert(r.total.missing === r.items.reduce((a, x) => a + x.missing, 0) && r.items[0].missing >= r.items.at(-1).missing && r.items[0].rank === 1, 'Rangfolge: größter Fehlbestand zuerst, Summen stimmen');
+  // Prognose höher → Soll nicht niedriger; ohne Prognose gilt das gemessene Soll
+  const hi = S.rateSpots(fleet, { ags: A, op: 'Voi', demand, groups: grp, quota, fc: { day24: fc.day24.map(x => x * 4) } }), none = S.rateSpots(fleet, { ags: A, op: 'Voi', demand, groups: grp, quota, fc: null });
+  assert(hi.items.find(x => x.deploy?.count === 12).targetFc >= hub.targetFc && none.fc === null && none.items.find(x => x.deploy?.count === 12).targetFc === none.items.find(x => x.deploy?.count === 12).target && none.items.find(x => x.deploy?.count === 12).expected24 === null, 'Soll steigt mit der Prognose; ohne Prognose bleibt das gemessene Soll');
+  // ohne Nachfragemodell: keine Klassen außer D, kein Fehler
+  const nd = S.rateSpots(fleet, { ags: A, op: 'Voi', demand: null, groups: grp, quota, fc });
+  assert(nd.items.length > 0 && nd.items.every(x => x.cls === 'D' && x.missing === 0) && nd.hours === 0, 'Ohne Nachfragemodell: alle Orte Klasse D, kein Fehler');
+  // mehrere Orte in einer Zelle teilen sich den Zellenanteil
+  const two = S.rateSpots({ ...fleet, stations: [] }, { ags: A, op: 'Voi', demand, groups: { deploy: [grp.deploy[0], { ...grp.deploy[0], lat: 48.79008, lon: 9.20008, rank: 2 }] }, quota: null, fc });
+  assert(two.items.length === 2 && Math.abs(two.items[0].cellShare - 1 / share) < 1e-9, 'Zwei Orte in einer Zelle teilen sich deren Anteil');
+  // Ist: ein Fahrzeug zählt nur am nächsten Ort im Umkreis (zwei Orte dicht beieinander zählen es nicht doppelt)
+  const veh0 = fleet.vehicles.find(v => v.operator === 'Voi' && v.ags === A);
+  const near2 = { ...fleet, stations: [], vehicles: [{ ...veh0, lat: 48.79006, lon: 9.20006, disabled: false, reserved: false }, { ...veh0, lat: 48.79007, lon: 9.20007, disabled: false, reserved: false }] };
+  const dup = S.rateSpots(near2, { ags: A, op: 'Voi', demand, groups: { deploy: [grp.deploy[0], { ...grp.deploy[0], lat: 48.79008, lon: 9.20008, rank: 2 }] }, quota: null, fc });
+  assert(dup.items.length === 2 && dup.total.have === 2, `Ist: zwei Fahrzeuge zwischen zwei nahen Orten werden einmal gezählt (${dup.total.have})`);
+  assert(byLabel('Marktplatz')?.park?.name === 'Marktplatz' || market.park.name === 'Marktplatz', 'Verbundener Ort trägt die Angaben des Parkspots (Name, Leerquote)');
+}
