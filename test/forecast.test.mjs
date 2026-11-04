@@ -74,6 +74,15 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(!gm.ok && gm.missingShare === 1, 'Wetter-Gate zu ohne Wetterdaten (alle Zeilen ohne Wetter)');
 }
 
+// ---------- Regression: Temperaturspanne im Gate (Kalt-Merkmal ist negativ kodiert, t = 10 + 10·(kalt + warm)); echte Daten 03./04.11. zeigten Spanne 0
+{
+  const dd = F.assignEras(docs.slice(0, 2).map(d => F.dayFromDoc(d, null)));
+  const mk = (day, tt) => ({ day, source: 'test', cells: { '48.5|9.0': { t: Array(24).fill(tt), p: Array(24).fill(0) } }, ags: Object.fromEntries(AGS.map(a => [a, '48.5|9.0'])) });
+  const W2 = [mk(addDays(DAY0, -1), 2), mk(DAY0, 2), mk(addDays(DAY0, 1), 18), mk(addDays(DAY0, 2), 18)];
+  const R2 = F.buildRows(dd, F.wxLookup(W2)), g2 = F.weatherGate(R2, Array.from({ length: R2.n }, (_, i) => i));
+  assert(g2.tempRangeK >= 13 && g2.tempRangeK <= 17, `Wetter-Gate: Spanne 2 °C gegen 18 °C ≈ 15 K (nicht 0 durch Spiegelung um 10 °C): ${g2.tempRangeK} K`);
+}
+
 // ---------- Stunden ohne Trainingsdaten dürfen die Prognose nicht aufblähen (Regression: Nachtlücke früher Tage → Rate 1 je Fahrzeugstunde)
 {
   const early = [makeDoc(addDays(DAY0, 0), { skipHours: [1, 2, 3, 4, 5, 6, 7, 8] }), makeDoc(addDays(DAY0, 1), { skipHours: [1, 2, 3, 4, 5, 6, 7, 8] }), makeDoc(addDays(DAY0, 2))];
