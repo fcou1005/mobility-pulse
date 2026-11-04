@@ -188,6 +188,10 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   assert(wDay.length >= 1 && wf.version === 1 && wf.hours.length === 24 && wc && wc.t.length === 24 && wc.t[3] === null && wc.t[4] === 10 && wc.p[5] === 1.2 && Object.keys(wf.ags).length >= 1 && /DWD/.test(wf.source) && !JSON.stringify(wf).includes('999'),
     `Wetter-Cache: weather/<UTC-Tag>.json mit 24 Stunden je Rasterzelle (${wDay.join(', ')}), unplausibler Wert → null, Gemeinde → Zelle`);
   void wd;
+  const tomorrow = new Date(Date.now() + 86400e3).toISOString().slice(0, 10);
+  assert(wDay.includes(tomorrow), `Wetter-Cache: auch die Datei für morgen (${tomorrow}, Vorhersage) wird geschrieben`);
+  const fl = await readFile('test/out/forecast/latest.json', 'utf8').then(JSON.parse).catch(() => null), fg = await readFile('test/out/forecast/log.json', 'utf8').then(JSON.parse).catch(() => null);
+  assert(fl && fl.version === 1 && ['insufficient', 'learning', 'active'].includes(fl.status) && fg && fg.version === 1 && typeof fg.evals === 'object', `Prognose: forecast/latest.json und log.json vom Sammler geschrieben (Status ${fl?.status}, ${fl?.trainDays} Tage)`);
 }
 {
   const E2 = await import('../lib/pulse-econ.js'), ecL = l4.eventChecks?.groups?.['08111000|Lime|scooter'], mY = l4.measure?.days?.[ydM];

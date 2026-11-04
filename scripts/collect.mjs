@@ -11,6 +11,7 @@ import * as E from '../lib/pulse-econ.js';
 import * as R from '../lib/pulse-report.js';
 import * as FE from '../lib/pulse-flowest.js';
 import * as V from '../lib/pulse-coverage.js';
+import * as FC from '../lib/pulse-forecast.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -633,11 +634,11 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
 
 // Wetter-Cache (weather/<UTC-Tag>.json): stündlich Temperatur, Niederschlag, Wind, Sonnenschein je 0,5°-Rasterzelle über den Gemeinden mit
 // Flotte (Schwerpunkt aus den Grenzen), DWD-Beobachtungen über Bright Sky. Zweck: eine Wetterreihe aufbauen, die später ein wetterbereinigtes
-// Modell speist (je früher der Verlauf beginnt, desto früher trägt es). Höchstens einmal je 50 Minuten, nur heute und gestern (UTC);
+// Modell speist (je früher der Verlauf beginnt, desto früher trägt es). Höchstens einmal je 50 Minuten, gestern und heute (UTC) als Beobachtung, morgen als Vorhersage;
 // bei Fehler bleibt die alte Datei. WEATHER_URL leer = aus (Fixture-Test). Werte außerhalb des plausiblen Bereichs werden null.
 {
   const base = process.env.WEATHER_URL ?? 'https://api.brightsky.dev', dir = path.join(DATA, 'weather');
-  const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10), days = [utcDay(now - 86400e3), utcDay(now)];
+  const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10), days = [utcDay(now - 86400e3), utcDay(now)], wDays = [...days, utcDay(now + 86400e3)]; // morgen: DWD-Vorhersage (MOSMIX), wird am Folgetag durch Beobachtungen ersetzt
   const fileOf = (d) => path.join(dir, `${d}.json`);
   let stale = false;
   for (const d of days) { try { const o = existsSync(fileOf(d)) ? JSON.parse(await readFile(fileOf(d), 'utf8')) : null; if (!o || !(now - Date.parse(o.generatedAt) < 50 * 60e3)) stale = true; } catch { stale = true; } }
@@ -651,11 +652,11 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
       const keys = [...cells.keys()], res = {}; let fails = 0;
       for (let i = 0; i < keys.length; i += 4) await Promise.all(keys.slice(i, i + 4).map(async (k) => {
         const [lat, lon] = cells.get(k).map(x => Math.round(x * 100) / 100); // Abfrage am Schwerpunkt der ersten Gemeinde der Zelle (Zelle nur zum Zusammenfassen)
-        const r = await fetchJson(`${base}/weather?lat=${lat}&lon=${lon}&date=${days[0]}&last_date=${utcDay(now + 86400e3)}&tz=UTC&units=dwd`, { retry: 0 });
+        const r = await fetchJson(`${base}/weather?lat=${lat}&lon=${lon}&date=${days[0]}&last_date=${utcDay(now + 2 * 86400e3)}&tz=UTC&units=dwd`, { retry: 0 });
         if (r.ok && Array.isArray(r.json?.weather)) res[k] = r.json.weather; else fails++;
       }));
       let wrote = 0;
-      for (const d of days) {
+      for (const d of wDays) {
         const hours = Array.from({ length: 24 }, (_, h) => `${d}T${String(h).padStart(2, '0')}:00:00Z`), out = {};
         for (const [k, rows] of Object.entries(res)) {
           const by = new Map(rows.map(w => [Date.parse(w.timestamp), w])), col = (f, lo, hi, dg) => hours.map(h => num(by.get(Date.parse(h))?.[f], lo, hi, dg));
@@ -1049,6 +1050,27 @@ try {
   log(`Verfolgung: ${Object.keys(tr.state.v).length} Kennungen im Zustand${tr.first ? ' (erster Lauf)' : ` · Fahrten begonnen ${ev.start}, beendet ${ev.end}, Umsetzungen ${ev.reloc}, Akkutausch ${ev.swap}`} · lange Standzeiten ${tr.idleLong.length}`);
 }
 
+// Prognose-Engine (lib/pulse-forecast.js): ein gepooltes Modell über alle Anbieter und Gemeinden, Selbstprüfung per Rolling Origin (ein Tag voraus)
+// und Live-Abgleich ausgegebener Prognosen mit der Realität → forecast/latest.json (nächste 24 Stunden) und forecast/log.json. Höchstens alle
+// FORECAST_EVERY_MIN Minuten (Standard 170); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
+if (process.env.FORECAST !== '0') {
+  try {
+    const dir = path.join(DATA, 'forecast'), fLatest = path.join(dir, 'latest.json'), fLog = path.join(dir, 'log.json');
+    const rd = async (f) => (existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null);
+    const prevLatest = await rd(fLatest), every = (process.env.FORECAST_EVERY_MIN != null ? +process.env.FORECAST_EVERY_MIN : 170) * 60e3;
+    if (!prevLatest || !(now - Date.parse(prevLatest.generatedAt) < every)) {
+      const list = async (d, n) => (existsSync(d) ? (await readdir(d)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(-n).map(f => path.join(d, f)) : []);
+      const docs = []; for (const f of await list(path.join(DATA, 'events'), 21)) docs.push(JSON.parse(await readFile(f, 'utf8')));
+      const weather = []; for (const f of await list(path.join(DATA, 'weather'), 30)) weather.push(JSON.parse(await readFile(f, 'utf8')));
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, prevLog: await rd(fLog), now });
+      await mkdir(dir, { recursive: true });
+      await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log));
+      const l = res.latest;
+      log(`Prognose: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, ${Date.now() - t0} ms`);
+    }
+  } catch (e) { log(`Prognose: ${e.message} – alte Dateien bleiben`); }
+}
+
 // Aktive Gemeindegrenzen fürs Dashboard
 if (boundaries) {
   const activeAgs = new Set(munis.keys());
@@ -1088,7 +1110,8 @@ if (boundaries) {
     '## Grundlagen', '',
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
-    '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
+    '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
+    '- Prognose (`forecast/latest.json`, `forecast/log.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender und dem Wetter-Cache; statistisches Modell des Projekts, keine Betreiberdaten.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',
