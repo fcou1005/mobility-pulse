@@ -116,6 +116,7 @@ Ohne vermutete Abgrenzung bleiben: Nürnberg (Zonen A/B/C sind Abstellregeln ohn
 - **Tabellen-CSV:** jede Tabelle ab 5 Zeilen ohne eigenen Export bekommt einen „↓ CSV“-Knopf (Text der Zellen, Trennzeichen je Sprache); Berichtstabellen behalten ihre eigenen Exporte.
 - **Glossar per Touch/Tastatur:** Kürzel mit Erklärung (`abbr`) sind fokussierbar; Antippen oder Enter zeigt die Erklärung als Popover, Esc oder Tippen daneben schließt.
 - **Spielraum unter der Grenze:** in der Obergrenzen-Prüfung „N frei“ je Anbieter (Grenze − gemeldeter Bestand) und für die Gesamtgrenze; gemeldet, nicht buchbar, Herleitung der Grenze bleibt sichtbar.
+- **Wetter-Cache (`weather/<UTC-Tag>.json`, Sammler):** stündlich Temperatur (°C), Niederschlag (mm/h), Wind (km/h), Sonnenschein (min/h) je 0,5°-Rasterzelle über den Gemeinden mit Flotte (DWD über Bright Sky; `ags` ordnet Gemeinde → Zelle). Höchstens einmal je 50 Minuten, heute und gestern; bei Fehler bleibt die alte Datei; `WEATHER_URL` leer = aus. Zweck: Wetterreihe aufbauen, damit später ein wetterbereinigtes Modell trainiert werden kann (erst sinnvoll ab etwa 4–6 Wochen mit Regentagen).
 - **Datenschutz-Test:** zufällige Eingaben, feste Saat – keine veröffentlichte Zelle × Band unter der Schwelle (3), veröffentlicht + unterdrückt = Eingabe. Offen: `below` je Gemeinde nennt die unterdrückte Summe exakt; bei Gemeinden mit nur einer unterdrückten Zelle ließe sich deren Wert ablesen.
 
 ## Dashboard

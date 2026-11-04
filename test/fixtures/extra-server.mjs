@@ -55,6 +55,12 @@ export async function startExtra() {
     if (kind === 'p' && p[file]) return json(p[file]());
     if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
     if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);
+    if (kind === 'weather') { // Bright-Sky-Format: stündliche Zeilen von date 00:00 bis last_date 00:00 (UTC); ein unplausibler Temperaturwert (999) pro Antwort
+      if (st.weatherDown) return json({}, 500);
+      const d0 = Date.parse(`${u.searchParams.get('date')}T00:00:00Z`), d1 = Date.parse(`${u.searchParams.get('last_date')}T00:00:00Z`), w = [];
+      for (let t = d0, i = 0; t <= d1; t += 3600e3, i++) w.push({ timestamp: new Date(t).toISOString().replace('Z', '+00:00'), temperature: i === 3 ? 999 : 8 + (i % 24) / 2, precipitation: i % 24 === 5 ? 1.2 : 0, wind_speed: 12, sunshine: 0 });
+      return json({ weather: w, sources: [] });
+    }
     if (kind === 'cb') return json(cb());
     if (kind === 'auth') {
       if (key !== 'geheim-123') return json({}, 401);

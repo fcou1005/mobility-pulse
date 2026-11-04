@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { rm, mkdir, readFile, writeFile, mkdtemp } from 'node:fs/promises';
+import { rm, mkdir, readFile, writeFile, mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -8,7 +8,7 @@ import * as T from '../lib/pulse-track.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -180,8 +180,15 @@ await writeFile(`test/out/events/${ydM}.json`, JSON.stringify({ day: ydM, versio
   published: { at: Date.now(), through: null, complete: true } }));
 const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.000Z', source: 'OpenHolidays API (openholidaysapi.org, ODbL)', from: '2025-01-01', to: '2026-12-31', states: { BW: { '2026-11-02': 'F' } } });
 await writeFile('test/out/calendar.json', calOld);
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+{
+  const wd = T.dayOf(Date.now()), wDay = (await readdir('test/out/weather').catch(() => [])).filter(n => n.endsWith('.json')).map(n => n.slice(0, -5)).sort(), wf = wDay.length ? JSON.parse(await readFile(`test/out/weather/${wDay[0]}.json`, 'utf8')) : null;
+  const wc = wf && Object.values(wf.cells)[0];
+  assert(wDay.length >= 1 && wf.version === 1 && wf.hours.length === 24 && wc && wc.t.length === 24 && wc.t[3] === null && wc.t[4] === 10 && wc.p[5] === 1.2 && Object.keys(wf.ags).length >= 1 && /DWD/.test(wf.source) && !JSON.stringify(wf).includes('999'),
+    `Wetter-Cache: weather/<UTC-Tag>.json mit 24 Stunden je Rasterzelle (${wDay.join(', ')}), unplausibler Wert → null, Gemeinde → Zelle`);
+  void wd;
+}
 {
   const E2 = await import('../lib/pulse-econ.js'), ecL = l4.eventChecks?.groups?.['08111000|Lime|scooter'], mY = l4.measure?.days?.[ydM];
   assert(l4.eventChecks?.day === ydM && ecL?.level === 'bad' && ecL.checks.flags.includes('pickup') && l4.eventChecks.groups['08111000|Voi|scooter']?.level === 'ok' && l4.eventChecks.rules?.pickupBad === E2.EVENT_CHECKS.pickupBad,
@@ -292,6 +299,14 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
   const arY = JSON.parse(await readFile(`test/out/archive/${yd.slice(0, 7)}.json`, 'utf8'));
   assert(pubY.published?.complete === true && pubY.runs.length === ew3.runs.length && cY.published?.complete === true && ew4.day === day && ew4.runs.length === 1 && arY.days[yd],
     'M-11: Tageswechsel – Vortag vollständig veröffentlicht (Ereignisse, Zellen, Archiv), heute neu begonnen');
+}
+{
+  // Wetter-Cache: Dienst antwortet 500 → bereits vorhandene (veraltete) Datei bleibt unverändert
+  const wDay = (await readdir('test/out/weather').catch(() => [])).filter(n => n.endsWith('.json')).map(n => n.slice(0, -5)).sort(), f = `test/out/weather/${wDay[wDay.length - 1]}.json`;
+  await writeFile(f, (await readFile(f, 'utf8')).replace(/"generatedAt":"[^"]+"/, '"generatedAt":"2026-01-01T00:00:00.000Z"'));
+  const stale = await readFile(f, 'utf8'); ex.st.weatherDown = true;
+  await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0', WEATHER_URL: ex.base });
+  assert(wDay.length >= 1 && await readFile(f, 'utf8') === stale, 'Wetter-Cache: Dienst antwortet 500 → alte Datei bleibt unverändert'); ex.st.weatherDown = false;
 }
 ex.close(); srv.kill();
 await rm(tmp, { recursive: true, force: true });

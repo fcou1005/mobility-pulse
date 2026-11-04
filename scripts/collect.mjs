@@ -631,6 +631,44 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
   }
 }
 
+// Wetter-Cache (weather/<UTC-Tag>.json): stündlich Temperatur, Niederschlag, Wind, Sonnenschein je 0,5°-Rasterzelle über den Gemeinden mit
+// Flotte (Schwerpunkt aus den Grenzen), DWD-Beobachtungen über Bright Sky. Zweck: eine Wetterreihe aufbauen, die später ein wetterbereinigtes
+// Modell speist (je früher der Verlauf beginnt, desto früher trägt es). Höchstens einmal je 50 Minuten, nur heute und gestern (UTC);
+// bei Fehler bleibt die alte Datei. WEATHER_URL leer = aus (Fixture-Test). Werte außerhalb des plausiblen Bereichs werden null.
+{
+  const base = process.env.WEATHER_URL ?? 'https://api.brightsky.dev', dir = path.join(DATA, 'weather');
+  const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10), days = [utcDay(now - 86400e3), utcDay(now)];
+  const fileOf = (d) => path.join(dir, `${d}.json`);
+  let stale = false;
+  for (const d of days) { try { const o = existsSync(fileOf(d)) ? JSON.parse(await readFile(fileOf(d), 'utf8')) : null; if (!o || !(now - Date.parse(o.generatedAt) < 50 * 60e3)) stale = true; } catch { stale = true; } }
+  if (base && stale && boundaries) {
+    const cellOf = (c) => `${(Math.round(c[0] * 2) / 2).toFixed(1)}|${(Math.round(c[1] * 2) / 2).toFixed(1)}`;
+    const cells = new Map(), agsCell = {};
+    for (const [ags, m] of Object.entries(muniOut)) if (m.c && Number.isFinite(m.c[0]) && Number.isFinite(m.c[1]) && Object.values(m.operators || {}).length) { const k = cellOf(m.c); agsCell[ags] = k; if (!cells.has(k)) cells.set(k, m.c); }
+    const num = (x, lo, hi, d = 1) => (typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi ? Math.round(x * 10 ** d) / 10 ** d : null);
+    try {
+      await mkdir(dir, { recursive: true });
+      const keys = [...cells.keys()], res = {}; let fails = 0;
+      for (let i = 0; i < keys.length; i += 4) await Promise.all(keys.slice(i, i + 4).map(async (k) => {
+        const [lat, lon] = cells.get(k).map(x => Math.round(x * 100) / 100); // Abfrage am Schwerpunkt der ersten Gemeinde der Zelle (Zelle nur zum Zusammenfassen)
+        const r = await fetchJson(`${base}/weather?lat=${lat}&lon=${lon}&date=${days[0]}&last_date=${utcDay(now + 86400e3)}&tz=UTC&units=dwd`, { retry: 0 });
+        if (r.ok && Array.isArray(r.json?.weather)) res[k] = r.json.weather; else fails++;
+      }));
+      let wrote = 0;
+      for (const d of days) {
+        const hours = Array.from({ length: 24 }, (_, h) => `${d}T${String(h).padStart(2, '0')}:00:00Z`), out = {};
+        for (const [k, rows] of Object.entries(res)) {
+          const by = new Map(rows.map(w => [Date.parse(w.timestamp), w])), col = (f, lo, hi, dg) => hours.map(h => num(by.get(Date.parse(h))?.[f], lo, hi, dg));
+          const t = col('temperature', -45, 55), p = col('precipitation', 0, 250), w = col('wind_speed', 0, 250), s = col('sunshine', 0, 60, 0);
+          if ([t, p].some(a => a.some(x => x != null))) out[k] = { lat: cells.get(k)[0], lon: cells.get(k)[1], t, p, w, s };
+        }
+        if (Object.keys(out).length) { await writeFile(fileOf(d), JSON.stringify({ version: 1, day: d, generatedAt: new Date(now).toISOString(), source: 'DWD Open Data via Bright Sky', units: { t: '°C', p: 'mm/h', w: 'km/h', s: 'min/h' }, hours, cells: out, ags: agsCell })); wrote++; }
+      }
+      log(`Wetter: ${keys.length} Rasterzellen, ${wrote} Tagesdatei(en)${fails ? `, ${fails} Abrufe ohne Antwort` : ''}`);
+    } catch (e) { log(`Wetter: ${e.message} – alte Dateien bleiben`); }
+  }
+}
+
 // Momentaufnahmen (nur Zugangs-Quellen)
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
@@ -1050,6 +1088,7 @@ if (boundaries) {
     '## Grundlagen', '',
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
+    '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',
