@@ -1,17 +1,17 @@
-import * as C from './pulse-core.js?v=mw2hedag';
-import * as Ops from './ops.js?v=mw2hedag';
-import * as E from './pulse-econ.js?v=mw2hedag';
-import * as K from './pulse-calib.js?v=mw2hedag';
-import * as Rp from './report.js?v=mw2hedag';
-import * as R from './pulse-report.js?v=mw2hedag';
-import * as Fl from './flows.js?v=mw2hedag';
-import * as Cov from './coverage.js?v=mw2hedag';
-import * as Cmp from './compare.js?v=mw2hedag';
-import * as Sp from './spots.js?v=mw2hedag';
-import * as Fv from './forecast.js?v=mw2hedag';
-import { mapKeys } from './mapkeys.js?v=mw2hedag';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw2hedag';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw2hedag';
+import * as C from './pulse-core.js?v=mw2id1k1';
+import * as Ops from './ops.js?v=mw2id1k1';
+import * as E from './pulse-econ.js?v=mw2id1k1';
+import * as K from './pulse-calib.js?v=mw2id1k1';
+import * as Rp from './report.js?v=mw2id1k1';
+import * as R from './pulse-report.js?v=mw2id1k1';
+import * as Fl from './flows.js?v=mw2id1k1';
+import * as Cov from './coverage.js?v=mw2id1k1';
+import * as Cmp from './compare.js?v=mw2id1k1';
+import * as Sp from './spots.js?v=mw2id1k1';
+import * as Fv from './forecast.js?v=mw2id1k1';
+import { mapKeys } from './mapkeys.js?v=mw2id1k1';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw2id1k1';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw2id1k1';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -513,7 +513,7 @@ function snapshotToSystem(snap, rec) {
 }
 
 // ---------- Rendering ----------
-// Drei Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
+// Vier Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
 // „Städte“: die bundesweiten Vergleiche (Gebietsvergleich, Verfügbarkeit je Stadt, Rangliste, Dichte) aus „Leistung“ ausgelagert
 const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
 const GROUPS_DEF = () => [
@@ -522,10 +522,10 @@ const GROUPS_DEF = () => [
   { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')]] },
   { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')]] },
 ];
-const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources' };
+const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources', datenqualität: 'sources', datenqualitaet: 'sources', qualitaet: 'sources' };
 const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals', 'prognose-basis']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 let currentView = 'live', urlReady = false;
-const resolveView = (h) => { let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
+const resolveView = (h) => { try { h = decodeURIComponent(h); } catch { /* Hash nicht dekodierbar: roh verwenden */ } let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 // Welche Filter der Leiste in welcher Ansicht wirken; die übrigen werden ausgeblendet (Disposition und Vergleich haben eigene Auswahl im Panel)
 const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
 let viewShown = false;
@@ -549,7 +549,7 @@ function setView(name) {
   if (dirty.has(name)) renderView(name);
   else if (name === 'ops') renderOps(); // prüft selbst, ob der Plan neu gerechnet werden muss
   if (name === 'live' && pendingLive && dataReady) { pendingLive = false; liveFetch(); }
-  syncUrl();
+  syncUrl(); scheduleToc();
   // echter Wechsel: an den Anfang der neuen Ansicht und Fokus auf ihre Überschrift (Screenreader hören den Namen der Ansicht)
   if (changed) {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -744,8 +744,12 @@ function renderHeader() {
   renderStamp();
   const h = dataHealth();
   const el = $('#filter-count');
-  el.innerHTML = isClient() ? `<span class="health ${h.level}"><i></i>${h.label}${h.staleRun ? ` · ${t('app.dataOld', { v0: ageText(Date.now() - state.latest.at) })}` : ''}</span>`
-    : `<span class="health ${h.level}"><i></i>${h.label}${h.counted ? ` · ${t('app.ofReachableSourcesCurrent', { usable: fmt(h.usable), fresh: fmt(h.fresh), counted: fmt(h.counted) })}` : ''}${h.staleRun ? ` · ${t('app.collectorRunOld', { v0: ageText(Date.now() - state.latest.at) })}` : ''}</span>`;
+  const showAge = h.staleRun && !$('#notice [data-id="stale"]'); // das Hinweisband „Sammler-Lauf alt“ nennt das Alter schon; die Zeile wiederholt es nur ohne Band
+  // Veralteter Stand: keine Abdeckungszahlen („0 von 290 nutzbar“ wäre nur das Alter in anderer Form), sondern eine klare Aussage; ab 6 Std. rot
+  const lvl = h.staleRun ? (Date.now() - state.latest.at > 6 * 36e5 ? 'bad' : 'warn') : h.level, head = h.staleRun ? t('ux.dataStale') : h.label;
+  const age = showAge ? ` · ${t(isClient() ? 'app.dataOld' : 'app.collectorRunOld', { v0: ageText(Date.now() - state.latest.at) })}` : '';
+  const counts = !isClient() && !h.staleRun && h.counted ? ` · ${t('app.ofReachableSourcesCurrent', { usable: fmt(h.usable), fresh: fmt(h.fresh), counted: fmt(h.counted) })}` : '';
+  el.innerHTML = `<span class="health ${lvl}"><i></i>${head}${counts}${age}</span>`;
   el.title = isClient() ? gl('fresh') : h.detail;
   renderAttribution(); renderFilterSum();
 }
@@ -823,9 +827,9 @@ function renderLive() {
   $('#live-tiles').innerHTML = [
     tile(t('app.availableBookable'), fmt(st.available), t('app.reportedReserved', { total: fmt(st.total), reserved: fmt(st.reserved) })),
     tile(t('app.disabled2'), fmt(st.disabled), `${st.total ? t('app.ofFleet', { disabled: pctf(st.disabled, st.total) }) : t('app.noVehicleData')}${ghostsInScope() ? ` · ${t('app.orphaned', { ghostsInScope: fmt(ghostsInScope()) })}` : ''}`, st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
-    tile(t('app.stationsWithVehicles'), `${fmt(st.stationsRenting - st.stationsEmpty)} / ${fmt(st.stations)}`, st.stations ? t('app.emptyFull', { stationsEmpty: fmt(st.stationsEmpty), v1: dockKnown ? ` ${t('app.docksZonesParen', { docks: fmt(st.stationsEmptyDock), zones: fmt(st.stationsEmptyVirtual) })}` : '', stationsFull: fmt(st.stationsFull) }) : t('app.noStationsInArea'), '', st.stations ? emptyTip(st) : ''),
+    tile(t('app.stationsWithVehicles'), `${fmt(st.stationsRenting - st.stationsEmpty)} <small>/ ${fmt(st.stations)}</small>`, st.stations ? t('app.emptyFull', { stationsEmpty: fmt(st.stationsEmpty), v1: dockKnown ? ` ${t('app.docksZonesParen', { docks: fmt(st.stationsEmptyDock), zones: fmt(st.stationsEmptyVirtual) })}` : '', stationsFull: fmt(st.stationsFull) }) : t('app.noStationsInArea'), '', st.stations ? emptyTip(st) : ''),
     tile(t('app.lowEnergy'), energyVal(en), energySub(en), lowE > 0.3 ? 'warn' : ''),
-    tile(cl(t('app.sources2'), t('app.dataFreshness')), `${fmt(usable.length)} / ${fmt(recs.length)}`, t('app.currentDelayedStale', { length: eff.filter(e => e.status === 'live').length, length2: eff.filter(e => e.status === 'delayed').length, length3: eff.filter(e => e.status === 'stale').length, v3: gaps ? ` · ${gaps} ${cl(gaps > 1 ? t('app.dataGaps') : t('app.dataGap'), t('app.operatorsWithoutData'))}` : '' }), recs.length && usable.length / recs.length < 0.7 ? 'warn' : '', gl('fresh')),
+    tile(cl(t('app.sources2'), t('app.dataFreshness')), `${fmt(usable.length)} <small>/ ${fmt(recs.length)}</small>`, t('app.currentDelayedStale', { length: eff.filter(e => e.status === 'live').length, length2: eff.filter(e => e.status === 'delayed').length, length3: eff.filter(e => e.status === 'stale').length, v3: gaps ? ` · ${gaps} ${cl(gaps > 1 ? t('app.dataGaps') : t('app.dataGap'), t('app.operatorsWithoutData'))}` : '' }), recs.length && usable.length / recs.length < 0.7 ? 'warn' : '', gl('fresh')),
   ].join('');
   // Tabelle: „Δ Sammler“ nur, wenn es etwas zeigt (Live-Abruf mit Abweichung); Lizenzen stehen unter Datenvertrauen › Quellen
   const showDelta = rows.some(r => r.delta && r.delta.diff !== 0);
@@ -2441,6 +2445,41 @@ function scrollRegion(d) {
     d.setAttribute('aria-label', name);
   }
 }
+// ---------- Orientierung auf langen Seiten: Sprungleiste „Auf dieser Seite“ und Nach-oben-Knopf ----------
+// Ab 4 sichtbaren Panels mit Überschrift zeigt die Ansicht unter dem Titel eine Leiste, die zu den Panels springt. Die Ansicht bleibt vollständig
+// (nichts gefaltet: Strg+F und Druck sehen alles). Keine Links mit „#…“: der Hash wählt die Ansicht, darum Knöpfe mit scrollIntoView.
+let tocTimer = 0, tocSeq = 0;
+const scheduleToc = () => { clearTimeout(tocTimer); tocTimer = setTimeout(buildToc, 350); };
+function buildToc() {
+  const view = $(`#view-${currentView}`); if (!view) return;
+  const items = [];
+  for (const h of view.querySelectorAll('.panel h2')) {
+    if (!h.offsetParent || h.closest('.toc')) continue;
+    const c = h.cloneNode(true); c.querySelectorAll('.pill,.badge,button,.chip,sup').forEach(x => x.remove());
+    const label = c.textContent.replace(/\s+/g, ' ').trim(); if (!label) continue;
+    const box = h.closest('.panel') || h; if (!box.id) box.id = `sec-${currentView}-${++tocSeq}`;
+    items.push([box.id, label.length > 44 ? `${label.slice(0, 42)}…` : label]);
+  }
+  let toc = view.querySelector(':scope > .toc');
+  if (items.length < 4) { toc?.remove(); return; }
+  const sig = `${lang()}|${items.map(i => i.join('=')).join('|')}`;
+  if (toc?.dataset.sig === sig) return;
+  if (!toc) { toc = document.createElement('nav'); toc.className = 'toc'; const hero = view.querySelector(':scope > .hero'); if (hero) hero.after(toc); else view.prepend(toc); }
+  toc.dataset.sig = sig; toc.setAttribute('aria-label', t('ux.onThisPage'));
+  toc.innerHTML = `<span class="toc-l">${esc(t('ux.onThisPage'))}</span>${items.map(([id, l]) => `<button type="button" class="chip" data-toc="${esc(id)}">${esc(l)}</button>`).join('')}`;
+}
+function bindOrientation() {
+  const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest?.('.toc [data-toc]'); if (!b) return;
+    const box = document.getElementById(b.dataset.toc); if (!box) return;
+    box.scrollIntoView({ behavior: calm(), block: 'start' });
+    const h = box.querySelector('h2'); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+  });
+  const up = $('#to-top');
+  if (up) { const upd = () => { up.hidden = window.scrollY < 900; }; addEventListener('scroll', upd, { passive: true }); upd(); up.addEventListener('click', () => window.scrollTo({ top: 0, behavior: calm() })); }
+  onLang(scheduleToc);
+}
 function enhanceUi() {
   if (window.top !== window.self) { document.body.classList.add('framed'); notice(() => t('app.framedWarning'), 'bad', 'framed'); }
   if (CFG.DATA_OK) {
@@ -2460,7 +2499,9 @@ function enhanceUi() {
       for (const d of n.matches?.('.tbl') ? [n] : n.querySelectorAll?.('.tbl') || []) scrollRegion(d);
     }
     if (leaf) relabelLeaflet(main);
+    if (ms.some(m => !m.target.closest?.('.toc, .leaflet-container'))) scheduleToc();
   }).observe(main, { childList: true, subtree: true });
+  bindOrientation();
   main?.querySelectorAll('.tbl').forEach(scrollRegion);
   relabelLeaflet(); onLang(() => relabelLeaflet());
 // Werkzeuge (Stand, Link kopieren, Kundenansicht, DE/EN, Hell/Dunkel): am Desktop in der Seitenleiste, am Telefon im Menü „⋯“.
@@ -2470,6 +2511,9 @@ function enhanceUi() {
     const mob = mq.matches, side = $('#side-tools'), menu = $('#tools-m-body');
     if (!side || !menu) return;
     for (const id of ['stand-pill', 'btn-share', 'btn-client', 'lang-switch', 'btn-theme']) { const el = $(`#${id}`); if (el) (mob ? menu : side).appendChild(el); }
+    // Telefon: „Live abrufen“ und „⋯“ sitzen neben der Marke (spart die eigene Zeile unter den Segmenten), am Desktop wieder in der Kopfleiste
+    const brand = $('aside .brand'), live = $('#btn-live'), tm = $('#tools-m'), stand = $('.stand');
+    if (brand && live && tm && stand) { if (mob) brand.after(live, tm); else stand.append(live, tm); }
     if (!mob) $('#tools-m')?.removeAttribute('open');
   };
   placeTools(); mq.addEventListener?.('change', placeTools);
