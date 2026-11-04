@@ -625,9 +625,24 @@ function setClient(on) {
   $$('abbr[data-gloss]').forEach(a => { a.title = gl(a.dataset.gloss); });
   setView(currentView); if (dataReady) renderAll(); // alle Texte in der passenden Sprache (Kunde: ohne Methodik-Begriffe)
 }
+// CSV für jede Tabelle (.tbl) ohne eigenen Export: Zellen als Text, Sprache wie die Oberfläche; Berichtstabellen haben eigene Exporte
+function bindTableCsv() {
+  const add = () => $$('.tbl:not([data-csv])').forEach(box => {
+    const tb = box.querySelector('table'); if (!tb || tb.rows.length < 6 || box.closest('.rp-report')) return; box.dataset.csv = '1';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'tbl-csv'; b.style.cssText = 'margin:var(--s2) 0'; b.textContent = t('app.tableCsv');
+    b.addEventListener('click', () => {
+      const rows = [...tb.rows].map(r => [...r.cells].map(c => c.innerText.replace(/\s+/g, ' ').trim()));
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + R.toCsv(rows, lang())], { type: 'text/csv;charset=utf-8' }));
+      a.download = `${(box.closest('section,[role=tabpanel]')?.id || 'tabelle')}_${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    box.before(b);
+  });
+  let tm = 0; new MutationObserver(() => { clearTimeout(tm); tm = setTimeout(add, 200); }).observe(document.querySelector('main') || document.body, { childList: true, subtree: true }); add();
+}
 async function copyLink() {
   syncUrl();
   const btn = $('#btn-share'), url = location.href; let ok = false;
+  if (navigator.share && matchMedia('(pointer:coarse)').matches) { try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } } // Handy: nativer Teilen-Dialog, sonst Zwischenablage
   try { await navigator.clipboard.writeText(url); ok = true; } catch {
     try { const tq = document.createElement('textarea'); tq.value = url; tq.setAttribute('readonly', ''); tq.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(tq); tq.select(); ok = document.execCommand('copy'); tq.remove(); } catch { ok = false; }
   }
@@ -1487,7 +1502,7 @@ function renderSourceTable() {
   $('#src-more').innerHTML = [moreBtn('src', rest, ` ${t('app.orNarrowSearch')}`), hidden.length ? t('app.checkedDirectFeedCandidates', { length: fmt(hidden.length) }) : ''].filter(Boolean).join(' ');
 }
 // ---------- Nutzung & Bewegung ----------
-state.usage = { index: null, day: null, docs: {}, cells: {}, idle: null, idleLong: null, quota: null, pricing: null, zonesIndex: null, zones: {}, reliability: null, consistency: null, weather: {} };
+state.usage = { index: null, day: /^\d{4}-\d{2}-\d{2}$/.test(QS.get('day') || '') ? QS.get('day') : null, docs: {}, cells: {}, idle: null, idleLong: null, quota: null, pricing: null, zonesIndex: null, zones: {}, reliability: null, consistency: null, weather: {} };
 // Alle Lader über den Promise-Cache: parallele Aufrufer teilen sich einen Download, fehlende Dateien werden nicht je Aufruf neu angefragt
 async function loadUsageIndex() { if (!state.usage.index) { const r = await cached('events/index.json', 25000); state.usage.index = r.json || { days: [], cellDays: [] }; } return state.usage.index; }
 async function loadEvents(day) { if (!(day in state.usage.docs)) { const r = await cached(`events/${day}.json`, 60000); state.usage.docs[day] = r.json || null; } return state.usage.docs[day]; }
@@ -2341,7 +2356,7 @@ function bind() {
   $('#chk-weather').addEventListener('change', () => renderUsage());
   ['usage-op', 'usage-type'].forEach(id => $(`#${id}`).addEventListener('change', () => { const s = state.usage.chartSel; if (!s) return; s.op = $('#usage-op').value; s.type = $('#usage-type').value; renderUsageChart(); }));
   ['econ-min', 'econ-real', 'econ-net'].forEach(id => $(`#${id}`).addEventListener('change', () => { renderEcon(state.usage.day); renderCalibPanel().catch(e => console.error('Kalibrierung', e)); }));
-  $('#usage-days').addEventListener('click', (e) => { const b = e.target.closest('[data-uday]'); if (!b) return; state.usage.day = b.dataset.uday; renderUsage(); });
+  $('#usage-days').addEventListener('click', (e) => { const b = e.target.closest('[data-uday]'); if (!b) return; state.usage.day = b.dataset.uday; try { const q = new URLSearchParams(location.search); q.set('day', state.usage.day); history.replaceState(history.state, '', `${location.pathname}?${q}${location.hash}`); } catch { /* file:// */ } renderUsage(); });
   $('#btn-flow-map').addEventListener('click', () => { $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); window.scrollTo({ top: 0 }); });
   document.addEventListener('click', (e) => { const a = e.target.closest('.pick-cell'); if (!a) return; e.preventDefault(); $('#sel-layer').value = 'flow'; location.hash = '#live'; renderMap(); setTimeout(() => state.map.setView([+a.dataset.lat, +a.dataset.lon], 16), 300); });
   $('#in-charge').addEventListener('change', (e) => { state.thresholds.charge = +e.target.value || 20; if (state.live) recomputeLive(); renderAll(); });
@@ -2461,7 +2476,7 @@ async function init() {
   await loadBase();
   populateScope();
   const deep = applyUrlParams(); // Deep-Link: Gebiet, Anbieter, Fahrzeugart aus der URL
-  renderAll(); syncUrl();
+  bindTableCsv(); renderAll(); syncUrl();
   if (deep) autoLive();
   if (DEMO) return; // Demo-Stand: kein Nachladen
   // Sammler-Stand alle 2 Min. prüfen; bei neuem Lauf alles neu laden (Ereignis-, Zonen- und Flottendateien inklusive)

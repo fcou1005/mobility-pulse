@@ -109,6 +109,13 @@ Jedes Teilgebiet mit eigener Grenze in `data/reference.json` → `obergrenzen[].
 
 Ohne vermutete Abgrenzung bleiben: Nürnberg (Zonen A/B/C sind Abstellregeln ohne Höchstzahl je Zone), Hannover (geplant, Markterkundung), Aachen (Zonen und Kontingente in Anlagen, die das Ratsinfo nicht ausliefert), Bremen Kernstadtzone/erweitertes Gebiet. Karlsruhe: Eine Gesamtzahl je Anbieter (z. B. 665) steht in keiner gelesenen amtlichen Quelle; laut Vereinbarung gilt die Höchstzahl „nur auf die Kernzonen“. Test: `node test/report.test.mjs` (Abschnitte „Teilgebiete“ und „zweite Stadt“).
 
+## Marktanteil, Teilen, Tabellen-CSV (Runde 4)
+
+- **Marktanteil und Konzentration** (Kommunalbericht): Anteil je Gruppe und Anbieter am Bestand (`fleetShare`), dazu `totals.hhi` (Herfindahl-Hirschman, 0–10.000, je Anbieter über alle Arten), `topOp`, `topShare`. Grundlage ist der Bestand, nicht die Fahrten: rotierende Kennungen verfälschen Fahrtenanteile, den Bestand nicht. Kachel nur bei mehr als einem Anbieter.
+- **Teilbare Ansicht:** `?period=` (Berichtszeitraum) und `?day=` (Nutzungstag) bleiben in der URL; unbekannte Werte fallen auf den Standard zurück. Am Handy öffnet „Link kopieren“ den nativen Teilen-Dialog.
+- **Tabellen-CSV:** jede Tabelle ab 5 Zeilen ohne eigenen Export bekommt einen „↓ CSV“-Knopf (Text der Zellen, Trennzeichen je Sprache); Berichtstabellen behalten ihre eigenen Exporte.
+- **Datenschutz-Test:** zufällige Eingaben, feste Saat – keine veröffentlichte Zelle × Band unter der Schwelle (3), veröffentlicht + unterdrückt = Eingabe. Offen: `below` je Gemeinde nennt die unterdrückte Summe exakt; bei Gemeinden mit nur einer unterdrückten Zelle ließe sich deren Wert ablesen.
+
 ## Dashboard
 
 `web/` (gebaut nach `docs/` mit `node scripts/build-web.mjs`). Ansichten: Übersicht, Leistung, Städte, Nutzung, Disposition, Spot-Abgleich, Signale, Abdeckung, Anbieter-Vergleich, Kommunal-Bericht, Quellen (Adresse `#<ansicht>`, z. B. `#staedte`). Schriften (IBM Plex Sans/Mono, OFL) und Leaflet 1.9.4 liegen selbst gehostet unter `web/vendor/` (aus den npm-Paketen `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono`, `leaflet`); die CSP erlaubt Skripte, Stile und Schriften nur von der eigenen Herkunft, von außen kommen nur OSM-Kacheln. `?data=` nimmt nur Pfade derselben Herkunft, `raw.githubusercontent.com/fcou1005/mobility-pulse/(data|demo)/` und – nur bei lokal geöffneter Seite – `localhost`; abweichende Datenstände kennzeichnet ein Hinweis oben.

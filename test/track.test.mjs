@@ -530,6 +530,20 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const r = T.suppressCells({ A: { c, d } });
   assert(r.munis.A.c[0] === 6 && r.munis.A.c[1] === 1 && r.munis.A.d[0] === 4 && r.below.A[12] === 1, 'M-11: Anteil ohne Bandangabe bleibt ab 3 Ereignissen, sonst below (Summen stimmen)');
 }
+// Datenschutz-Invariante: in keiner veröffentlichten Zelle steht je Band ein Wert, der unter der Schwelle liegt (zufällige Eingaben, feste Saat)
+{
+  let seed = 12345; const rnd = (n) => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed % n; };
+  const munis = { A: {}, B: {} }; let sumIn = 0;
+  for (const ags of ['A', 'B']) for (let i = 0; i < 300; i++) {
+    const c = new Array(T.CELL_LEN).fill(0); let s0 = 0, s1 = 0;
+    for (let k = 0; k < 6; k++) { const st = rnd(4) === 0 ? rnd(6) : 0, en = rnd(4) === 0 ? rnd(6) : 0; c[4 + k] = st; c[16 + k] = en; s0 += st; s1 += en; c[10 + k] = rnd(3); }
+    c[0] = s0; c[1] = s1; sumIn += s0 + s1; munis[ags][`c${i}`] = c;
+  }
+  const r = T.suppressCells(munis); let bad = 0, sumOut = 0, sumBelow = 0;
+  for (const cells of Object.values(r.munis)) for (const c of Object.values(cells)) for (let k = 0; k < 6; k++) { const n = c[4 + k] + c[16 + k]; sumOut += n; if (n > 0 && n < T.CELL_MIN) bad++; }
+  for (const b of Object.values(r.below)) for (let i = 0; i < 12; i++) sumBelow += b[i];
+  assert(bad === 0 && sumOut + sumBelow === sumIn, 'Datenschutz: keine veröffentlichte Zelle × Band unter der Schwelle; veröffentlicht + unterdrückt = Eingabe');
+}
 // Z4: Ausblendung bei niedrigem Akku (Quelle mit Untergrenze 15 %): Verschwinden bis 20 % = hide, nicht Fahrtbeginn; gesperrt = Abholung
 {
   const u0 = Date.parse('2026-11-12T10:00:00Z'), dt = 20 * 60e3, hr = T.hourOf(u0 + 2 * dt);

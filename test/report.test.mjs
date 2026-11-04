@@ -80,6 +80,8 @@ const docSun = { day: '2026-11-08', runs: [...fullHourRuns('2026-11-08', 15).map
   assert(near(voi.ridesDay, 40 / (2 * cov)) && near(voi.rvd, voi.ridesDay / 115), 'Fahrten/Tag = gemessen ÷ beobachteter Anteil des Tagesgangs; je Fahrzeug ÷ Ø Flotte');
   assert(!lime.plausible && rep.totals.excluded.includes('Lime|scooter') && near(rep.totals.ridesDay, voi.ridesDay) && near(rep.totals.rvd, voi.ridesDay / (115 + 40)), 'unplausible Gruppe (RVD > 15) bleibt sichtbar, aber nicht in den Summen');
   assert(near(rep.totals.per1000Fleet, (115 + 50 + 40) / 600) && near(rep.totals.per1000Rides, voi.ridesDay / 600), 'je 1.000 Einwohner: Flotte und Fahrten je Tag');
+  assert(near(voi.fleetShare, 115 / 205) && rep.totals.topOp === 'Voi' && near(rep.totals.topShare, 115 / 205) && rep.totals.opCount === 3
+    && rep.totals.hhi === Math.round(((115 / 205) ** 2 + (50 / 205) ** 2 + (40 / 205) ** 2) * 1e4), 'Marktanteil nach Bestand und HHI je Anbieter (0–10.000)');
   assert(rep.quality.prelim && rep.quality.fullDays === 0 && rep.quality.gapRuns === 1 && rep.quality.taintedDays[0] === '2026-11-02' && rep.quality.profileSource === 'Standardkurve' && rep.quality.fleetFromHistory.includes('2026-11-03'),
     'Datenqualität: vorläufig (< 3 volle Tage), 1 Lücken-Lauf, Tagesgang = Standardkurve, Flotte aus Verlauf benannt');
   const dur = R.municipalReport({ docs: [{ ...d2, groups: { '08111000|Voi|scooter': g({ start: h24({ 10: 25 }), tripDurSum: 25 * 9 * MIN, tripDurN: 25, tripDistSum: 25 * 1200, tripDistN: 25 }) } }], hists, ags: '08111000' });

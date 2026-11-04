@@ -320,7 +320,7 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
 }
 @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;animation-iteration-count:1!important}}
 /* Druck / Kundenmodus auf Papier: helles Schema, keine Bedienelemente, nichts abgeschnitten */
-@media print{
+@media print{.tbl-csv{display:none!important}
   :root,:root[data-theme]{--bg:#ffffff;--bg-2:#eaeef2;--panel:#ffffff;--panel-2:#f6f8fa;--line:#dbe2ea;--line-2:#c9d3de;--fg:#111820;--fg-2:#3b4855;--muted:#5f6b78;--accent:#0f766e;--accent-2:#0b5e58;--accent-ink:#ffffff;--ok:#1e7b38;--warn:#8f5d0f;--bad:#c93c3c;--info:#2b6fd6;--thumb:var(--panel);--shadow:none;--shadow-sm:none;color-scheme:light}
   aside,.filters,#notice,.seg,#lang-switch,.leaflet-control-zoom,button,.toolbar,.chips,#ops-layers,.ops-form,details.ops-params>summary,.inline-form label,.inline-form input,.inline-form select,.skip,input.calib,.tools-m{display:none!important}
   .leaflet-tile-pane{filter:grayscale(1) contrast(.92) brightness(1.04)!important} /* Druck immer hell (das Abweichungsband #data-origin bleibt sichtbar) */

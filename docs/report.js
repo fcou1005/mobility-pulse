@@ -2,16 +2,19 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mw2aa5ht';
-import * as K from './pulse-calib.js?v=mw2aa5ht';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw2aa5ht';
-import { decodeFleet } from './pulse-ops.js?v=mw2aa5ht';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mw2aa5ht';
-import { mapKeys } from './mapkeys.js?v=mw2aa5ht';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mw2aa5ht';
+import * as R from './pulse-report.js?v=mw2bilwe';
+import * as K from './pulse-calib.js?v=mw2bilwe';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw2bilwe';
+import { decodeFleet } from './pulse-ops.js?v=mw2bilwe';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mw2bilwe';
+import { mapKeys } from './mapkeys.js?v=mw2bilwe';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mw2bilwe';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
-const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: 'all', show: {} }; S.set(el, s); } return s; };
+// Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
+const urlParam = (k) => { try { const v = new URLSearchParams(location.search).get(k); return v && /^[A-Za-z0-9:_-]{1,20}$/.test(v) ? v : null; } catch { return null; } };
+const urlSet = (k, v) => { try { const q = new URLSearchParams(location.search); if (v && v !== 'all') q.set(k, v); else q.delete(k); const qs = q.toString().replace(/%3A/gi, ':'); history.replaceState(history.state, '', `${location.pathname}${qs ? `?${qs}` : ''}${location.hash}`); } catch { /* file:// o. Ä. */ } };
+const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: urlParam('period') || 'all', show: {} }; S.set(el, s); } return s; };
 const CACHE = new Map();
 // Datum, Uhrzeit, Wochentage, Fahrzeugart, Zeitraum-Art und Quellstatus in der Sprache der Seite (Formatierer je Sprache gecacht)
 const stamp = (ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: R.TZ }).format(new Date(ms)) : '–');
@@ -488,6 +491,7 @@ function reportHtml(ctx, rep, meta, ref) {
     calTile(t('rep.tripsPerVehiclePerDay2'), C?.rvd, C?.rvdLo, C?.rvdHi, 2, tq.rvd, t('rep.tripsDayAvgFleet', { pre })),
     q.source === 'archiv' ? '' : tile(t('rep.disabledRate'), pctTxt(ctx, tq.disabledShare), t('rep.disabledVehiclesInFleetMean')),
     tile(t('rep.vehiclesPer1000Residents'), num(ctx, tq.per1000Fleet, 1), rep.pop ? t('rep.residents', { pop: fmt(rep.pop) }) : t('rep.populationMissing')),
+    tq.hhi != null && tq.opCount > 1 ? tile(t('rep.marketConcentration'), `${fmt(tq.hhi)} HHI`, t('rep.topOperatorShare', { op: ctx.esc(tq.topOp), pct: fmt(tq.topShare * 100, 0) })) : '',
     calTile(t('rep.tripsPer1000ResidentsAndDay'), C?.per1000Rides, C?.per1000Lo, C?.per1000Hi, 1, tq.per1000Rides, rep.pop ? t('rep.extrapolatedPre', { pre }) : t('rep.populationMissing')),
   ].filter(Boolean);
   // Spalten nach Anzahl (UI-17): 7 Kacheln → 4 + 3, 6 → 3 + 3, 5 → 3 + 2; keine Kachel allein in der letzten Zeile
@@ -523,7 +527,7 @@ export async function renderReport(el, ctx) {
   if (!el) return;
   const s = prep(el, ctx); const { state, esc } = ctx;
   bindOnce(el, 'report', () => {
-    el.addEventListener('change', (e) => { if (e.target.matches('[data-rp="period"]')) { s.period = e.target.value; renderReport(el, s.ctx); } });
+    el.addEventListener('change', (e) => { if (e.target.matches('[data-rp="period"]')) { s.period = e.target.value; urlSet('period', s.period); renderReport(el, s.ctx); } });
     el.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-rp]'); if (!b) return;
       if (b.dataset.rp === 'print') printReport(el);

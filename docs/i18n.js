@@ -1933,6 +1933,8 @@ const DE = {
   "rep.subAreaWithItsOwnCap": "Teilgebiet mit eigener Grenze",
   "rep.note": "Hinweis",
   "rep.per1000Residents": "{typeName} je 1.000 EW",
+  "rep.marketConcentration": "Marktkonzentration (HHI nach Bestand)",
+  "rep.topOperatorShare": "{op} hat {pct} % des Bestands · 10.000 = ein Anbieter",
   "rep.vehiclesResidents": "{total} Fahrzeuge · {pop} Einwohner",
   "rep.extrapolatedMeasured": "{typeName}, {v1} hochgerechnet, gemessen{pre}",
   "rep.noDailyFilesYet2": "noch keine Tagesdateien",
@@ -2348,6 +2350,7 @@ const DE = {
   "fresh.collector": "Sammler-Stand",
   // lib, Bausteine (common)
   "common.language": "Sprache",
+  "app.tableCsv": "↓ CSV (Tabelle)",
   "common.langHint": "Diese Seite gibt es auch auf Englisch.",
   "common.langSwitch": "Auf Englisch umschalten",
   "common.langKeep": "Auf Deutsch bleiben",
@@ -4752,6 +4755,8 @@ const EN = {
   "rep.subAreaWithItsOwnCap": "Sub-area with its own cap",
   "rep.note": "Note",
   "rep.per1000Residents": "{typeName} per 1,000 residents",
+  "rep.marketConcentration": "Market concentration (HHI by fleet)",
+  "rep.topOperatorShare": "{op} holds {pct} % of the fleet · 10,000 = one operator",
   "rep.vehiclesResidents": "{total} vehicles · {pop} residents",
   "rep.extrapolatedMeasured": "{typeName}, {v1} extrapolated, measured{pre}",
   "rep.noDailyFilesYet2": "no daily files yet",
@@ -5167,6 +5172,7 @@ const EN = {
   "fresh.collector": "Collector snapshot",
   // lib, Bausteine (common)
   "common.language": "Language",
+  "app.tableCsv": "↓ CSV",
   "common.langHint": "This dashboard is also available in English.",
   "common.langSwitch": "Switch to English",
   "common.langKeep": "Keep German",
