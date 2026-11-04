@@ -156,11 +156,15 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const sumOf = (pre) => Array.from({ length: 24 }, (_, h) => Object.entries(S.days[TODAY]).filter(([k]) => k.startsWith(pre)).reduce((a, [, e]) => a + (e.p?.[h] || 0), 0));
   assert(werr(sumOf('op:'), T.p) < 0.01 && werr(sumOf('ty:'), T.p) < 0.01, 'Gebiete: Anbieter und Arten ergeben je Stunde die Deutschland-Reihe');
   assert(Object.keys(S.days[TODAY]).some(k => k.startsWith('ags:')) && Object.keys(S.days[TODAY]).some(k => k.startsWith('g:')) && Object.keys(S.days[TODAY]).length <= 1 + 5 + 2 + AGS.length + F.SERIES_MIN.groupMax, 'Gebiete: Gemeinden und große Gruppen sind dabei, die Zahl ist begrenzt');
+  // Herkunft des Plans (Kontrolle im Dashboard): Modell, Trainingstage, Zeitpunkt, rückwirkend ja/nein
+  const PL = S.plans?.[TODAY], PLY = S.plans?.[addDays(TODAY, -1)];
+  assert(PL && ['pooled', 'profile', 'pooledWx'].includes(PL.model) && PL.trainDays >= 2 && PL.retro === false && PL.at === new Date(NOW).toISOString() && PLY?.retro === true && !S.plans[TOMORROW], `Plan-Herkunft: heute ${PL?.model}/${PL?.trainDays} Tage, gestern rückwirkend, morgen noch kein Plan`);
   // Plan bleibt eingefroren, Ist und Live folgen neuen Daten
   const docs2 = [...docs, makeDoc(TODAY)], NOW2 = Date.parse(`${TODAY}T16:00:00Z`);
   docs2.at(-1).published = { complete: false }; docs2.at(-1).groups = Object.fromEntries(Object.entries(docs2.at(-1).groups).map(([k, g]) => [k, { ...g, start: g.start.map((x, h) => (h < 16 ? x : 0)), vmin: g.vmin.map((x, h) => (h < 16 ? x : 0)) }]));
   const r2 = F.runForecast({ docs: docs2, calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(r.log)), prevSeries: JSON.parse(JSON.stringify(S)), now: NOW2 }), T2 = r2.series.days[TODAY].DE;
   assert(JSON.stringify(T2.p) === JSON.stringify(T.p), 'Plan heute bleibt über den Tag eingefroren (zweiter Lauf)');
+  assert(JSON.stringify(r2.series.plans[TODAY]) === JSON.stringify(PL), 'Plan-Herkunft bleibt mit dem eingefrorenen Plan stehen (Zeitpunkt unverändert)');
   assert(T2.a && T2.a.slice(0, 16).every(x => x != null && x >= 0) && T2.a.slice(16).every(x => x === null), 'Ist: Stunden mit Beobachtung gezählt, spätere Stunden null');
   assert(T2.l.slice(0, 18).every(x => x === null) && T2.l.slice(18).every(x => x > 0), 'Live-Prognose beginnt mit der nächsten vollen Ortsstunde (18 Uhr bei 16:00 UTC)');
   const A = F.actualOfDay(F.dayFromDoc(docs2.at(-1), null));

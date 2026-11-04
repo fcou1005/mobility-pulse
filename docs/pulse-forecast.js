@@ -11,8 +11,8 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw2gtctj';
-import { hourOf, dayOf } from './pulse-track.js?v=mw2gtctj';
+import * as E from './pulse-econ.js?v=mw2hedag';
+import { hourOf, dayOf } from './pulse-track.js?v=mw2hedag';
 export const FORECAST_VERSION = 1;
 export const GATES = {
   minTrainDays: 2,        // weniger Tage: keine Prognose
@@ -308,7 +308,7 @@ export function planDay(R, days, di, day, wx, calendar, evals) {
  * vollen Stunde), nowH: erste Stunde der Prognose je Ortstag { [Tag]: ab Stunde }, prev: forecast/series.json des letzten Laufs.
  */
 export function buildSeries({ days, today, tomorrow, plans, live, liveFrom, prev = null, now, status, active }) {
-  const keepFrom = dayOf(now - (SERIES_KEEP_DAYS - 1) * 86400e3), out = { version: 1, generatedAt: new Date(now).toISOString(), tz: 'Europe/Berlin', today, tomorrow, status, active, days: {} };
+  const keepFrom = dayOf(now - (SERIES_KEEP_DAYS - 1) * 86400e3), out = { version: 1, generatedAt: new Date(now).toISOString(), tz: 'Europe/Berlin', today, tomorrow, status, active, plans: {}, days: {} };
   const prevDays = prev?.version === 1 ? prev.days || {} : {}, dayBy = new Map(days.map(d => [d.day, d]));
   const dayList = [...new Set([...Object.keys(prevDays), ...plans.keys(), ...days.map(d => d.day), tomorrow])].filter(d => d >= keepFrom && d <= tomorrow).sort();
   for (const day of dayList) {
@@ -331,6 +331,9 @@ export function buildSeries({ days, today, tomorrow, plans, live, liveFrom, prev
       if (e.p || e.a || e.l) entry[sc] = e;
     }
     if (Object.keys(entry).length) out.days[day] = entry;
+    // Herkunft des Plans (Kontrolle im Dashboard): Modell, Trainingstage, Zeitpunkt des Einfrierens; bleibt mit dem Plan stehen
+    if (plan) out.plans[day] = { model: plan.model, trainDays: plan.trainDays, at: new Date(now).toISOString(), retro: day < today };
+    else if (prev?.plans?.[day] && out.days[day]) out.plans[day] = prev.plans[day];
   }
   return out;
 }

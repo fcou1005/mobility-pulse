@@ -343,8 +343,9 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
   <nav data-i18n-aria-label="html.mainSections" id="nav" aria-label="Hauptbereiche">
     <div data-i18n="html.sections" class="nav-h">Bereiche</div>
     <a href="#live" data-group="markt"><span class="k">01</span><span data-i18n="html.marketViewOverview"><b>Marktbild</b><small>Übersicht, Leistung, Städte, Nutzung, Abdeckung, Vergleich, Bericht</small></span></a>
-    <a href="#ops" data-group="ops"><span class="k">02</span><span data-i18n="html.operationsDeploySpotsAndRuns"><b>Disposition</b><small>Deploy-Spots und Touren</small></span></a>
-    <a href="#sources" data-group="vertrauen"><span class="k">03</span><span data-i18n="html.dataTrustSourcesCollector"><b>Datenvertrauen</b><small>Quellen, Sammler, Signale</small></span></a>
+    <a href="#prognose" data-group="prognose"><span class="k">02</span><span data-i18n="html.forecastNav"><b>Prognose</b><small>Heute und morgen, Trefferquote, Spots, Grundlagen</small></span></a>
+    <a href="#ops" data-group="ops"><span class="k">03</span><span data-i18n="html.operationsDeploySpotsAndRuns"><b>Disposition</b><small>Deploy-Spots und Touren</small></span></a>
+    <a href="#sources" data-group="vertrauen"><span class="k">04</span><span data-i18n="html.dataTrustSourcesCollector"><b>Datenvertrauen</b><small>Quellen, Sammler, Signale</small></span></a>
   </nav>
   <div class="side-foot">
     <div data-i18n="html.openDataCheckedAndMergedNo">Offene Daten, geprüft und zusammengeführt. Kein Anbieterzugang, keine Fahrzeugwege.</div>
@@ -501,8 +502,18 @@ svg.chart .mon-gap{fill:var(--bad);opacity:.14}svg.chart .mon-line{stroke:var(--
   </section>
 
   <section class="view" id="view-prognose">
-    <div class="hero"><h1 data-i18n="html.forecastHero">Prognose</h1><p data-i18n="html.forecastHeroSub">Plan für heute und morgen, Ist bis jetzt und Live-Prognose in einer Stundenreihe – dazu, wie gut das selbstlernende Modell gegen die Realität liegt, und welche bekannten Deploy- und Parkspots wie wichtig sind und wo Fahrzeuge fehlen.</p></div>
+    <div class="hero"><h1 data-i18n="html.forecastHero">Prognose</h1><p data-i18n="html.forecastHeroSub">Plan für heute und morgen, Ist bis jetzt und Live-Prognose in einer Stundenreihe – dazu, wie gut das selbstlernende Modell gegen die Realität liegt und was es schon gelernt hat.</p></div>
     <div id="fv-panel"></div>
+  </section>
+
+  <section class="view" id="view-prognose-spots">
+    <div class="hero"><h1 data-i18n="html.forecastSpotsHero">Spots bewerten</h1><p data-i18n="html.forecastSpotsHeroSub">Wichtigkeit, Soll, Ist und Fehlbestand der bekannten Deploy- und Parkspots einer Gemeinde – gerechnet mit der Prognose des Anbieters statt nur mit der letzten Messung.</p></div>
+    <div id="fv-spots-panel"></div>
+  </section>
+
+  <section class="view" id="view-prognose-basis">
+    <div class="hero"><h1 data-i18n="html.forecastBasisHero">Grundlagen &amp; Kontrolle</h1><p data-i18n="html.forecastBasisHeroSub">Alles, was die Prognose nutzt, erzeugt oder nur vermutet: Selbstkontrollen, Eingangsdaten, Modell, Annahmen, Parameter, was fehlt – und die Rohdaten.</p></div>
+    <div id="fv-basis-panel"></div>
   </section>
 
   <section class="view" id="view-spots">
