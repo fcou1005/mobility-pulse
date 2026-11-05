@@ -106,6 +106,66 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(w.active === 'pooled' && w.evalDays === F.GATES.evalWindow, `Modellwahl: nur die letzten ${F.GATES.evalWindow} Tage zählen (alte Phase zählt nicht mehr)`);
 }
 
+// ---------- Lernen aus den eigenen Fehlern: Gewichte je Gruppe, Verblassen, kein Vorgriff, Wahl nur bei messbarem Gewinn
+{
+  // Lernstand von Hand: A trifft mit dem eigenen Profil (10 % Fehler, gepoolt 40 %), B umgekehrt, C hat kaum Daten
+  const R = { keys: ['A', 'B', 'C'], g: Int32Array.from([0, 1, 2]), y: Float64Array.from([1000, 1000, 3]) };
+  const fb = F.feedbackUpdate(F.emptyFeedback(), '2026-11-01', R, [0, 1, 2], Float64Array.from([1100, 600, 9]), Float64Array.from([600, 1100, 3]));
+  const W = F.feedbackWeights(fb), wA = W.of('A').w, wB = W.of('B').w, wC = W.of('C').w;
+  assert(wA > 0.85 && wB < 0.15, `Gewicht je Gruppe aus der eigenen Trefferbilanz: A ${wA.toFixed(2)} eigenes Profil, B ${wB.toFixed(2)} (lernt von allen)`);
+  assert(Math.abs(wC - W.w0) < Math.abs(wA - W.w0) && W.of('D').w === W.w0, `Wenig eigene Erfahrung → nahe am Gesamtgewicht (C ${wC.toFixed(2)}, gesamt ${W.w0.toFixed(2)}); unbekannte Gruppe = Gesamtgewicht`);
+  const mu = F.predictAdaptive(Float64Array.from([10, NaN]), Float64Array.from([20, 30]), (j) => ['A', 'A'][j], W);
+  assert(Math.abs(mu[0] - (wA * 10 + (1 - wA) * 20)) < 1e-9 && mu[1] === 30, 'Mischung aus eigenem Profil und gepooltem Modell; ohne eigene Historie nur gepoolt');
+  F.feedbackUpdate(fb, '2026-11-08', R, [], [], []);
+  assert(Math.abs(fb.groups.A[0] - 500) < 1e-6 && fb.upto === '2026-11-08' && fb.days > 1.4 && fb.days < 1.6, `Verblassen: nach ${F.FEEDBACK.halfLifeDays} Tagen zählt ein Tag halb (A: ${fb.groups.A[0]} Starts)`);
+  const c = F.compactFeedback(fb);
+  assert(c.v === F.FEEDBACK.v && JSON.stringify(F.compactFeedback(c)) === JSON.stringify(c), 'Lernstand für log.json gerundet und beim erneuten Runden stabil');
+}
+{
+  // kein Vorgriff: ein Tag, den der Lernstand schon kennt, wird nicht mit ihm bewertet
+  const ds = F.assignEras(docs.slice(0, 6).map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds), name = (i) => ds[i].day;
+  const known = { ...F.emptyFeedback(), upto: ds[4].day }, e1 = F.evaluateDays(R, [4], { fb: known, dayName: name });
+  const fresh = { ...F.emptyFeedback(), upto: ds[3].day }, e2 = F.evaluateDays(R, [4], { fb: fresh, dayName: name });
+  assert(!e1[4].models.adaptive && e2[4].models.adaptive && fresh.upto === ds[4].day && Object.keys(fresh.groups).length > 0, 'Kein Vorgriff: bewertet wird nur mit Lernstand aus früheren Tagen, danach wird der Tag übernommen');
+}
+{
+  const ev = (o) => Object.fromEntries(Object.entries(o).map(([d, m]) => [d, { models: Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { wapeGD: v, wapeGH: v }])) }]));
+  const mk = (n, f) => ev(Object.fromEntries(Array.from({ length: n }, (_, i) => [`2026-11-${String(i + 1).padStart(2, '0')}`, f(i)])));
+  assert(F.chooseModel(mk(4, () => ({ profile: 0.3, pooled: 0.2, adaptive: 0.19 })), { trainDays: 8 }).active === 'adaptive', 'Modellwahl: lernendes Modell 5 % besser → adaptive');
+  assert(F.chooseModel(mk(4, () => ({ profile: 0.3, pooled: 0.2, adaptive: 0.198 })), { trainDays: 8 }).active === 'pooled', 'Modellwahl: lernendes Modell nur 1 % besser → bleibt pooled (kein Überlernen)');
+  assert(F.chooseModel(mk(4, (i) => (i < 2 ? { profile: 0.3, pooled: 0.2 } : { profile: 0.3, pooled: 0.2, adaptive: 0.1 })), { trainDays: 8 }).active === 'pooled', 'Modellwahl: lernendes Modell erst nach 3 eigenen Tagen wählbar');
+  assert(F.chooseModel(mk(4, () => ({ profile: 0.3, pooled: 0.2, adaptive: 0.1 })), { trainDays: 8, without: ['adaptive'] }).active === 'pooled', 'Modellwahl ohne lernendes Modell (rückwirkende Pläne)');
+  const s = F.scoreOf({ wapeGD: 0.1, wapeGH: 0.3 }), s1 = F.scoreOf({ wapeGD: 0.1 });
+  assert(Math.abs(s - 0.2) < 1e-12 && s1 === 0.1, 'Wertung = Mittel aus Tagessumme und Stundenverlauf je Gruppe (ohne Stundenwert: Tageswert)');
+}
+{
+  // Welt mit vier mittelgroßen Gruppen mit eigenem Tagesgang (Spitze am späten Abend), den das gepoolte Modell nicht kennt: diese Gruppen sollen sich
+  // auf ihr eigenes Profil stützen, die vielen kleinen auf alle; das lernende Modell soll damit besser sein als beide Ausgangsmodelle
+  const special = new Set([...groups].sort((a, b) => b[1] * b[2] - a[1] * a[2]).slice(6, 10).map(g => g[0])), own = (h) => 0.25 + 1.8 * Math.exp(-((h - 22) ** 2) / 5);
+  const mk = (day) => { const d = makeDoc(day); for (const g of groups) if (special.has(g[0])) d.groups[g[0]].start = d.groups[g[0]].start.map((_, h) => pois(g[1] * g[2] * own(h))); return d; };
+  const ds = days12.map(mk), NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`);
+  const r = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW }), W = F.feedbackWeights(r.log.feedback);
+  const ws = [...special].map(k => W.of(k).w), small = groups.filter(g => !special.has(g[0])).map(g => W.of(g[0]).w), mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  assert(ws.every(w => w >= 0.6) && mean(small) < mean(ws) - 0.2, `Eigener Tagesgang → eigenes Profil (Gewichte ${ws.map(w => w.toFixed(2)).join(', ')}), kleine Gruppen im Mittel ${mean(small).toFixed(2)}`);
+  const ev = Object.values(r.log.evals).filter(e => e.models.adaptive), avg = (m) => mean(ev.map(e => F.scoreOf(e.models[m])));
+  assert(ev.length >= 5 && avg('adaptive') < Math.min(avg('pooled'), avg('profile')), `Lernendes Modell schlägt beide Ausgangsmodelle (Wertung ${(avg('adaptive') * 100).toFixed(1)} % gegen gepoolt ${(avg('pooled') * 100).toFixed(1)} %, Profil ${(avg('profile') * 100).toFixed(1)} %)`);
+  const ch = F.chooseModel(r.log.evals, { trainDays: NDAY });
+  assert(r.latest.active === ch.active && r.latest.learn?.leanOwn >= 4 && r.log.feedback.upto === addDays(DAY0, NDAY - 1), `Gewählt nach der Regel: ${r.latest.active} (${r.latest.reason}); Lernstand bis ${r.log.feedback?.upto}, ${r.latest.learn?.leanOwn} Gruppen stützen sich auf sich selbst`);
+  // Weg „aktiv“: Auswertung so, dass ein Modell klar vorn liegt → Live-Prognose damit; gleiche Eingaben (mit Wetter) für alle drei, gemessen an der Wahrheit
+  const rW = F.runForecast({ docs: ds, calendar: null, weather: WX, prevLog: null, now: NOW });
+  const runAs = (m) => { const lg = JSON.parse(JSON.stringify(rW.log)); for (const e of Object.values(lg.evals)) if (e.models[m]) { e.models[m].wapeGD *= 0.5; e.models[m].wapeGH *= 0.5; } return F.runForecast({ docs: ds, calendar: null, weather: WX, prevLog: lg, now: NOW + 3600e3 }); };
+  const errOf = (L) => { let e = 0, t = 0; L.horizon.local.forEach(([d, h], i) => { const tru = groups.reduce((a, g) => a + (special.has(g[0]) ? g[1] * g[2] * own(h) : trueMu(g, d, h)), 0); e += Math.abs(L.totals[i] - tru); t += tru; }); return e / t; };
+  const r4 = runAs('adaptive'), E = { adaptive: errOf(r4.latest), profile: errOf(runAs('profile').latest), pooledWx: errOf(runAs('pooledWx').latest) };
+  assert(r4.latest.active === 'adaptive' && r4.latest.weather.used && r4.latest.totals.every(Number.isFinite) && E.adaptive <= Math.max(E.profile, E.pooledWx) + 0.005,
+    `Aktiv: lernendes Modell (mit Wetter im gepoolten Teil); Stundensummen gegen die Wahrheit ${(E.adaptive * 100).toFixed(1)} % (Profil ${(E.profile * 100).toFixed(1)} %, gepoolt mit Wetter ${(E.pooledWx * 100).toFixed(1)} %)`);
+  const PL = r4.series.plans[addDays(DAY0, NDAY)], PY = r4.series.plans[addDays(DAY0, NDAY - 1)];
+  assert(PL?.model === 'adaptive' && PY && PY.model !== 'adaptive', `Plan heute mit dem lernenden Modell (${PL?.model}); rückwirkender Plan gestern ohne (Lernstand kennt den Tag schon: ${PY?.model})`);
+  const r2 = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: JSON.parse(JSON.stringify(r.log)), now: NOW + 3600e3 });
+  assert(JSON.stringify(r2.log.feedback) === JSON.stringify(r.log.feedback) && JSON.stringify(r2.log.evals) === JSON.stringify(r.log.evals), 'Zweiter Lauf am selben Tag: Lernstand und Auswertungen unverändert');
+  const r3 = F.runForecast({ docs: [...ds, mk(addDays(DAY0, NDAY))], calendar: null, weather: [], prevLog: JSON.parse(JSON.stringify(r.log)), now: NOW + 86400e3 });
+  assert(r3.log.feedback.upto === addDays(DAY0, NDAY) && r3.log.evals[addDays(DAY0, NDAY)]?.models.adaptive, 'Neuer Tag: wird erst bewertet, dann in den Lernstand übernommen');
+}
+
 // ---------- Ende zu Ende: Lauf, Selbstprüfung, Prognose, Live-Abgleich
 {
   const NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`); // alle 12 Tage sind abgeschlossen
