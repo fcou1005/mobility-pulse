@@ -341,3 +341,63 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const bad = F.runForecast({ docs: [{ day: '2026-11-03', runs: [], groups: { 'x|y|z': { start: [1], vmin: [] } } }, { day: '2026-11-02' }, null], now: Date.parse('2026-11-04T10:00:00Z') });
   assert(bad.latest.status === 'insufficient', 'Kaputte Gruppenzeilen und fehlende Felder werden übersprungen');
 }
+
+// ---------- Umgebung: Warnungen, Autobahn, gepflegte Ereignisse (lib/pulse-context.js)
+import * as CX from '../lib/pulse-context.js';
+{
+  const docsI = new Map(), t0 = F.localToUtcMs('2026-11-10', 14), now = t0 - 2 * 3600e3;
+  const n = CX.addAlerts(docsI, { c1: [{ status: 'actual', severity: 'severe', onset: new Date(t0).toISOString(), expires: new Date(t0 + 3 * 3600e3).toISOString() }, { status: 'actual', severity: 'minor', onset: new Date(t0).toISOString(), expires: new Date(t0 + 5 * 3600e3).toISOString() }, { status: 'test', severity: 'extreme', onset: new Date(t0).toISOString() }] }, { '08416041': 'c1', '08111000': 'c2' }, now);
+  const w = docsI.get('2026-11-10')?.ags['08416041']?.warn;
+  assert(n > 0 && w && w.slice(13, 20).join() === '0,3,3,3,1,1,0' && !docsI.get('2026-11-10').ags['08111000'], `Warnungen: höchste Stufe je Ortsstunde (14–16 Uhr Stufe 3, danach 1), Probewarnung ignoriert, nur Gemeinden der Zelle (${w?.slice(13, 20).join(',')})`);
+  const it = (o) => ({ coordinate: { lat: '48.5', long: '9.0' }, future: false, ...o });
+  const r = [CX.roadItem(it({}), 'closure', now), CX.roadItem(it({ future: true }), 'closure', now), CX.roadItem(it({ abnormalTrafficType: 'STATIONARY_TRAFFIC' }), 'warning', now), CX.roadItem(it({ description: ['Fahrbahnverengung, Staugefahr'], startTimestamp: '2026-01-01T00:00:00+01:00' }), 'warning', now), CX.roadItem(it({ title: 'A8 Stau 4 km', startTimestamp: new Date(now - 3600e3).toISOString() }), 'warning', now)];
+  assert(r[0]?.kind === 'closure' && !r[1] && r[2]?.kind === 'jam' && !r[3] && r[4]?.kind === 'jam', 'Autobahn: Sperrung zählt, geplante nicht; Stau zählt, Dauer-Baustellenhinweis nicht');
+  const hit = CX.addRoad(docsI, [{ lat: 48.5, lon: 9.0 }, { lat: 1, lon: 1 }], (lat) => (lat > 40 ? '08416041' : null), now);
+  assert(hit === 1 && docsI.get(T_dayOf(now)).ags['08416041'].road[T_hourOf(now)] === 1, 'Autobahn: Meldung → Gemeinde zur Stunde der Beobachtung');
+  const cur = CX.checkCurated({ ereignisse: [{ art: 'streik-oepnv', von: '2026-11-10', gebiet: { laender: ['BW'] }, quelle: 'https://x' }, { art: 'streik-bahn', von: '2026-11-11T04:00', bis: '2026-11-11T10:00', gebiet: 'DE', quelle: 'https://y' }, { art: 'veranstaltung', von: '2026-11-12', gebiet: { ags: ['08111000'] }, quelle: 'https://z' }, { art: 'demo', von: '2026-11-10', gebiet: 'DE', quelle: 'q' }, { art: 'streik-oepnv', von: '2026-11-10', gebiet: 'DE' }] });
+  assert(cur.ok.length === 3 && cur.bad.length === 2, `Ereignisliste: unbekannte Art und fehlende Quelle werden abgewiesen (${cur.bad.join('; ')})`);
+  const L = CX.ctxLookup([...docsI.values()], cur.ok), K = (a) => CX.CTX_KEYS.filter((_, i) => a[i]).join('+') || '–';
+  assert(K(L('08416041', '2026-11-10', 15)) === 'warn+strike' && K(L('09162000', '2026-11-10', 15)) === '–' && K(L('09162000', '2026-11-11', 5)) === 'rail' && K(L('09162000', '2026-11-11', 11)) === '–' && K(L('08111000', '2026-11-12', 20)) === 'event' && K(L('08416041', '2026-11-10', 19)) === 'strike',
+    'Merkmale je Gemeinde und Stunde: Warnung ab Stufe 2, Streik je Land, Bahnstreik mit Uhrzeit bundesweit, Veranstaltung je Gemeinde');
+  const back = CX.weatherBackfillDays(['2026-10-31', '2026-11-01', '2026-11-02', '2026-11-03'], ['2026-11-03', '2026-11-04', '2026-11-05'], '2026-11-06');
+  assert(back.join() === '2026-10-30,2026-10-31,2026-11-01,2026-11-02', `Wetter nachholen: fehlende UTC-Tage samt Vortag des ältesten Ortstags (${back.join(', ')}); gestern und heute holt der normale Abruf`);
+}
+function T_dayOf(ms) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms)); }
+function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Berlin' }).format(new Date(ms)) % 24; }
+
+// ---------- Umgebung im Modell und Langzeitgedächtnis (synthetische Welt mit bekannter Wirkung)
+{
+  const TRUE_W = -0.5, TRUE_S = 0.4, W_AGS = new Set(AGS.slice(0, 3)), S_LAND = '08'; // Warnung 12–18 Uhr jeden dritten Tag in drei Gemeinden; ÖPNV-Streik BW
+  const NALL = 32, dl = Array.from({ length: NALL }, (_, i) => addDays(DAY0, i)), strikeDays = new Set([dl[2], dl[4]]);
+  const warnOn = (day, h) => dl.indexOf(day) % 3 === 1 && h >= 12 && h <= 18;
+  const mkCtx = (day) => { const d = makeDoc(day); for (const g of groups) { const ags = g[0].split('|')[0]; d.groups[g[0]].start = d.groups[g[0]].start.map((_, h) => pois(trueMu(g, day, h) * Math.exp((W_AGS.has(ags) && warnOn(day, h) ? TRUE_W : 0) + (ags.startsWith(S_LAND) && strikeDays.has(day) ? TRUE_S : 0)))); } return d; };
+  const allDocs = dl.map(mkCtx);
+  const inc = dl.map(day => ({ version: 1, day, sources: {}, ags: Object.fromEntries([...W_AGS].map(a => [a, { warn: Array.from({ length: 24 }, (_, h) => (warnOn(day, h) ? 3 : 0)) }])) }));
+  const curated = [...strikeDays].map(d => ({ art: 'streik-oepnv', von: d, gebiet: { laender: ['BW'] }, quelle: 'https://example.org' })), WX2 = wxDocs(addDays(DAY0, -1), addDays(DAY0, NALL + 2)); // mit Wetter, sonst verdeckt der Temperaturgang die Wirkung
+  // 1) Fenster mit beiden Streiktagen: Wirkungen gelernt, Modell mit Umgebung schlägt das gepoolte
+  const r1 = F.runForecast({ docs: allDocs.slice(0, 12), weather: WX2, incidents: inc, curated, now: Date.parse(`${dl[12]}T10:00:00Z`) });
+  const fx = r1.latest.memory.effects, ev1 = Object.values(r1.log.evals).filter(e => e.models.pooledWx && e.env?.includes('warn')), mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  assert(r1.latest.env.ready.includes('warn') && r1.latest.env.ready.includes('strike') && Math.abs(fx.warn.b - TRUE_W) < 0.12 && Math.abs(fx.strike.b - TRUE_S) < 0.15,
+    `Umgebung gelernt: Warnung Faktor ${Math.exp(fx.warn.b).toFixed(2)} (wahr ${Math.exp(TRUE_W).toFixed(2)}), Streik ${Math.exp(fx.strike.b).toFixed(2)} (wahr ${Math.exp(TRUE_S).toFixed(2)})`);
+  assert(ev1.length >= 4 && mean(ev1.map(e => F.scoreOf(e.models.pooledWx))) < mean(ev1.map(e => F.scoreOf(e.models.pooled))), `Selbstprüfung: Modell mit Umgebung ${(mean(ev1.map(e => F.scoreOf(e.models.pooledWx))) * 100).toFixed(1)} % gegen gepoolt ${(mean(ev1.map(e => F.scoreOf(e.models.pooled))) * 100).toFixed(1)} %`);
+  // 2) Lauf Tag für Tag mit 21-Tage-Fenster: die Streiktage verlassen das Fenster, die Wirkung bleibt im Gedächtnis
+  let log = null, r = null;
+  for (let i = 3; i <= NALL - 1; i++) { r = F.runForecast({ docs: allDocs.slice(Math.max(0, i - 21), i), weather: WX2, incidents: inc, curated, prevLog: log, now: Date.parse(`${dl[i]}T10:00:00Z`) }); log = r.log; }
+  const M = r.log.memory, sm = r.latest.memory, fresh = F.runForecast({ docs: allDocs.slice(NALL - 22, NALL - 1), weather: WX2, incidents: inc, curated, now: Date.parse(`${dl[NALL - 1]}T10:00:00Z`) });
+  assert(Object.keys(M.days).length === 21 && M.old && M.old.days > 9.5 && M.old.days <= 10 && Object.keys(M.days).every(d => d > M.old.at) && Math.abs(sm.days - sm.oldDays - sm.windowDays) < 0.11,
+    `Gedächtnis: ${Object.keys(M.days).length} Tage im Fenster, ${M.old.days.toFixed(1)} übernommen bis ${M.old.at}, keiner doppelt`);
+  assert(!fresh.latest.env.ready.includes('strike') && r.latest.env.ready.includes('strike') && Math.abs(sm.effects.strike.b - TRUE_S) < 0.15 && sm.effects.strike.lo < Math.exp(TRUE_S) && sm.effects.strike.hi > Math.exp(TRUE_S),
+    `Streiktage nicht mehr im Fenster: ohne Gedächtnis unbekannt, mit Gedächtnis Faktor ${Math.exp(sm.effects.strike.b).toFixed(2)} (90 %: ${sm.effects.strike.lo}–${sm.effects.strike.hi}, wahr ${Math.exp(TRUE_S).toFixed(2)})`);
+  // 3) Vorhersage: angekündigte Warnung für morgen senkt die Live-Prognose in den betroffenen Gemeinden
+  const tomorrowW = { version: 1, day: addDays(dl[NALL - 1], 0), sources: {}, ags: Object.fromEntries([...W_AGS].map(a => [a, { warn: Array.from({ length: 24 }, (_, h) => (h >= 12 && h <= 18 ? 3 : 0)) }])) };
+  const lg = JSON.parse(JSON.stringify(r.log)); for (const e of Object.values(lg.evals)) if (e.models.pooledWx) { e.models.pooledWx.wapeGD *= 0.5; e.models.pooledWx.wapeGH *= 0.5; }
+  const docsNow = allDocs.slice(NALL - 22, NALL - 1), nowL = Date.parse(`${dl[NALL - 1]}T05:00:00Z`);
+  const withW = F.runForecast({ docs: docsNow, weather: WX2, incidents: [...inc.slice(0, -1), tomorrowW], curated, prevLog: JSON.parse(JSON.stringify(lg)), now: nowL }), noW = F.runForecast({ docs: docsNow, weather: WX2, incidents: inc.slice(0, -1), curated, prevLog: JSON.parse(JSON.stringify(lg)), now: nowL });
+  const muni = (L, a) => L.horizon.local.reduce((s, [d, h], i) => s + (d === dl[NALL - 1] && h >= 12 && h <= 18 ? L.municipalities[a]?.[i] || 0 : 0), 0);
+  const ratio = muni(withW.latest, AGS[0]) / muni(noW.latest, AGS[0]);
+  assert(withW.latest.active === 'pooledWx' && withW.latest.env.active.includes('warn') && Math.abs(ratio - Math.exp(TRUE_W)) < 0.1, `Live: angekündigte Warnung 12–18 Uhr → Prognose dort ×${ratio.toFixed(2)} (wahr ${Math.exp(TRUE_W).toFixed(2)})`);
+  // 4) Wetter-Gate zählt Gedächtnistage mit
+  const ds = F.assignEras(docs.slice(0, 3).map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds, F.wxLookup(WX)), sel = Array.from({ length: R.n }, (_, i) => i);
+  const g0 = F.weatherGate(R, sel), g1 = F.weatherGate(R, sel, [[-2, 4, 1, 0], [12, 20, 0, 1], [3, 9, 1, 0]]);
+  assert(g1.rainDays === g0.rainDays + 2 && g1.dryDays === g0.dryDays + 1 && g1.tempRangeK >= 22 && g1.memDays === 3, `Wetter-Gate mit Gedächtnis: ${g0.rainDays}→${g1.rainDays} Regentage, Spanne ${g0.tempRangeK}→${g1.tempRangeK} K`);
+}

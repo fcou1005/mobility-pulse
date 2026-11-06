@@ -49,7 +49,7 @@ export async function startExtra() {
   };
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x'); const key = req.headers['x-api-key'] || null;
-    log.push({ path: u.pathname, host: req.headers.host, key });
+    log.push({ path: u.pathname, host: req.headers.host, key, q: Object.fromEntries(u.searchParams) });
     const json = (b, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
     const [, kind, file] = u.pathname.split('/');
     if (kind === 'p' && p[file]) return json(p[file]());
@@ -60,6 +60,18 @@ export async function startExtra() {
       const d0 = Date.parse(`${u.searchParams.get('date')}T00:00:00Z`), d1 = Date.parse(`${u.searchParams.get('last_date')}T00:00:00Z`), w = [];
       for (let t = d0, i = 0; t <= d1; t += 3600e3, i++) w.push({ timestamp: new Date(t).toISOString().replace('Z', '+00:00'), temperature: i === 3 ? 999 : 8 + (i % 24) / 2, precipitation: i % 24 === 5 ? 1.2 : 0, wind_speed: 12, sunshine: 0 });
       return json({ weather: w, sources: [] });
+    }
+    if (kind === 'alerts') { // Bright-Sky-Warnungen: eine schwere ab der nächsten Stunde für 3 Stunden, eine Probewarnung
+      const t = Math.floor(Date.now() / 3600e3 + 1) * 3600e3, iso = (x) => new Date(x).toISOString();
+      return json({ alerts: [{ id: 1, alert_id: 'a', status: 'actual', severity: 'severe', onset: iso(t), expires: iso(t + 3 * 3600e3), event_de: 'STURMBÖEN', headline_de: 'Text' }, { id: 2, alert_id: 'b', status: 'test', severity: 'extreme', onset: iso(t), expires: iso(t + 3600e3) }], location: null });
+    }
+    if (kind === 'autobahn') { // Autobahn-API: A8 mit Sperrung und Stau (Stuttgart), Dauer-Baustellenhinweis; A81 nicht erreichbar
+      const [, , road, , sv] = u.pathname.split('/');
+      if (!road) return json({ roads: ['A8', 'A81 '] });
+      if (road !== 'A8') return json({}, 500);
+      if (sv === 'closure') return json({ closure: [{ coordinate: { lat: '48.775', long: '9.175' }, future: false, isBlocked: 'true', title: 'A8' }] });
+      if (sv === 'warning') return json({ warning: [{ coordinate: { lat: '48.776', long: '9.176' }, future: false, abnormalTrafficType: 'STATIONARY_TRAFFIC' }, { coordinate: { lat: '48.776', long: '9.176' }, future: false, description: ['Baustelle'], startTimestamp: '2025-01-01T00:00:00.000+0100' }] });
+      return json({}, 404);
     }
     if (kind === 'cb') return json(cb());
     if (kind === 'auth') {

@@ -1,0 +1,5 @@
+{
+  "hinweis": "Gepflegte Ereignisliste für die Prognose (Merkmale strike, rail, event). Ein Eintrag je Ereignis: art = streik-oepnv | streik-bahn | veranstaltung; von/bis = Ortszeit als YYYY-MM-DD (ganzer Tag, bis einschließlich) oder YYYY-MM-DDTHH:MM; gebiet = \"DE\" | { \"laender\": [\"BW\", …] } | { \"ags\": [\"08111000\", …] }; quelle = Link auf die Ankündigung (Pflicht); titel frei. Nur belegte Ereignisse eintragen, auch vergangene (sie bleiben im Langzeitgedächtnis). Fehlerhafte Einträge überspringt der Sammler und meldet sie im Protokoll.",
+  "beispiel": { "art": "streik-oepnv", "von": "2026-03-19", "bis": "2026-03-19", "gebiet": { "laender": ["BY", "SL", "BB", "NW", "HH"] }, "titel": "Warnstreik ver.di im kommunalen Nahverkehr", "quelle": "https://www.echo24.de/welt/naechster-streik-in-gleich-sechs-bundeslaendern-angekuendigt-ein-tag-noch-in-dieser-woche-im-fokus-zr-94219895.html" },
+  "ereignisse": []
+}

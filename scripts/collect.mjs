@@ -12,6 +12,7 @@ import * as R from '../lib/pulse-report.js';
 import * as FE from '../lib/pulse-flowest.js';
 import * as V from '../lib/pulse-coverage.js';
 import * as FC from '../lib/pulse-forecast.js';
+import * as CX from '../lib/pulse-context.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -632,16 +633,31 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
   }
 }
 
+// Umgebungsereignisse (incidents/<Ortstag>.json, lib/pulse-context.js): vorhandene Dateien lesen, ergänzen, schreiben
+const incidentDir = path.join(DATA, 'incidents');
+async function incidentDocs(dayList) {
+  const m = new Map();
+  for (const d of new Set(dayList)) { const f = path.join(incidentDir, `${d}.json`); try { m.set(d, existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : CX.emptyIncidentDoc(d)); } catch { m.set(d, CX.emptyIncidentDoc(d)); } }
+  return m;
+}
+async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true }); for (const [d, doc] of docs) { doc.updatedAt = new Date(now).toISOString(); await writeFile(path.join(incidentDir, `${d}.json`), JSON.stringify(doc)); } }
+
 // Wetter-Cache (weather/<UTC-Tag>.json): stündlich Temperatur, Niederschlag, Wind, Sonnenschein je 0,5°-Rasterzelle über den Gemeinden mit
 // Flotte (Schwerpunkt aus den Grenzen), DWD-Beobachtungen über Bright Sky. Zweck: eine Wetterreihe aufbauen, die später ein wetterbereinigtes
 // Modell speist (je früher der Verlauf beginnt, desto früher trägt es). Höchstens einmal je 50 Minuten, gestern und heute (UTC) als Beobachtung, morgen als Vorhersage;
 // bei Fehler bleibt die alte Datei. WEATHER_URL leer = aus (Fixture-Test). Werte außerhalb des plausiblen Bereichs werden null.
+// Seit 6.11.2026: fehlende Tage im Fenster der Prognose (Ortstage der Ereignisdateien, höchstens 23 Tage zurück) werden im selben Abruf nachgeholt
+// (die Reihe begann erst am 3.11., die Tage davor hatten kein Wetter und hielten das Wetter-Gate zu). Im selben Takt die DWD-Warnungen je Zelle
+// (Bright Sky /alerts) → incidents/<Ortstag>.json (lib/pulse-context.js).
 {
   const base = process.env.WEATHER_URL ?? 'https://api.brightsky.dev', dir = path.join(DATA, 'weather');
   const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10), days = [utcDay(now - 86400e3), utcDay(now)], wDays = [...days, utcDay(now + 86400e3)]; // morgen: DWD-Vorhersage (MOSMIX), wird am Folgetag durch Beobachtungen ersetzt
   const fileOf = (d) => path.join(dir, `${d}.json`);
   let stale = false;
   for (const d of days) { try { const o = existsSync(fileOf(d)) ? JSON.parse(await readFile(fileOf(d), 'utf8')) : null; if (!o || !(now - Date.parse(o.generatedAt) < 50 * 60e3)) stale = true; } catch { stale = true; } }
+  const dayFiles = async (d) => (existsSync(d) ? (await readdir(d)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)) : []);
+  const back = CX.weatherBackfillDays((await dayFiles(path.join(DATA, 'events'))).sort().slice(-21), await dayFiles(dir), utcDay(now));
+  if (back.length) { stale = true; wDays.unshift(...back); }
   if (base && stale && boundaries) {
     const cellOf = (c) => `${(Math.round(c[0] * 2) / 2).toFixed(1)}|${(Math.round(c[1] * 2) / 2).toFixed(1)}`;
     const cells = new Map(), agsCell = {};
@@ -652,7 +668,7 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
       const keys = [...cells.keys()], res = {}; let fails = 0;
       for (let i = 0; i < keys.length; i += 4) await Promise.all(keys.slice(i, i + 4).map(async (k) => {
         const [lat, lon] = cells.get(k).map(x => Math.round(x * 100) / 100); // Abfrage am Schwerpunkt der ersten Gemeinde der Zelle (Zelle nur zum Zusammenfassen)
-        const r = await fetchJson(`${base}/weather?lat=${lat}&lon=${lon}&date=${days[0]}&last_date=${utcDay(now + 2 * 86400e3)}&tz=UTC&units=dwd`, { retry: 0 });
+        const r = await fetchJson(`${base}/weather?lat=${lat}&lon=${lon}&date=${back[0] ?? days[0]}&last_date=${utcDay(now + 2 * 86400e3)}&tz=UTC&units=dwd`, { retry: 0 });
         if (r.ok && Array.isArray(r.json?.weather)) res[k] = r.json.weather; else fails++;
       }));
       let wrote = 0;
@@ -665,8 +681,47 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
         }
         if (Object.keys(out).length) { await writeFile(fileOf(d), JSON.stringify({ version: 1, day: d, generatedAt: new Date(now).toISOString(), source: 'DWD Open Data via Bright Sky', units: { t: '°C', p: 'mm/h', w: 'km/h', s: 'min/h' }, hours, cells: out, ags: agsCell })); wrote++; }
       }
-      log(`Wetter: ${keys.length} Rasterzellen, ${wrote} Tagesdatei(en)${fails ? `, ${fails} Abrufe ohne Antwort` : ''}`);
+      log(`Wetter: ${keys.length} Rasterzellen, ${wrote} Tagesdatei(en)${back.length ? ` (nachgeholt: ${back.join(', ')})` : ''}${fails ? `, ${fails} Abrufe ohne Antwort` : ''}`);
+      // DWD-Warnungen je Zelle (Beginn/Ende → Ortsstunden, auch die kommenden); Fehler lassen die Dateien unverändert
+      const alerts = {}; let afails = 0; const aUntil = Date.now() + 45e3; // höchstens 45 s, danach mit dem Stand weiter
+      for (let i = 0; i < keys.length && Date.now() < aUntil; i += 4) await Promise.all(keys.slice(i, i + 4).map(async (k) => {
+        const [lat, lon] = cells.get(k).map(x => Math.round(x * 100) / 100), r = await fetchJson(`${base}/alerts?lat=${lat}&lon=${lon}`, { retry: 0 });
+        if (r.ok && Array.isArray(r.json?.alerts)) alerts[k] = r.json.alerts.map(a => ({ status: a.status, severity: a.severity, onset: a.onset, effective: a.effective, expires: a.expires })); else afails++;
+      }));
+      if (Object.keys(alerts).length) { const docs = await incidentDocs([T.dayOf(now - 3 * 3600e3), T.dayOf(now), T.dayOf(now + 86400e3), T.dayOf(now + 2 * 86400e3)]), n = CX.addAlerts(docs, alerts, agsCell, now);
+        for (const d of docs.values()) d.sources.warn = { at: new Date(now).toISOString(), cells: Object.keys(alerts).length };
+        await writeIncidents(docs); log(`Warnungen (DWD): ${Object.values(alerts).reduce((a, l) => a + l.length, 0)} aktiv in ${Object.keys(alerts).length} Zellen, ${n} Gemeinde-Stunden neu${afails ? `, ${afails} Abrufe ohne Antwort` : ''}`); }
     } catch (e) { log(`Wetter: ${e.message} – alte Dateien bleiben`); }
+  }
+}
+
+// Autobahn (verkehr.autobahn.de, Autobahn GmbH des Bundes): Sperrungen und Staus mit Koordinate → Gemeinde, eingetragen zur aktuellen Ortsstunde
+// in incidents/<Ortstag>.json (Merkmal „road“ der Prognose). Höchstens einmal je 55 Minuten (rund 220 Abrufe: Liste der Autobahnen, je Autobahn
+// Sperrungen und Verkehrsmeldungen); Baustellen-Hinweise ohne Stau und geplante Sperrungen zählen nicht. AUTOBAHN_URL leer = aus.
+// Gespeichert werden nur Gemeinde und Stunde, keine Meldungstexte.
+{
+  const base = process.env.AUTOBAHN_URL ?? 'https://verkehr.autobahn.de/o/autobahn';
+  if (base && index) {
+    try {
+      const docs = await incidentDocs([T.dayOf(now)]), doc = docs.get(T.dayOf(now)), last = Date.parse(doc.sources?.road?.at || 0);
+      if (!(now - last < 55 * 60e3)) {
+        const list = await fetchJson(`${base}/`, { retry: 0 }), roads = Array.isArray(list.json?.roads) ? list.json.roads.filter(r => /^A\d+$/.test(String(r).trim())).map(r => String(r).trim()) : [];
+        if (!roads.length) log(`Autobahn: Liste nicht erreichbar${list.status ? ` (HTTP ${list.status})` : ''}`);
+        else {
+          const items = []; let fails = 0, done = 0; const until = Date.now() + 60e3; // höchstens 60 s je Lauf; Rest beim nächsten Mal
+          const jobs = roads.flatMap(r => ['closure', 'warning'].map(sv => [r, sv]));
+          for (let i = 0; i < jobs.length && Date.now() < until; i += 6) await Promise.all(jobs.slice(i, i + 6).map(async ([r, sv]) => {
+            done++; const x = await fetchJson(`${base}/${encodeURIComponent(r)}/services/${sv}`, { retry: 0 }), arr = x.json?.[sv];
+            if (!x.ok || !Array.isArray(arr)) { fails++; return; }
+            for (const it of arr) { const v = CX.roadItem(it, sv, now); if (v) items.push(v); }
+          }));
+          const n = CX.addRoad(docs, items, (lat, lon) => C.assignMunicipality(index, lat, lon)?.ags ?? null, now);
+          doc.sources.road = { at: new Date(now).toISOString(), roads: roads.length, items: items.length, fails, ...(done < jobs.length ? { partial: +(done / jobs.length).toFixed(2) } : {}) };
+          await writeIncidents(docs);
+          log(`Autobahn: ${roads.length} Autobahnen, ${items.filter(x => x.kind === 'closure').length} Sperrungen, ${items.filter(x => x.kind === 'jam').length} Staus, ${n} Gemeinden betroffen${fails ? `, ${fails} Abrufe ohne Antwort` : ''}`);
+        }
+      }
+    } catch (e) { log(`Autobahn: ${e.message} – übersprungen`); }
   }
 }
 
@@ -1042,6 +1097,8 @@ try {
   await writeFile(path.join(DATA, 'reliability.json'), JSON.stringify({ at: now, days: 7, sources: T.reliability(tr.state) }));
   // Ereignis- und Zellendateien: 30 bzw. 14 Tage behalten
   for (const f of (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -HISTORY_DAYS)) await rm(path.join(DATA, 'events', f));
+  // Umgebungsereignisse wie Ereignisse (+ 2 Tage Vorschau: heute, morgen); was die Prognose daraus gelernt hat, steht im Langzeitgedächtnis
+  if (existsSync(incidentDir)) for (const f of (await readdir(incidentDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -(HISTORY_DAYS + 2))) await rm(path.join(incidentDir, f));
   const cellDays = (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}(\.json)?$/.test(f)).sort();
   for (const f of cellDays.filter(f => !f.endsWith('.json')).slice(0, -14)) await rm(path.join(cellsDir, f), { recursive: true, force: true });
   for (const f of cellDays.filter(f => f.endsWith('.json')).slice(0, -3)) await rm(path.join(cellsDir, f));
@@ -1064,11 +1121,14 @@ if (process.env.FORECAST !== '0') {
       const docs = []; for (const f of await list(path.join(DATA, 'events'), 21)) docs.push(JSON.parse(await readFile(f, 'utf8')));
       const weather = []; for (const f of await list(path.join(DATA, 'weather'), 30)) weather.push(JSON.parse(await readFile(f, 'utf8')));
       const red = new Set(Object.entries(latest.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k)); // rote Ampel: nicht plausibel gezählt
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
+      // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
+      const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
+      const cur = CX.checkCurated(await rd(path.join(ROOT, 'data', 'ereignisse.json'))); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: cur.ok, prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
       await mkdir(dir, { recursive: true });
       await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
       const l = res.latest;
-      log(`Prognose: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, ${Date.now() - t0} ms`);
+      log(`Prognose: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
     }
   } catch (e) { log(`Prognose: ${e.message} – alte Dateien bleiben`); }
 }
@@ -1113,7 +1173,8 @@ if (boundaries) {
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
     '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
-    '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender und dem Wetter-Cache; statistisches Modell des Projekts, keine Betreiberdaten.',
+    '- Umgebungsereignisse (`incidents/<Tag>.json`, nur Kennzeichen je Gemeinde und Stunde, keine Meldungstexte): Wetterwarnungen des Deutschen Wetterdienstes (DWD Open Data, über Bright Sky); Sperrungen und Staus auf Autobahnen aus der Verkehrsinformation der Autobahn GmbH des Bundes (verkehr.autobahn.de; ausdrückliche Nutzungsbedingungen der Schnittstelle nicht gefunden, Quelle: Die Autobahn GmbH des Bundes). Streiks und Veranstaltungen aus der gepflegten Liste `data/ereignisse.json` im Code-Zweig (je Eintrag mit Quelle).',
+    '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',

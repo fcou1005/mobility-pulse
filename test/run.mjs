@@ -8,7 +8,7 @@ import * as T from '../lib/pulse-track.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -180,7 +180,7 @@ await writeFile(`test/out/events/${ydM}.json`, JSON.stringify({ day: ydM, versio
   published: { at: Date.now(), through: null, complete: true } }));
 const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.000Z', source: 'OpenHolidays API (openholidaysapi.org, ODbL)', from: '2025-01-01', to: '2026-12-31', states: { BW: { '2026-11-02': 'F' } } });
 await writeFile('test/out/calendar.json', calOld);
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, FORECAST_EVERY_MIN: '0' });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 {
   const wd = T.dayOf(Date.now()), wDay = (await readdir('test/out/weather').catch(() => [])).filter(n => n.endsWith('.json')).map(n => n.slice(0, -5)).sort(), wf = wDay.length ? JSON.parse(await readFile(`test/out/weather/${wDay[0]}.json`, 'utf8')) : null;
@@ -190,8 +190,16 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   void wd;
   const tomorrow = new Date(Date.now() + 86400e3).toISOString().slice(0, 10);
   assert(wDay.includes(tomorrow), `Wetter-Cache: auch die Datei für morgen (${tomorrow}, Vorhersage) wird geschrieben`);
+  const before = new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10), wReq = ex.log.filter(x => x.path === '/weather');
+  assert(wDay.includes(before) && wReq.length && wReq.every(x => x.q?.date === before), `Wetter nachgeholt: der UTC-Tag vor dem ältesten Ereignistag (${before}) fehlte und kommt im selben Abruf mit (date=${wReq[0]?.q?.date})`);
+  const inc = await readFile(`test/out/incidents/${T.dayOf(Date.now())}.json`, 'utf8').then(JSON.parse).catch(() => null), incT = await readFile(`test/out/incidents/${T.dayOf(Date.now() + 86400e3)}.json`, 'utf8').then(JSON.parse).catch(() => null);
+  const warnH = Object.values(inc?.ags || {}).flatMap(a => a.warn || []).filter(v => v === 3).length + Object.values(incT?.ags || {}).flatMap(a => a.warn || []).filter(v => v === 3).length, h = T.hourOf(Date.now());
+  const road = Object.entries(inc?.ags || {}).filter(([, a]) => a.road?.[h] === 1).map(([k]) => k);
+  assert(inc?.version === 1 && warnH >= 3 && !JSON.stringify(inc).includes('extreme') && inc.sources.warn?.cells >= 1, `Warnungen (DWD): incidents/<Tag>.json mit Stufe 3 für die kommenden Stunden (${warnH} Gemeinde-Stunden), Probewarnung ignoriert, keine Texte`);
+  assert(road.length === 1 && inc.sources.road?.roads === 2 && inc.sources.road.fails === 2 && inc.sources.road.items === 2, `Autobahn: Sperrung + Stau → ${road.join(', ')} zur Stunde ${h}; Baustellenhinweis zählt nicht; Ausfall einer Autobahn bricht nicht ab`);
   const fl = await readFile('test/out/forecast/latest.json', 'utf8').then(JSON.parse).catch(() => null), fg = await readFile('test/out/forecast/log.json', 'utf8').then(JSON.parse).catch(() => null);
   assert(fl && fl.version === 1 && ['insufficient', 'learning', 'active'].includes(fl.status) && fg && fg.version === 1 && typeof fg.evals === 'object', `Prognose: forecast/latest.json und log.json vom Sammler geschrieben (Status ${fl?.status}, ${fl?.trainDays} Tage)`);
+  assert(fl.env?.sources?.days >= 1 && fl.env.sources.warnAt && fl.env.sources.roadAt && fg.memory?.v === 1, `Prognose kennt die Umgebung (${fl.env?.sources?.days} Tagesdateien, Ereignisliste ${fl.env?.sources?.curated} Einträge) und führt das Gedächtnis`);
 }
 {
   const E2 = await import('../lib/pulse-econ.js'), ecL = l4.eventChecks?.groups?.['08111000|Lime|scooter'], mY = l4.measure?.days?.[ydM];
