@@ -24,6 +24,7 @@ const CONCURRENCY = +process.env.CONCURRENCY || 8;
 const TIMEOUT = +process.env.FETCH_TIMEOUT || 20000;
 const MAX_BYTES = +process.env.MAX_BYTES || 40e6; // Obergrenze je Antwort
 const HISTORY_DAYS = +process.env.HISTORY_DAYS || 30;
+const HEALTH = { minShare: 0.9 }; // Ausfall-Wächter: „fail“ unter 90 % der üblichen Zahl liefernder Quellen (HEALTH_FILE)
 const UA = 'mobility-pulse/1.0 (+https://github.com/fcou1005/mobility-pulse)';
 
 // Verfolgungszustand: mit TRACK_DIR (privater Cache des Workflows) gesalzene HMAC-Schlüssel und kein out/track mehr;
@@ -261,7 +262,7 @@ for (const { src, sys, probe, error } of results) {
   rec.cors = corsOk;
   if ((src.auth || !corsOk) && usable) {
     snapshots.push({ id: src.id, at: now, feedAgeMs: rec.feedAgeMs, operator: src.operator,
-      vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null]),
+      vehicles: sys.vehicles.filter(v => v.geoStatus === 'ok').map(v => [+v.lat.toFixed(5), +v.lon.toFixed(5), v.type, (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, OPS.rangePublic(v)]),
       stations: sys.stations.filter(s => C.validLatLon(s.lat, s.lon)).map(s => [+s.lat.toFixed(5), +s.lon.toFixed(5), s.name, s.physicalAvailable, s.bookable, s.docksAvailable, s.renting ? 1 : 0, s.returning ? 1 : 0]) });
   }
 }
@@ -964,7 +965,7 @@ try {
     await mkdir(path.join(cellsDir, doc.day), { recursive: true });
     for (const [st, m] of Object.entries(doc.states || {})) {
       const sp = T.suppressCells(m);
-      await writeFile(path.join(cellsDir, doc.day, `${st}.json`), JSON.stringify({ day: doc.day, state: st, ...cellMeta(doc), fields: CELL_FIELDS, munis: sp.munis, below: sp.below, belowFields: BELOW_FIELDS, minCount: T.CELL_MIN, published: { at: now, through: doc.lastAt ?? null, complete } }));
+      await writeFile(path.join(cellsDir, doc.day, `${st}.json`), JSON.stringify({ day: doc.day, state: st, ...cellMeta(doc), fields: CELL_FIELDS, munis: sp.munis, below: sp.below, belowFields: BELOW_FIELDS, minCount: T.CELL_MIN, suppress: T.SUPPRESS_VERSION, published: { at: now, through: doc.lastAt ?? null, complete } }));
     }
   };
   let cellWork = null;
@@ -994,7 +995,7 @@ try {
       let runsD = null;
       for (const f of files) {
         const doc = JSON.parse(await readFile(f, 'utf8')); const perState = !d.endsWith('.json');
-        if (doc.taintChecked && (!perState || doc.minCount)) continue;
+        if (doc.taintChecked && (!perState || (doc.minCount && doc.suppress >= T.SUPPRESS_VERSION))) continue;
         if (!doc.taintChecked) {
           runsD ??= JSON.parse(await readFile(evF, 'utf8')).runs || [];
           const { bands } = T.repairCells(doc, runsD);
@@ -1002,12 +1003,15 @@ try {
         }
         // ältere Landesdateien: Unterdrückung kleiner Zellen nachträglich (M-11)
         if (perState && !doc.minCount) { const sp = T.suppressCells(doc.munis); doc.munis = sp.munis; doc.below = sp.below; doc.belowFields = BELOW_FIELDS; doc.minCount = T.CELL_MIN; }
+        // Sekundärunterdrückung nachträglich (ab 6.11.2026): einzeln unterdrückte Zelle je Gemeinde × Band nicht aus below ablesbar
+        else if (perState && !(doc.suppress >= T.SUPPRESS_VERSION)) T.secondarySuppress(doc.munis, doc.below || {}, { min: doc.minCount });
+        if (perState) doc.suppress = T.SUPPRESS_VERSION;
         await writeFile(f, JSON.stringify(doc));
       }
     }
   } catch (e) { log(`Zellen-Reparatur: ${e.message}`); }
   // Start-Ziel-Ströme (nur stabile Kennungen; lib/pulse-track.js publishFlows): Tagessumme privat in TRACK_DIR, veröffentlicht wird ein Tag
-  // erst nach Tagesende (flows/<Tag>.json, ≥ 2 Fahrten je Zeile, Top 300 je Gemeinde, 30 Tage) – ohne privates Verzeichnis keine Ströme
+  // erst nach Tagesende (flows/<Tag>.json, ≥ T.FLOW_MIN = 5 Fahrten je Zeile, Top 300 je Gemeinde, 30 Tage) – ohne privates Verzeichnis keine Ströme
   if (TRACK_DIR) {
     const flDir = path.join(DATA, 'flows'), rawFile = path.join(TRACK_DIR, 'flows-raw.json.gz');
     await mkdir(flDir, { recursive: true });
@@ -1017,9 +1021,11 @@ try {
     await writeFile(rawFile, gzipSync(JSON.stringify(raw)));
     const flDays = (await readdir(flDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     for (const f of flDays.slice(0, -HISTORY_DAYS)) await rm(path.join(flDir, f));
+    // ältere Tagesdateien mit niedrigerer Schwelle (bis 6.11.2026: 2) einmalig nachziehen: Zeilen unter T.FLOW_MIN entfallen
+    for (const f of flDays.slice(-HISTORY_DAYS)) { try { const fp = path.join(flDir, f), doc = JSON.parse(await readFile(fp, 'utf8')); if (T.tightenFlows(doc)) { await writeFile(fp, JSON.stringify(doc)); log(`Ströme ${f.slice(0, 10)}: auf ≥ ${T.FLOW_MIN} Fahrten je Zeile nachgezogen (${doc.flows.length} Zeilen)`); } } catch (e) { log(`Ströme ${f}: ${e.message}`); } }
     await writeFile(path.join(flDir, 'index.json'), JSON.stringify({ days: flDays.slice(-HISTORY_DAYS).map(f => f.slice(0, 10)), collecting: raw.day, min: T.FLOW_MIN, top: T.FLOW_TOP, fields: T.FLOW_FIELDS, updatedAt: now }));
     // Geschätzte Ströme für rotierende Kennungen (lib/pulse-flowest.js): je Lauf nur Zählungen je Zelle, privat in TRACK_DIR
-    // (flows-est-raw.json.gz, keine Paare); Schätzung erst nach Tagesende → flows-est/<Tag>.json (estimated: true, ≥ 2 erwartete Fahrten,
+    // (flows-est-raw.json.gz, keine Paare); Schätzung erst nach Tagesende → flows-est/<Tag>.json (estimated: true, ≥ FE.EST_MIN = 2 erwartete Fahrten,
     // Top 300 je Gemeinde, 500-m-Zellen, Gütekennzahl aus der Validierung an stabilen Kennungen) + flows-est/index.json, 30 Tage
     try {
       const eDir = path.join(DATA, 'flows-est'), eRawFile = path.join(TRACK_DIR, 'flows-est-raw.json.gz'), eIdxFile = path.join(eDir, 'index.json');
@@ -1054,11 +1060,12 @@ try {
       const st = muniOut[v.ags]?.state; if (!st) continue; const o = S(st);
       const e = tr.state.v[vkey(v.operator, v.rawId)];
       // Standzeit null, wenn sie für die Quelle unbrauchbar ist (Z5); Feld 13 standzeitMindestens 1 = seit Beginn der Verfolgung unbewegt (Mindestwert, Z6)
-      const idleOk = e && !tr.idleUnusable?.[v.sourceId], idleMin = idleOk ? Math.round((now - e[8]) / 60e3) : null;
+      // veröffentlicht wird nur die Klasse (OPS.idleClassMin: unter 6 h, 6–24 h, ganze Tage), nicht die Minute des letzten Fahrtendes
+      const idleOk = e && !tr.idleUnusable?.[v.sourceId], idleMin = idleOk ? OPS.idleClassMin(Math.round((now - e[8]) / 60e3)) : null;
       const idleMinOnly = idleOk && T.isCensored(T.censorLimit(tr.state), e[8], e[7]) ? 1 : null;
       // Feld 11 reichweiteSchwelleKm (null = Standard), Feld 12 reichweiteKonstant (1 = Reichweite der Quelle konstant); Felder am Zeilenende ohne
       // Wert entfallen (Leser werten fehlende Felder als null), explizites null nur vor einem späteren Wert
-      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, v.rangeKm != null ? +v.rangeKm.toFixed(1) : null, idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null, idleMinOnly];
+      const row = [+v.lat.toFixed(5), +v.lon.toFixed(5), idx(o.ops, v.operator), TYPES.indexOf(v.type), (v.reserved ? 1 : 0) | (v.disabled ? 2 : 0), v.batteryPct != null && !v.batteryDerived ? Math.round(v.batteryPct) : null, OPS.rangePublic(v), idleMin, idx(o.munis, v.ags), v.rangeDerived ? 1 : 0, v.rangeLimitKm ?? null, v.rangeFlat ? 1 : null, idleMinOnly];
       while (row.length && row[row.length - 1] == null) row.pop();
       o.vehicles.push(row);
     }
@@ -1067,7 +1074,7 @@ try {
       o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0, s.isVirtual === true ? 1 : s.isVirtual === false ? 0 : null]);
     }
     let bytes = 0;
-    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, standzeitMin ist ein Mindestwert; standzeitMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitKlasseMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): standzeitKlasseMin = Untergrenze der Standzeit-Klasse in Minuten (0 = unter 6 h, 360 = 6–24 h, ab 1440 ganze Tage; minutengenau wird nicht veröffentlicht, weil sie zeigt, wann an einer Adresse die letzte Fahrt endete), reichweiteKm ganze km (Quellen mit eigener Reichweiten-Skala, Feld reichweiteSchwelleKm gesetzt: 0,1 km), reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, die Klasse ist ein Mindestwert; standzeitKlasseMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
   }
   // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
@@ -1107,7 +1114,8 @@ try {
   await writeFile(path.join(DATA, 'idle.json'), JSON.stringify({ at: now, version: T.IDLE_VERSION, buckets: T.IDLE_LABELS, fields: 'groups: Anzahl je Klasse, dann Summe; censored: davon Mindestwerte je Klasse', trackStart: tr.state.trackStart ?? null, groups: tr.idle, censored: tr.idleCens, unusable: Object.keys(tr.idleUnusable || {}).sort() }));
   // Lange Standzeiten: je Gemeinde max. 400 Punkte (gleichmäßig ausgedünnt)
   const byAgs = new Map(); for (const p of tr.idleLong) { if (!byAgs.has(p.ags)) byAgs.set(p.ags, []); byAgs.get(p.ags).push(p); }
-  const longOut = []; for (const [, list] of byAgs) { list.sort((a, b) => b.hours - a.hours); const step = Math.max(1, Math.ceil(list.length / 400)); for (let i = 0; i < list.length; i += step) longOut.push(list[i]); }
+  // hours nur als ganze Tage (Klasse wie ops/<Land>.json: OPS.idleClassMin), nicht stundengenau
+  const longOut = []; for (const [, list] of byAgs) { list.sort((a, b) => b.hours - a.hours); const step = Math.max(1, Math.ceil(list.length / 400)); for (let i = 0; i < list.length; i += step) longOut.push({ ...list[i], hours: OPS.idleClassMin(list[i].hours * 60) / 60 }); }
   await writeFile(path.join(DATA, 'idle-long.json'), JSON.stringify({ at: now, total: tr.idleLong.length, points: longOut }));
   await writeFile(path.join(DATA, 'stations-quota.json'), JSON.stringify({ at: now, days: 7, fields: ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns', 'virtual'], stations: T.stationQuota(tr.state) }));
   await writeFile(path.join(DATA, 'reliability.json'), JSON.stringify({ at: now, days: 7, sources: T.reliability(tr.state) }));
@@ -1179,12 +1187,15 @@ if (boundaries) {
   for (const r of counted) { const k = r.licenseId || r.licenseUrl || 'ohne Angabe'; if (!byLic.has(k)) byLic.set(k, []); byLic.get(k).push(r); }
   const lic = [...byLic].sort((a, b) => b[1].length - a[1].length);
   const sa = counted.filter(r => /^CC-BY-SA/.test(r.licenseId || ''));
+  const noLic = counted.filter(r => !r.licenseId && !r.licenseUrl), badLic = counted.filter(r => !r.licenseId && /privacy|datenschutz/i.test(r.licenseUrl || ''));
   const lines = [
     '# Daten und Lizenzen', '',
     `Stand: ${new Date(now).toISOString()} · erzeugt vom Sammler (scripts/collect.mjs) bei jedem Lauf.`, '',
     'Dieser Datenzweig enthält aus offenen Quellen abgeleitete Daten: Bestände, Ereignisse (Fahrten, Umsetzungen, Akkutausch), Zellen, Archiv und Momentaufnahmen. Die Lizenzangaben stammen aus den Feeds (GBFS `system_information`: `license_id`, `license_url`, `attribution_organization_name`) bzw. aus den Verzeichnissen; maßgeblich sind die Bedingungen der jeweiligen Quelle. Je Quelle stehen sie auch in `latest.json` → `sources[]` (`licenseId`, `licenseUrl`, `attribution`, `attributionUrl`).', '',
     '## Veröffentlichung von Ereignissen und Zellen', '',
-    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht; Kennungen bleiben privat (HMAC mit privatem Salt).', '',
+    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Läge dort weniger als 3 (also womöglich eine einzelne Zelle), fällt zusätzlich die kleinste veröffentlichte Zelle des Bands in `below` (`suppress: 2`). Start-Ziel-Ströme (`flows/<Tag>.json`) erscheinen erst nach Tagesende und nur für Zellenpaare mit mindestens ' + T.FLOW_MIN + ' Fahrten am Tag; geschätzte Ströme (`flows-est/`) ab ' + FE.EST_MIN + ' erwarteten Fahrten. Fahrzeugkennungen werden nicht veröffentlicht; sie bleiben privat (HMAC mit privatem Salt).', '',
+    '## Live-Bestand und Momentaufnahmen', '',
+    'Veröffentlicht wird der jeweils letzte Bestand ohne Kennung: `ops/<Land>.json` (je sichtbarem Fahrzeug Position, Anbieter, Art, Ladestand, Reichweite, Standzeit-Klasse) und `snapshot/<Quelle>.json` (Bestand von Quellen, die der Browser nicht selbst lesen kann). Reichweite in ganzen km (Quellen mit eigener Reichweiten-Skala: 0,1 km). Die Standzeit erscheint nur als Klasse: unter 6 h, 6–24 h, danach ganze Tage (auch `idle-long.json`). Eine minutengenaue Standzeit zeigte, wann an einer Adresse die letzte Fahrt endete. Frühere Bestände bleiben nicht im Datenzweig (ein Commit je Lauf ohne Vorgänger).', '',
     '## Grundlagen', '',
     `- Gemeindegrenzen: ${md(boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
@@ -1200,7 +1211,8 @@ if (boundaries) {
     '', '## Weitergabe unter gleichen Bedingungen', '',
     sa.length ? `${sa.length} Quellen stehen unter CC BY-SA (${[...new Set(sa.map(r => md(r.operator)))].join(', ')}). Daten, die aus diesen Quellen abgeleitet sind (Bestände, Ereignisse, Zellen, Archiv der betroffenen Gebiete und Anbieter), stehen unter CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).` : 'In diesem Stand liefert keine Quelle Daten unter CC BY-SA.',
     'Aus OpenStreetMap abgeleitete Datenbankteile (`context/`) stehen unter der ODbL 1.0.',
-    '', 'Quellen ohne Lizenzangabe sind oben als „ohne Angabe“ geführt; für sie gelten die Nutzungsbedingungen des jeweiligen Betreibers bzw. Verzeichnisses.', '',
+    '', `Quellen ohne Lizenzangabe sind oben als „ohne Angabe“ geführt (${noLic.length}${noLic.length ? `: ${[...new Set(noLic.map(r => md(r.operator)))].join(', ')}` : ''}). Ihre Lizenz ist ungeklärt; sie gelten hier nicht als gemeinfrei (CC0). Maßgeblich sind die Nutzungsbedingungen des jeweiligen Betreibers bzw. Verzeichnisses.`,
+    ...(badLic.length ? [`Bei ${badLic.length} Quelle${badLic.length === 1 ? '' : 'n'} (${[...new Set(badLic.map(r => md(r.operator)))].join(', ')}) führt der Lizenz-Link zu einer Datenschutzerklärung, nicht zu einer Lizenz: Lizenz ebenfalls ungeklärt.`] : []), '',
   ];
   await writeFile(path.join(DATA, 'DATA-LICENSE.md'), lines.join('\n'));
 }
@@ -1214,5 +1226,13 @@ if (boundaries) {
   doc.runs.push([now, Date.now() - now, sourceOut.length, st.live || 0, st.delayed || 0, st.stale || 0, failing, dv.vehicles.length, ds.stations.length, runEv?.start ?? null, runEv?.end ?? null, runEv?.rot ?? null, process.env.GITHUB_EVENT_NAME || 'lokal', tr.gap ? 0 : 1, RULE]);
   doc.runs = doc.runs.filter(r => now - r[0] <= 7 * 86400e3).slice(-600);
   await writeFile(f, JSON.stringify(doc));
+  // Ausfall-Wächter (HEALTH_FILE, z. B. für Healthchecks.io im Workflow): Zeile 1 „ok“ oder „fail“, Zeile 2 Grund. „fail“, wenn weniger als
+  // HEALTH.minShare der Quellen aktuell oder verzögert liefern als im Median der letzten 7 Tage (grüner Lauf mit Teilausfall)
+  if (process.env.HEALTH_FILE) {
+    const okOf = (r) => (r[3] || 0) + (r[4] || 0), prev = doc.runs.slice(0, -1).map(okOf).sort((a, b) => a - b);
+    const med = prev.length >= 12 ? prev[Math.floor(prev.length / 2)] : null, cur = okOf(doc.runs[doc.runs.length - 1]);
+    const fail = med != null && cur < HEALTH.minShare * med;
+    await writeFile(process.env.HEALTH_FILE, `${fail ? 'fail' : 'ok'}\n${cur} Quellen aktuell/verzögert${med != null ? ` (Median 7 Tage ${med}, Schwelle ${Math.ceil(HEALTH.minShare * med)})` : ''} · ${dv.vehicles.length} Fahrzeuge · ${((Date.now() - now) / 1000).toFixed(0)} s\n`);
+  }
 }
 log(`fertig in ${((Date.now() - now) / 1000).toFixed(1)} s · Status:`, JSON.stringify(statusCounts));

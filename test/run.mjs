@@ -65,7 +65,7 @@ await writeFile(path.join(tmp, 's4i.json'), JSON.stringify({ ...cat, auth_source
 await writeFile(path.join(tmp, 'ref.json'), JSON.stringify({ obergrenzen: [{ ags: '08416041', ort: 'Tübingen (Test)', type: 'scooter', gesamt: 1, jeAnbieter: 5, quelle: 'Test', url: 'https://example.org' }] }));
 // Städte laut Anbieter (Abdeckung): Bolt nennt Tübingen und Stuttgart, Dott „Tubingen“ (englische Umschrift)
 await writeFile(path.join(tmp, 'cities.json'), JSON.stringify({ erstellt: '2026-11-01', anbieter: [{ name: 'Bolt', quelle: 'https://example.org/bolt', staedte: [{ ort: 'Tübingen' }, { ort: 'Stuttgart' }] }, { name: 'Dott', quelle: 'https://example.org/dott', staedte: [{ ort: 'Tubingen' }] }] }));
-const env3 = { TRACK_DIR, REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'), ZONES_FILE: '',
+const env3 = { TRACK_DIR, HEALTH_FILE: path.join(tmp, 'health.txt'), REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'), ZONES_FILE: '',
   ZONE_WATCH: JSON.stringify({ type: 'Feature', properties: { name: 'Testzone', limits: { scooter: { maximum: 777 } } }, geometry: { type: 'Polygon', coordinates: [[[8.9, 48.4], [9.3, 48.4], [9.3, 48.9], [8.9, 48.9], [8.9, 48.4]]] } }) };
 const t3 = Date.now();
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's3.json') });
@@ -265,12 +265,17 @@ assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.co
   await writeFile(path.join(TRACK_DIR, 'flows-est-raw.json.gz'), gzipSync(JSON.stringify({ version: 1, day: yd, tail: [], learn: {}, vSame: { scooter: 4 }, vLate: {}, lost: 0, runs: [estRun(ydAt - 20 * 60e3, null, { gap: 1 }),
     estRun(ydAt, 20 * 60e3, { s: { 'Voi|scooter': { '08416041|19408:2586': 6 }, 'Bolt|scooter': { '08416041|19408:2586': 5 } }, e: { 'Voi|scooter': { '08416041|19412:2590': 5 }, 'Bolt|scooter': { '08416041|19412:2590': 5 } },
       vs: { 'Bolt|scooter': { '08416041|19408:2586': 4 } }, ve: { 'Bolt|scooter': { '08416041|19412:2590': 3, '08416041|19409:2587': 1 } } })] })));
+  // ältere Tagesdatei mit Schwelle 2 (Stand bis 6.11.2026): der Sammler zieht sie auf T.FLOW_MIN nach
+  const yd2 = T.dayOf(Date.now() - 2 * 86400e3); await mkdir('test/out/flows', { recursive: true });
+  await writeFile(`test/out/flows/${yd2}.json`, JSON.stringify({ version: 1, day: yd2, min: 2, fields: T.FLOW_FIELDS, flows: [['08416041', '1:1', '2:2', 'Bolt', 'scooter', 1, 3, 600, 900], ['08416041', '3:3', '4:4', 'Bolt', 'scooter', 1, 6, 1200, 1800]],
+    munis: { '08416041': { trips: 10, shown: 9, below: 1, cut: 0, ops: { Bolt: 10 } } }, total: { trips: 10, shown: 9, below: 1, cut: 0 } }));
   await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
-  const fl = JSON.parse(await readFile('test/out/flows/index.json', 'utf8')), pub = JSON.parse(await readFile(`test/out/flows/${yd}.json`, 'utf8'));
+  const fl = JSON.parse(await readFile('test/out/flows/index.json', 'utf8')), pub = JSON.parse(await readFile(`test/out/flows/${yd}.json`, 'utf8')), old2 = JSON.parse(await readFile(`test/out/flows/${yd2}.json`, 'utf8'));
+  assert(old2.min === T.FLOW_MIN && old2.flows.length === 1 && old2.flows[0][6] === 6 && old2.munis['08416041'].shown === 6 && old2.munis['08416041'].below === 4 && old2.total.trips === 10, 'flows/<vorgestern>.json (Schwelle 2) auf ≥ 5 Fahrten je Zeile nachgezogen');
   const rawT = JSON.parse(gunzipSync(await readFile(path.join(TRACK_DIR, 'flows-raw.json.gz'))).toString('utf8'));
   const tripsT = Object.values(rawT.rows).reduce((a, r) => a + Object.values(r).reduce((x, v) => x + v[0], 0), 0);
-  assert(fl.days.join() === yd && fl.collecting === T.dayOf(Date.now()) && fl.min === 2 && fl.fields.join() === T.FLOW_FIELDS.join(), 'flows/index.json: abgeschlossener Tag gelistet, heute in Sammlung');
-  assert(JSON.stringify(pub.flows) === JSON.stringify([['08416041', '19408:2586', '19412:2590', 'Bolt', 'scooter', 1, 3, 900, 3000]]) && pub.munis['08416041'].below === 2 && pub.total.trips === 5 && pub.stable['08416041'][0] === 'Bolt', 'flows/<gestern>.json: nur Zeilen ≥ 2 Fahrten, Einzelfahrten als Summe unter Mindestschwelle');
+  assert(fl.days.join() === `${yd2},${yd}` && fl.collecting === T.dayOf(Date.now()) && fl.min === T.FLOW_MIN && fl.fields.join() === T.FLOW_FIELDS.join(), 'flows/index.json: abgeschlossene Tage gelistet, heute in Sammlung, Schwelle 5');
+  assert(pub.min === 5 && pub.flows.length === 0 && pub.munis['08416041'].below === 5 && pub.total.trips === 5 && pub.stable['08416041'][0] === 'Bolt', 'flows/<gestern>.json: Paar mit 3 Fahrten unter der Schwelle 5 → nur als Summe (below)');
   const run4b = JSON.parse(await readFile('test/out/runs.json', 'utf8')).runs.slice(-1)[0];
   assert(rawT.day === T.dayOf(Date.now()) && tripsT >= 4 && tripsT === run4b[9] && Object.keys(rawT.rows).every(k => /^\d{8}\|.+\|.+\|[0-5]$/.test(k)) && !existsSync('test/out/flows-raw.json.gz') && !existsSync('test/out/track'), `Tagessumme heute privat: ${tripsT} Fahrten mit Start und Ziel = gezählte Fahrten des Laufs (gesperrtes a2 nicht), nichts davon im Datenzweig`);
   const eIdx = JSON.parse(await readFile('test/out/flows-est/index.json', 'utf8')), est = JSON.parse(await readFile(`test/out/flows-est/${yd}.json`, 'utf8'));
@@ -322,6 +327,25 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
   const stale = await readFile(f, 'utf8'); ex.st.weatherDown = true;
   await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0', WEATHER_URL: ex.base });
   assert(wDay.length >= 1 && await readFile(f, 'utf8') === stale, 'Wetter-Cache: Dienst antwortet 500 → alte Datei bleibt unverändert'); ex.st.weatherDown = false;
+}
+// Veröffentlichungstest: was im Datenzweig landet, hält die Datenschutz-Regeln ein (kehrt mit einer neuen Funktion keine Lücke zurück)
+{
+  const files = async (d) => (await readdir(d).catch(() => [])).filter(n => n.endsWith('.json')).map(n => path.join(d, n));
+  const isCls = (m) => m == null || m === 0 || m === 360 || (m > 0 && m % 1440 === 0);
+  let veh = 0, badIdle = 0, badRange = 0;
+  for (const f of await files('test/out/ops')) for (const r of JSON.parse(await readFile(f, 'utf8')).vehicles || []) { veh++; if (!isCls(r[7])) badIdle++; if (r[6] != null && r[10] == null && !Number.isInteger(r[6])) badRange++; }
+  let snapV = 0; for (const f of await files('test/out/snapshot')) for (const r of JSON.parse(await readFile(f, 'utf8')).vehicles || []) { snapV++; if (r[5] != null && !Number.isInteger(r[5]) && r[5] !== +r[5].toFixed(1)) badRange++; }
+  const il = existsSync('test/out/idle-long.json') ? JSON.parse(await readFile('test/out/idle-long.json', 'utf8')).points || [] : [];
+  const badLong = il.filter(p => p.hours % 24 !== 0).length;
+  let rows = 0, lowRows = 0; for (const f of (await files('test/out/flows')).filter(f => !f.endsWith('index.json'))) { const d = JSON.parse(await readFile(f, 'utf8')); for (const r of d.flows || []) { rows++; if (r[6] < T.FLOW_MIN) lowRows++; } }
+  let cellDocs = 0, unsup = 0;
+  for (const d of (await readdir('test/out/cells').catch(() => [])).filter(n => /^\d{4}-\d{2}-\d{2}$/.test(n))) for (const f of await files(path.join('test/out/cells', d))) { cellDocs++; if (JSON.parse(await readFile(f, 'utf8')).suppress !== T.SUPPRESS_VERSION) unsup++; }
+  assert(veh > 0 && badIdle === 0 && badRange === 0 && badLong === 0, `Veröffentlichung: Standzeit nur als Klasse, Reichweite ganze km (${veh} Fahrzeuge ops, ${snapV} Momentaufnahme, ${il.length} lange Standzeiten)`);
+  assert(lowRows === 0 && cellDocs > 0 && unsup === 0, `Veröffentlichung: keine Stromzeile unter ${T.FLOW_MIN} (${rows} Zeilen), alle Zellendateien mit Sekundärunterdrückung (${cellDocs})`);
+  const lic = await readFile('test/out/DATA-LICENSE.md', 'utf8');
+  const hl = (await readFile(path.join(tmp, 'health.txt'), 'utf8')).split('\n');
+  assert(['ok', 'fail'].includes(hl[0]) && /Quellen aktuell\/verzögert/.test(hl[1]), `Ausfall-Wächter: HEALTH_FILE mit Status und Grund (${hl.join(' | ').trim()})`);
+  assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
 }
 ex.close(); srv.kill();
 await rm(tmp, { recursive: true, force: true });

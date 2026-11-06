@@ -367,7 +367,7 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   assert(rc.split('\n')[0].endsWith(';prioritaet;prio_rang;grund') && dropLine.endsWith(`;${st0.prio};${st0.rank};${O.stopReason(st0)}`) && /Fehlmenge 6|Spot leer/.test(O.stopReason(st0)), 'Touren-CSV: Priorität, Rang und Grund je Stopp');
   const gjr = O.planGeoJson([], two.runs, D2).features.find(f => f.properties.kind === 'stop' && f.properties.type === 'drop');
   assert(gjr.properties.priority === st0.prio && gjr.properties.priorityRank === st0.rank && gjr.properties.reason === O.stopReason(st0), 'GeoJSON: Priorität, Rang und Grund je Stopp');
-  assert(O.stopReason({ type: 'swap', why: { battery: 12, idleH: 30 } }, 'en') === 'battery 12 %, idle 30 h' && O.stopReason({ type: 'pickup', station: 'X', why: { full: true } }) === 'Station voll', 'Grundtext: Akku und Standzeit, volle Station');
+  assert(O.stopReason({ type: 'swap', why: { battery: 12, idleH: 30 } }, 'en') === 'battery 12 %, idle 1–2 days' && O.stopReason({ type: 'pickup', station: 'X', why: { full: true } }) === 'Station voll', 'Grundtext: Akku und Standzeit, volle Station');
 }
 // --- Analyse-CSV mit allen Zahlen
 {
@@ -638,5 +638,15 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const csv = O.violationsCsv(r).split('\n'), en = O.violationsCsv(r, { lang: 'en' }).split('\n');
   assert(csv[0] === O.COLLECT_CSV_FIELDS.join(';') && csv.length === 6 && csv[1].startsWith('1;Bolt;Abstellverbot;') && csv[1].includes(`;"'=HYPERLINK(""x"")";Abstellverbot;130;1500;1;50;20;scooter`) && csv[2].startsWith('2;Bolt;Pflicht-Abstellzone ohne Station;') && csv[2].includes(';Nur Stationen;Pflicht-Abstellzone;70;900;;50;'),
     'CSV: Spalte art, Formel-Schutz für Zonennamen aus dem Feed, Stationsabstand, Standzeit mindestens 1/leer');
-  assert(en[0] === 'rank,operator,kind,lat,lon,zone_id,zone_name,zone_kind,station_distance_m,idle_min,idle_at_least,battery_pct,range_km,vehicle_type' && en[2].includes('mandatory parking zone without station') && en[5].includes('no-riding zone'), 'CSV englisch: Komma, englische Spalten, Art und Zonenart');
+  assert(en[0] === 'rank,operator,kind,lat,lon,zone_id,zone_name,zone_kind,station_distance_m,idle_from_min,idle_at_least,battery_pct,range_km,vehicle_type' && en[2].includes('mandatory parking zone without station') && en[5].includes('no-riding zone'), 'CSV englisch: Komma, englische Spalten, Art und Zonenart');
+}
+// Veröffentlichte Standzeit nur als Klasse, Reichweite in ganzen km (ops/<Land>.json, snapshot/, idle-long.json)
+{
+  const cls = [null, 0, 40, 359, 360, 1439, 1440, 2879, 2880, 8700].map(O.idleClassMin);
+  assert(JSON.stringify(cls) === JSON.stringify([null, 0, 0, 0, 360, 360, 1440, 1440, 2880, 8640]), `Standzeit-Klassen: unter 6 h → 0, 6–24 h → 360, danach ganze Tage (${cls})`);
+  assert(O.idleClassText(40) === 'unter 6 h' && O.idleClassText(400) === '6–24 h' && O.idleClassText(3000) === '2–3 Tage' && O.idleClassText(1500, { atLeast: true }) === '≥ 1 Tag' && O.idleClassText(3000, { en: true }) === '2–3 days' && O.idleClassText(null) === '–',
+    'Standzeit-Klasse als Text (de/en, Mindestwert)');
+  assert(O.rangePublic({ rangeKm: 23.46 }) === 23 && O.rangePublic({ rangeKm: 1.26, rangeLimitKm: 2.4 }) === 1.3 && O.rangePublic({ rangeKm: null }) === null && O.rangePublic({}) === null, 'Reichweite: ganze km, eigene Skala 0,1 km');
+  const v = (idleMin) => ({ lat: 48.5, lon: 9.05, operator: 'Dott', type: 'scooter', battery: 80, idleMin: O.idleClassMin(idleMin) });
+  assert(O.vehiclePrio('pickup', v(30 * 60)).prio === O.vehiclePrio('pickup', v(24 * 60)).prio && O.vehiclePrio('pickup', v(25 * 60)).prio > O.vehiclePrio('pickup', v(23 * 60)).prio, 'Disposition: 24-h-Grenze wirkt auch mit Klassen');
 }

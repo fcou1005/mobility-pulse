@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mw5e5x6d';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mw5e5x6d';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mw5gkh0g';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mw5gkh0g';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -48,6 +48,27 @@ export const DEFAULTS = {
   // detour: Rückfall ohne Straßenmatrix = Luftlinie × 1,35 (Umwegfaktor Stadtverkehr). prioLambda: Gewicht der Priorität in der Reihenfolge (PRIO_LEVELS)
   prioLambda: 1,
 };
+// Veröffentlichte Standzeit (ops/<Land>.json, idle-long.json) nur als Klasse: eine minutengenaue Standzeit zeigt, wann an einer Adresse die
+// letzte Fahrt endete. Wert = Untergrenze der Klasse in Minuten: 0 = unter 6 h, 360 = 6–24 h, ab 24 h ganze Tage (1440 = 1–2 Tage, 2880 = 2–3 Tage …).
+// Die Schwellen der Disposition (6 h Bonus, 24 h Überschuss) liegen auf Klassengrenzen und wirken unverändert.
+export const IDLE_CLASS = { minH: 6, dayH: 24 };
+export function idleClassMin(min) {
+  if (min == null || !Number.isFinite(+min)) return null;
+  const m = Math.max(0, +min), lo = IDLE_CLASS.minH * 60, day = IDLE_CLASS.dayH * 60;
+  return m < lo ? 0 : m < day ? lo : Math.floor(m / day) * day;
+}
+/** Klasse als Text: „unter 6 h“, „6–24 h“, „1–2 Tage“; atLeast (Mindestwert, seit Beginn der Verfolgung unbewegt): „≥ 6 h“, „≥ 2 Tage“ */
+export function idleClassText(min, { en = false, atLeast = false } = {}) {
+  const c = idleClassMin(min); if (c == null) return '–';
+  const lo = IDLE_CLASS.minH * 60, day = IDLE_CLASS.dayH * 60, d = c / day;
+  if (c === 0) return en ? `under ${IDLE_CLASS.minH} h` : `unter ${IDLE_CLASS.minH} h`;
+  if (c < day) return atLeast ? `≥ ${IDLE_CLASS.minH} h` : `${c / 60}–${IDLE_CLASS.dayH} h`;
+  if (atLeast) return en ? `≥ ${d} ${d === 1 ? 'day' : 'days'}` : `≥ ${d} ${d === 1 ? 'Tag' : 'Tage'}`;
+  return en ? `${d}–${d + 1} days` : `${d}–${d + 1} Tage`;
+}
+/** Veröffentlichte Reichweite: ganze km (feine Werte helfen, ein Fahrzeug am neuen Ort wiederzuerkennen); Quellen mit eigener Reichweiten-Skala
+ *  (rangeLimitKm, Schwelle aus dem 95. Perzentil) behalten 0,1 km, sonst stimmte ihre Akkutausch-Schwelle nicht mehr */
+export const rangePublic = (v) => (v?.rangeKm == null || !Number.isFinite(+v.rangeKm) ? null : v.rangeLimitKm != null ? +(+v.rangeKm).toFixed(1) : Math.round(+v.rangeKm));
 // Regler „Priorität ↔ Strecke“: Stufe → λ (0 = nur Kilometer). Standard Stufe 2 = λ 1: ein Meter, den die dringenden Stopps im Mittel
 // früher erreicht werden, ist einen Meter Umweg wert. Stufe 4 (λ 4) kommt der reinen Prioritätsfolge nahe, ohne Zickzack.
 export const PRIO_LEVELS = [0, 0.5, 1, 2, 4];
@@ -979,7 +1000,7 @@ export function spotsAnalysisCsv(spots, needs = null, { horizonH = DEFAULTS.hori
 export function stopReason(s, lang = 'de') {
   const w = s?.why || {}, en = lang === 'en', out = [];
   if (s.type === 'swap') { if (w.battery != null) out.push(en ? `battery ${w.battery} %` : `Akku ${w.battery} %`); else if (w.rangeKm != null) out.push(en ? `range ${w.rangeKm} km` : `Reichweite ${w.rangeKm} km`); }
-  if (w.idleH != null && s.type !== 'drop' && !s.station) out.push(en ? `idle ${w.idleH} h` : `steht ${w.idleH} h`);
+  if (w.idleH != null && s.type !== 'drop' && !s.station) out.push(`${en ? 'idle' : 'steht'} ${idleClassText(w.idleH * 60, { en })}`);
   if (s.type === 'drop') { if (s.station) out.push(w.empty ? (en ? 'station empty' : 'Station leer') : (en ? `shortfall ${w.need}` : `Fehlmenge ${w.need}`)); else if (w.empty) out.push(en ? 'spot empty' : 'Spot leer'); else if (w.need) out.push(en ? `shortfall ${w.need}` : `Fehlmenge ${w.need}`); }
   if (s.type === 'pickup' && s.station && w.full) out.push(en ? 'station full' : 'Station voll');
   return out.join(', ');
@@ -991,7 +1012,7 @@ export function runsCsv(runs, depot, lang = 'de') {
   for (const r of runs) {
     rows.push([r.id, r.kind, 0, 'depot', depot.lat.toFixed(6), depot.lon.toFixed(6), '', `${r.km} km · ${r.totalMin} min`, '', '', '']);
     const en = lang === 'en';
-    r.stops.forEach((s, i) => rows.push([r.id, r.kind, i + 1, s.type, s.lat.toFixed(6), s.lon.toFixed(6), s.count, s.type === 'drop' ? (en ? `Spot ${s.spotRank} (need ${s.target}${s.need != null ? `, fleet ${s.have}, shortfall ${s.need}` : ''})` : `Spot ${s.spotRank} (Bedarf ${s.target}${s.need != null ? `, Bestand ${s.have}, Fehlmenge ${s.need}` : ''})`) : s.battery?.length ? `${en ? 'Battery' : 'Akku'} ${s.battery.join('/')} %` : s.idleMaxH != null ? `${en ? 'idle' : 'steht'} ${s.idleMaxH} h` : '',
+    r.stops.forEach((s, i) => rows.push([r.id, r.kind, i + 1, s.type, s.lat.toFixed(6), s.lon.toFixed(6), s.count, s.type === 'drop' ? (en ? `Spot ${s.spotRank} (need ${s.target}${s.need != null ? `, fleet ${s.have}, shortfall ${s.need}` : ''})` : `Spot ${s.spotRank} (Bedarf ${s.target}${s.need != null ? `, Bestand ${s.have}, Fehlmenge ${s.need}` : ''})`) : s.battery?.length ? `${en ? 'Battery' : 'Akku'} ${s.battery.join('/')} %` : s.idleMaxH != null ? `${en ? 'idle' : 'steht'} ${idleClassText(s.idleMaxH * 60, { en })}` : '',
       s.prio ?? '', s.rank ?? '', stopReason(s, lang)]));
   }
   return opsCsv([head, ...rows], lang);
@@ -1182,9 +1203,10 @@ export function parkingViolations(fleet, zonesDoc, { operator = null, buffers = 
   return { operator, features, zones: { ban: zones.ban.length, mpz: zones.mpz.length, ok: zones.ok.length }, buffers: [...buffers], stationM, mpzStationM, counts, list, zonesHit: [...hit.values()] };
 }
 // Einsammelliste als CSV (Formel-Schutz über csvCell): Deutsch mit Semikolon, Englisch mit Komma und englischen Spaltennamen
+// standzeit_ab_min = Untergrenze der Standzeit-Klasse (veröffentlicht nur als Klasse, IDLE_CLASS)
 // art = Art des Befunds (Abstellverbot | Pflicht-Abstellzone ohne Station), zonenart = Regel der Zone, station_abstand_m = nächste eigene Station
-export const COLLECT_CSV_FIELDS = ['rang', 'anbieter', 'art', 'lat', 'lon', 'zone_id', 'zone_name', 'zonenart', 'station_abstand_m', 'standzeit_min', 'standzeit_mindestens', 'akku_prozent', 'reichweite_km', 'fahrzeugart'];
-const COLLECT_CSV_EN = { rang: 'rank', anbieter: 'operator', art: 'kind', zonenart: 'zone_kind', station_abstand_m: 'station_distance_m', standzeit_min: 'idle_min', standzeit_mindestens: 'idle_at_least', akku_prozent: 'battery_pct', reichweite_km: 'range_km', fahrzeugart: 'vehicle_type' };
+export const COLLECT_CSV_FIELDS = ['rang', 'anbieter', 'art', 'lat', 'lon', 'zone_id', 'zone_name', 'zonenart', 'station_abstand_m', 'standzeit_ab_min', 'standzeit_mindestens', 'akku_prozent', 'reichweite_km', 'fahrzeugart'];
+const COLLECT_CSV_EN = { rang: 'rank', anbieter: 'operator', art: 'kind', zonenart: 'zone_kind', station_abstand_m: 'station_distance_m', standzeit_ab_min: 'idle_from_min', standzeit_mindestens: 'idle_at_least', akku_prozent: 'battery_pct', reichweite_km: 'range_km', fahrzeugart: 'vehicle_type' };
 export function violationsCsv(res, { lang = 'de' } = {}) {
   const en = lang === 'en', mpz = (v) => v.kind === 'mpz';
   const rows = (res?.list || []).map((v, i) => [i + 1, res.operator, mpz(v) ? (en ? 'mandatory parking zone without station' : 'Pflicht-Abstellzone ohne Station') : (en ? 'no-parking zone' : 'Abstellverbot'), v.lat.toFixed(6), v.lon.toFixed(6), v.zone.id, v.zone.name ?? '',

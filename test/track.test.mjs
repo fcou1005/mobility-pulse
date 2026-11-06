@@ -284,7 +284,7 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
     ['A1|Bolt|scooter|2', [['1:1>2:2', 1, 180e3, 700]]], ['A1|Lime|bike|4', [['7:7>8:8', 1, 240e3, 600]]], ['A1|Bolt|scooter|5', [['7:7>8:8', 1, 360e3, 1500]]]]), { day: '2026-11-10', stable: { A1: ['Bolt'], A2: ['DB Connect'] } });
   assert(raw.runs === 2 && raw.rows['A1|Lime|scooter|1']['1:1>2:2'][0] === 2 && raw.stable.A1.join() === 'Bolt,Lime' && raw.stable.A2[0] === 'DB Connect', 'mergeFlows: Läufe, Zählung und stabile Anbieter summiert');
   assert(T.mergeFlows(raw, new Map(), { day: '2026-11-11' }).runs === 1 && T.mergeFlows(raw, new Map(), { day: '2026-11-11' }).day === '2026-11-11' && !Object.keys(T.mergeFlows(raw, new Map(), { day: '2026-11-11' }).rows).length, 'mergeFlows: neuer Tag beginnt neue Summe');
-  const pub = T.publishFlows(raw, { at: 1 });
+  const pub = T.publishFlows(raw, { at: 1, min: 2 }); // Aggregationslogik mit Schwelle 2 (veröffentlicht wird mit T.FLOW_MIN = 5)
   const R = (from, to) => pub.flows.filter(r => r[1] === from && r[2] === to);
   assert(pub.fields.join() === T.FLOW_FIELDS.join() && pub.cell[0] === T.CELL_LAT && pub.day === '2026-11-10' && pub.min === 2, 'publishFlows: Felder, Zellmaß, Tag, Mindestschwelle');
   assert(pub.flows.every(r => r[6] >= 2), 'keine veröffentlichte Zeile unter 2 Fahrten');
@@ -293,11 +293,16 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   assert(JSON.stringify(R('7:7', '8:8').map(r => r.slice(3, 7))) === JSON.stringify([[null, null, null, 2]]), 'Zellenpaar 7: verschiedene Anbieter, Arten und Bänder → ganz zusammengefasst');
   assert(!R('5:5', '6:6').length && pub.munis.A1.below === 1 && pub.munis.A1.trips === 9 && pub.munis.A1.shown === 8 && pub.total.trips === pub.total.shown + pub.total.below + pub.total.cut, 'Einzelfahrt unter Mindestschwelle nur als Summe; trips = shown + below + cut');
   assert(pub.munis.A1.ops.Lime === 6 && pub.munis.A1.ops.Bolt === 2 && pub.munis.A1.ops.Voi === 1 && pub.stable.A2[0] === 'DB Connect', 'Fahrten je Anbieter und stabile Anbieter je Gemeinde');
-  const top = T.publishFlows(raw, { top: 2 });
+  const top = T.publishFlows(raw, { top: 2, min: 2 });
   assert(top.flows.length === 2 && top.munis.A1.cut === 4 && top.munis.A1.shown === 4 && top.munis.A1.below === 1 && top.flows[0][6] >= top.flows[1][6], 'Top-N je Gemeinde: Rest als „außerhalb Top“');
   const st = T.stableOps({ s1: 'stable', s2: 'rotating', s3: 'stable' }, [{ id: 's1', operator: 'Lime', municipalities: ['A1', 'A2'] }, { id: 's2', operator: 'Voi', municipalities: ['A1'] }, { id: 's3', operator: 'DB Connect', municipalities: ['A1'] }]);
   assert(JSON.stringify(st) === JSON.stringify({ A1: ['DB Connect', 'Lime'], A2: ['Lime'] }), 'stableOps: nur stabile Quellen je Gemeinde');
   assert(T.publishFlows(null).flows.length === 0 && T.publishFlows(null).total.trips === 0, 'publishFlows ohne Tagessumme: leer');
+  const p5 = T.publishFlows(raw, { at: 1 });
+  assert(T.FLOW_MIN === 5 && p5.min === 5 && p5.flows.every(r => r[6] >= 5) && p5.total.trips === p5.total.shown + p5.total.below + p5.total.cut, 'veröffentlichte Ströme: Standard-Schwelle 5, keine Zeile darunter, Summen stimmen');
+  // ältere Tagesdatei (Schwelle 2) nachziehen: Zeilen unter 5 → below, Summen stimmen, zweiter Aufruf ändert nichts
+  const old2 = JSON.parse(JSON.stringify(pub)); old2.flows.push(['A1', '9:9', '9:8', 'Lime', 'scooter', 1, 6, 60, 600]); old2.munis.A1.trips += 6; old2.munis.A1.shown += 6; old2.total.trips += 6; old2.total.shown += 6;
+  assert(T.tightenFlows(old2) && old2.min === 5 && old2.flows.length === 1 && old2.flows[0][6] === 6 && old2.munis.A1.shown === 6 && old2.munis.A1.below === 9 && old2.total.trips === old2.total.shown + old2.total.below + old2.total.cut && !T.tightenFlows(old2), 'tightenFlows: Zeilen unter 5 entfallen, Fahrten in below, einmalig');
 }
 // Zeitumstellung: Tagesdatei trägt Minuten je Ortsstunde
 {
@@ -543,6 +548,16 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   for (const cells of Object.values(r.munis)) for (const c of Object.values(cells)) for (let k = 0; k < 6; k++) { const n = c[4 + k] + c[16 + k]; sumOut += n; if (n > 0 && n < T.CELL_MIN) bad++; }
   for (const b of Object.values(r.below)) for (let i = 0; i < 12; i++) sumBelow += b[i];
   assert(bad === 0 && sumOut + sumBelow === sumIn, 'Datenschutz: keine veröffentlichte Zelle × Band unter der Schwelle; veröffentlicht + unterdrückt = Eingabe');
+  // Sekundärunterdrückung: below je Gemeinde × Band liegt nie zwischen 1 und 2, solange im Band noch eine Zelle veröffentlicht ist
+  let lone = 0; for (const [ags, b] of Object.entries(r.below)) for (let k = 0; k < 6; k++) { const s = b[k] + b[6 + k]; if (s > 0 && s < T.CELL_MIN && Object.values(r.munis[ags] || {}).some(c => c[4 + k] + c[16 + k] > 0)) lone++; }
+  assert(lone === 0, 'Datenschutz: keine einzeln unterdrückte Zelle aus below ablesbar (Sekundärunterdrückung)');
+}
+{
+  const C3 = (b, st, en) => { const c = new Array(T.CELL_LEN).fill(0); c[4 + b] = st; c[16 + b] = en; c[0] = st; c[1] = en; return c; };
+  const r = T.suppressCells({ A: { a: C3(2, 1, 0), b: C3(2, 2, 2), c: C3(2, 5, 1) } });
+  assert(!r.munis.A.a && !r.munis.A.b && r.munis.A.c[6] === 5 && r.below.A[2] === 3 && r.below.A[8] === 2, 'Sekundärunterdrückung: eine Zelle mit 1 Ereignis → kleinste weitere (4) fällt mit in below, größte bleibt');
+  const pubd = { A: { b: C3(2, 2, 2), c: C3(2, 5, 1) } }, bel = { A: new Array(14).fill(0) }; bel.A[2] = 1; // bereits veröffentlichte Datei ohne Sekundärunterdrückung
+  assert(T.secondarySuppress(pubd, bel) === 1 && !pubd.A.b && bel.A[2] === 3 && bel.A[8] === 2 && T.secondarySuppress(pubd, bel) === 0, 'Sekundärunterdrückung nachträglich auf veröffentlichten Daten, danach stabil');
 }
 // Z4: Ausblendung bei niedrigem Akku (Quelle mit Untergrenze 15 %): Verschwinden bis 20 % = hide, nicht Fahrtbeginn; gesperrt = Abholung
 {

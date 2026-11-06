@@ -3,7 +3,7 @@
 // Eigenständig: renderCompare(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, setScope }; Leaflet (L) global.
 // Daten: ops/<Land>.json (letzter Sammler-Lauf), Rechenlogik in lib/pulse-compare.js. Werte aus Daten gehen durch ctx.esc.
 import * as P from './pulse-compare.js';
-import { decodeFleet } from './pulse-ops.js';
+import { decodeFleet, idleClassText } from './pulse-ops.js';
 import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
@@ -77,7 +77,8 @@ function langControls(map) {
 // ---------- Bausteine ----------
 const pct = (ctx, x) => (x == null ? '–' : `${ctx.fmt(x * 100)} %`);
 const num = (ctx, x, d = 0) => (x == null ? '–' : ctx.fmt(x, d));
-const hours = (ctx, min) => (min == null ? '–' : min < 120 ? t('cmp.min', { v: ctx.fmt(min) }) : t('cmp.h', { v: ctx.fmt(min / 60, 1) }));
+// Standzeit liegt nur als Klasse vor (ops/<Land>.json, lib/pulse-ops.js idleClassMin): Median als Klasse
+const hours = (ctx, min) => (min == null ? '–' : idleClassText(min, { en: lang() === 'en' }));
 const opCell = (ctx, op) => `<span class="cmp-op" style="--c:${ctx.esc(ctx.opColor(op))}"><i></i>${ctx.esc(op)}</span>`;
 function sortHead(cols, sort, attr) {
   return cols.map(([k, l, n, title, g = '']) => { if (!k) return `<th${n ? ' class="n"' : ''}>${l}</th>`; const on = sort.key === k; return `<th class="${[n ? 'n' : '', g].filter(Boolean).join(' ')}" aria-sort="${on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="rp-sort${on ? ' on' : ''}" data-${attr}="${k}"${title ? ` title="${title}"` : ''}>${l}<span aria-hidden="true">${on ? (sort.dir === 'asc' ? '▲' : '▼') : ''}</span></button></th>`; }).join('');

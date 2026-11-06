@@ -12,6 +12,7 @@ import * as Fv from './forecast.js';
 import { mapKeys } from './mapkeys.js';
 import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js';
+import { idleClassText } from './pulse-ops.js';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -793,7 +794,8 @@ function renderAttribution() {
   if (foot) {
     foot.innerHTML = `<span>${t('app.data', { v0: esc([...shown, rest > 0 ? t('app.more', { rest }) : null].filter(Boolean).join(', ') || t('app.loadingCollectorSnapshot')), v1: dirs.length ? ` · ${t('app.via', { join: esc(dirs.join(', ')) })}` : '', v2: cl(t('app.licencePerSourceUnderData'), t('app.useSubjectToOperators')) })}</span>`
       + `<span>${t('app.municipalBoundariesVg250DlDe', { v0: esc(state.latest?.boundaries?.attribution?.replace(/\s*\(.*\)\s*$/, '') || '© GeoBasis-DE / BKG') })}</span>`
-      + `<span>${t('app.mapsOpenstreetmap')}</span>`;
+      + `<span>${t('app.mapsOpenstreetmap')}</span>`
+      + `<details class="foot-privacy"><summary>${t('app.privacyTitle')}</summary><div class="foot-privacy-body">${t('app.privacyBody', { flowMin: 5, cellMin: 3 })}</div></details>`;
     foot.title = names.join('\n');
   }
   if (state.map?.attributionControl) {
@@ -933,7 +935,7 @@ function renderMap() {
         const v = vehicles[i]; drawn++;
         const col = v.disabled ? DISABLED_COL : opColor(v.operator), dim = state.mapFocus && state.mapFocus !== v.operator; // Legende: ein Anbieter hervorgehoben
         L.circleMarker([v.lat, v.lon], { radius: 4.5, weight: 2, color: bg, fillColor: col, fillOpacity: dim ? .12 : v.disabled ? .7 : .95, opacity: dim ? .2 : 1 })
-          .bindPopup(`<b>${esc(v.operator)}</b> · ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? ` · ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? ` · ${t(v.idleCensored ? 'trk.idleForAtLeast' : 'app.idleFor', { v0: durText(v.idleMin * 60e3) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : ` · ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? ` · ${t('app.idReused')}` : ''}${src === coll ? ` · ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
+          .bindPopup(`<b>${esc(v.operator)}</b> · ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? ` · ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? ` · ${t(v.idleCensored ? 'trk.idleForAtLeast' : 'app.idleFor', { v0: idleClassText(v.idleMin, { en: lang() === 'en', atLeast: v.idleCensored }) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : ` · ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? ` · ${t('app.idReused')}` : ''}${src === coll ? ` · ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
       }
       if ($('#chk-stations').checked) for (const s of stations) {
         // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt. Leer = gestrichelter Rand ohne Füllung (Form statt
@@ -2085,7 +2087,7 @@ async function renderIdleLayer() {
   const L_ = state.layers; L_.grid.clearLayers();
   const d = await loadOnce('idleLong', 'idle-long.json'); if (!d) return;
   const pts = d.points.filter(p => (state.scope === 'DE' || p.ags === state.scope) && (state.operator === 'all' || p.op === state.operator) && (state.type === 'all' || p.ty === state.type));
-  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: p.censored ? `≥ ${fmt(p.hours)}` : fmt(p.hours), v3: (p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '') + (p.censored ? ` · ${t('trk.sinceTrackStart')}` : '') })).addTo(L_.grid);
+  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: idleClassText(p.hours * 60, { en: lang() === 'en', atLeast: !!p.censored }), v3: (p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '') + (p.censored ? ` · ${t('trk.sinceTrackStart')}` : '') })).addTo(L_.grid);
   $('#map-legend').innerHTML = `<span><i class="dot" style="background:var(--warn)"></i>${t('app.availableButNotMovedForMore')}</span><span class="muted">${t('app.shownAsOf', { length: fmt(pts.length), v1: d.total > d.points.length ? ` ${t('app.thinnedOutPerMunicipality', { total: fmt(d.total) })}` : '', v2: timeText(d.at) })}</span>`;
 }
 // Welche Farbe gehört zu welchem Anbieter: immer unter der Karte, sortiert nach verfügbaren Fahrzeugen im Gebiet

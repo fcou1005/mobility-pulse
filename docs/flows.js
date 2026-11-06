@@ -3,9 +3,9 @@
 // Gemessen: nur Anbieter mit stabilen Kennungen (flows/). Geschätzt: Anbieter mit rotierenden Kennungen, erwartete Fahrten je ≈ 500-m-Zellenpaar
 // (flows-est/, lib/pulse-flowest.js, keine Einzelverknüpfung). Nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw5e5x6d';
-import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mw5e5x6d';
-import { mapKeys } from './mapkeys.js?v=mw5e5x6d';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw5gkh0g';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mw5gkh0g';
+import { mapKeys } from './mapkeys.js?v=mw5gkh0g';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -215,8 +215,9 @@ async function update(S) {
   q('day').innerHTML = days.length ? [...days].reverse().map(d => `<option value="${esc(d)}">${esc(dmy(d))}</option>`).join('') : '<option value="">–</option>';
   q('day').value = sel.day || '';
   const collecting = typeof idx?.collecting === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(idx.collecting) ? idx.collecting : null;
-  const howNote = S.est ? `${t('flows.estHow')} ${qualityText(S, idx?.quality)}` : t('flows.routeMostLikelyCycleRoute');
-  const privacy = S.est ? t('flows.estPrivacy') : t('flows.mobilityPulseLinksStartAnd');
+  const minN = Number.isFinite(idx?.min) ? idx.min : S.est ? 2 : 5; // Mindestschwelle je Zeile (gemessen 5, geschätzt 2 erwartete Fahrten)
+  const howNote = S.est ? `${t('flows.estHow')} ${qualityText(S, idx?.quality)}` : t('flows.routeMostLikelyCycleRoute', { min: minN });
+  const privacy = S.est ? t('flows.estPrivacy', { min: minN }) : t('flows.mobilityPulseLinksStartAnd', { min: minN });
   if (!days.length) {
     if (S.est) return empty(S, idxR?.status === 404 || !idx ? t('flows.estNoFiles') : t('flows.estNoDay'), `${collecting ? `${t('flows.collectorIsCurrently', { dmy: esc(dmy(collecting)) })} ` : ''}${privacy}`, howNote);
     return empty(S, idxR?.status === 404 || !idx ? t('flows.noFlowFilesInDataSnapshotYet') : t('flows.noCompletedDayWithFlowsYet'),
@@ -249,7 +250,7 @@ async function update(S) {
     const place = sel.ags ? esc(name(sel.ags)) : t('flows.germany');
     if (S.est) return empty(S, !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : t('flows.estNoPair', { place: sel.ags ? esc(name(sel.ags)) : t('flows.germany'), dmy: esc(dmy(sel.day)) }),
       `${others ? `${t('flows.onThisDayThereAreFlowsIn', { others })} ` : ''}${privacy}`, howNote);
-    const head = !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : !stable.length && !(m?.trips > 0) ? t('flows.inNoOperatorReportsStable', { place, dmy: esc(dmy(sel.day)) }) : t('flows.noCellPairWithAtLeast2Trips', { place, dmy: esc(dmy(sel.day)) });
+    const head = !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : !stable.length && !(m?.trips > 0) ? t('flows.inNoOperatorReportsStable', { place, dmy: esc(dmy(sel.day)) }) : t('flows.noCellPairWithAtLeast2Trips', { place, dmy: esc(dmy(sel.day)), min: Number.isFinite(doc.min) ? doc.min : minN });
     const detail = sel.ags && (stable.length || m?.trips) ? t('flows.operatorsWithStableIds', { v0: esc(stable.join(', ') || Object.keys(m?.ops || {}).join(', ')), v1: m?.trips ? `${t('flows.withStartAndDestinationAll', { v0: plural(ctx, m.trips, t('flows.trip'), t('flows.trips2')) })} ` : '' }) : '';
     return empty(S, head, `${detail}${others ? `${t('flows.onThisDayThereAreFlowsIn', { others })} ` : ''}${privacy}`, howNote);
   }

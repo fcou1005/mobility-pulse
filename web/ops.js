@@ -17,7 +17,9 @@ const IDLE_COL = () => (dk() ? '#c084fc' : '#7c3aed');
 // Standzeit als Mindestwert (Z6, linkszensiert): Fahrzeuge tragen idleCensored (ops-Feld 13); Stopps nur die gerundete Stunde – sie gilt als „≥“,
 // wenn sie bis auf einen Lauf (45 Min.) der Zeit seit Beginn der Verfolgung (ops trackStart) entspricht
 const idleAtLeast = (h) => { const p = S.plan; return h != null && p?.trackStart != null && p.at != null && h >= (p.at - p.trackStart - 45 * 60e3) / 3600e3 - 0.5; };
-const idleHText = (h) => (idleAtLeast(h) ? t('trk.idleHAtLeast', { idleMaxH: X.fmt(h) }) : t('ops.idleH', { idleMaxH: X.fmt(h) }));
+// Standzeit kommt nur als Klasse (lib/pulse-ops.js idleClassMin): Text „unter 6 h“, „6–24 h“, „1–2 Tage“, als Mindestwert „≥ …“
+const idleCls = (min, atLeast = false) => O.idleClassText(min, { en: lang() === 'en', atLeast });
+const idleHText = (h) => (idleAtLeast(h) ? t('trk.idleHAtLeast', { idleMaxH: idleCls(h * 60, true) }) : t('ops.idleH', { idleMaxH: idleCls(h * 60) }));
 const RUN_KINDS = Object.keys(RUN_COLOR);
 // Rechenschritte entkoppeln, damit Status gezeichnet wird und die Seite zwischen den Schritten reagiert
 const tick = () => globalThis.scheduler?.yield ? scheduler.yield() : new Promise(r => setTimeout(r, 0));
@@ -491,7 +493,7 @@ function renderTiles() {
     tile(t('ops.lowBatteryTile'), k.batteryKnown ? `${f(k.low)}` : t('common.na'), k.batteryKnown ? (() => { const rt = rangeText(p.fleet.vehicles, num('#ops-swaprange', 5)); return t('ops.lowBatterySub', { charge: num('#ops-swapthr', 20), range: rt.v, known: f(k.batteryKnown) }) + (rt.limited ? ` · ${t('ops.srcLimitRule', { share: Math.round(O.RANGE_LIMIT.share * 100), maxP95: O.RANGE_LIMIT.maxP95Km })}` : ''); })() : t('ops.noChargeLevelInFeed'), k.batteryKnown && k.low / k.batteryKnown > 0.25 ? 'warn' : ''),
     // Mindestwerte (Z6): seit Beginn der Verfolgung unbewegt; der Median ist „≥“, sobald er im Bereich der zensierten Werte liegt
     (() => { const cz = p.fleet.vehicles.filter(v => !v.disabled && !v.reserved && v.idleMin != null && v.idleCensored), czMin = cz.length ? Math.min(...cz.map(v => v.idleMin)) : null;
-      const med = k.idleMedianH == null ? '–' : `${czMin != null && k.idleMedianH * 60 >= czMin ? '≥ ' : ''}${f(k.idleMedianH, 1)} h`;
+      const med = k.idleMedianH == null ? '–' : idleCls(k.idleMedianH * 60, czMin != null && k.idleMedianH * 60 >= czMin);
       const cs = cz.length && p.trackStart ? ` · ${t('trk.opsIdleCensored', { share: `${f((cz.length / Math.max(1, k.idleKnown)) * 100)} %`, start: dateFmt({ day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(p.trackStart)) })}` : '';
       return tile(t('ops.idleTile'), k.idleKnown ? `${f(k.idle24)}` : t('common.na'), k.idleKnown ? t('ops.idleSub', { share: `${f((k.idle24 / k.idleKnown) * 100)} %`, median: med }) + cs : '', k.idleKnown && k.idle24 / k.idleKnown > 0.3 ? 'warn' : ''); })(),
     tile(t('ops.revenueDay'), p.econ === undefined ? '…' : p.econ?.revDay != null && p.econ.plausible ? (prelim ? `${rv(p.econ.revDay * 0.7)}<small>–${rv(p.econ.revDay * 1.3)} €</small>` : `${f(p.econ.revDay)} €`) : '—', p.econ === undefined ? t('ops.loadingEstimate') : !p.econ ? t('ops.noTripDataForThisOperator') : t('ops.tripsVehDayUtilisationNet', { v0: prelim ? `${t('ops.preliminaryUnder3Measurement')} · ` : '', v1: p.econ.plausible ? '' : `${t('ops.tripCountImplausible')} · `, rvd: f(p.econ.rvd, 2), v3: p.econ.utilization == null ? '–' : f(p.econ.utilization * 100, 1) + ' %' }), `est${p.econ && !p.econ.plausible ? ' warn' : ''}`),
@@ -569,7 +571,7 @@ function drawLayers(keys) {
       const opc = X.opColor(v.operator), col = v.disabled ? tok('--bad') : O.needsSwap(v, swapOpt) ? tok('--warn') : (v.idleMin ?? 0) >= 1440 ? IDLE_COL() : opc;
       const plain = col === opc;
       withPop(L.circleMarker([v.lat, v.lon], { radius: plain ? 2.5 : 3.5, weight: 0, fillColor: col, fillOpacity: plain ? .4 : .95, renderer: S.canvas.fleet }),
-        () => `<b>${esc(v.operator)}</b> · ${esc(X.TYPE[v.type] || v.type)}<br>${v.disabled ? `${t('ops.disabled')} · ` : v.reserved ? `${t('ops.reserved')} · ` : ''}${v.battery != null ? `${t('ops.battery', { battery: f(v.battery) })} · ` : ''}${v.idleMin != null ? (v.idleCensored ? t('trk.idleForAtLeast', { v0: `${f(v.idleMin / 60, 1)} h` }) : t('ops.idleForH', { v0: f(v.idleMin / 60, 1) })) : ''}`).addTo(Lx.fleet);
+        () => `<b>${esc(v.operator)}</b> · ${esc(X.TYPE[v.type] || v.type)}<br>${v.disabled ? `${t('ops.disabled')} · ` : v.reserved ? `${t('ops.reserved')} · ` : ''}${v.battery != null ? `${t('ops.battery', { battery: f(v.battery) })} · ` : ''}${v.idleMin != null ? (v.idleCensored ? t('trk.idleForAtLeast', { v0: idleCls(v.idleMin, true) }) : t('ops.idleForH', { v0: idleCls(v.idleMin) })) : ''}`).addTo(Lx.fleet);
     }
     for (const s of p.fleet.stations) withPop(L.circleMarker([s.lat, s.lon], { radius: 5, weight: 2, color: X.opColor(s.operator), fillColor: s.bookable ? X.opColor(s.operator) : 'transparent', fillOpacity: .6, renderer: S.canvas.fleet }),
       () => t('ops.bookable', { v0: esc(s.name || t('ops.station')), bookable: f(s.bookable), v2: s.docks != null ? t('ops.free', { docks: f(s.docks) }) : '', v3: s.capacity ? ` · ${t('ops.capacity', { capacity: f(s.capacity) })}` : '' })).addTo(Lx.fleet);
@@ -966,7 +968,7 @@ const COL_GEO_TOP = 10;
 const isClient = () => document.body.classList.contains('mode-client');
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const colValid = () => { const c = S.col; return c && c.ags === X.state.scope && c.op === S.op && c.type === $('#ops-type')?.value ? c : null; };
-const idleText = (v) => v.idleMin == null ? '–' : `${v.idleCensored ? '≥ ' : ''}${X.fmt(v.idleMin / 60, 1)} h`;
+const idleText = (v) => v.idleMin == null ? '–' : idleCls(v.idleMin, v.idleCensored);
 const zoneLabel = (z) => z.name || t('col.zoneId', { id: z.id });
 // Art je Fahrzeug bzw. betroffener Zone: Pflicht-Abstellzone ohne Station (Blau wie „Abstellen nur an Stationen“ der Übersichtskarte), Fahrverbot (Rot), Abstellverbot
 const colKind = (x) => (x.kind === 'mpz' ? 'mpz' : x.noRide ?? x.zone?.noRide ? 'noRide' : 'noPark');
@@ -1045,7 +1047,7 @@ function renderCollect() {
     const g = geoKey(v.lat, v.lon), geo = GEO.get(g);
     const main = i < COL_GEO_TOP ? `<span class="geo-main" translate="no" data-geo="${g}" data-fallback="${esc(t('ops.addressNotFound'))}">${geo ? esc(geo) : geo === null ? t('ops.addressNotFound') : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span><div class="sub-line">${osmLink(v.lat, v.lon)}</div>` : osmLink(v.lat, v.lon);
     const energy = [v.battery != null ? `${f(v.battery)} %` : null, v.rangeKm != null ? `${f(v.rangeKm, 1)} km` : null].filter(Boolean).join(' · ') || '–';
-    return `<tr><td class="n"><span class="mono muted">${i + 1} ·</span> <b>${idleText(v)}</b>${v.idleMin != null ? `<div class="sub-line">${f(v.idleMin)} min</div>` : ''}</td><td>${main}</td><td>${violSvg(kindColor(v), tok('--panel'), 14, 'display:inline-block;vertical-align:-2px;margin-right:4px;', v.kind === 'mpz')}<b>${kindText(v)}</b><div class="sub-line">${esc(zoneLabel(v.zone))} · ${esc(X.TYPE[v.type] || v.type)}${v.kind === 'mpz' ? ` · ${stationText(v)}` : ''}</div></td>
+    return `<tr><td class="n"><span class="mono muted">${i + 1} ·</span> <b>${idleText(v)}</b></td><td>${main}</td><td>${violSvg(kindColor(v), tok('--panel'), 14, 'display:inline-block;vertical-align:-2px;margin-right:4px;', v.kind === 'mpz')}<b>${kindText(v)}</b><div class="sub-line">${esc(zoneLabel(v.zone))} · ${esc(X.TYPE[v.type] || v.type)}${v.kind === 'mpz' ? ` · ${stationText(v)}` : ''}</div></td>
       <td class="n">${energy}</td><td><button type="button" class="chip" data-col-fly="${i}">${t('ops.onMap')}</button></td></tr>`;
   }).join('');
   queueGeo(r.list.slice(0, COL_GEO_TOP));
