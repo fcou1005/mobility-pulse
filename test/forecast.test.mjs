@@ -497,3 +497,21 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
     'Sport: Merkmal event in Stuttgart 17–21 Uhr, nicht davor, danach oder anderswo');
   assert(resolve('Münster', 'NW') === null && CX.sportEntries(rows, { ...venues, vereine: { 'VfB Stuttgart': { ort: 'Nirgendwo', land: 'BW' } } }, { now, resolve }).noAgs.join() === 'Nirgendwo (BW)', 'Sport: Ort ohne Gemeinde gemeldet, Land muss passen');
 }
+// ---------- Veranstaltungsorte (Wikidata) und Termine (Ticketmaster) → Veranstaltungen (lib/pulse-context.js)
+{
+  const B = (id, l, c, p, t) => ({ i: { value: `http://www.wikidata.org/entity/${id}` }, l: { value: l }, c: { value: String(c) }, p: { value: p }, types: { value: t } });
+  const vs = CX.parseVenues({ results: { bindings: [B('Q10', 'Arena', 15500, 'Point(9.2 48.79)', 'Mehrzweckhalle'), B('Q10', 'Arena', 15000, 'Point(9.2 48.79)', 'Mehrzweckhalle'), B('Q11', 'Friedhof X', 40000, 'Point(9.1 48.7)', 'Waldfriedhof'),
+    B('Q12', 'Stadion', 60000, 'Point(9.232 48.792)', 'Fußballstadion'), B('Q13', 'Klein', 4000, 'Point(9 48)', 'Mehrzweckhalle'), B('Q14', 'Ohne Ort', 9000, '', 'Arena')] } });
+  assert(vs.map(v => `${v.id}:${v.cap}`).join() === 'Q12:60000,Q10:15500', 'Orte: größte Kapazität je Objekt, Friedhof, zu klein und ohne Koordinate entfallen, nach Plätzen sortiert');
+  const at = Date.parse('2026-11-20T19:00:00Z');
+  const E = (id, name, dt, lat, lon, extra = {}) => ({ id, name, url: `https://tm/${id}`, dates: { start: dt ? { dateTime: dt } : { localDate: '2026-11-20' }, status: { code: extra.status || 'onsale' } }, classifications: [{ segment: { name: 'Music' }, genre: { name: 'Undefined' } }], _embedded: { venues: [{ name: 'Arena', location: { latitude: String(lat), longitude: String(lon) } }] } });
+  const evs = CX.parseTmEvents({ _embedded: { events: [E('a', 'Konzert', '2026-11-20T19:00:00Z', 48.7902, 9.2003), E('b', 'Konzert | VIP', '2026-11-20T19:00:00Z', 48.7901, 9.2001), E('c', 'Abgesagt', '2026-11-21T19:00:00Z', 48.79, 9.2, { status: 'cancelled' }),
+    E('d', 'Ohne Zeit', null, 48.79, 9.2), E('e', 'Nebenan', '2026-11-22T19:00:00Z', 48.7955, 9.2), E('f', 'Stadionkonzert', '2026-11-23T17:00:00Z', 48.7921, 9.2318)] } });
+  assert(evs.length === 4 && evs[0].genre === null && evs[0].seg === 'Music', 'Termine: abgesagte und zeitlose entfallen, Genre „Undefined“ leer');
+  const rows = CX.matchEvents(evs, vs);
+  assert(rows.length === 2 && rows[0][1] === 'Konzert' && rows[0][3] === 'Q10' && rows[1][3] === 'Q12', 'Zuordnung: nächster Ort ≤ 400 m, gleiche Zeit am gleichen Ort einmal (kürzester Name), 600 m daneben entfällt');
+  const vA = vs.map(v => ({ ...v, ags: '08111000' })), ent = CX.venueEntries(rows, vA, { now: at - 86400e3 });
+  assert(ent.length === 1 && ent[0].von === '2026-11-20T19:00' && ent[0].bis === '2026-11-20T23:00' && ent[0].gebiet.ags[0] === '08111000' && /15500 Plätze/.test(ent[0].titel) && ent[0].quelle === 'https://tm/a',
+    `Einträge: Beginn 20 Uhr → 19–23 Uhr Ortszeit, mit Plätzen; Termin in 3+ Tagen noch nicht (${ent.map(e => e.von).join()})`);
+  assert(CX.venueEntries(rows, vA.map(v => ({ ...v, cap: 4000 })), { now: at - 86400e3 }).length === 0 && CX.venueEntries(rows, vs, { now: at - 86400e3 }).length === 0, 'Einträge: nur Orte ab 5.000 Plätzen und mit Gemeinde');
+}

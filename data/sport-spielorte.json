@@ -1,51 +1,295 @@
 {
-  "hinweis": "Spielorte für Sport-Ereignisse (Merkmal event der Prognose). Der Sammler holt die Spielpläne aus OpenLigaDB (ODbL) und macht aus jedem Heimspiel eines hier geführten Vereins eine Veranstaltung in der Gemeinde des Stadions (ort + land, aufgelöst über die Gemeindegrenzen; ags optional). Ligen „alle“: jeder Heimverein muss hier stehen, fehlende meldet der Sammler (sport.json → unbekannt). Ligen „liste“: nur die hier geführten Vereine (3. Liga: Vereine mit großem Publikum, Auswahl ohne Zuschauerzahlen geprüft). Vereinsnamen wie in OpenLigaDB (team1.teamName); alias für abweichende Schreibweisen. aktivAb: erst ab dann gehen die Spiele in die Prognose (Ende der Lernphase); gesammelt werden sie vorher schon.",
+  "hinweis": "Spielorte für Sport-Ereignisse (Merkmal event der Prognose). Der Sammler holt die Spielpläne aus OpenLigaDB (ODbL) und macht aus jedem Heimspiel eines hier geführten Vereins eine Veranstaltung in der Gemeinde des Stadions (ort + land, aufgelöst über die Gemeindegrenzen; ags optional). Ligen „alle“: jeder Heimverein muss hier stehen, fehlende meldet der Sammler (sport.json → unbekannt). Ligen „liste“: nur die hier geführten Vereine (3. Liga: Vereine mit großem Publikum, Auswahl ohne Zuschauerzahlen geprüft; DFB-Pokal und Champions League: nur hier geführte Vereine; DEL: Eishockey, alle Vereine). Vereinsnamen wie in OpenLigaDB (team1.teamName); alias für abweichende Schreibweisen. aktivAb: erst ab dann gehen die Spiele in die Prognose (Ende der Lernphase); gesammelt werden sie vorher schon.",
   "aktivAb": "2026-11-28T10:00:00+01:00",
-  "ligen": { "bl1": "alle", "bl2": "alle", "bl3": "liste" },
+  "ligen": {
+    "bl1": "alle",
+    "bl2": "alle",
+    "bl3": "liste",
+    "del": "alle",
+    "dfb": "liste",
+    "ucl": "liste"
+  },
   "vereine": {
-    "FC Bayern München": { "ort": "München", "land": "BY" },
-    "RB Leipzig": { "ort": "Leipzig", "land": "SN" },
-    "1. FSV Mainz 05": { "ort": "Mainz", "land": "RP" },
-    "1. FC Union Berlin": { "ort": "Berlin", "land": "BE" },
-    "1. FC Köln": { "ort": "Köln", "land": "NW" },
-    "SV 07 Elversberg": { "ort": "Spiesen-Elversberg", "land": "SL", "alias": ["SV Elversberg"] },
-    "Borussia Dortmund": { "ort": "Dortmund", "land": "NW" },
-    "SC Freiburg": { "ort": "Freiburg im Breisgau", "land": "BW" },
-    "FC Augsburg": { "ort": "Augsburg", "land": "BY" },
-    "VfB Stuttgart": { "ort": "Stuttgart", "land": "BW" },
-    "TSG Hoffenheim": { "ort": "Sinsheim", "land": "BW", "alias": ["TSG 1899 Hoffenheim"] },
-    "Bayer 04 Leverkusen": { "ort": "Leverkusen", "land": "NW" },
-    "Borussia Mönchengladbach": { "ort": "Mönchengladbach", "land": "NW" },
-    "SV Werder Bremen": { "ort": "Bremen", "land": "HB", "alias": ["Werder Bremen"] },
-    "SC Paderborn 07": { "ort": "Paderborn", "land": "NW" },
-    "FC Schalke 04": { "ort": "Gelsenkirchen", "land": "NW" },
-    "Hamburger SV": { "ort": "Hamburg", "land": "HH" },
-    "Eintracht Frankfurt": { "ort": "Frankfurt am Main", "land": "HE" },
-    "VfL Bochum": { "ort": "Bochum", "land": "NW", "alias": ["VfL Bochum 1848"] },
-    "1. FC Heidenheim 1846": { "ort": "Heidenheim an der Brenz", "land": "BW" },
-    "SV Darmstadt 98": { "ort": "Darmstadt", "land": "HE" },
-    "Karlsruher SC": { "ort": "Karlsruhe", "land": "BW" },
-    "1. FC Magdeburg": { "ort": "Magdeburg", "land": "ST" },
-    "VfL Wolfsburg": { "ort": "Wolfsburg", "land": "NI" },
-    "FC St. Pauli": { "ort": "Hamburg", "land": "HH" },
-    "1. FC Nürnberg": { "ort": "Nürnberg", "land": "BY" },
-    "Energie Cottbus": { "ort": "Cottbus", "land": "BB", "alias": ["FC Energie Cottbus"] },
-    "Holstein Kiel": { "ort": "Kiel", "land": "SH" },
-    "Eintracht Braunschweig": { "ort": "Braunschweig", "land": "NI" },
-    "Hertha BSC": { "ort": "Berlin", "land": "BE" },
-    "SpVgg Greuther Fürth": { "ort": "Fürth", "land": "BY" },
-    "VfL Osnabrück": { "ort": "Osnabrück", "land": "NI" },
-    "1. FC Kaiserslautern": { "ort": "Kaiserslautern", "land": "RP" },
-    "Hannover 96": { "ort": "Hannover", "land": "NI" },
-    "Dynamo Dresden": { "ort": "Dresden", "land": "SN", "alias": ["SG Dynamo Dresden"] },
-    "DSC Arminia Bielefeld": { "ort": "Bielefeld", "land": "NW", "alias": ["Arminia Bielefeld"] },
-    "Fortuna Düsseldorf": { "ort": "Düsseldorf", "land": "NW" },
-    "Hansa Rostock": { "ort": "Rostock", "land": "MV", "alias": ["F.C. Hansa Rostock", "FC Hansa Rostock"] },
-    "Rot-Weiss Essen": { "ort": "Essen", "land": "NW" },
-    "Alemannia Aachen": { "ort": "Aachen", "land": "NW" },
-    "MSV Duisburg": { "ort": "Duisburg", "land": "NW" },
-    "SV Waldhof Mannheim": { "ort": "Mannheim", "land": "BW" },
-    "1. FC Saarbrücken": { "ort": "Saarbrücken", "land": "SL" },
-    "Preußen Münster": { "ort": "Münster", "land": "NW", "alias": ["SC Preußen Münster"] }
+    "FC Bayern München": {
+      "ort": "München",
+      "land": "BY"
+    },
+    "RB Leipzig": {
+      "ort": "Leipzig",
+      "land": "SN"
+    },
+    "1. FSV Mainz 05": {
+      "ort": "Mainz",
+      "land": "RP"
+    },
+    "1. FC Union Berlin": {
+      "ort": "Berlin",
+      "land": "BE"
+    },
+    "1. FC Köln": {
+      "ort": "Köln",
+      "land": "NW"
+    },
+    "SV 07 Elversberg": {
+      "ort": "Spiesen-Elversberg",
+      "land": "SL",
+      "alias": [
+        "SV Elversberg"
+      ]
+    },
+    "Borussia Dortmund": {
+      "ort": "Dortmund",
+      "land": "NW"
+    },
+    "SC Freiburg": {
+      "ort": "Freiburg im Breisgau",
+      "land": "BW"
+    },
+    "FC Augsburg": {
+      "ort": "Augsburg",
+      "land": "BY"
+    },
+    "VfB Stuttgart": {
+      "ort": "Stuttgart",
+      "land": "BW"
+    },
+    "TSG Hoffenheim": {
+      "ort": "Sinsheim",
+      "land": "BW",
+      "alias": [
+        "TSG 1899 Hoffenheim"
+      ]
+    },
+    "Bayer 04 Leverkusen": {
+      "ort": "Leverkusen",
+      "land": "NW"
+    },
+    "Borussia Mönchengladbach": {
+      "ort": "Mönchengladbach",
+      "land": "NW"
+    },
+    "SV Werder Bremen": {
+      "ort": "Bremen",
+      "land": "HB",
+      "alias": [
+        "Werder Bremen"
+      ]
+    },
+    "SC Paderborn 07": {
+      "ort": "Paderborn",
+      "land": "NW"
+    },
+    "FC Schalke 04": {
+      "ort": "Gelsenkirchen",
+      "land": "NW"
+    },
+    "Hamburger SV": {
+      "ort": "Hamburg",
+      "land": "HH"
+    },
+    "Eintracht Frankfurt": {
+      "ort": "Frankfurt am Main",
+      "land": "HE"
+    },
+    "VfL Bochum": {
+      "ort": "Bochum",
+      "land": "NW",
+      "alias": [
+        "VfL Bochum 1848"
+      ]
+    },
+    "1. FC Heidenheim 1846": {
+      "ort": "Heidenheim an der Brenz",
+      "land": "BW"
+    },
+    "SV Darmstadt 98": {
+      "ort": "Darmstadt",
+      "land": "HE"
+    },
+    "Karlsruher SC": {
+      "ort": "Karlsruhe",
+      "land": "BW"
+    },
+    "1. FC Magdeburg": {
+      "ort": "Magdeburg",
+      "land": "ST"
+    },
+    "VfL Wolfsburg": {
+      "ort": "Wolfsburg",
+      "land": "NI"
+    },
+    "FC St. Pauli": {
+      "ort": "Hamburg",
+      "land": "HH"
+    },
+    "1. FC Nürnberg": {
+      "ort": "Nürnberg",
+      "land": "BY"
+    },
+    "Energie Cottbus": {
+      "ort": "Cottbus",
+      "land": "BB",
+      "alias": [
+        "FC Energie Cottbus"
+      ]
+    },
+    "Holstein Kiel": {
+      "ort": "Kiel",
+      "land": "SH"
+    },
+    "Eintracht Braunschweig": {
+      "ort": "Braunschweig",
+      "land": "NI"
+    },
+    "Hertha BSC": {
+      "ort": "Berlin",
+      "land": "BE"
+    },
+    "SpVgg Greuther Fürth": {
+      "ort": "Fürth",
+      "land": "BY"
+    },
+    "VfL Osnabrück": {
+      "ort": "Osnabrück",
+      "land": "NI"
+    },
+    "1. FC Kaiserslautern": {
+      "ort": "Kaiserslautern",
+      "land": "RP"
+    },
+    "Hannover 96": {
+      "ort": "Hannover",
+      "land": "NI"
+    },
+    "Dynamo Dresden": {
+      "ort": "Dresden",
+      "land": "SN",
+      "alias": [
+        "SG Dynamo Dresden"
+      ]
+    },
+    "DSC Arminia Bielefeld": {
+      "ort": "Bielefeld",
+      "land": "NW",
+      "alias": [
+        "Arminia Bielefeld"
+      ]
+    },
+    "Fortuna Düsseldorf": {
+      "ort": "Düsseldorf",
+      "land": "NW"
+    },
+    "Hansa Rostock": {
+      "ort": "Rostock",
+      "land": "MV",
+      "alias": [
+        "F.C. Hansa Rostock",
+        "FC Hansa Rostock"
+      ]
+    },
+    "Rot-Weiss Essen": {
+      "ort": "Essen",
+      "land": "NW"
+    },
+    "Alemannia Aachen": {
+      "ort": "Aachen",
+      "land": "NW"
+    },
+    "MSV Duisburg": {
+      "ort": "Duisburg",
+      "land": "NW"
+    },
+    "SV Waldhof Mannheim": {
+      "ort": "Mannheim",
+      "land": "BW"
+    },
+    "1. FC Saarbrücken": {
+      "ort": "Saarbrücken",
+      "land": "SL"
+    },
+    "Preußen Münster": {
+      "ort": "Münster",
+      "land": "NW",
+      "alias": [
+        "SC Preußen Münster"
+      ]
+    },
+    "Adler Mannheim": {
+      "ort": "Mannheim",
+      "land": "BW"
+    },
+    "Augsburger Panther": {
+      "ort": "Augsburg",
+      "land": "BY"
+    },
+    "ERC Ingolstadt": {
+      "ort": "Ingolstadt",
+      "land": "BY"
+    },
+    "Eisbären Berlin": {
+      "ort": "Berlin",
+      "land": "BE"
+    },
+    "Grizzlys Wolfsburg": {
+      "ort": "Wolfsburg",
+      "land": "NI"
+    },
+    "Iserlohn Roosters": {
+      "ort": "Iserlohn",
+      "land": "NW"
+    },
+    "Krefeld Pinguine": {
+      "ort": "Krefeld",
+      "land": "NW"
+    },
+    "Kölner Haie": {
+      "ort": "Köln",
+      "land": "NW"
+    },
+    "Löwen Frankfurt": {
+      "ort": "Frankfurt am Main",
+      "land": "HE"
+    },
+    "Nürnberg Ice Tigers": {
+      "ort": "Nürnberg",
+      "land": "BY",
+      "alias": [
+        "Thomas Sabo Ice Tigers"
+      ]
+    },
+    "Pinguins Bremerhaven": {
+      "ort": "Bremerhaven",
+      "land": "HB",
+      "alias": [
+        "Fischtown Pinguins",
+        "Fischtown Pinguins Bremerhaven"
+      ]
+    },
+    "Red Bull München": {
+      "ort": "München",
+      "land": "BY",
+      "alias": [
+        "EHC Red Bull München"
+      ]
+    },
+    "Schwenninger Wild Wings": {
+      "ort": "Villingen-Schwenningen",
+      "land": "BW",
+      "alias": [
+        "SERC Wild Wings"
+      ]
+    },
+    "Straubing Tigers": {
+      "ort": "Straubing",
+      "land": "BY"
+    },
+    "Düsseldorfer EG": {
+      "ort": "Düsseldorf",
+      "land": "NW"
+    },
+    "Dresdner Eislöwen": {
+      "ort": "Dresden",
+      "land": "SN"
+    }
   }
 }

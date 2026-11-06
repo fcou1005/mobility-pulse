@@ -687,9 +687,28 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   // Panel 7: Rohdaten
   const p7 = `<div class="panel">${head(t('fv.rawTitle'), t('fv.rawSub'))}<div class="fv-links">${files}</div><p class="fv-sub">${t('fv.rawNote')}</p></div>`;
   const p9 = `<div class="panel" id="fv-env">${head(t('fv.envTitle'), t('fv.envSub'))}${envHtml(ctx, L, { title: false })}</div>`;
+  const p10 = `<div class="panel" id="fv-events">${head(t('fv.evTitle'), t('fv.evSub'))}<div class="fv-ev-body"><p class="fv-sub">${t('fv.evLoading')}</p></div></div>`;
   const p8 = `<div class="panel" id="fv-dl">${head(t('fv.dlTitle'), t('fv.dlSub'))}${dlRow(false)}<p class="fv-sub">${t('fv.dlNote', { repo: esc(ctx.CFG?.REPO || '') })}</p></div>`;
-  el.innerHTML = topBar(ctx, sel) + `<div class="fv-grid">${p1}${p2}${p3}${p9}${p8}${p4}${p5}${p6}${p7}</div>`;
+  el.innerHTML = topBar(ctx, sel) + `<div class="fv-grid">${p1}${p2}${p3}${p9}${p10}${p8}${p4}${p5}${p6}${p7}</div>`;
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
+  fillEvents(el.querySelector('#fv-events .fv-ev-body'), ctx, sel);
+}
+// Veranstaltungen im gewählten Gebiet (sport.json: Heimspiele aus OpenLigaDB; veranstaltungen.json: Termine an Orten ab 5.000 Plätzen), 7 Tage zurück bis 14 Tage voraus
+async function fillEvents(box, ctx, sel) {
+  if (!box) return;
+  const [sp, vd] = await Promise.all([fj(ctx, 'sport.json'), fj(ctx, 'veranstaltungen.json')]);
+  if (!box.isConnected) return;
+  const { esc } = ctx, now = Date.now(), from = now - 7 * 864e5, to = now + 14 * 864e5, scope = sel.ags && sel.ags !== 'DE' ? sel.ags : null;
+  const V = new Map((vd?.venues || []).map(v => [v.id, v])), rows = [];
+  for (const e of sp?.entries || []) if (Number.isFinite(e.beginn)) rows.push({ t: e.beginn, ags: e.gebiet?.ags?.[0], what: e.titel.replace(/ \((bl\d|del|dfb|ucl)[^)]*\)$/, ''), venue: '', cap: null, kind: `${t('fv.evSport')} (${e.liga || ''})`, url: e.quelle });
+  for (const [, name, tt, vid, seg, genre, url] of vd?.events || []) { const v = V.get(vid); if (v) rows.push({ t: tt, ags: v.ags, what: name, venue: v.name, cap: v.cap, kind: [seg, genre].filter(Boolean).join(' · '), url }); }
+  const list = rows.filter(r => r.t >= from && r.t <= to && (!scope || r.ags === scope)).sort((a, b) => a.t - b.t);
+  const fmtT = (x) => dateFmt({ weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ }).format(new Date(x));
+  const act = vd?.sources?.veranstaltungen && !/TICKETMASTER_KEY fehlt/.test(vd.sources.veranstaltungen), notes = [t('fv.evNote', { from: sp?.activeFrom ? dateFmt({ dateStyle: 'medium', timeZone: TZ }).format(new Date(sp.activeFrom)) : '–' }), act ? '' : t('fv.evNoKey')].filter(Boolean).join(' ');
+  const shown = list.slice(0, 80);
+  box.innerHTML = (shown.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.evTitle'))}"><table><thead><tr><th>${t('fv.evColWhen')}</th><th>${t('fv.evColWhere')}</th><th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n">${t('fv.evColCap')}</th><th class="mh">${t('fv.evColKind')}</th></tr></thead><tbody>`
+    + shown.map(r => `<tr${r.t < now ? ' class="muted"' : ''}><td>${esc(fmtT(r.t))}</td><td>${esc(ctx.muniName?.(r.ags) || r.ags || '–')}</td><td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.what)}</a>` : esc(r.what)}</td><td class="mh">${esc(r.venue || '–')}</td><td class="n">${r.cap ? n0(r.cap) : '–'}</td><td class="mh">${esc(r.kind || '–')}</td></tr>`).join('')
+    + `</tbody></table></div>` : `<p class="fv-sub">${t('fv.evNone')}</p>`) + `<p class="fv-sub">${list.length > shown.length ? `${t('fv.evMore', { n: list.length - shown.length })} ` : ''}${notes}</p>`;
 }
 
 function scopeLabel(ctx, sel) {

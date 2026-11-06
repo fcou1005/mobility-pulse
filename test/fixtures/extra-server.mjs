@@ -73,6 +73,17 @@ export async function startExtra() {
       if (sv === 'warning') return json({ warning: [{ coordinate: { lat: '48.776', long: '9.176' }, future: false, abnormalTrafficType: 'STATIONARY_TRAFFIC' }, { coordinate: { lat: '48.776', long: '9.176' }, future: false, description: ['Baustelle'], startTimestamp: '2025-01-01T00:00:00.000+0100' }] });
       return json({}, 404);
     }
+    if (kind === 'sparql') { // Wikidata: Arena in Tübingen (zweimal mit zwei Websites), Friedhof, zu kleine Halle
+      const B = (id, l, c, p, t, w) => ({ i: { value: `http://www.wikidata.org/entity/${id}` }, l: { value: l }, c: { value: String(c) }, p: { value: p }, types: { value: t }, ...(w ? { w: { value: w } } : {}) });
+      return json({ results: { bindings: [B('Q1', 'Testarena', 8000, 'Point(9.06 48.52)', 'Mehrzweckhalle', 'https://testarena.example/en/'), B('Q1', 'Testarena', 8000, 'Point(9.06 48.52)', 'Mehrzweckhalle', 'https://testarena.example/'),
+        B('Q2', 'Waldfriedhof', 20000, 'Point(9.07 48.53)', 'Friedhof'), B('Q3', 'Kleine Halle', 3000, 'Point(9.05 48.51)', 'Mehrzweckhalle')] } });
+    }
+    if (kind === 'tm') { // Ticketmaster Discovery: Konzert in 5 h an der Arena, dasselbe als Paket, Testeintrag, weit weg, ohne Uhrzeit
+      if (u.searchParams.get('apikey') !== 'tm-test') return json({ fault: 'Invalid ApiKey' }, 401);
+      const t = new Date(Math.floor(Date.now() / 3600e3 + 5) * 3600e3).toISOString().replace('.000Z', 'Z'), V = (lat, lon) => ({ _embedded: { venues: [{ name: 'Testarena', location: { latitude: String(lat), longitude: String(lon) } }] } });
+      const E = (id, name, dt, lat, lon) => ({ id, name, url: `https://www.ticketmaster.de/event/${id}`, dates: { start: dt ? { dateTime: dt, localDate: dt.slice(0, 10) } : { localDate: '2026-12-01' }, status: { code: 'onsale' } }, classifications: [{ segment: { name: 'Music' }, genre: { name: 'Rock' } }], ...V(lat, lon) });
+      return json({ _embedded: { events: [E('e1', 'Band X', t, 48.5202, 9.0601), E('e2', 'Band X | Premium Packages', t, 48.5202, 9.0601), E('e3', 'Evelyn Test GCP', t, 48.5202, 9.0601), E('e4', 'Fern', t, 52.5, 13.4), E('e5', 'Ohne Zeit', null, 48.52, 9.06)] }, page: { totalElements: 5 } });
+    }
     if (kind === 'getmatchdata') { // OpenLigaDB: bl1 mit Heimspiel in 2 h (Testverein → Tübingen), unbekanntem Heimverein, altem Spiel, Spiel ohne Anstoß; bl2 leer; bl3 Fehler
       const [, , lg] = u.pathname.split('/'), t = Math.floor(Date.now() / 3600e3 + 2) * 3600e3 + 30 * 60e3, iso = (x) => new Date(x).toISOString().replace('.000Z', 'Z');
       const m = (id, at, h, g) => ({ matchID: id, matchDateTime: null, matchDateTimeUTC: at == null ? null : iso(at), leagueShortcut: lg, team1: { teamName: h, shortName: h }, team2: { teamName: g, shortName: g }, location: null });

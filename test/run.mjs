@@ -8,7 +8,7 @@ import * as T from '../lib/pulse-track.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -181,14 +181,19 @@ await writeFile(`test/out/events/${ydM}.json`, JSON.stringify({ day: ydM, versio
 const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.000Z', source: 'OpenHolidays API (openholidaysapi.org, ODbL)', from: '2025-01-01', to: '2026-12-31', states: { BW: { '2026-11-02': 'F' } } });
 await writeFile('test/out/calendar.json', calOld);
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), FORECAST_EVERY_MIN: '0' });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, TICKETMASTER_URL: `${ex.base}/tm`, TICKETMASTER_KEY: 'tm-test', FORECAST_EVERY_MIN: '0' });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 {
   const sp = JSON.parse(await readFile('test/out/sport.json', 'utf8')), e = sp.entries[0] || {};
   assert(sp.license === 'ODbL-1.0' && sp.active === true && sp.entries.length === 1 && e.art === 'veranstaltung' && e.gebiet?.ags?.[0] === '08416041' && /^\d{4}-\d{2}-\d{2}T\d{2}:00$/.test(e.von) && e.quelle.includes('/getmatchdata/bl1/'),
     `Sport: Heimspiel des Testvereins als Veranstaltung in Tübingen (${e.von} bis ${e.bis})`);
-  assert(sp.unknown.join() === 'Unbekannt FC' && sp.matches.length === 2 && sp.fetched.bl1?.n === 3 && sp.fetched.bl2?.n === 0 && sp.fetched.bl3?.error && ex.log.filter(x => x.path.startsWith('/getmatchdata/')).length === 3,
+  assert(sp.unknown.join() === 'Unbekannt FC' && sp.matches.length === 2 && sp.fetched.bl1?.n === 3 && sp.fetched.bl2?.n === 0 && sp.fetched.bl3?.error && ex.log.filter(x => x.path.startsWith('/getmatchdata/')).length === 6,
     'Sport: unbekannter Heimverein gemeldet, altes Spiel und Spiel ohne Anstoß entfallen, Liga mit Fehler protokolliert');
+  const vraw = await readFile('test/out/veranstaltungen.json', 'utf8'), vd = JSON.parse(vraw), ev = vd.events[0] || [];
+  assert(vd.venues.length === 1 && vd.venues[0].id === 'Q1' && vd.venues[0].cap === 8000 && vd.venues[0].ags === '08416041' && vd.venues[0].web === 'https://testarena.example/' && Number.isFinite(vd.venuesAt),
+    'Veranstaltungsorte aus Wikidata: Arena ab 5.000 Plätzen mit Gemeinde, Friedhof und kleine Halle entfallen, deutsche Website bevorzugt');
+  assert(vd.events.length === 1 && ev[1] === 'Band X' && ev[3] === 'Q1' && ev[4] === 'Music' && vd.entries === 1 && vd.fetchedAt.Q1 > 0 && !vraw.includes('tm-test') && ex.log.some(x => x.path === '/tm/events.json' && x.q.latlong === '48.52,9.06' && x.q.radius === '1'),
+    'Veranstaltungen (Ticketmaster): Termin der Arena zugeordnet, Paket zusammengefasst, Test, ferne und zeitlose Termine entfallen, Schlüssel nicht im Datenstand');
 }
 {
   const wd = T.dayOf(Date.now()), wDay = (await readdir('test/out/weather').catch(() => [])).filter(n => n.endsWith('.json')).map(n => n.slice(0, -5)).sort(), wf = wDay.length ? JSON.parse(await readFile(`test/out/weather/${wDay[0]}.json`, 'utf8')) : null;
