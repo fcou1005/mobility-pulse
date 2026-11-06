@@ -608,6 +608,8 @@ function syncUrl(push = false) {
 function applyUrlParams(q = QS, back = false) {
   const has = (sel, v) => v != null && [...$(sel).options].some(o => o.value === v);
   const sc = q.get('scope') ?? (back ? 'DE' : null);
+  // Gebiet mit nur vereinzelten Fahrzeugen (in der Gebietswahl ausgeblendet): per Link trotzdem wählbar
+  if (sc && !has('#sel-scope', sc) && state.latest?.municipalities?.[sc]) { state.scope = sc; populateScope(); }
   if (has('#sel-scope', sc)) { state.scope = sc; $('#sel-scope').value = sc; }
   else if (!back && sc && sc !== 'DE' && state.latest) notice(() => t('app.areaFromLinkIsNotInCurrent', { sc: esc(sc) }), 'warn', 'scope'); // ohne Datenstand ist der Schlüssel nicht prüfbar (Meldung dazu: nolatest)
   populateOperators();
@@ -733,7 +735,7 @@ function renderStamp() {
   const pill = $('#stand-pill');
   if (pill) { pill.textContent = !at ? t('app.asOf') : live ? `Live ${timeText(at)}` : t('app.ago', { v0: cl(t('app.collector'), t('app.asOf2')), at: timeText(at), v2: ageText(Date.now() - at) }); pill.classList.toggle('stale', !live && !DEMO && !!at && Date.now() - at > 45 * 60e3); pill.title = at ? t('app.dataAsOf', { v0: new Date(at).toLocaleString(fmtLocale(), { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Berlin' }) }) : ''; }
   const el = $('#side-stamp'); if (!el) return;
-  el.textContent = state.latest ? t('app.sourcesMunicipalities', { v0: fmt(state.latest.counts?.sources), v1: fmt(state.latest.counts?.municipalities) }) : cl(t('app.collectorNoRunYet'), t('app.noDataYet'));
+  el.textContent = state.latest ? t('app.sourcesMunicipalities', { v0: fmt(state.latest.counts?.sources), v1: fmt(state.latest.counts?.municipalitiesShown ?? state.latest.counts?.municipalities) }) : cl(t('app.collectorNoRunYet'), t('app.noDataYet'));
 }
 function renderHeader() {
   $('#crumb-scope').textContent = scopeLabel();
@@ -2314,10 +2316,14 @@ function renderSupplyLayer() {
 // ---------- Steuerung ----------
 function populateScope() {
   const sel = $('#sel-scope'); const munis = state.latest?.municipalities || {};
-  const byState = {};
-  for (const m of Object.values(munis)) { (byState[m.state] ??= []).push(m); }
+  // Betriebsgebiet-Erkennung (latest.municipalities[ags].presence, Sammler): Orte mit nur vereinzelten Fahrzeugen nicht als eigenes Gebiet; das
+  // gewählte Gebiet bleibt immer wählbar (Links), neue Gebiete tragen den Zusatz „neu“
+  const byState = {}; let hidden = 0;
+  for (const m of Object.values(munis)) { if (m.presence?.status === 'vereinzelt' && m.ags !== state.scope) { hidden++; continue; } (byState[m.state] ??= []).push(m); }
   const STATES = { BW: 'Baden-Württemberg', BY: t('app.bavaria'), BE: 'Berlin', BB: 'Brandenburg', HB: 'Bremen', HH: 'Hamburg', HE: t('app.hesse'), MV: t('app.mecklenburgWesternPomerania'), NI: t('app.lowerSaxony'), NW: t('app.northRhineWestphalia'), RP: t('app.rhinelandPalatinate'), SL: 'Saarland', SN: t('app.saxony'), ST: t('app.saxonyAnhalt'), SH: 'Schleswig-Holstein', TH: t('app.thuringia') };
-  sel.innerHTML = `<option value="DE">${t('app.allOfGermany')}</option>` + Object.keys(byState).sort((a, b) => (STATES[a] || a).localeCompare(STATES[b] || b)).map(st => `<optgroup label="${esc(STATES[st] || st)}">${byState[st].sort((a, b) => String(a.name).localeCompare(String(b.name), 'de')).map(m => `<option value="${esc(m.ags)}">${esc(m.name)}</option>`).join('')}</optgroup>`).join('');
+  sel.innerHTML = `<option value="DE">${t('app.allOfGermany')}</option>` + Object.keys(byState).sort((a, b) => (STATES[a] || a).localeCompare(STATES[b] || b)).map(st => `<optgroup label="${esc(STATES[st] || st)}">${byState[st].sort((a, b) => String(a.name).localeCompare(String(b.name), 'de')).map(m => `<option value="${esc(m.ags)}">${esc(m.name)}${m.presence?.status === 'neu' ? ` (${t('app.presenceNew')})` : ''}</option>`).join('')}</optgroup>`).join('')
+    + (hidden ? `<option disabled value="">${esc(t('app.strayHidden', { n: fmt(hidden) }))}</option>` : '');
+  sel.title = state.latest?.presence ? t('app.presenceTitle') : '';
   sel.value = state.scope;
 }
 function populateOperators() {

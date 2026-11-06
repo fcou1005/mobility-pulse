@@ -520,6 +520,18 @@ for (const [ags, m] of munis) {
   for (const [k, st] of groups) { const [a, op, ty] = k.split('|'); if (a !== ags) continue; ops[op] ??= { total: 0, available: 0, types: {} }; ops[op].total += st.total; ops[op].available += st.available; ops[op].types[ty] = st.total; }
   muniOut[ags] = { ...m, c: centroids.get(ags) || null, areaKm2: areas.get(ags) ?? null, operators: ops }; // c = [lat, lon] Flächenschwerpunkt, areaKm2 aus den Grenzen
 }
+// Betriebsgebiet-Erkennung (V.presenceOf): wo ein Anbieter wirklich fährt, aus den Tagesdateien der letzten 14 Tage und dem aktuellen Stand.
+// Vereinzelte Orte (ein verirrtes Fahrzeug, sporadisch ein, zwei E-Scooter am Rand) bleiben in den Daten, erscheinen aber nicht als eigenes Gebiet.
+let presence = null;
+try {
+  const evDir0 = path.join(DATA, 'events'), cur = {};
+  const files = existsSync(evDir0) ? (await readdir(evDir0)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(-V.PRESENCE.windowDays) : [];
+  const docs = []; for (const f of files) { try { docs.push(JSON.parse(await readFile(path.join(evDir0, f), 'utf8'))); } catch {} }
+  for (const [k, st] of groups) { const [a, op] = k.split('|'); const c = (cur[`${a}|${op}`] ||= { vehicles: 0, stations: 0 }); c.vehicles += st.total || 0; c.stations += st.stations || 0; }
+  presence = V.presenceOf(docs, cur);
+  for (const [ags, m] of Object.entries(muniOut)) { const p = presence.byMuni[ags]; if (p) m.presence = { status: p.status, ops: p.ops }; }
+  log(`Betriebsgebiete (${presence.days} Tage): ${Object.entries(presence.counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
+} catch (e) { log(`Betriebsgebiete: ${e.message} – ohne Einstufung`); }
 const totals = {};
 for (const [k, st] of groups) { const ty = k.split('|')[2]; totals[ty] ??= C.emptyStats(); for (const f of Object.keys(st)) totals[ty][f] = (totals[ty][f] || 0) + st[f]; }
 
@@ -542,13 +554,14 @@ for (const r of sourceOut) { if (!FAILING.includes(r.status)) continue; r.errorC
 const latest = {
   at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt,
   boundaries: boundaries ? { count: boundaries.features.length, attribution: boundaries.attribution, source: boundaries.source } : null,
-  counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
+  counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, municipalitiesShown: presence ? Object.values(muniOut).filter(V.muniShown).length : munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
   dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size, mirrorSources: mirrorInfo.size },
   thresholds: { chargeThreshold, rangeThreshold },
   energy: { version: 1, fields: ['energyKnown', 'energyLow', 'energyRangeOnly', 'energyRangeOnlyLow', 'ready'], rangeOnlyOps: [...rangeOnlyOps].sort(), // Felder je groups-Eintrag (Q-2)
     rangeLimit: { ...C.RANGE_LIMIT, rule: 'Reichweite < min(rangeThreshold, sources[].rangeLimitKm); rangeLimitKm = share × 95. Perzentil der Reichweite der Quelle, wenn dieses < maxP95Km (ab minN Fahrzeugen), sonst null' },
     rangeFlat: { ...C.RANGE_FLAT, rule: 'Reichweite der Quelle konstant (Spanne p5–p95 < maxSpreadKm oder > maxModeShare gleiche Werte, ab minN Fahrzeugen): für Energie unbekannt (sources[].rangeFlat)' } },
   sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps, mirrors: mirrorsOut,
+  ...(presence ? { presence: { version: 1, days: presence.days, rules: V.PRESENCE, counts: Object.fromEntries(Object.keys(presence.counts).map(k => [k, Object.values(muniOut).filter(m => m.presence?.status === k).length])), strayVehicles: Object.values(muniOut).filter(m => m.presence?.status === 'vereinzelt').reduce((s0, m) => s0 + Object.values(m.operators || {}).reduce((x, o) => x + (o.total || 0), 0), 0) } } : {}),
 };
 // Messbasis und Ampel aus dem veröffentlichten Stand der Ereignisse (vom vorigen Lauf): latest.json → measure.days[Tag] (Messminuten je
 // Stunde ohne Lücken, Läufe, Regelstände der gezählten Läufe, voller Tag; lib/pulse-econ.js measureDay; abgeschlossene Tage werden

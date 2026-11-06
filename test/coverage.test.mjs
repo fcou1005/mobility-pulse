@@ -153,3 +153,30 @@ assert(V.rowId({ opKey: 'voi', ags: null, city: 'Flensburg' }) === 'voi|?flensbu
   assert(bonn?.cat === 'feed-still' && bonn.named === 'Bolt Köln-Bonn' && !bonn.gap && essen?.cat === 'gesperrt' && cv.rows.find((r) => r.opKey === 'bolt' && r.ags === '05315000')?.cat === 'abgedeckt',
     'Titel „Bolt Köln-Bonn“: Bonn → Feed still (named), Essen ohne Feed weiter „geschlossene Plattform“, Köln abgedeckt');
 }
+
+// ---------- Betriebsgebiet-Erkennung: wo ein Anbieter wirklich fährt
+{
+  const day = (d, groups) => ({ day: d, groups });
+  const vm = (n) => Array.from({ length: 24 }, (_, h) => (h >= 8 && h < 20 ? n * 60 : 0)); // n Fahrzeuge 8–20 Uhr
+  const D = (i) => `2026-11-${String(i).padStart(2, '0')}`;
+  const docs = Array.from({ length: 10 }, (_, i) => day(D(i + 1), {
+    'A|Voi|scooter': { vmin: vm(40) },                                   // Stadt: täglich 40
+    'B|Voi|scooter': { vmin: vm(i % 3 === 0 ? 1 : 0) },                  // Nachbarort: ab und zu ein E-Scooter
+    'C|Voi|scooter': { vmin: vm(4) },                                    // Randgebiet mit dauerhaft 4: echtes kleines Gebiet
+    'D|Lime|scooter': { vmin: vm(i >= 8 ? 6 : 0) },                      // Wachstum: seit 2 Tagen 6
+    'E|Dott|scooter': { vmin: vm(i >= 3 ? (i >= 7 ? 6 : 2) : 0) },        // dauerhaft 2, zuletzt 6 (verdreifacht)
+    'F|Bolt|scooter': { vmin: vm(2) },                                    // dauerhaft 2, kein Wachstum
+  }));
+  const P = V.presenceOf(docs, { 'A|Voi': { vehicles: 38 }, 'G|nextbike': { vehicles: 0, stations: 3 }, 'H|Bolt': { vehicles: 25 }, 'B|Voi': { vehicles: 1 } });
+  const st = (k) => P.byOp[k]?.status;
+  assert(st('A|Voi') === 'aktiv' && st('C|Voi') === 'aktiv' && st('G|nextbike') === 'fest', `Betriebsgebiet: Stadt (täglich 40) und dauerhaft 4 Fahrzeuge aktiv, Stationen ohne Fahrzeug fest (${st('A|Voi')}, ${st('C|Voi')}, ${st('G|nextbike')})`);
+  assert(st('B|Voi') === 'vereinzelt' && st('F|Bolt') === 'vereinzelt', `Vereinzelt: ab und zu ein E-Scooter (${P.byOp['B|Voi'].days} Tage, Median ${P.byOp['B|Voi'].median}) und dauerhaft nur 2 ohne Wachstum`);
+  assert(st('D|Lime') === 'neu' && st('E|Dott') === 'neu' && st('H|Bolt') === 'neu', 'Neu: seit 2 Tagen 6 Fahrzeuge, Verdreifachung, Start mit 25 Fahrzeugen auf einmal');
+  assert(P.byMuni.A.status === 'aktiv' && P.byMuni.B.status === 'vereinzelt' && P.counts.vereinzelt === 2 && V.muniShown({ presence: P.byMuni.A }) && !V.muniShown({ presence: P.byMuni.B }) && V.muniShown({}),
+    `Gemeinde: bester Stand ihrer Anbieter; gezeigt außer vereinzelt (${JSON.stringify(P.counts)})`);
+  // Abdeckung: mit Erkennung zählt der Stand, nicht die Momentaufnahme
+  const lat = JSON.parse(JSON.stringify(latest));
+  lat.municipalities['03241005'].presence = { status: 'aktiv', ops: { Dott: 'aktiv' } };
+  const cv2 = V.coverage({ claims, latest: lat, features, daily, prev, now: Date.parse('2026-11-01T18:00:00Z') });
+  assert(cv2.rows.some((r) => r.opKey === 'dott' && r.ags === '03241005') && !cv2.operators.find((o) => o.opKey === 'dott').stray, 'Abdeckung: Garbsen mit 4 Fahrzeugen, aber dauerhaft da (aktiv) → eigene Zeile statt Streuung');
+}

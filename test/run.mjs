@@ -199,6 +199,9 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   assert(road.length === 1 && inc.sources.road?.roads === 2 && inc.sources.road.fails === 2 && inc.sources.road.items === 2, `Autobahn: Sperrung + Stau → ${road.join(', ')} zur Stunde ${h}; Baustellenhinweis zählt nicht; Ausfall einer Autobahn bricht nicht ab`);
   const fl = await readFile('test/out/forecast/latest.json', 'utf8').then(JSON.parse).catch(() => null), fg = await readFile('test/out/forecast/log.json', 'utf8').then(JSON.parse).catch(() => null);
   assert(fl && fl.version === 1 && ['insufficient', 'learning', 'active'].includes(fl.status) && fg && fg.version === 1 && typeof fg.evals === 'object', `Prognose: forecast/latest.json und log.json vom Sammler geschrieben (Status ${fl?.status}, ${fl?.trainDays} Tage)`);
+  const pr = l4.presence, mp = Object.values(l4.municipalities || {});
+  assert(pr?.version === 1 && pr.days >= 1 && mp.length && mp.every(m => ['fest', 'aktiv', 'neu', 'vereinzelt'].includes(m.presence?.status)) && l4.counts.municipalitiesShown === mp.filter(m => m.presence.status !== 'vereinzelt').length,
+    `Betriebsgebiete: jede Gemeinde eingestuft (${JSON.stringify(pr?.counts)}), gezeigt ${l4.counts?.municipalitiesShown} von ${mp.length}`);
   assert(fl.env?.sources?.days >= 1 && fl.env.sources.warnAt && fl.env.sources.roadAt && fg.memory?.v === 1, `Prognose kennt die Umgebung (${fl.env?.sources?.days} Tagesdateien, Ereignisliste ${fl.env?.sources?.curated} Einträge) und führt das Gedächtnis`);
 }
 {
