@@ -8,7 +8,7 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw5gkh0g';
+import { hourOf, dayOf } from './pulse-track.js?v=mw5h654v';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -102,6 +102,52 @@ export function ctxLookup(docs = [], curated = []) {
       for (const e of cur) if (s >= e.from && s <= e.to && (e.all || e.laender.has(land) || e.ags.has(String(ags)))) out[CTX_KEYS.indexOf(e.k)] = 1; }
     return out;
   };
+}
+
+// ---------- Sport: Heimspiele aus OpenLigaDB (ODbL) als Veranstaltungen ----------
+// Je Heimspiel ein Eintrag wie in data/ereignisse.json (art 'veranstaltung' → Merkmal event) für die Gemeinde des Stadions (data/sport-spielorte.json),
+// von der vollen Stunde vor Anstoß − beforeMin bis Anstoß + afterMin (Spiel, Halbzeit, Abreise). Nur Spiele im Fenster [now − pastDays, now + aheadDays]:
+// weiter vorn stehen oft nur Platzhalter-Anstoßzeiten, bis die Liga die Spieltage zeitgenau ansetzt.
+export const SPORT = { leagues: ['bl1', 'bl2', 'bl3'], beforeMin: 60, afterMin: 180, pastDays: 60, aheadDays: 3, keepAheadDays: 21, refreshH: 6 };
+/** OpenLigaDB-Saison (Startjahr): ab Juli das laufende Jahr */
+export const sportSeason = (now) => { const d = new Date(now); return d.getUTCMonth() >= 6 ? d.getUTCFullYear() : d.getUTCFullYear() - 1; };
+/** OpenLigaDB-Spiele → kompakte Zeilen [matchID, Liga, Anstoß UTC (ms), Heim, Gast] (ohne Anstoßzeit oder Mannschaft: entfällt) */
+export function compactMatches(list, league) {
+  const out = [];
+  for (const m of Array.isArray(list) ? list : []) {
+    const t = Date.parse(m?.matchDateTimeUTC ?? ''), h = m?.team1?.teamName, g = m?.team2?.teamName;
+    if (Number.isFinite(t) && typeof h === 'string' && h && typeof g === 'string') out.push([m.matchID ?? null, league, t, h, g]);
+  }
+  return out;
+}
+const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const localStamp = (t) => { const d = new Date(t); return `${dayOf(t)}T${String(hourOf(t)).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
+/**
+ * Heimspiele → Einträge. rows: compactMatches-Zeilen, venues: data/sport-spielorte.json ({ ligen: { bl1: 'alle' | 'liste' }, vereine: { Name: { ort, land, ags?, alias? } } }),
+ * resolve(ort, land) → ags | null. Rückgabe { entries, unknown: [Heimmannschaft ohne Spielort in Ligen „alle“], noAgs: [Ort ohne Gemeinde] }
+ */
+export function sportEntries(rows, venues, { now, resolve = () => null, beforeMin = SPORT.beforeMin, afterMin = SPORT.afterMin, pastDays = SPORT.pastDays, aheadDays = SPORT.aheadDays, base = 'https://api.openligadb.de' } = {}) {
+  const byName = new Map();
+  for (const [name, v] of Object.entries(venues?.vereine || {})) for (const n of [name, ...(Array.isArray(v?.alias) ? v.alias : [])]) byName.set(norm(n), v);
+  const entries = [], unknown = new Set(), noAgs = new Set(), agsOf = new Map();
+  for (const [id, lg, t, home, guest] of rows || []) {
+    if (!(t >= now - pastDays * 86400e3 && t <= now + aheadDays * 86400e3)) continue;
+    const v = byName.get(norm(home));
+    if (!v) { if ((venues?.ligen?.[lg] ?? 'alle') === 'alle') unknown.add(home); continue; }
+    const key = `${v.ort}|${v.land}`; if (!agsOf.has(key)) agsOf.set(key, v.ags || resolve(v.ort, v.land) || null);
+    const ags = agsOf.get(key); if (!ags) { noAgs.add(`${v.ort} (${v.land})`); continue; }
+    const from = Math.floor((t - beforeMin * 60e3) / 3600e3) * 3600e3;
+    entries.push({ art: 'veranstaltung', von: localStamp(from), bis: localStamp(t + afterMin * 60e3), gebiet: { ags: [ags] }, titel: `${home} – ${guest} (${lg}, Anstoß ${localStamp(t).slice(11)})`,
+      quelle: `${base}/getmatchdata/${lg}/${sportSeason(t)}`, id: id == null ? null : `openligadb:${id}` });
+  }
+  entries.sort((a, b) => a.von.localeCompare(b.von));
+  return { entries, unknown: [...unknown].sort(), noAgs: [...noAgs].sort() };
+}
+/** Gemeinde zu Ortsname und Land aus den Grenzen (features[].properties { ags, name, state }); Namen wie „Cottbus/Chóśebuz“ passen über den Anfang */
+export function placeResolver(features) {
+  const idx = new Map();
+  for (const f of features || []) { const p = f?.properties; if (!p?.ags || !p.name) continue; const k = `${p.state}|${norm(String(p.name).split(/[/,(]/)[0])}`; if (!idx.has(k)) idx.set(k, []); idx.get(k).push(p.ags); }
+  return (ort, land) => { const l = idx.get(`${land}|${norm(ort)}`); return l?.length === 1 ? l[0] : null; };
 }
 
 /** Fehlende Wettertage (UTC) für die Ortstage der Ereignisdateien: je Ortstag D braucht die Prognose die UTC-Tage D−1 (23 Uhr) und D */

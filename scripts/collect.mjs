@@ -1131,6 +1131,42 @@ try {
   log(`Verfolgung: ${Object.keys(tr.state.v).length} Kennungen im Zustand${tr.first ? ' (erster Lauf)' : ` · Fahrten begonnen ${ev.start}, beendet ${ev.end}, Umsetzungen ${ev.reloc}, Akkutausch ${ev.swap}`} · lange Standzeiten ${tr.idleLong.length}`);
 }
 
+// Sport-Ereignisse (lib/pulse-context.js SPORT): Heimspiele 1.–3. Liga aus OpenLigaDB (ODbL), je Liga höchstens alle 6 h abgefragt; Spielorte aus
+// data/sport-spielorte.json → sport.json (kompakte Spiele im Fenster, Einträge wie data/ereignisse.json, Vereine ohne Spielort). In die Prognose
+// (Merkmal event) erst ab aktivAb – gesammelt wird vorher schon. Fällt OpenLigaDB aus, bleiben die zuletzt geholten Spiele. SPORT_URL leer = aus.
+let sportCurated = [];
+{
+  const base = process.env.SPORT_URL ?? 'https://api.openligadb.de', sf = path.join(DATA, 'sport.json');
+  try {
+    const venues = JSON.parse(await readFile(process.env.SPORT_VENUES_FILE || path.join(ROOT, 'data', 'sport-spielorte.json'), 'utf8'));
+    const prev = existsSync(sf) ? JSON.parse(await readFile(sf, 'utf8')) : null;
+    let rows = Array.isArray(prev?.matches) ? prev.matches : []; const fetched = { ...(prev?.fetched || {}) };
+    if (base) {
+      const season = CX.sportSeason(now);
+      for (const lg of CX.SPORT.leagues) {
+        if (fetched[lg]?.at && now - fetched[lg].at < CX.SPORT.refreshH * 3600e3 && fetched[lg].season === season) continue;
+        const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 20e3);
+        try {
+          const r = await fetch(`${base}/getmatchdata/${lg}/${season}`, { headers: { 'User-Agent': UA, accept: 'application/json' }, signal: ctrl.signal });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const list = CX.compactMatches(await r.json(), lg);
+          rows = [...rows.filter(x => x[1] !== lg), ...list]; fetched[lg] = { at: now, season, n: list.length };
+        } catch (e) { fetched[lg] = { ...(fetched[lg] || {}), failedAt: now, error: String(e?.message || e).slice(0, 80) }; log(`Sport ${lg}: ${e?.message || e}`); } finally { clearTimeout(tm); }
+      }
+    }
+    // nur das Fenster behalten, das die Prognose braucht (rückwärts Training und Gedächtnis, vorwärts Ansetzungen der nächsten Wochen)
+    rows = rows.filter(x => x[2] >= now - CX.SPORT.pastDays * 86400e3 && x[2] <= now + CX.SPORT.keepAheadDays * 86400e3).sort((a, b) => a[2] - b[2] || String(a[0]).localeCompare(String(b[0])));
+    const sp = CX.sportEntries(rows, venues, { now, resolve: CX.placeResolver(boundaries?.features), base: base || 'https://api.openligadb.de' });
+    const activeFrom = Date.parse(venues.aktivAb ?? ''), active = !Number.isFinite(activeFrom) || now >= activeFrom;
+    sportCurated = active ? CX.checkCurated({ ereignisse: sp.entries }).ok : [];
+    await writeFile(sf, JSON.stringify({ version: 1, at: now, source: 'OpenLigaDB (https://www.openligadb.de), Open Database License (ODbL) 1.0', license: 'ODbL-1.0', leagues: CX.SPORT.leagues,
+      window: { beforeMin: CX.SPORT.beforeMin, afterMin: CX.SPORT.afterMin, pastDays: CX.SPORT.pastDays, aheadDays: CX.SPORT.aheadDays }, activeFrom: venues.aktivAb ?? null, active, fetched,
+      matchFields: ['id', 'liga', 'anstoss_utc_ms', 'heim', 'gast'], matches: rows, entries: sp.entries, unknown: sp.unknown, noAgs: sp.noAgs }));
+    if (sp.unknown.length || sp.noAgs.length) log(`Sport: ohne Spielort ${sp.unknown.join(', ') || '–'} · ohne Gemeinde ${sp.noAgs.join(', ') || '–'}`);
+    log(`Sport: ${rows.length} Spiele im Fenster, ${sp.entries.length} Heimspiele als Veranstaltung${active ? ' (in der Prognose)' : ` (in der Prognose ab ${venues.aktivAb})`}`);
+  } catch (e) { log(`Sport: ${e.message}`); }
+}
+
 // Prognose-Engine (lib/pulse-forecast.js): ein gepooltes Modell über alle Anbieter und Gemeinden, Selbstprüfung per Rolling Origin (ein Tag voraus)
 // und Live-Abgleich ausgegebener Prognosen mit der Realität → forecast/latest.json (nächste 24 Stunden) und forecast/log.json. Höchstens alle
 // FORECAST_EVERY_MIN Minuten (Standard 60); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
@@ -1148,7 +1184,7 @@ if (process.env.FORECAST !== '0') {
       // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
       const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
       const cur = CX.checkCurated(await rd(path.join(ROOT, 'data', 'ereignisse.json'))); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: cur.ok, prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...cur.ok, ...sportCurated], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
       await mkdir(dir, { recursive: true });
       await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
       const l = res.latest;
@@ -1201,6 +1237,7 @@ if (boundaries) {
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
     '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
     '- Umgebungsereignisse (`incidents/<Tag>.json`, nur Kennzeichen je Gemeinde und Stunde, keine Meldungstexte): Wetterwarnungen des Deutschen Wetterdienstes (DWD Open Data, über Bright Sky); Sperrungen und Staus auf Autobahnen aus der Verkehrsinformation der Autobahn GmbH des Bundes (verkehr.autobahn.de; ausdrückliche Nutzungsbedingungen der Schnittstelle nicht gefunden, Quelle: Die Autobahn GmbH des Bundes). Streiks und Veranstaltungen aus der gepflegten Liste `data/ereignisse.json` im Code-Zweig (je Eintrag mit Quelle).',
+    '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
     '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',

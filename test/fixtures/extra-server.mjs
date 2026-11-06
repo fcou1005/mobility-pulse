@@ -73,6 +73,13 @@ export async function startExtra() {
       if (sv === 'warning') return json({ warning: [{ coordinate: { lat: '48.776', long: '9.176' }, future: false, abnormalTrafficType: 'STATIONARY_TRAFFIC' }, { coordinate: { lat: '48.776', long: '9.176' }, future: false, description: ['Baustelle'], startTimestamp: '2025-01-01T00:00:00.000+0100' }] });
       return json({}, 404);
     }
+    if (kind === 'getmatchdata') { // OpenLigaDB: bl1 mit Heimspiel in 2 h (Testverein → Tübingen), unbekanntem Heimverein, altem Spiel, Spiel ohne Anstoß; bl2 leer; bl3 Fehler
+      const [, , lg] = u.pathname.split('/'), t = Math.floor(Date.now() / 3600e3 + 2) * 3600e3 + 30 * 60e3, iso = (x) => new Date(x).toISOString().replace('.000Z', 'Z');
+      const m = (id, at, h, g) => ({ matchID: id, matchDateTime: null, matchDateTimeUTC: at == null ? null : iso(at), leagueShortcut: lg, team1: { teamName: h, shortName: h }, team2: { teamName: g, shortName: g }, location: null });
+      if (lg === 'bl1') return json([m(1, t, 'Testverein', 'Gast FC'), m(2, t, 'Unbekannt FC', 'Gast FC'), m(3, Date.now() - 70 * 86400e3, 'Testverein', 'Alt FC'), m(4, null, 'Testverein', 'Ohne Zeit')]);
+      if (lg === 'bl2') return json([]);
+      return json({}, 500);
+    }
     if (kind === 'cb') return json(cb());
     if (kind === 'auth') {
       if (key !== 'geheim-123') return json({}, 401);

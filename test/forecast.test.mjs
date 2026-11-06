@@ -475,3 +475,25 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const r4 = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: lg, now: Date.parse(`${addDays(DAY0, NDAY)}T09:30:00Z`) });
   assert(r4.latest.active === 'week' && r4.latest.totals.every(Number.isFinite) && r4.latest.decision?.combined?.week, `Betrieb: veröffentlicht wird ${r4.latest.active}, Entscheidung in latest.json (decision)`);
 }
+// ---------- Sport: Heimspiele aus OpenLigaDB als Veranstaltungen (lib/pulse-context.js sportEntries)
+{
+  const now = Date.parse('2026-11-06T12:00:00Z'), k = Date.parse('2026-11-07T17:30:00Z'); // Anstoß 18:30 Ortszeit
+  const rows = CX.compactMatches([{ matchID: 7, matchDateTimeUTC: '2026-11-07T17:30:00Z', team1: { teamName: 'VfB Stuttgart' }, team2: { teamName: 'SV Werder Bremen' } },
+    { matchID: 8, matchDateTimeUTC: '2026-11-07T14:30:00Z', team1: { teamName: 'Energie Cottbus' }, team2: { teamName: 'Hertha BSC' } },
+    { matchID: 9, matchDateTimeUTC: '2026-11-07T12:00:00Z', team1: { teamName: 'SG Sonnenhof Großaspach' }, team2: { teamName: 'MSV Duisburg' } },
+    { matchID: 10, matchDateTimeUTC: '2026-11-07T12:00:00Z', team1: { teamName: 'Neuer Verein' }, team2: { teamName: 'X' } },
+    { matchID: 11, matchDateTimeUTC: '2026-11-20T19:30:00Z', team1: { teamName: 'VfB Stuttgart' }, team2: { teamName: 'Z' } },
+    { matchID: 12, matchDateTimeUTC: null, team1: { teamName: 'VfB Stuttgart' }, team2: { teamName: 'Y' } }], 'bl1');
+  rows[1][1] = 'bl2'; rows[2][1] = 'bl3'; rows[3][1] = 'bl2';
+  const venues = { ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { 'VfB Stuttgart': { ort: 'Stuttgart', land: 'BW' }, 'FC Energie Cottbus': { ort: 'Cottbus', land: 'BB', alias: ['Energie Cottbus'] } } };
+  const resolve = CX.placeResolver([{ properties: { ags: '08111000', name: 'Stuttgart', state: 'BW' } }, { properties: { ags: '12052000', name: 'Cottbus/Chóśebuz', state: 'BB' } }, { properties: { ags: 'x1', name: 'Münster', state: 'HE' } }]);
+  const r = CX.sportEntries(rows, venues, { now, resolve });
+  const vfb = r.entries.find(e => e.gebiet.ags[0] === '08111000'), cb = r.entries.find(e => e.gebiet.ags[0] === '12052000');
+  assert(rows.length === 5 && CX.sportSeason(now) === 2026 && CX.sportSeason(Date.parse('2027-03-01T00:00:00Z')) === 2026 && CX.sportSeason(Date.parse('2027-07-01T00:00:00Z')) === 2027, 'Sport: Spiele ohne Anstoß entfallen; Saison = Startjahr (ab Juli)');
+  assert(vfb?.von === '2026-11-07T17:00' && vfb.bis === '2026-11-07T21:30' && vfb.art === 'veranstaltung' && vfb.quelle.endsWith('/getmatchdata/bl1/2026') && vfb.id === 'openligadb:7', `Sport: Anstoß 18:30 → Veranstaltung 17:00–21:30 Ortszeit in Stuttgart (${vfb?.von}–${vfb?.bis})`);
+  assert(cb?.von === '2026-11-07T14:00' && r.entries.length === 2 && r.unknown.join() === 'Neuer Verein' && !r.entries.some(e => /Großaspach/.test(e.titel)), 'Sport: Alias und „Cottbus/Chóśebuz“ aufgelöst; 3. Liga nur gelistete Vereine; unbekannter Verein der 2. Liga gemeldet; Spiel in 14 Tagen noch nicht');
+  const ctx = CX.ctxLookup([], CX.checkCurated({ ereignisse: r.entries }).ok), iE = CX.CTX_KEYS.indexOf('event');
+  assert(ctx('08111000', '2026-11-07', 16)[iE] === 0 && ctx('08111000', '2026-11-07', 17)[iE] === 1 && ctx('08111000', '2026-11-07', 21)[iE] === 1 && ctx('08111000', '2026-11-07', 22)[iE] === 0 && ctx('09162000', '2026-11-07', 18)[iE] === 0,
+    'Sport: Merkmal event in Stuttgart 17–21 Uhr, nicht davor, danach oder anderswo');
+  assert(resolve('Münster', 'NW') === null && CX.sportEntries(rows, { ...venues, vereine: { 'VfB Stuttgart': { ort: 'Nirgendwo', land: 'BW' } } }, { now, resolve }).noAgs.join() === 'Nirgendwo (BW)', 'Sport: Ort ohne Gemeinde gemeldet, Land muss passen');
+}
