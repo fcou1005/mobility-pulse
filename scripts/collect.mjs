@@ -1010,6 +1010,14 @@ try {
       }
     }
   } catch (e) { log(`Zellen-Reparatur: ${e.message}`); }
+  // laufender Tag: schon veröffentlichte Landesdateien ohne Sekundärunterdrückung sofort nachziehen (nicht erst beim nächsten Bandwechsel)
+  try {
+    const dToday = path.join(cellsDir, tr.day);
+    if (existsSync(dToday)) for (const f of (await readdir(dToday)).filter(f => f.endsWith('.json'))) {
+      const fp = path.join(dToday, f), doc = JSON.parse(await readFile(fp, 'utf8'));
+      if (doc.minCount && !(doc.suppress >= T.SUPPRESS_VERSION)) { T.secondarySuppress(doc.munis, doc.below || {}, { min: doc.minCount }); doc.suppress = T.SUPPRESS_VERSION; await writeFile(fp, JSON.stringify(doc)); }
+    }
+  } catch (e) { log(`Zellen heute: ${e.message}`); }
   // Start-Ziel-Ströme (nur stabile Kennungen; lib/pulse-track.js publishFlows): Tagessumme privat in TRACK_DIR, veröffentlicht wird ein Tag
   // erst nach Tagesende (flows/<Tag>.json, ≥ T.FLOW_MIN = 5 Fahrten je Zeile, Top 300 je Gemeinde, 30 Tage) – ohne privates Verzeichnis keine Ströme
   if (TRACK_DIR) {

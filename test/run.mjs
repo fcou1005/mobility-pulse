@@ -180,6 +180,8 @@ await writeFile(`test/out/events/${ydM}.json`, JSON.stringify({ day: ydM, versio
   published: { at: Date.now(), through: null, complete: true } }));
 const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.000Z', source: 'OpenHolidays API (openholidaysapi.org, ODbL)', from: '2025-01-01', to: '2026-12-31', states: { BW: { '2026-11-02': 'F' } } });
 await writeFile('test/out/calendar.json', calOld);
+// laufender Tag ohne Sekundärunterdrückung (veröffentlicht vor dem 6.11.2026): der nächste Lauf zieht nach
+{ const dT = `test/out/cells/${T.dayOf(Date.now())}`; for (const f of (await readdir(dT).catch(() => [])).filter(f => f.endsWith('.json'))) { const doc = JSON.parse(await readFile(path.join(dT, f), 'utf8')); delete doc.suppress; await writeFile(path.join(dT, f), JSON.stringify(doc)); } }
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, TICKETMASTER_URL: `${ex.base}/tm`, TICKETMASTER_KEY: 'tm-test', FORECAST_EVERY_MIN: '0' });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
