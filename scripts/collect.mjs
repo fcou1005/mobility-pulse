@@ -1183,8 +1183,12 @@ if (process.env.FORECAST !== '0') {
       const red = new Set(Object.entries(latest.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k)); // rote Ampel: nicht plausibel gezählt
       // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
       const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
-      const cur = CX.checkCurated(await rd(path.join(ROOT, 'data', 'ereignisse.json'))); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...cur.ok, ...sportCurated], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
+      const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
+      // Veranstaltungen (Konzerte, Feste) wie Sport erst ab veranstaltungenAb in die Prognose (Ende der Lernphase); Streiks sofort
+      const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
+      const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung');
+      if (curOk.length < cur.ok.length) log(`Ereignisliste: ${cur.ok.length - curOk.length} Veranstaltungen vorgemerkt, in der Prognose ab ${curDoc.veranstaltungenAb}`);
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red });
       await mkdir(dir, { recursive: true });
       await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
       const l = res.latest;
