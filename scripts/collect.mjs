@@ -696,15 +696,18 @@ async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true
 }
 
 // Autobahn (verkehr.autobahn.de, Autobahn GmbH des Bundes): Sperrungen und Staus mit Koordinate → Gemeinde, eingetragen zur aktuellen Ortsstunde
-// in incidents/<Ortstag>.json (Merkmal „road“ der Prognose). Höchstens einmal je 55 Minuten (rund 220 Abrufe: Liste der Autobahnen, je Autobahn
-// Sperrungen und Verkehrsmeldungen); Baustellen-Hinweise ohne Stau und geplante Sperrungen zählen nicht. AUTOBAHN_URL leer = aus.
+// in incidents/<Ortstag>.json (Merkmal „road“ der Prognose). Einmal je Ortsstunde (rund 220 Abrufe: Liste der Autobahnen, je Autobahn Sperrungen
+// und Verkehrsmeldungen), damit keine Stunde ohne Beobachtung bleibt; nur frische Sperrungen und Staus (CX.ROAD_FRESH), keine Dauer-Baustellen.
+// AUTOBAHN_URL leer = aus.
 // Gespeichert werden nur Gemeinde und Stunde, keine Meldungstexte.
 {
   const base = process.env.AUTOBAHN_URL ?? 'https://verkehr.autobahn.de/o/autobahn';
   if (base && index) {
     try {
       const docs = await incidentDocs([T.dayOf(now)]), doc = docs.get(T.dayOf(now)), last = Date.parse(doc.sources?.road?.at || 0);
-      if (!(now - last < 55 * 60e3)) {
+      // Fassung 2 (6.11.2026 abends): Fassung 1 zählte auch monatelange Bauphasen – deren Kennzeichen des Tages einmal löschen
+      if (doc.sources?.road && !(doc.sources.road.v >= 2)) { for (const a of Object.values(doc.ags)) delete a.road; doc.sources.road.v = 2; }
+      if (!(now - last < 55 * 60e3) || !(Number.isFinite(last) && T.dayOf(last) === T.dayOf(now) && T.hourOf(last) === T.hourOf(now))) {
         const list = await fetchJson(`${base}/`, { retry: 0 }), roads = Array.isArray(list.json?.roads) ? list.json.roads.filter(r => /^A\d+$/.test(String(r).trim())).map(r => String(r).trim()) : [];
         if (!roads.length) log(`Autobahn: Liste nicht erreichbar${list.status ? ` (HTTP ${list.status})` : ''}`);
         else {
@@ -716,7 +719,7 @@ async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true
             for (const it of arr) { const v = CX.roadItem(it, sv, now); if (v) items.push(v); }
           }));
           const n = CX.addRoad(docs, items, (lat, lon) => C.assignMunicipality(index, lat, lon)?.ags ?? null, now);
-          doc.sources.road = { at: new Date(now).toISOString(), roads: roads.length, items: items.length, fails, ...(done < jobs.length ? { partial: +(done / jobs.length).toFixed(2) } : {}) };
+          doc.sources.road = { v: 2, at: new Date(now).toISOString(), roads: roads.length, items: items.length, fails, ...(done < jobs.length ? { partial: +(done / jobs.length).toFixed(2) } : {}) };
           await writeIncidents(docs);
           log(`Autobahn: ${roads.length} Autobahnen, ${items.filter(x => x.kind === 'closure').length} Sperrungen, ${items.filter(x => x.kind === 'jam').length} Staus, ${n} Gemeinden betroffen${fails ? `, ${fails} Abrufe ohne Antwort` : ''}`);
         }

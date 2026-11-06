@@ -8,7 +8,7 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw5b153v';
+import { hourOf, dayOf } from './pulse-track.js?v=mw5bywr0';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -45,15 +45,20 @@ export function addAlerts(docs, alerts, agsCell, now, { maxAheadH = 48, from = n
   return n;
 }
 
-/** Autobahn-Meldung → { lat, lon, kind: 'closure' | 'jam' } oder null (Baustellen-Hinweise ohne Stau, geplante Sperrungen, ohne Koordinate) */
+// Nur frische Ereignisse zählen: Bauphasen-Sperrungen laufen oft monatelang (Beginn Monate zurück) und wären je Gemeinde fast konstant – das
+// Modell könnte sie nicht vom Gruppeneffekt trennen, und für die Zukunft ist der Wert unbekannt (dort 0). Deshalb: Sperrung, die vor höchstens
+// ROAD_FRESH.closureH Stunden begonnen hat oder ohne Beginn (kurzfristige Sperrfenster, z. B. nachts), Stau seit höchstens ROAD_FRESH.jamH Stunden.
+export const ROAD_FRESH = { closureH: 24, jamH: 6 };
+/** Autobahn-Meldung → { lat, lon, kind: 'closure' | 'jam' } oder null (Dauer-Baustellen, geplante Sperrungen, alte Staumeldungen, ohne Koordinate) */
 export function roadItem(it, service, now) {
   const lat = +it?.coordinate?.lat, lon = +it?.coordinate?.long;
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || it.future === true) return null;
   const start = it.startTimestamp ? Date.parse(it.startTimestamp) : NaN;
   if (Number.isFinite(start) && start > now) return null;
-  if (service === 'closure') return { lat, lon, kind: 'closure' };
+  const age = Number.isFinite(start) ? (now - start) / 3600e3 : 0;
+  if (service === 'closure') return age <= ROAD_FRESH.closureH ? { lat, lon, kind: 'closure' } : null;
   const type = String(it.abnormalTrafficType || ''), text = [it.title, ...(Array.isArray(it.description) ? it.description : [])].join(' ');
-  const jam = /STATIONARY|QUEUING|SLOW|HEAVY/.test(type) || (/\bStau\b|stockender Verkehr|zähfließend/i.test(text) && (!Number.isFinite(start) || now - start < 6 * 3600e3));
+  const jam = (/STATIONARY|QUEUING|SLOW|HEAVY/.test(type) || /\bStau\b|stockender Verkehr|zähfließend|Stillstand/i.test(text)) && age <= ROAD_FRESH.jamH;
   return jam ? { lat, lon, kind: 'jam' } : null;
 }
 

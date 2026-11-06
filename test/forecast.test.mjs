@@ -174,6 +174,8 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const out = F.hybridAdjust(R, ds, 2, rows, new Float64Array(24).fill(1)), f = (Y + K) / (20 + K);
   assert(out.every(x => Math.abs(x - f) < 1e-9), `Hybrid: Faktor (Fahrten am Bezugstag + ${K}) ÷ (Basis derselben Stunden + ${K}) = ${f.toFixed(3)}, Lückenstunden des Bezugstags zählen nicht`);
   assert(F.hybridAdjust(R, ds, 0, rows, new Float64Array(24).fill(1)).every(x => x === 1), 'Hybrid ohne vollständigen Vortag: Basis unverändert');
+  const sat = rows.map(r => ({ ...r, cls: 2 })), fer = rows.map(r => ({ ...r, cls: 1 }));
+  assert(F.hybridAdjust(R, ds, 2, sat, new Float64Array(24).fill(1)).every(x => x === 1) && F.hybridAdjust(R, ds, 2, fer, new Float64Array(24).fill(1)).every(x => Math.abs(x - f) < 1e-9), 'Hybrid: Samstag ohne Samstag als Bezugstag bleibt beim Modell (kein Freitagsniveau); Ferienwerktag darf einen Werktag nehmen');
   // Bezugstag gleichen Tagtyps: für einen Sonntag der Sonntag davor, nicht der Samstag
   const d14 = Array.from({ length: 14 }, (_, i) => addDays(DAY0, i)), ds14 = F.assignEras(d14.map((d, i) => F.dayFromDoc(makeDoc(d, { level: i === 6 ? 3 : 1 }), null))), R14 = F.buildRows(ds14);
   const ags = groups[0][0].split('|')[0], gi = R14.keys.indexOf(groups[0][0]), cls = ds14[13].cls(ags), sumY = (j) => ds14[j].groups[groups[0][0]].start.reduce((a, b) => a + b, 0);
@@ -352,6 +354,8 @@ import * as CX from '../lib/pulse-context.js';
   const it = (o) => ({ coordinate: { lat: '48.5', long: '9.0' }, future: false, ...o });
   const r = [CX.roadItem(it({}), 'closure', now), CX.roadItem(it({ future: true }), 'closure', now), CX.roadItem(it({ abnormalTrafficType: 'STATIONARY_TRAFFIC' }), 'warning', now), CX.roadItem(it({ description: ['Fahrbahnverengung, Staugefahr'], startTimestamp: '2026-01-01T00:00:00+01:00' }), 'warning', now), CX.roadItem(it({ title: 'A8 Stau 4 km', startTimestamp: new Date(now - 3600e3).toISOString() }), 'warning', now)];
   assert(r[0]?.kind === 'closure' && !r[1] && r[2]?.kind === 'jam' && !r[3] && r[4]?.kind === 'jam', 'Autobahn: Sperrung zählt, geplante nicht; Stau zählt, Dauer-Baustellenhinweis nicht');
+  const old1 = CX.roadItem(it({ startTimestamp: '2026-09-19T00:00:00+02:00' }), 'closure', now), old2 = CX.roadItem(it({ abnormalTrafficType: 'QUEUING_TRAFFIC', startTimestamp: new Date(now - 26 * 3600e3).toISOString() }), 'warning', now);
+  assert(!old1 && !old2, 'Autobahn: monatelange Bauphasen-Sperrung und 26 Stunden alte Staumeldung zählen nicht (sonst fast konstant je Gemeinde, Zukunft unbekannt)');
   const hit = CX.addRoad(docsI, [{ lat: 48.5, lon: 9.0 }, { lat: 1, lon: 1 }], (lat) => (lat > 40 ? '08416041' : null), now);
   assert(hit === 1 && docsI.get(T_dayOf(now)).ags['08416041'].road[T_hourOf(now)] === 1, 'Autobahn: Meldung → Gemeinde zur Stunde der Beobachtung');
   const cur = CX.checkCurated({ ereignisse: [{ art: 'streik-oepnv', von: '2026-11-10', gebiet: { laender: ['BW'] }, quelle: 'https://x' }, { art: 'streik-bahn', von: '2026-11-11T04:00', bis: '2026-11-11T10:00', gebiet: 'DE', quelle: 'https://y' }, { art: 'veranstaltung', von: '2026-11-12', gebiet: { ags: ['08111000'] }, quelle: 'https://z' }, { art: 'demo', von: '2026-11-10', gebiet: 'DE', quelle: 'q' }, { art: 'streik-oepnv', von: '2026-11-10', gebiet: 'DE' }] });
