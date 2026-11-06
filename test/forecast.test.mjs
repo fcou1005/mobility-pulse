@@ -431,3 +431,47 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const bH = F.scoreDay(RD, teD, F.predictPooled(F.fitPooled(RD, trD, { halfLife: 7 }), RD, teD)).bias, b0 = F.scoreDay(RD, teD, F.predictPooled(F.fitPooled(RD, trD, { halfLife: 0 }), RD, teD)).bias;
   assert(bH < b0 - 0.05 && bH > 0, `Jüngere Tage zählen mehr: im Abfall liegt gepoolt nur ${(bH * 100).toFixed(0)} % statt ${(b0 * 100).toFixed(0)} % zu hoch`);
 }
+
+// ---------- Messaufbau: Schattenprognosen, faire Vergleichswerte, Spitzen, 80-%-Band, Entscheidungsregel (6.11.2026 abends)
+{
+  // Spitzen
+  const S = (arr) => new Map(arr.map((v, h) => [h, v]));
+  const a = Array.from({ length: 24 }, (_, h) => 10 + 100 * Math.exp(-((h - 17) ** 2) / 4)), f1 = a.map((v, h) => a[(h + 1) % 24]), f2 = a.map(v => v * 1.2);
+  const p1 = F.peakScore([{ a: S(a), f: S(f1) }]), p2 = F.peakScore([{ a: S(a), f: S(f2) }]), p3 = F.peakScore([{ a: S(a.slice(0, 20)), f: S(f2) }]);
+  assert(p1.hit === 0 && p1.hit1 === 1 && p2.hit === 1 && Math.abs(p2.top3 - 0.2) < 1e-9 && p3 === null, `Spitzen: eine Stunde früher → nicht genau, aber ±1 h; 20 % zu hoch → Spitze genau, Top-3-Fehler ${p2.top3}; zu wenige Stunden → keine Wertung`);
+  // Vergleichswerte als Prognose: letzte beobachtete gleiche Stunde (inkl. heute schon beobachteter Stunden) und Vorwoche
+  const ds = F.assignEras(days12.map(d => F.dayFromDoc(makeDoc(d), null))), R = F.buildRows(ds);
+  const fut = [{ day: addDays(DAY0, NDAY), h: 9, cls: () => 0 }, { day: addDays(DAY0, NDAY), h: 22, cls: () => 0 }], Fu = F.buildFuture(R, fut, () => 1), sel = Array.from({ length: Fu.n }, (_, i) => i);
+  const g0 = groups[0][0], gi = R.keys.indexOf(g0), rowsOf = (dIdx, h) => { for (let i = 0; i < R.n; i++) if (R.day[i] === dIdx && R.g[i] === gi && R.hr[i] === h) return R.y[i]; return null; };
+  const nv = F.predictBaseline(R, ds, ds.length, Fu, sel, 'naive', (i) => fut[Fu.fh[i]].day), wk = F.predictBaseline(R, ds, ds.length, Fu, sel, 'week', (i) => fut[Fu.fh[i]].day);
+  const j9 = sel.findIndex(i => Fu.g[i] === gi && Fu.hr[i] === 9);
+  assert(nv[j9] === rowsOf(NDAY - 1, 9) && wk[j9] === rowsOf(NDAY - 7, 9), 'Vergleichswerte: „wie gestern“ = letzte beobachtete gleiche Stunde, Vorwoche = gleicher Wochentag 7 Tage zuvor');
+  // Betrieb: Ausgabe mit allen Kandidaten, Live-Abgleich gegen faire Vergleichswerte, Band, Spitzen
+  const NOW = Date.parse(`${addDays(DAY0, NDAY - 2)}T05:00:00Z`), dd = docs.slice(0, NDAY - 2), r = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW });
+  const iss = Object.values(r.log.issued)[0];
+  assert(iss?.v === 2 && iss.phi > 0 && Object.keys(iss.shadow).length >= 3 && !iss.shadow[iss.model], `Ausgabe hält alle Kandidaten fest (${iss.model} veröffentlicht, Schatten: ${Object.keys(iss.shadow).join(', ')})`);
+  const r2 = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(r.log)), now: Date.parse(`${addDays(DAY0, NDAY)}T09:00:00Z`) });
+  const lv = Object.values(r2.log.live).find(x => x.v === 2);
+  assert(lv && lv.models.naive?.w > 0 && lv.models.week?.w > 0 && Object.keys(lv.models).length >= 5 && lv.cover80 > 0.5 && lv.peak?.n >= 1 && lv.hoursC >= 16,
+    `Live v2: ${Object.keys(lv?.models || {}).join(', ')} gegen „wie gestern“ ${(lv?.models.naive.w * 100).toFixed(1)} % und Vorwoche ${(lv?.models.week.w * 100).toFixed(1)} %; 80-%-Band trifft ${(lv?.cover80 * 100).toFixed(0)} %; Spitze ±1 h ${lv?.peak?.hit1}`);
+  // „wie gestern“ nutzt nur, was bei Ausgabe bekannt war: für eine Ausgabe um 6 Uhr ist 9 Uhr des Vortags bekannt, 9 Uhr heute nicht
+  const evDays = Object.entries(r2.log.evals); 
+  assert(evDays.some(([, e]) => e.models.week) && evDays.some(([, e]) => e.models.hybrid?.peak || e.models.pooled?.peak), 'Selbstprüfung mit Vorwochen-Vergleich und Spitzen je Modell');
+  // Entscheidungsregel
+  const mkLive = (n, rel) => Object.fromEntries(Array.from({ length: n }, (_, k) => [1000 + k, { v: 2, from: Date.parse('2026-11-01T00:00:00Z') + k * 6 * 3600e3, models: Object.fromEntries(Object.entries(rel).map(([m, x]) => [m, { w: x * 0.1 }])) }]));
+  const ev = Object.fromEntries(['2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'].map(d => [d, { trainDays: 5, models: Object.fromEntries(Object.entries({ profile: 0.17, pooled: 0.19, adaptive: 0.17, hybrid: 0.16, naive: 0.18, week: 0.2 }).map(([m, v]) => [m, { wapeGD: v, wapeGH: v }])) }]));
+  const nowMs = Date.parse('2026-11-05T12:00:00Z');
+  const c0 = F.chooseModel(ev, { trainDays: 6, live: mkLive(3, { naive: 1, hybrid: 0.7 }), nowMs });
+  const c1 = F.chooseModel(ev, { trainDays: 6, live: mkLive(10, { naive: 1, hybrid: 0.95, pooled: 0.8, profile: 1, adaptive: 0.9 }), nowMs });
+  const c2 = F.chooseModel(ev, { trainDays: 6, live: mkLive(10, { naive: 1, hybrid: 0.9, pooled: 0.885, profile: 1, adaptive: 0.95 }), prevActive: 'hybrid', nowMs });
+  const c3 = F.chooseModel(ev, { trainDays: 6, live: mkLive(14, { naive: 1, week: 0.9, hybrid: 1.3, pooled: 1.4, profile: 1.4, adaptive: 1.3 }), nowMs });
+  assert(c0.active === 'hybrid' && !c0.combined, `Entscheidung: unter ${F.DECIDE.liveMin} Live-Prognosen gilt die Selbstprüfung (${c0.active})`);
+  assert(c1.active === 'pooled' && c1.combined.pooled.w > 0.5, `Entscheidung: live klar besser → ${c1.active} (${c1.reason})`);
+  assert(c2.active === 'hybrid', `Entscheidung: knapp besser (unter ${F.DECIDE.switchGain * 100} %) → bleibt beim bisherigen (${c2.reason})`);
+  assert(c3.active === 'week' && /Vergleichswert/.test(c3.reason), `Entscheidung: kein Modell schlägt die Vergleichswerte → der bessere Vergleichswert wird veröffentlicht (${c3.active})`);
+  // Veröffentlichung eines Vergleichswerts: Prognose = Vorwoche (fehlende Werte aus dem Modell)
+  const lg = JSON.parse(JSON.stringify(r2.log)); lg.live = mkLive(14, { naive: 1, week: 0.9, hybrid: 1.3, pooled: 1.4, pooledWx: 1.35, profile: 1.4, adaptive: 1.3 }); // alle Kandidaten live schlechter
+  for (const k of Object.keys(lg.live)) lg.live[k].from = Date.parse(`${addDays(DAY0, NDAY - 1)}T00:00:00Z`) - (+k - 1000) * 3600e3;
+  const r4 = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: lg, now: Date.parse(`${addDays(DAY0, NDAY)}T09:30:00Z`) });
+  assert(r4.latest.active === 'week' && r4.latest.totals.every(Number.isFinite) && r4.latest.decision?.combined?.week, `Betrieb: veröffentlicht wird ${r4.latest.active}, Entscheidung in latest.json (decision)`);
+}

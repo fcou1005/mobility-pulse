@@ -5,13 +5,13 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw5d7krn';
-import * as SP from './pulse-spots.js?v=mw5d7krn';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw5d7krn';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw5d7krn';
-import { toCsv } from './pulse-report.js?v=mw5d7krn';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw5d7krn';
-import { mapKeys } from './mapkeys.js?v=mw5d7krn';
+import * as FC from './pulse-forecast.js?v=mw5e5x6d';
+import * as SP from './pulse-spots.js?v=mw5e5x6d';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw5e5x6d';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw5e5x6d';
+import { toCsv } from './pulse-report.js?v=mw5e5x6d';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw5e5x6d';
+import { mapKeys } from './mapkeys.js?v=mw5e5x6d';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -227,14 +227,28 @@ function accRows(S0, sel, G, { withToday = false } = {}) {
   return rows;
 }
 /** Mittlere Kennzahlen je Modell über die letzten ausgewerteten Tage (Selbstprüfung aus log.json); sc = Wertung (Tag und Stunde je Gruppe), nach der gewählt wird */
-const MODEL_ORDER = ['hybrid', 'adaptive', 'pooled', 'pooledWx', 'profile', 'naive'];
-const MODEL_COLOR = { hybrid: '#8b5cf6', adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
-const modelName = (m) => (m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`));
+const MODEL_ORDER = ['hybrid', 'adaptive', 'pooled', 'pooledWx', 'profile', 'naive', 'week'];
+const MODEL_COLOR = { week: 'var(--muted)', hybrid: '#8b5cf6', adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
+const modelName = (m) => (m === 'naive' ? t('fv.naive') : m === 'week' ? t('fv.week') : t(`fc.model.${m}`));
 const mature = (G, d) => !(G?.evals?.[d]?.trainDays < (FC.GATES.minEvalTrainDays ?? 0)); // wie chooseModel: unreife Starttage zählen nicht
 function raceOf(G, L) {
   const ev = G?.evals || {}, evDays = Object.keys(ev).sort().filter(d => mature(G, d)).slice(-(L?.gates?.evalWindow ?? FC.GATES.evalWindow));
   const avg = (m, f) => { const v = evDays.map(d => f(ev[d]?.models?.[m])).filter(x => x != null); return v.length ? { v: sum(v) / v.length, n: v.length } : null; };
   return MODEL_ORDER.map(m => ({ m, sc: avg(m, FC.scoreOf), gd: avg(m, x => x?.wapeGD), gh: avg(m, x => x?.wapeGH), bias: avg(m, x => x?.bias), cov: avg(m, x => x?.cover80) })).filter(r => r.sc);
+}
+/** Welche Prognose wird veröffentlicht? Live-Rennen aller Kandidaten (Schattenprognosen) und Selbstprüfung, je relativ zu „wie gestern“ */
+function decisionHtml(ctx, L, G) {
+  const D = L?.decision, rule = D?.rule || FC.DECIDE, f2 = (x) => (x == null ? '–' : `×${numFmt(2).format(x)}`);
+  const recs = Object.values(G?.live || {}).filter(x => x?.v >= 2 && x.models?.naive?.w > 0);
+  const evals = G?.evals || {}, days = Object.keys(evals).sort().filter(d => !(evals[d]?.trainDays < FC.GATES.minEvalTrainDays)).slice(-FC.GATES.evalWindow);
+  const selfRel = (m) => { const v = days.map(d => { const a = FC.scoreOf(evals[d]?.models?.[m]), b = FC.scoreOf(evals[d]?.models?.naive); return a != null && b > 0 ? a / b : null; }).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+  const pkOf = (m) => { const v = recs.map(x => x.models?.[m]?.peak?.hit1).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+  const t3Of = (m) => { const v = recs.map(x => x.models?.[m]?.peak?.top3).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+  const ms = [...MODEL_ORDER.filter(m => m !== 'naive'), 'naive', 'week'].filter(m => D?.live?.[m] || selfRel(m) != null || D?.combined?.[m]);
+  if (!ms.length) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><p class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</p>`;
+  const rows = ms.map(m => { const lv = D?.live?.[m], c = D?.combined?.[m], sr = m === 'naive' ? 1 : selfRel(m);
+    return `<tr><td>${ctx.esc(m === 'week' ? t('fv.week') : modelName(m))}${m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="n">${f2(c?.r ?? (D?.combined ? null : sr))}</td><td class="n">${f2(lv?.r ?? null)}</td><td class="n mh">${lv ? n0(lv.n) : '–'}</td><td class="n mh">${f2(sr)}</td><td class="n mh">${c ? pc(c.w) : '–'}</td><td class="n mh">${pkOf(m) == null ? '–' : pc(pkOf(m))}</td><td class="n mh">${t3Of(m) == null ? '–' : pc(t3Of(m))}</td></tr>`; }).join('');
+  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.decTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.decColAll')}</th><th class="n">${t('fv.decColLive')}</th><th class="n mh">${t('fv.decColN')}</th><th class="n mh">${t('fv.decColSelf')}</th><th class="n mh">${t('fv.decColW')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colTop3')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</div>${L?.reason ? `<div class="fv-sub">${t('fv.reasonNow')} <i>${ctx.esc(L.reason)}</i></div>` : ''}`;
 }
 function accuracyPanel(ctx, S0, sel, G, L) {
   const rows = accRows(S0, sel, G);
@@ -243,8 +257,9 @@ function accuracyPanel(ctx, S0, sel, G, L) {
     + `<td class="n bars"><span class="t">${pc(r.wape)}</span><span class="fv-bar" style="width:${Math.round(r.wape / maxW * 110)}px"></span></td><td class="n bars"><span class="t">${pc(r.naive)}</span>${r.naive == null ? '' : `<span class="fv-bar n" style="width:${Math.round(r.naive / maxW * 110)}px"></span>`}</td><td class="n mh">${r.skill == null ? '–' : sg(r.skill)}</td><td class="n mh">${r.train == null ? '–' : n0(r.train)}</td></tr>`).join('') : '';
   const table = rows.length ? `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.accTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th class="n mh">${t('fv.colIst')}</th><th class="n mh">${t('fv.colPlan')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n">${t('fv.colErr')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colTrain')}</th></tr></thead><tbody>${body}</tbody></table></div>`
     : `<div class="empty"><b>${t('fv.accNone')}</b>${t('fv.accNoneHint')}</div>`;
-  const live = (L?.live || []).slice(-6).reverse(), liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colHours')}</th><th class="n mh">${t('fv.colStarts')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="n">${pc(x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${x.skill == null ? '–' : sg(x.skill)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td><td class="n mh">${n0(x.starts)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}</div>` : '';
-  return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}</div>`;
+  const live = (L?.live || []).slice(-6).reverse(), pk1 = (x) => (x?.peak?.hit1 == null ? '–' : pc(x.peak.hit1)), mdl = (x) => (x.model ? ctx.esc(modelName(x.model)) : '–');
+  const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}</div>` : '';
+  return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}${decisionHtml(ctx, L, G)}</div>`;
 }
 
 // ---------- Zeugnis: wie gut ist die Prognose, besser als „wie gestern“? ----------
@@ -292,8 +307,8 @@ function curveSvg(ctx, G, L, width) {
   const xl = days.map((d, i) => (i % every === 0 || i === days.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="${i === 0 ? 'start' : i === days.length - 1 ? 'end' : 'middle'}">${ctx.esc(dayTxt(d, { day: 'numeric', month: 'numeric' }))}</text>` : '')).join('');
   const lines = ms.map(m => { let d = '', open = false, dots = '';
     days.forEach((day, i) => { const v = FC.scoreOf(ev[day]?.models?.[m]); if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`; open = true; dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${m === L?.active ? 3.6 : 2.6}" fill="${MODEL_COLOR[m]}"><title>${ctx.esc(`${modelName(m)} · ${dayTxt(day)} · ${pc(v, 1)}`)}</title></circle>`; });
-    return `<path class="${m === L?.active ? 'act' : ''}${m === 'naive' ? ' nv' : ''}" style="stroke:${MODEL_COLOR[m]}" d="${d}"/>${dots}`; }).join('');
-  const keys = ms.map(m => `<span><i class="${m === 'naive' ? 'nv' : ''}" style="border-color:${MODEL_COLOR[m]}"></i>${m === L?.active ? `<b>${ctx.esc(modelName(m))}</b> (${t('fv.activeTag')})` : ctx.esc(modelName(m))}</span>`).join('');
+    return `<path class="${m === L?.active ? 'act' : ''}${m === 'naive' || m === 'week' ? ' nv' : ''}" style="stroke:${MODEL_COLOR[m]}" d="${d}"/>${dots}`; }).join('');
+  const keys = ms.map(m => `<span><i class="${m === 'naive' || m === 'week' ? 'nv' : ''}" style="border-color:${MODEL_COLOR[m]}"></i>${m === L?.active ? `<b>${ctx.esc(modelName(m))}</b> (${t('fv.activeTag')})` : ctx.esc(modelName(m))}</span>`).join('');
   return `<div class="fv-keys2">${keys}</div><div class="fv-curve"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(t('fv.curveAria'))}">${grid}${lines}${xl}</svg></div>`;
 }
 function curveTrend(ctx, G, L) {
