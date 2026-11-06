@@ -11,12 +11,12 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw54jh6a';
-import { hourOf, dayOf } from './pulse-track.js?v=mw54jh6a';
+import * as E from './pulse-econ.js?v=mw55l8n9';
+import { hourOf, dayOf } from './pulse-track.js?v=mw55l8n9';
 export const FORECAST_VERSION = 1;
 // Fassung der Selbstprüfung: 2 = Prüfzeilen mit der Exposition der Vortage (lastExposure) wie Plan und Live-Prognose; bis 6.11.2026 rechnete
 // die Prüfung mit den tatsächlichen Fahrzeugstunden des Prüftags (Vorwissen) und lag zu günstig. Andere Fassung im Log → evals und Lernstand neu.
-export const EVAL_VERSION = 2;
+export const EVAL_VERSION = 3;
 export const GATES = {
   minTrainDays: 2,        // weniger Tage: keine Prognose
   minEvalDays: 3,         // ausgewertete Tage, ab denen ein Modell zur Wahl steht
@@ -31,7 +31,7 @@ export const GATES = {
   wxShareDay: 0.1,        // Wetter-Gate: Regen- bzw. Trockentag = an diesem Tag in mindestens 10 % der Gemeinde-Tage Regen bzw. kein Regen
   evalWindow: 7,          // Tage der Modellwahl
 };
-export const MODELS = ['profile', 'pooled', 'pooledWx', 'adaptive'];
+export const MODELS = ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid'];
 /** Wertung eines Modells an einem Tag: Mittel aus Abweichung je Gruppe und Tag (Niveau) und je Gruppe und Stunde (Tagesgang); ohne Stundenwert nur der Tageswert */
 export const scoreOf = (x) => (x?.wapeGD == null ? null : x.wapeGH == null ? x.wapeGD : (x.wapeGD + x.wapeGH) / 2);
 const NCLS = 4, CLS = { W: 0, F: 1, S: 2, H: 3 }, NERA = 8;
@@ -240,10 +240,31 @@ export function weatherGate(R, sel) {
   return { ok: range >= GATES.wxTempRangeK && rainy >= GATES.wxRainDays && dry >= GATES.wxRainDays && missShare <= GATES.wxMissingMax, tempRangeK: +range.toFixed(1), rainDays: rainy, dryDays: dry, missingShare: +missShare.toFixed(3), days: byDay.size, places: gdays.size };
 }
 
+// ---------- Hybrid: Niveau „wie gestern“, Tagesgang aus dem Modell (Kandidat „hybrid“) ----------
+// „Wie gestern“ trifft das Tagesniveau einer Gruppe gut, das Modell den Tagesgang. Der Hybrid nimmt die Basisprognose (Mittel aus eigenem Profil
+// und gepooltem Modell) und skaliert sie je Gruppe so, dass ihre Summe über die Stunden, die am Bezugstag beobachtet wurden, den dort gezählten
+// Fahrtbeginnen entspricht (geschrumpft mit HYBRID.k Pseudo-Fahrten). Bezugstag = letzter vollständiger Tag desselben Tagtyps (≤ HYBRID.maxBack
+// Tage zurück), sonst der letzte vollständige Tag. Geprüft an den echten Tagen 3.–5.11.2026: Wertung 16,2 % gegen 17,1 % (profile), 17,2 %
+// (Mittel profile/pooled) und 18,2 % („wie gestern“). Wird nur aktiv, wenn er in der Selbstprüfung um GATES.adGain besser ist.
+export const HYBRID = { k: 20, maxBack: 7 };
+/** rows[j] = { g, h, ags, cls } passend zu base[j]; before = Index des Zieltags in days (Bezugstage < before, nur vollständige) */
+export function hybridAdjust(R, days, before, rows, base, { k = HYBRID.k } = {}) {
+  const cand = []; for (let j = Math.min(before, days.length) - 1; j >= Math.max(0, before - HYBRID.maxBack); j--) if (days[j]?.complete) cand.push(j);
+  if (!cand.length) return Float64Array.from(base);
+  const want = new Set(cand), yOf = new Map();
+  for (let i = 0; i < R.n; i++) { const j = R.day[i]; if (!want.has(j)) continue; let m = yOf.get(j); if (!m) yOf.set(j, m = new Map()); m.set(R.g[i] * 24 + R.hr[i], R.y[i]); }
+  // je Gruppe und Tagtyp des Ziels (eine Live-Prognose kann über Mitternacht in einen anderen Tagtyp reichen)
+  const refOf = new Map(), Y = new Map(), M = new Map(), key = (r) => r.g * 16 + r.cls;
+  const ref = (r) => { const q = key(r); let x = refOf.get(q); if (x == null) { x = cand.find(j => days[j].cls(r.ags) === r.cls) ?? cand[0]; refOf.set(q, x); } return x; };
+  rows.forEach((r, j) => { const y = yOf.get(ref(r))?.get(r.g * 24 + r.h); if (y == null || !Number.isFinite(base[j])) return; const q = key(r); Y.set(q, (Y.get(q) || 0) + y); M.set(q, (M.get(q) || 0) + base[j]); });
+  return Float64Array.from(base, (b, j) => { const q = key(rows[j]), y = Y.get(q), m = M.get(q); return y == null || !(m > 0) ? b : b * (y + k) / (m + k); });
+}
+const blendBase = (muP, muQ) => Float64Array.from(muQ, (q, j) => (Number.isFinite(muP[j]) ? 0.5 * muP[j] + 0.5 * q : q));
+
 /**
  * Rolling-Origin-Auswertung der Tage evalIdx (Indizes in R.day; nur vollständige, bisher nicht ausgewertete). Rückgabe { [dayIdx]: { trainDays, models } }.
  */
-export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, dayName = (d) => String(d), expoBefore = null } = {}) {
+export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, dayName = (d) => String(d), expoBefore = null, days = null } = {}) {
   const out = {};
   for (const d of evalIdx) {
     const train = [], test = []; for (let i = 0; i < R.n; i++) { if (R.day[i] < d) train.push(i); else if (R.day[i] === d) test.push(i); }
@@ -269,6 +290,12 @@ export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, day
       res.models.adaptive = scoreDay(R, test, predictAdaptive(muP, muQ, (j) => R.keys[R.g[test[j]]], feedbackWeights(fb)), m1.phi, { split: true });
       feedbackUpdate(fb, day, R, test, muP, muQ);
     }
+    // Hybrid (Niveau des Bezugstags, Tagesgang aus profile/pooled) und Vergleich der Flottenannahmen (nur mitgeschrieben)
+    if (days) {
+      const rows = test.map(i => ({ g: R.g[i], h: R.hr[i], ags: String(R.keys[R.g[i]]).split('|')[0], cls: R.cl[i] }));
+      res.models.hybrid = scoreDay(R, test, hybridAdjust(R, days, d, rows, blendBase(muP, muQ)), m1.phi, { split: true });
+      if (last) { const alt = {}; for (const mode of ['class', 'mean']) { const lx = lastExposure(days, d, { target: days[d].cls, mode }); let se = 0, sa = 0; for (const i of test) { const v = lx.get(R.keys[R.g[i]])?.[R.hr[i]] ?? 0; se += R.e[i]; sa += Math.abs(v - R.e[i]); } alt[mode] = se > 0 ? +(sa / se).toFixed(4) : null; } res.expoErrAlt = alt; }
+    }
     out[d] = res;
   }
   return out;
@@ -284,10 +311,16 @@ export function chooseModel(evals, { trainDays = 0, without = [] } = {}) {
   let active = trainDays >= GATES.minTrainDays ? 'pooled' : null, reason = 'zu wenige ausgewertete Tage – gepooltes Modell vorläufig';
   if (pool && prof) { active = pool.w <= prof.w ? 'pooled' : 'profile'; reason = `Mittel der letzten ${pool.n} Tage: pooled ${P0(pool.w)}, profile ${P0(prof.w)} Abweichung (Tag und Stunde je Gruppe)`; }
   if (wx && pool && wx.w <= pool.w * (1 - GATES.wxGain) && (!prof || wx.w <= prof.w)) { active = 'pooledWx'; reason = `Wetter verbessert pooled von ${P0(pool.w)} auf ${P0(wx.w)}`; }
-  // lernendes Modell: über dieselben Tage verglichen wie das bisher gewählte, muss es um GATES.adGain schlagen (kein Überlernen)
-  if (active && pool && prof && !without.includes('adaptive')) {
-    const ds = days.filter(d => scoreOf(evals[d]?.models?.adaptive) != null && scoreOf(evals[d]?.models?.[active]) != null), ad = mean('adaptive', ds), cur = mean(active, ds);
-    if (ad && cur && ad.w <= cur.w * (1 - GATES.adGain)) { reason = `lernt aus Fehlern je Gruppe: ${P0(ad.w)} statt ${P0(cur.w)} (${active}) über ${ad.n} Tage`; active = 'adaptive'; }
+  // Erweiterungen (lernendes Modell, Hybrid): über dieselben Tage verglichen wie das bisher gewählte, müssen es um GATES.adGain schlagen (kein
+  // Überlernen); bei beiden gewinnt der größere Vorsprung
+  if (active && pool && prof) {
+    let best = null;
+    for (const c of ['adaptive', 'hybrid']) {
+      if (without.includes(c)) continue;
+      const ds = days.filter(d => scoreOf(evals[d]?.models?.[c]) != null && scoreOf(evals[d]?.models?.[active]) != null), a = mean(c, ds), cur = mean(active, ds);
+      if (a && cur && a.w <= cur.w * (1 - GATES.adGain) && (!best || a.w / cur.w < best.r)) best = { c, r: a.w / cur.w, a, cur };
+    }
+    if (best) { reason = `${best.c === 'hybrid' ? 'Niveau wie gestern, Tagesgang aus dem Modell' : 'lernt aus Fehlern je Gruppe'}: ${P0(best.a.w)} statt ${P0(best.cur.w)} (${active}) über ${best.a.n} Tage`; active = best.c; }
   }
   return { active, status: pool && prof ? 'active' : 'learning', reason, scores: Object.fromEntries(MODELS.map(m => [m, sc[m] ? +sc[m].w.toFixed(4) : null])), evalDays: days.length };
 }
@@ -338,7 +371,7 @@ export function buildFuture(R, fut, expo, wx = () => null) {
   R.keys.forEach((key, gi) => {
     const ags = key.split('|')[0];
     fut.forEach((f, fi) => {
-      const e = expo(key, f.h); if (!(e > 0)) return;
+      const e = expo(key, f.h, f); if (!(e > 0)) return;
       const x = wx(ags, f.day, f.h);
       cols.y.push(0); cols.e.push(e); cols.g.push(gi); cols.hr.push(f.h); cols.cl.push(f.cls(ags)); cols.era.push(0); cols.fh.push(fi);
       cols.w0.push(x ? x[0] : 0); cols.w1.push(x ? x[1] : 0); cols.w2.push(x ? x[2] : 0); cols.hasW.push(x ? 1 : 0);
@@ -379,13 +412,34 @@ export function actualOfDay(d, { hourMin = GATES.hourMinObserved } = {}) {
   }
   return out;
 }
-/** Erwartete Fahrzeugstunden je Gruppe und Stunde: zuletzt beobachteter Wert derselben Stunde, nur Tage mit Index < beforeIdx */
-function lastExposure(days, beforeIdx = days.length) {
-  const last = new Map();
+/**
+ * Erwartete Fahrzeugstunden je Gruppe und Stunde (Flottenannahme für Plan, Live-Prognose und Selbstprüfung), nur Tage mit Index < beforeIdx.
+ * mode 'last' = zuletzt beobachteter Wert derselben Stunde; 'class' = dasselbe, aber vom letzten Tag desselben Tagtyps wie der Zieltag
+ * (target(ags) → Tagtyp; sonst 'last'); 'mean' = Mittel der letzten EXPOSURE.n beobachteten Werte; 'classMean' = Mittel der letzten EXPOSURE.n
+ * Werte desselben Tagtyps (sonst 'mean'). Stunden, die nie beobachtet wurden: Mittel der beobachteten Stunden der Gruppe.
+ */
+export const EXPOSURE = { mode: 'last', n: 3 };
+export function lastExposure(days, beforeIdx = days.length, { target = null, mode = EXPOSURE.mode } = {}) {
+  const hist = new Map(), byClass = target && (mode === 'class' || mode === 'classMean'), multi = mode === 'mean' || mode === 'classMean';
   for (let di = 0; di < Math.min(beforeIdx, days.length); di++) { const d = days[di];
-    for (const [k, g] of Object.entries(d.groups)) { if (!Array.isArray(g.vmin)) continue; let a = last.get(k); if (!a) last.set(k, a = new Array(24).fill(0)); for (let h = 0; h < 24; h++) if (d.hourMin[h] >= GATES.hourMinObserved && (g.vmin[h] || 0) > 0) a[h] = g.vmin[h] / 60; } }
-  // Stunden, die an keinem Tag beobachtet wurden (Lücken früher Tage): Mittel der beobachteten Stunden der Gruppe, sonst fehlt dort jede Prognose
-  for (const a of last.values()) { const seen = a.filter(x => x > 0); if (!seen.length || seen.length === 24) continue; const m = sum(seen) / seen.length; for (let h = 0; h < 24; h++) if (!(a[h] > 0)) a[h] = m; }
+    for (const [k, g] of Object.entries(d.groups)) {
+      if (!Array.isArray(g.vmin)) continue; let a = hist.get(k); if (!a) hist.set(k, a = Array.from({ length: 24 }, () => []));
+      const c = byClass ? d.cls(k.split('|')[0]) : 0;
+      for (let h = 0; h < 24; h++) if (d.hourMin[h] >= GATES.hourMinObserved && (g.vmin[h] || 0) > 0) a[h].push([g.vmin[h] / 60, c]);
+    }
+  }
+  const last = new Map();
+  for (const [k, a] of hist) {
+    const tc = byClass ? target(k.split('|')[0]) : null;
+    const out = a.map(list => {
+      if (!list.length) return 0;
+      const same = tc != null ? list.filter(x => x[1] === tc) : list, src = same.length ? same : list, take = multi ? src.slice(-EXPOSURE.n) : src.slice(-1);
+      return take.reduce((t, x) => t + x[0], 0) / take.length;
+    });
+    const seen = out.filter(x => x > 0);
+    if (seen.length && seen.length < 24) { const m = sum(seen) / seen.length; for (let h = 0; h < 24; h++) if (!(out[h] > 0)) out[h] = m; }
+    last.set(k, out);
+  }
   return last;
 }
 /**
@@ -397,14 +451,15 @@ export function planDay(R, days, di, day, wx, calendar, evals, fb = null) {
   const trainDays = new Set(trainSel.map(i => R.day[i])).size;
   if (trainDays < GATES.minTrainDays) return null;
   const prior = Object.fromEntries(Object.entries(evals || {}).filter(([d]) => d < day));
-  const gate = weatherGate(R, trainSel), pick = (a) => (a === 'pooledWx' && gate.ok ? 'pooledWx' : a === 'profile' ? 'profile' : a === 'adaptive' ? 'adaptive' : 'pooled');
+  const gate = weatherGate(R, trainSel), pick = (a) => (a === 'pooledWx' && gate.ok ? 'pooledWx' : a === 'profile' ? 'profile' : a === 'adaptive' ? 'adaptive' : a === 'hybrid' ? 'hybrid' : 'pooled');
   let model = pick(chooseModel(prior, { trainDays }).active);
   // lernendes Modell nur, wenn der Lernstand ausschließlich Tage vor dem geplanten Tag kennt (rückwirkende Pläne sonst ohne Rückkopplung)
   if (model === 'adaptive' && !(fb?.upto && fb.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['adaptive'] }).active);
   const rec = dayFromDoc({ day, runs: [], groups: {} }, calendar), fut = Array.from({ length: 24 }, (_, h) => ({ day, h, cls: rec.cls }));
-  const last = lastExposure(days, di), F = buildFuture(R, fut, (k, h) => last.get(k)?.[h] ?? 0, wx), sel = Array.from({ length: F.n }, (_, i) => i);
+  const last = lastExposure(days, di, { target: rec.cls }), F = buildFuture(R, fut, (k, h) => last.get(k)?.[h] ?? 0, wx), sel = Array.from({ length: F.n }, (_, i) => i);
   const mu = model === 'profile' ? predictProfile(R, trainSel, sel, F)
     : model === 'adaptive' ? predictAdaptive(predictProfile(R, trainSel, sel, F, NaN), predictPooled(fitPooled(R, trainSel, { weather: gate.ok }), F, sel), (j) => R.keys[F.g[sel[j]]], feedbackWeights(fb))
+      : model === 'hybrid' ? (() => { const base = blendBase(predictProfile(R, trainSel, sel, F, NaN), predictPooled(fitPooled(R, trainSel, { weather: gate.ok }), F, sel)); return hybridAdjust(R, days, di, sel.map(i => ({ g: F.g[i], h: F.hr[i], ags: String(R.keys[F.g[i]]).split('|')[0], cls: F.cl[i] })), base); })()
       : predictPooled(fitPooled(R, trainSel, { weather: model === 'pooledWx' }), F, sel);
   const scopes = new Map(); for (const [sc, d] of aggregateFuture(R, F, mu, fut)) scopes.set(sc, d[day]);
   return { day, model, trainDays, scopes };
@@ -470,17 +525,17 @@ export function runForecast({ docs, calendar = null, weather = [], prevLog = nul
   // Rolling Origin: jeder volle, abgeschlossene Tag, der noch nicht ausgewertet ist (ältere Tage ohne Vortraining entfallen von selbst)
   const win = days.map((d, i) => (d.complete && d.day < today ? i : -1)).filter(i => i >= 0).slice(-(GATES.evalWindow + 2));
   const evalIdx = pfb ? win.filter(i => !log.evals[days[i].day]) : win;
-  const ev = evaluateDays(R, evalIdx, { fb, dayName: (i) => days[i].day, expoBefore: (d) => lastExposure(days, d) });
+  const ev = evaluateDays(R, evalIdx, { fb, dayName: (i) => days[i].day, expoBefore: (d) => lastExposure(days, d, { target: days[d].cls }), days });
   for (const [di, e] of Object.entries(ev)) {
     const test = []; for (let i = 0; i < R.n; i++) if (R.day[i] === +di) test.push(i);
     e.models.naive = scoreDay(R, test, predictNaive(R, test, +di), 1, { split: true });
-    log.evals[days[+di].day] = { trainDays: e.trainDays, wxGate: e.wxGate, ...(e.expoErr != null ? { expoErr: e.expoErr } : {}), models: e.models };
+    log.evals[days[+di].day] = { trainDays: e.trainDays, wxGate: e.wxGate, ...(e.expoErr != null ? { expoErr: e.expoErr } : {}), ...(e.expoErrAlt ? { expoErrAlt: e.expoErrAlt } : {}), models: e.models };
   }
   for (const d of Object.keys(log.evals).sort().slice(0, -21)) delete log.evals[d];
   log.feedback = compactFeedback(fb);
   const choice = chooseModel(log.evals, { trainDays }), fbw = feedbackWeights(fb);
   const all = Array.from({ length: R.n }, (_, i) => i), gate = weatherGate(R, all);
-  const useWx = gate.ok && (choice.active === 'pooledWx' || choice.active === 'adaptive');
+  const useWx = gate.ok && (choice.active === 'pooledWx' || choice.active === 'adaptive' || choice.active === 'hybrid');
   const out = { version: FORECAST_VERSION, generatedAt: new Date(now).toISOString(), status: trainDays < GATES.minTrainDays ? 'insufficient' : choice.status, active: trainDays < GATES.minTrainDays ? null : (choice.active === 'pooledWx' && !useWx ? 'pooled' : choice.active), reason: choice.reason, scores: choice.scores, evalDays: choice.evalDays, trainDays,
     excluded: exclude?.size || 0, gates: { ...GATES }, weather: { gate, used: useWx, source: weather.length ? weather[0].source ?? null : null }, learn: fb.upto ? learnSummary(fb, fbw) : null, horizon: null, totals: null, groups: {}, municipalities: {} };
   const tomorrow = dayOf(localToUtcMs(today, 12) + 24 * 3600e3);
@@ -496,11 +551,12 @@ export function runForecast({ docs, calendar = null, weather = [], prevLog = nul
     }
     const HL = fut.length; for (const f of fut) if (liveFrom[f.day] == null) liveFrom[f.day] = f.h;
     // erwartete Fahrzeugstunden: zuletzt beobachteter Wert derselben Stunde je Gruppe
-    const last = lastExposure(days), expo = (k, h) => last.get(k)?.[h] ?? 0;
+    const last = lastExposure(days), byDay = new Map(), expo = (k, h, f) => { let m = byDay.get(f.day); if (!m) byDay.set(f.day, m = lastExposure(days, days.length, { target: f.cls })); return m.get(k)?.[h] ?? 0; };
     const F = buildFuture(R, fut, expo, wx), sel = Array.from({ length: F.n }, (_, i) => i);
     let mu, phi = 1;
     if (out.active === 'profile') mu = predictProfile(R, all, sel, F);
     else if (out.active === 'adaptive') { const m = fitPooled(R, all, { weather: useWx }); phi = m.phi; mu = predictAdaptive(predictProfile(R, all, sel, F, NaN), predictPooled(m, F, sel), (j) => R.keys[F.g[sel[j]]], fbw); }
+    else if (out.active === 'hybrid') { const m = fitPooled(R, all, { weather: useWx }); phi = m.phi; const base = blendBase(predictProfile(R, all, sel, F, NaN), predictPooled(m, F, sel)); mu = hybridAdjust(R, days, days.length, sel.map(i => ({ g: F.g[i], h: F.hr[i], ags: String(R.keys[F.g[i]]).split('|')[0], cls: F.cl[i] })), base); }
     else { const m = fitPooled(R, all, { weather: useWx }); phi = m.phi; mu = predictPooled(m, F, sel); }
     out.phi = +phi.toFixed(2);
     live = aggregateFuture(R, F, mu, fut);

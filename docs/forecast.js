@@ -5,13 +5,13 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw54jh6a';
-import * as SP from './pulse-spots.js?v=mw54jh6a';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw54jh6a';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw54jh6a';
-import { toCsv } from './pulse-report.js?v=mw54jh6a';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw54jh6a';
-import { mapKeys } from './mapkeys.js?v=mw54jh6a';
+import * as FC from './pulse-forecast.js?v=mw55l8n9';
+import * as SP from './pulse-spots.js?v=mw55l8n9';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw55l8n9';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw55l8n9';
+import { toCsv } from './pulse-report.js?v=mw55l8n9';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw55l8n9';
+import { mapKeys } from './mapkeys.js?v=mw55l8n9';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -227,8 +227,8 @@ function accRows(S0, sel, G, { withToday = false } = {}) {
   return rows;
 }
 /** Mittlere Kennzahlen je Modell über die letzten ausgewerteten Tage (Selbstprüfung aus log.json); sc = Wertung (Tag und Stunde je Gruppe), nach der gewählt wird */
-const MODEL_ORDER = ['adaptive', 'pooled', 'pooledWx', 'profile', 'naive'];
-const MODEL_COLOR = { adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
+const MODEL_ORDER = ['hybrid', 'adaptive', 'pooled', 'pooledWx', 'profile', 'naive'];
+const MODEL_COLOR = { hybrid: '#8b5cf6', adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
 const modelName = (m) => (m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`));
 const mature = (G, d) => !(G?.evals?.[d]?.trainDays < (FC.GATES.minEvalTrainDays ?? 0)); // wie chooseModel: unreife Starttage zählen nicht
 function raceOf(G, L) {
@@ -350,6 +350,7 @@ function paramRows(L) {
     ['wxTempRangeK', gates.wxTempRangeK, t('fv.pWxRange')], ['wxRainDays', gates.wxRainDays, t('fv.pWxRain')], ['wxMissingMax', gates.wxMissingMax, t('fv.pWxMiss')], ['wxGain', gates.wxGain, t('fv.pWxGain')],
     ['adGain', gates.adGain ?? FC.GATES.adGain, t('fv.pAdGain')], ['evalWindow', gates.evalWindow, t('fv.pWindow')], ['minEvalTrainDays', gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays, t('fv.pMinEvalTrain')],
     ['liveMinHours', gates.liveMinHours ?? FC.GATES.liveMinHours, t('fv.pLiveMin')], ['wxShareDay', gates.wxShareDay ?? FC.GATES.wxShareDay, t('fv.pWxShare')],
+    ['HYBRID.k', FC.HYBRID.k, t('fv.pHybK')], ['HYBRID.maxBack', FC.HYBRID.maxBack, t('fv.pHybBack')],
     ['FEEDBACK.halfLifeDays', FC.FEEDBACK.halfLifeDays, t('fv.pHalfLife')], ['FEEDBACK.kBlend', FC.FEEDBACK.kBlend, t('fv.pKBlend')], ['FEEDBACK.sharp', FC.FEEDBACK.sharp, t('fv.pSharp')],
     ['SERIES_KEEP_DAYS', FC.SERIES_KEEP_DAYS, t('fv.pKeep')], ['SERIES_MIN.ags', FC.SERIES_MIN.ags, t('fv.pSerAgs')], ['SERIES_MIN.group', FC.SERIES_MIN.group, t('fv.pSerGroup')], ['SERIES_MIN.groupMax', FC.SERIES_MIN.groupMax, t('fv.pSerMax')],
     ['baseH', OPS.baseH, t('fv.pBase')], ['minPerSpot', OPS.minPerSpot, t('fv.pMinSpot')], ['maxPerSpot', OPS.maxPerSpot, t('fv.pMaxSpot')], ['spotRadiusM', OPS.spotRadiusM, t('fv.pRadius')], ['horizonH', OPS.horizonH, t('fv.pHorizon')], ['prelimH', OPS.prelimH, t('fv.pPrelim')],
@@ -368,7 +369,7 @@ export function steckbrief(ctx, S0, L, G, sel) {
   if (g.lv.length) out.push(mdTable([t('fv.gLevel'), t('fv.gModel'), t('fv.gNaive'), t('fv.gVerdict')], g.lv.map(x => [levelName(x), pc(x.a), pc(x.b), jTxt(x.j)])), `\n${strip(t('fv.gHow'))}\n`);
   out.push(`## ${t('fv.mdWhat')}\n`, `${t('fv.mdWhatTxt', { g: n0(L?.learn?.groups ?? Object.keys(L?.groups || {}).length), m: n0(Object.keys(L?.municipalities || {}).length) })}\n`);
   out.push(`## ${t('fv.mdModels')}\n`, '```\n' + `${t('fv.formula')}\n` + '```\n');
-  for (const [m, k] of [['profile', 'fv.mProfile'], ['pooled', 'fv.mPooled'], ['pooledWx', 'fv.mPooledWx'], ['adaptive', 'fv.mAdaptive'], ['naive', 'fv.mNaive']]) out.push(`- **${modelName(m)}**${m === L?.active ? ` (${t('fv.activeTag')})` : ''}: ${t(k, { hl: FC.FEEDBACK.halfLifeDays })}`);
+  for (const [m, k] of [['profile', 'fv.mProfile'], ['pooled', 'fv.mPooled'], ['pooledWx', 'fv.mPooledWx'], ['adaptive', 'fv.mAdaptive'], ['hybrid', 'fv.mHybrid'], ['naive', 'fv.mNaive']]) out.push(`- **${modelName(m)}**${m === L?.active ? ` (${t('fv.activeTag')})` : ''}: ${t(k, { hl: FC.FEEDBACK.halfLifeDays, k: FC.HYBRID.k, back: FC.HYBRID.maxBack })}`);
   out.push('', `${t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays })}\n`, `${t('fv.mdActive', { model: L?.active ? modelName(L.active) : '–', reason: L?.reason || '–' })}\n`);
   const x = L?.learn;
   out.push(`## ${t('fv.mdLearn')}\n`, `${t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })}\n`);
@@ -611,14 +612,14 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
     [t('fv.kvGroups'), n0(nGroups), t('fv.kvGroupsSub', { m: n0(nMuni) })],
     [t('fv.kvExcl'), n0(L.excluded || 0), ck?.ruleNow ? t('fv.kvExclSub', { rule: esc(ck.ruleNow) }) : t('fv.kvExclSub0')],
     [t('fv.kvPhi'), n1v(L.phi), t('fv.kvPhiSub')],
-    (() => { const d = evKeys.filter(x => G?.evals?.[x]?.expoErr != null).at(-1); return [t('fv.kvExpo'), d ? pc(G.evals[d].expoErr) : '–', d ? t('fv.kvExpoSub', { d: esc(dayTxt(d)) }) : t('fv.kvExpoNone')]; })(),
+    (() => { const d = evKeys.filter(x => G?.evals?.[x]?.expoErr != null).at(-1); const alt = d ? G.evals[d].expoErrAlt : null; return [t('fv.kvExpo'), d ? pc(G.evals[d].expoErr) : '–', d ? t('fv.kvExpoSub', { d: esc(dayTxt(d)) }) + (alt?.mean != null ? ` ${t('fv.kvExpoAlt', { c: pc(alt.class), m: pc(alt.mean) })}` : '') : t('fv.kvExpoNone')]; })(),
     [t('fv.kvWx'), esc(L.weather?.source || '–'), L.weather?.used ? t('fv.kvWxOn') : t('fv.kvWxOff', { range: n1v(wg.tempRangeK), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, miss: pc(wg.missingShare) })],
     [t('fv.kvCal'), cal?.source ? esc(cal.source) : t('fv.kvCalNone'), cal?.from ? `${esc(cal.from)} – ${esc(cal.to)}` : t('fv.kvCalFallback')],
     [t('fv.kvHorizon'), t('fv.kvHorizonV', { h: L.horizon?.hours ?? 24 }), L.horizon?.from ? t('fv.kvHorizonSub', { time: timeTxt(new Date(L.horizon.from).toISOString()), d: esc(L.horizon.tomorrow || '') }) : ''],
     [t('fv.kvStand'), timeTxt(L.generatedAt), t('fv.kvStandSub', { time: timeTxt(S0.generatedAt) })],
   ])}${provTbl}</div>`;
   // Panel 3: Modell
-  const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['naive', t('fv.mNaive')]];
+  const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['hybrid', t('fv.mHybrid', { k: FC.HYBRID.k, back: FC.HYBRID.maxBack })], ['naive', t('fv.mNaive')]];
   const p3 = `<div class="panel">${head(t('fv.modelTitle'), t('fv.modelSub'))}<code class="fv-formula">${esc(t('fv.formula'))}</code>`
     + `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.modelTitle'))}"><table style="margin-top:var(--s3)"><thead><tr><th>${t('fv.colModel')}</th><th>${t('fv.colWhat')}</th></tr></thead><tbody>${modelRows.map(([m, d]) => `<tr><td>${m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`)}${m === L.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="wrap">${esc(d)}</td></tr>`).join('')}</tbody></table></div>`
     + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(L.reason)}</i></p>` : ''}</div>`;

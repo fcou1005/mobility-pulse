@@ -166,6 +166,44 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(r3.log.feedback.upto === addDays(DAY0, NDAY) && r3.log.evals[addDays(DAY0, NDAY)]?.models.adaptive, 'Neuer Tag: wird erst bewertet, dann in den Lernstand übernommen');
 }
 
+// ---------- Hybrid: Niveau des Bezugstags, Tagesgang aus dem Modell
+{
+  const K = F.HYBRID.k, ds = F.assignEras([makeDoc(DAY0), makeDoc(addDays(DAY0, 1), { skipHours: [17, 18, 19, 20] }), makeDoc(addDays(DAY0, 2))].map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds);
+  const g0 = R.keys.indexOf(groups[0][0]), rows = Array.from({ length: 24 }, (_, h) => ({ g: g0, h, ags: groups[0][0].split('|')[0], cls: ds[2].cls(groups[0][0].split('|')[0]) }));
+  const Y = groups[0] && ds[1].groups[groups[0][0]].start.reduce((a, y, h) => a + ([17, 18, 19, 20].includes(h) ? 0 : y), 0);
+  const out = F.hybridAdjust(R, ds, 2, rows, new Float64Array(24).fill(1)), f = (Y + K) / (20 + K);
+  assert(out.every(x => Math.abs(x - f) < 1e-9), `Hybrid: Faktor (Fahrten am Bezugstag + ${K}) ÷ (Basis derselben Stunden + ${K}) = ${f.toFixed(3)}, Lückenstunden des Bezugstags zählen nicht`);
+  assert(F.hybridAdjust(R, ds, 0, rows, new Float64Array(24).fill(1)).every(x => x === 1), 'Hybrid ohne vollständigen Vortag: Basis unverändert');
+  // Bezugstag gleichen Tagtyps: für einen Sonntag der Sonntag davor, nicht der Samstag
+  const d14 = Array.from({ length: 14 }, (_, i) => addDays(DAY0, i)), ds14 = F.assignEras(d14.map((d, i) => F.dayFromDoc(makeDoc(d, { level: i === 6 ? 3 : 1 }), null))), R14 = F.buildRows(ds14);
+  const ags = groups[0][0].split('|')[0], gi = R14.keys.indexOf(groups[0][0]), cls = ds14[13].cls(ags), sumY = (j) => ds14[j].groups[groups[0][0]].start.reduce((a, b) => a + b, 0);
+  const o = F.hybridAdjust(R14, ds14, 13, Array.from({ length: 24 }, (_, h) => ({ g: gi, h, ags, cls })), new Float64Array(24).fill(1));
+  assert(wd(d14[13]) === 0 && ds14[6].cls(ags) === cls && ds14[12].cls(ags) !== cls && Math.abs(o[0] - (sumY(6) + K) / (24 + K)) < 1e-9, `Hybrid: Bezugstag für Sonntag ${d14[13]} ist Sonntag ${d14[6]} (Faktor ${o[0].toFixed(2)}), nicht Samstag ${d14[12]}`);
+}
+{
+  const ev = (o) => Object.fromEntries(Object.entries(o).map(([d, m]) => [d, { models: Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { wapeGD: v, wapeGH: v }])) }]));
+  const mk = (n, f) => ev(Object.fromEntries(Array.from({ length: n }, (_, i) => [`2026-11-${String(i + 1).padStart(2, '0')}`, f(i)])));
+  const h = F.chooseModel(mk(4, () => ({ profile: 0.17, pooled: 0.19, hybrid: 0.16 })), { trainDays: 8 });
+  assert(h.active === 'hybrid' && /wie gestern/.test(h.reason), `Modellwahl: Hybrid ≥ 2 % besser als das gewählte → hybrid (${h.reason})`);
+  assert(F.chooseModel(mk(4, () => ({ profile: 0.17, pooled: 0.19, hybrid: 0.168 })), { trainDays: 8 }).active === 'profile', 'Modellwahl: Hybrid nur 1 % besser → bleibt profile');
+  assert(F.chooseModel(mk(4, () => ({ profile: 0.3, pooled: 0.2, adaptive: 0.18, hybrid: 0.15 })), { trainDays: 8 }).active === 'hybrid' && F.chooseModel(mk(4, () => ({ profile: 0.3, pooled: 0.2, adaptive: 0.14, hybrid: 0.15 })), { trainDays: 8 }).active === 'adaptive', 'Modellwahl: sind lernendes Modell und Hybrid besser, gewinnt der größere Vorsprung');
+}
+{
+  // Saisonabfall: Nachfrage −6 % je Tag bei gleicher Flotte; Profil und gepooltes Modell mitteln über das Fenster und liegen zu hoch, der Hybrid folgt dem Niveau
+  const ds = days12.slice(0, NDAY - 1).map((d, i) => makeDoc(d, { level: 0.94 ** i })), TODAY = addDays(DAY0, NDAY - 1), NOW = Date.parse(`${TODAY}T03:00:00Z`);
+  const r = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW });
+  const ev = Object.values(r.log.evals).filter(e => e.models.hybrid && e.trainDays >= 3), avg = (m) => ev.reduce((a, e) => a + F.scoreOf(e.models[m]), 0) / ev.length;
+  assert(ev.length >= 5 && avg('hybrid') < Math.min(avg('profile'), avg('pooled')) * 0.95 && ev.every(e => e.expoErrAlt && e.expoErrAlt.class != null), `Saisonabfall: Hybrid ${(avg('hybrid') * 100).toFixed(1)} % gegen Profil ${(avg('profile') * 100).toFixed(1)} %, gepoolt ${(avg('pooled') * 100).toFixed(1)} %; andere Flottenannahmen mitgeschrieben`);
+  const PL = r.series.plans[TODAY];
+  assert(r.latest.active === 'hybrid' && r.latest.totals.every(Number.isFinite) && PL?.model === 'hybrid', `Gewählt: ${r.latest.active} (${r.latest.reason}); Plan heute mit ${PL?.model}`);
+  // Live-Prognose (Freitag früh bis Samstag) gegen die Wahrheit, gleiche Eingaben, Modell jeweils erzwungen
+  const runAs = (m) => { const lg = JSON.parse(JSON.stringify(r.log)); for (const e of Object.values(lg.evals)) if (e.models[m]) { e.models[m].wapeGD *= 0.5; e.models[m].wapeGH *= 0.5; } return F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: lg, now: NOW + 3600e3 }).latest; };
+  const lev = (d) => 0.94 ** Math.round((Date.parse(`${d}T12:00:00Z`) - Date.parse(`${DAY0}T12:00:00Z`)) / 86400e3);
+  const errOf = (L) => { let e = 0, t = 0; L.horizon.local.forEach(([d, h], i) => { const tru = groups.reduce((a, g) => a + trueMu(g, d, h, lev(d)), 0); e += Math.abs(L.totals[i] - tru); t += tru; }); return e / t; };
+  const E = { hybrid: errOf(runAs('hybrid')), pooled: errOf(runAs('pooled')), profile: errOf(runAs('profile')) };
+  assert(E.hybrid < Math.min(E.pooled, E.profile) * 0.8, `Live im Saisonabfall: Stundensummen ${(E.hybrid * 100).toFixed(1)} % neben der Wahrheit (gepoolt ${(E.pooled * 100).toFixed(1)} %, Profil ${(E.profile * 100).toFixed(1)} %)`);
+}
+
 // ---------- Selbstprüfung ohne Vorwissen: Exposition der Vortage wie im Betrieb (Regression Orakel, bis 6.11.2026)
 {
   const ds = F.assignEras(docs.slice(0, 6).map(d => F.dayFromDoc(d, null)));
