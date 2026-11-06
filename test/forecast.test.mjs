@@ -166,6 +166,49 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(r3.log.feedback.upto === addDays(DAY0, NDAY) && r3.log.evals[addDays(DAY0, NDAY)]?.models.adaptive, 'Neuer Tag: wird erst bewertet, dann in den Lernstand übernommen');
 }
 
+// ---------- Selbstprüfung ohne Vorwissen: Exposition der Vortage wie im Betrieb (Regression Orakel, bis 6.11.2026)
+{
+  const ds = F.assignEras(docs.slice(0, 6).map(d => F.dayFromDoc(d, null)));
+  const ds2 = F.assignEras(docs.slice(0, 6).map((d, i) => { const x = F.dayFromDoc(d, null); if (i === 5) x.groups = Object.fromEntries(Object.entries(x.groups).map(([k, g]) => [k, { ...g, vmin: g.vmin.map(v => v * 2.5) }])); return x; }));
+  const R1 = F.buildRows(ds), R2 = F.buildRows(ds2);
+  const lastOf = (days) => (d) => { const m = new Map(); for (const x of days.slice(0, d)) for (const [k, g] of Object.entries(x.groups)) m.set(k, g.vmin.map(v => v / 60)); return m; };
+  const e1 = F.evaluateDays(R1, [5], { expoBefore: lastOf(ds) })[5], e2 = F.evaluateDays(R2, [5], { expoBefore: lastOf(ds2) })[5];
+  const same = ['profile', 'pooled'].every(m => JSON.stringify({ ...e1.models[m] }) === JSON.stringify({ ...e2.models[m] }));
+  assert(same, `Leck-Test: tatsächliche Fahrzeugstunden des Prüftags ×2,5 ändern die Wertung nicht (pooled ${(e1.models.pooled.wapeGH * 100).toFixed(1)} = ${(e2.models.pooled.wapeGH * 100).toFixed(1)} %)`);
+  const o2 = F.evaluateDays(R2, [5], {})[5];
+  assert(o2.models.pooled.wapeGH !== e2.models.pooled.wapeGH && e2.expoErr > 0.5 && e1.expoErr < 0.05, `Ohne Vortags-Exposition (alte Prüfung) hinge die Wertung vom Prüftag ab; Fehler der Flottenprognose ${e1.expoErr} bzw. ${e2.expoErr}`);
+  const t = e1.models.pooled, ty = Object.values(t.byType), sz = Object.values(t.bySize);
+  assert(ty.reduce((a, x) => a + x[2], 0) === t.starts && sz.reduce((a, x) => a + x[2], 0) === t.starts && Object.keys(t.byType).every(k => ['scooter', 'bike'].includes(k)), `Aufteilung je Art (${Object.keys(t.byType).join(', ')}) und Größe (${Object.keys(t.bySize).join(', ')}) summiert sich zu allen Fahrtbeginnen`);
+}
+// ---------- Modellwahl nur mit reifen Tagen; Wetter-Gate je Gemeinde-Tag
+{
+  const ev = (o) => Object.fromEntries(Object.entries(o).map(([d, [td, m]]) => [d, { trainDays: td, models: Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { wapeGD: v, wapeGH: v }])) }]));
+  const E = ev({ '2026-11-02': [2, { profile: 0.9, pooled: 0.2 }], '2026-11-03': [3, { profile: 0.1, pooled: 0.2 }], '2026-11-04': [4, { profile: 0.1, pooled: 0.2 }], '2026-11-05': [5, { profile: 0.1, pooled: 0.2 }] });
+  const c = F.chooseModel(E, { trainDays: 6 });
+  assert(c.active === 'profile' && c.evalDays === 3, `Modellwahl: Tag mit 2 Trainingstagen zählt nicht (sonst gewänne pooled); ${c.reason}`);
+  // Regen jeden Tag irgendwo (eine Gemeinde regnet immer), sonst trocken an Tagen ohne Regen: alte Regel zählte 0 Trockentage
+  const ds = F.assignEras(docs.map(d => F.dayFromDoc(d, null)));
+  const W = WX.map(w => { const wet = { t: w.cells['48.5|9.0'].t, p: w.cells['48.5|9.0'].t.map(() => 1) }; return { ...w, cells: { ...w.cells, wet }, ags: { ...w.ags, [AGS[0]]: 'wet' } }; });
+  const R = F.buildRows(ds, F.wxLookup(W)), g = F.weatherGate(R, Array.from({ length: R.n }, (_, i) => i));
+  assert(g.ok && g.dryDays >= 4 && g.rainDays >= 2 && g.places >= NDAY * AGS.length - 2, `Wetter-Gate je Gemeinde-Tag: ${g.rainDays} Regen-, ${g.dryDays} Trockentage, obwohl es jeden Tag irgendwo regnet; Spanne ${g.tempRangeK} K`);
+}
+// ---------- Live-Abgleich trotz täglicher Abendlücke; gezielter Neuaufbau bei neuer Prüffassung
+{
+  const gap = [17, 18, 19, 20], NOW = Date.parse(`${addDays(DAY0, NDAY - 2)}T10:00:00Z`);
+  const ds = docs.slice(0, NDAY - 2), r = F.runForecast({ docs: ds, calendar: null, weather: WX, prevLog: null, now: NOW });
+  assert(Object.keys(r.log.issued).length === 1 && r.log.evalVersion === F.EVAL_VERSION && Object.values(r.log.evals).every(e => e.expoErr != null), 'Ausgegebene Prognose festgehalten; Auswertungen mit Fehler der Flottenprognose');
+  const holed = (d) => makeDoc(d, { skipHours: gap }); // keine Läufe und Fahrten 17–20 Uhr (wie die Lücken am 4./5.11.)
+  const next = [...ds, holed(addDays(DAY0, NDAY - 2)), holed(addDays(DAY0, NDAY - 1))];
+  const early = F.runForecast({ docs: next, calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(r.log)), now: Date.parse(`${addDays(DAY0, NDAY - 1)}T11:30:00Z`) });
+  assert(Object.keys(early.log.live).length === 0 && Object.keys(early.log.issued).length >= 1, 'Live-Abgleich wartet, bis die 24 Stunden plus Puffer vorbei sind');
+  const r2 = F.runForecast({ docs: next, calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(r.log)), now: Date.parse(`${addDays(DAY0, NDAY)}T09:00:00Z`) });
+  const lv = Object.values(r2.log.live)[0];
+  assert(lv && lv.hours === 20 && lv.lead.filter(x => x === null).length === 4 && lv.wapeTotalH < 0.2 && lv.naiveOpH != null, `Live-Abgleich mit Lücke 17–20 Uhr: ${lv?.hours} von 24 Stunden bewertet, Summe ${(lv?.wapeTotalH * 100).toFixed(1)} %, Vorlauf-Fehler je Stunde mitgeschrieben`);
+  const old = JSON.parse(JSON.stringify(r.log)); delete old.evalVersion; for (const e of Object.values(old.evals)) e.models.pooled.wapeGD = 0.999; old.live = { 1: { model: 'pooled', hours: 24 } };
+  const r3 = F.runForecast({ docs: ds, calendar: null, weather: WX, prevLog: old, now: NOW + 3600e3 });
+  assert(Object.values(r3.log.evals).every(e => e.models.pooled.wapeGD < 0.9) && r3.log.live[1] && Object.keys(r3.log.issued).length >= 1 && r3.log.feedback.upto, 'Neue Prüffassung: Auswertungen und Lernstand neu gerechnet, Live-Abgleich und ausgegebene Prognosen bleiben');
+}
+
 // ---------- Ende zu Ende: Lauf, Selbstprüfung, Prognose, Live-Abgleich
 {
   const NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`); // alle 12 Tage sind abgeschlossen

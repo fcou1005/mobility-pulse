@@ -5,13 +5,13 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw360q7q';
-import * as SP from './pulse-spots.js?v=mw360q7q';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw360q7q';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw360q7q';
-import { toCsv } from './pulse-report.js?v=mw360q7q';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw360q7q';
-import { mapKeys } from './mapkeys.js?v=mw360q7q';
+import * as FC from './pulse-forecast.js?v=mw54jh6a';
+import * as SP from './pulse-spots.js?v=mw54jh6a';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw54jh6a';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw54jh6a';
+import { toCsv } from './pulse-report.js?v=mw54jh6a';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw54jh6a';
+import { mapKeys } from './mapkeys.js?v=mw54jh6a';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -119,7 +119,8 @@ details.fv-data{margin-top:var(--s3)}details.fv-data summary{cursor:pointer;font
 .fv-keys2 i{display:inline-block;width:18px;height:0;border-top:3px solid;margin-right:6px;vertical-align:middle}.fv-keys2 i.nv{border-top-style:dashed}
 .fv-keys2 b{font-weight:600;color:var(--fg)}
 .fv-tbl .m-only{display:none}
-@media (max-width:640px){.fv-tbl .mh{display:none}.fv-tbl .m-only{display:block;margin-top:5px}.fv-tbl td.bars .fv-bar{display:none}.fv-tbl td.bars{min-width:0}.fv-tbl td.bars span.t{min-width:0;margin:0}.fv-verdict{font-size:14.5px}}
+.fv-tbl .v2+.v2::before{content:' · '}
+@media (max-width:640px){.fv-tbl .v2{display:block}.fv-tbl .v2+.v2::before{content:''}.fv-tbl .mh{display:none}.fv-tbl .m-only{display:block;margin-top:5px}.fv-tbl td.bars .fv-bar{display:none}.fv-tbl td.bars{min-width:0}.fv-tbl td.bars span.t{min-width:0;margin:0}.fv-verdict{font-size:14.5px}}
 `;
 let cssDone = false;
 const css = () => { if (cssDone || typeof document === 'undefined') return; cssDone = true; const s = document.createElement('style'); s.id = 'fv-style'; s.textContent = CSS; document.head.appendChild(s); };
@@ -229,8 +230,9 @@ function accRows(S0, sel, G, { withToday = false } = {}) {
 const MODEL_ORDER = ['adaptive', 'pooled', 'pooledWx', 'profile', 'naive'];
 const MODEL_COLOR = { adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
 const modelName = (m) => (m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`));
+const mature = (G, d) => !(G?.evals?.[d]?.trainDays < (FC.GATES.minEvalTrainDays ?? 0)); // wie chooseModel: unreife Starttage zählen nicht
 function raceOf(G, L) {
-  const ev = G?.evals || {}, evDays = Object.keys(ev).sort().slice(-(L?.gates?.evalWindow ?? FC.GATES.evalWindow));
+  const ev = G?.evals || {}, evDays = Object.keys(ev).sort().filter(d => mature(G, d)).slice(-(L?.gates?.evalWindow ?? FC.GATES.evalWindow));
   const avg = (m, f) => { const v = evDays.map(d => f(ev[d]?.models?.[m])).filter(x => x != null); return v.length ? { v: sum(v) / v.length, n: v.length } : null; };
   return MODEL_ORDER.map(m => ({ m, sc: avg(m, FC.scoreOf), gd: avg(m, x => x?.wapeGD), gh: avg(m, x => x?.wapeGH), bias: avg(m, x => x?.bias), cov: avg(m, x => x?.cover80) })).filter(r => r.sc);
 }
@@ -241,7 +243,7 @@ function accuracyPanel(ctx, S0, sel, G, L) {
     + `<td class="n bars"><span class="t">${pc(r.wape)}</span><span class="fv-bar" style="width:${Math.round(r.wape / maxW * 110)}px"></span></td><td class="n bars"><span class="t">${pc(r.naive)}</span>${r.naive == null ? '' : `<span class="fv-bar n" style="width:${Math.round(r.naive / maxW * 110)}px"></span>`}</td><td class="n mh">${r.skill == null ? '–' : sg(r.skill)}</td><td class="n mh">${r.train == null ? '–' : n0(r.train)}</td></tr>`).join('') : '';
   const table = rows.length ? `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.accTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th class="n mh">${t('fv.colIst')}</th><th class="n mh">${t('fv.colPlan')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n">${t('fv.colErr')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colTrain')}</th></tr></thead><tbody>${body}</tbody></table></div>`
     : `<div class="empty"><b>${t('fv.accNone')}</b>${t('fv.accNoneHint')}</div>`;
-  const live = (L?.live || []).slice(-6).reverse(), liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colStarts')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="n">${pc(x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n">${x.skill == null ? '–' : sg(x.skill)}</td><td class="n mh">${n0(x.starts)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const live = (L?.live || []).slice(-6).reverse(), liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colHours')}</th><th class="n mh">${t('fv.colStarts')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="n">${pc(x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${x.skill == null ? '–' : sg(x.skill)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td><td class="n mh">${n0(x.starts)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}</div>` : '';
   return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}</div>`;
 }
 
@@ -252,9 +254,12 @@ export function gradeOf(S0, sel, G, L) {
   const mean = (a) => (a.length ? sum(a) / a.length : null), rows = S0 ? accRows(S0, sel, G).filter(r => r.naive != null) : [];
   const scope = rows.length ? { a: mean(rows.map(r => r.wape)), b: mean(rows.map(r => r.naive)), n: rows.length, bias: mean(rows.map(r => r.bias)) } : null;
   const ev = G?.evals || {}, act = L?.active || 'pooled', win = L?.gates?.evalWindow ?? FC.GATES.evalWindow;
-  const days = Object.keys(ev).sort().slice(-win).filter(d => ev[d]?.models?.[act] && ev[d]?.models?.naive);
+  const days = Object.keys(ev).sort().filter(d => mature(G, d)).slice(-win).filter(d => ev[d]?.models?.[act] && ev[d]?.models?.naive);
   const gm = (k) => (days.length ? { a: mean(days.map(d => ev[d].models[act][k])), b: mean(days.map(d => ev[d].models.naive[k])), n: days.length } : null);
-  const lv = [['scope', scope], ['gh', gm('wapeGH')], ['gd', gm('wapeGD')]].filter(([, x]) => x && x.a != null && x.b != null).map(([k, x]) => ({ k, ...x, j: judge(x.a, x.b) }));
+  // ausgegebene Prognosen (Live-Abgleich, letzte 7 Tage): je Anbieter und Stunde gegen „wie gestern“ über dieselben Stunden
+  const lvRec = (L?.live || []).filter(x => x.wapeOpHn != null && x.naiveOpH != null && (L?.generatedAt ? Date.parse(L.generatedAt) - x.at <= 7 * 86400e3 : true));
+  const liveLv = lvRec.length ? { a: mean(lvRec.map(x => x.wapeOpHn)), b: mean(lvRec.map(x => x.naiveOpH)), n: lvRec.length, h: mean(lvRec.map(x => x.hours ?? 24)) } : null;
+  const lv = [['live', liveLv], ['scope', scope], ['gh', gm('wapeGH')], ['gd', gm('wapeGD')]].filter(([, x]) => x && x.a != null && x.b != null).map(([k, x]) => ({ k, ...x, j: judge(x.a, x.b) }));
   const nb = lv.filter(x => x.j === 'better').length, nw = lv.filter(x => x.j === 'worse').length;
   const lvl = !lv.length ? 'none' : nw === 0 ? 'ok' : nb === 0 ? 'bad' : 'near';
   const biasG = days.length ? mean(days.map(d => ev[d].models[act].bias).filter(x => x != null)) : null;
@@ -270,7 +275,7 @@ function verdictText(ctx, g) {
 const jChip = (j) => (j ? `<span class="fv-j ${j}">${t(j === 'better' ? 'fv.gBetter' : j === 'worse' ? 'fv.gWorse' : 'fv.gEqual')}</span>` : '–');
 function gradePanel(ctx, S0, sel, G, L) {
   const g = gradeOf(S0, sel, G, L), scopeTxt = scopeLabel(ctx, sel);
-  const label = (x) => (x.k === 'scope' ? [t('fv.gRowScope', { s: scopeTxt }), t('fv.gRowScopeSub', { n: x.n })] : x.k === 'gh' ? [t('fv.gRowGH'), t('fv.gRowGroupSub', { n: x.n, model: modelName(g.act) })] : [t('fv.gRowGD'), t('fv.gRowGroupSub', { n: x.n, model: modelName(g.act) })]);
+  const label = (x) => (x.k === 'live' ? [t('fv.gRowLive'), t('fv.gRowLiveSub', { n: x.n, h: n0(x.h) })] : x.k === 'scope' ? [t('fv.gRowScope', { s: scopeTxt }), t('fv.gRowScopeSub', { n: x.n })] : x.k === 'gh' ? [t('fv.gRowGH'), t('fv.gRowGroupSub', { n: x.n, model: modelName(g.act) })] : [t('fv.gRowGD'), t('fv.gRowGroupSub', { n: x.n, model: modelName(g.act) })]);
   const tbl = g.lv.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.gradeTitle'))}"><table><thead><tr><th>${t('fv.gLevel')}</th><th class="n">${t('fv.gModel')}</th><th class="n">${t('fv.gNaive')}</th><th class="mh">${t('fv.gVerdict')}</th></tr></thead><tbody>${g.lv.map(x => { const [l, s] = label(x); return `<tr><td class="wrap"><span class="lv">${ctx.esc(l)}</span><span class="lvs">${ctx.esc(s)}</span><span class="m-only">${jChip(x.j)}</span></td><td class="n">${pc(x.a)}</td><td class="n">${pc(x.b)}</td><td class="mh">${jChip(x.j)}</td></tr>`; }).join('')}</tbody></table></div>` : '';
   const ico = g.lvl === 'ok' ? '✓' : g.lvl === 'near' ? '!' : g.lvl === 'bad' ? '✗' : '–';
   return `<div class="panel" id="fv-grade">${head(t('fv.gradeTitle'), t('fv.gradeSub'))}<p class="fv-verdict ${g.lvl}"><i aria-hidden="true">${ico}</i><span>${verdictText(ctx, g)}</span></p>${tbl}<div class="fv-sub">${t('fv.gHow')}</div>${dlRow(true)}</div>`;
@@ -308,11 +313,21 @@ function learnedHtml(ctx, L) {
   const tbl = rows.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.learnedTitle'))}"><table><thead><tr><th>${t('fv.colGroup')}</th><th>${t('fv.colLearnsFrom')}</th><th class="n">${t('fv.colOwnW')}</th><th class="n mh">${t('fv.colErrOwn')}</th><th class="n mh">${t('fv.colErrPool')}</th><th class="n mh">${t('fv.colStarts')}</th></tr></thead><tbody>${rows.map(([dir, k, w, eo, ep, y]) => `<tr><td class="wrap">${ctx.esc(groupLabel(ctx, k))}</td><td><span class="fv-chip${dir === 'own' ? ' A' : ''}">${t(dir === 'own' ? 'fv.fromOwn' : 'fv.fromAll')}</span></td><td class="n">${pc(w)}</td><td class="n mh">${pc(eo)}</td><td class="n mh">${pc(ep)}</td><td class="n mh">${n0(y)}</td></tr>`).join('')}</tbody></table></div>` : '';
   return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.learnedTitle')}</h3><p class="fv-sub" style="margin-top:0">${ctx.esc(lead)} ${ctx.esc(state)}</p>${tbl}<div class="fv-sub">${t('fv.learnedNote')}</div>`;
 }
+/** Letzter reifer Prüftag: aktives Modell gegen „wie gestern“ je Fahrzeugart und Gruppengröße (die Gesamtwertung ist nach Volumen gewichtet) */
+function partsHtml(ctx, G, L) {
+  const ev = G?.evals || {}, act = L?.active, d = Object.keys(ev).sort().filter(x => mature(G, x) && ev[x]?.models?.[act]?.byType && ev[x]?.models?.naive?.byType).at(-1);
+  if (!d) return '';
+  const A = ev[d].models[act], N = ev[d].models.naive, tl = tMap('type', VEHICLE_TYPE_LABEL);
+  const rows = [...Object.keys(A.byType).filter(k => A.byType[k][2] > 0).sort((a, b) => A.byType[b][2] - A.byType[a][2]).map(k => [tl[k] || k, A.byType[k], N.byType[k]]),
+    ...['L', 'M', 'S'].filter(k => A.bySize?.[k]?.[2] > 0).map(k => [t(`fv.size${k}`), A.bySize[k], N.bySize?.[k]])];
+  const sc = (x) => (x ? (x[0] + x[1]) / 2 : null);
+  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.partsTitle')}</h3><div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.partsTitle'))}"><table><thead><tr><th>${t('fv.colPart')}</th><th class="n mh">${t('fv.colStarts')}</th><th class="n">${t('fv.gModel')}</th><th class="n">${t('fv.gNaive')}</th><th class="mh">${t('fv.gVerdict')}</th></tr></thead><tbody>${rows.map(([l, a, n]) => `<tr><td class="wrap"><span class="lv">${ctx.esc(l)}</span><span class="m-only">${jChip(judge(sc(a), sc(n)))}</span></td><td class="n mh">${n0(a[2])}</td><td class="n"><span class="v2">${pc(a[0])}</span><span class="v2">${pc(a[1])}</span></td><td class="n">${n ? `<span class="v2">${pc(n[0])}</span><span class="v2">${pc(n[1])}</span>` : '–'}</td><td class="mh">${jChip(judge(sc(a), sc(n)))}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.partsNote', { d: ctx.esc(dayTxt(d)), model: ctx.esc(modelName(act)) })}</div>`;
+}
 function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));
   const raceHtml = race.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.raceTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.raceTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.colScore')}</th><th class="n mh">${t('fv.colGD')}</th><th class="n mh">${t('fv.colGH')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n mh">${t('fv.colCover')}</th><th class="n mh">${t('fv.colDays')}</th></tr></thead><tbody>${race.map(r => `<tr><td>${ctx.esc(modelName(r.m))}${r.m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}${r.m !== 'naive' && r.sc.v === best ? ` <span class="fv-chip A">${t('fv.bestTag')}</span>` : ''}</td><td class="n bars"><span class="t">${pc(r.sc.v)}</span><span class="fv-bar${r.m === 'naive' ? ' n' : ''}" style="width:${Math.round(r.sc.v / maxS * 110)}px"></span></td><td class="n mh">${pc(r.gd?.v)}</td><td class="n mh">${pc(r.gh?.v)}</td><td class="n mh">${sg(r.bias?.v, 1)}</td><td class="n mh">${pc(r.cov?.v)}</td><td class="n mh">${r.sc.n}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.raceNote')}</div>` : '';
   const svg = curveSvg(ctx, G, L, width), trend = curveTrend(ctx, G, L);
-  return `<div class="panel" id="fv-curve">${head(t('fv.curveTitle'), t('fv.curveSub'))}${trend ? `<p class="fv-lead" style="margin-top:var(--s2)">${trend}</p>` : ''}${svg}${raceHtml}${learnedHtml(ctx, L)}</div>`;
+  return `<div class="panel" id="fv-curve">${head(t('fv.curveTitle'), t('fv.curveSub'))}${trend ? `<p class="fv-lead" style="margin-top:var(--s2)">${trend}</p>` : ''}${svg}${raceHtml}${partsHtml(ctx, G, L)}${learnedHtml(ctx, L)}</div>`;
 }
 
 // ---------- Algorithmus herunterladen: Steckbrief (Markdown, aus den aktuellen Daten) und Quellcode der Engine ----------
@@ -333,7 +348,8 @@ function paramRows(L) {
   return [
     ['minTrainDays', gates.minTrainDays, t('fv.pMinTrain')], ['minEvalDays', gates.minEvalDays, t('fv.pMinEval')], ['hourMinObserved', gates.hourMinObserved, t('fv.pHourMin')],
     ['wxTempRangeK', gates.wxTempRangeK, t('fv.pWxRange')], ['wxRainDays', gates.wxRainDays, t('fv.pWxRain')], ['wxMissingMax', gates.wxMissingMax, t('fv.pWxMiss')], ['wxGain', gates.wxGain, t('fv.pWxGain')],
-    ['adGain', gates.adGain ?? FC.GATES.adGain, t('fv.pAdGain')], ['evalWindow', gates.evalWindow, t('fv.pWindow')],
+    ['adGain', gates.adGain ?? FC.GATES.adGain, t('fv.pAdGain')], ['evalWindow', gates.evalWindow, t('fv.pWindow')], ['minEvalTrainDays', gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays, t('fv.pMinEvalTrain')],
+    ['liveMinHours', gates.liveMinHours ?? FC.GATES.liveMinHours, t('fv.pLiveMin')], ['wxShareDay', gates.wxShareDay ?? FC.GATES.wxShareDay, t('fv.pWxShare')],
     ['FEEDBACK.halfLifeDays', FC.FEEDBACK.halfLifeDays, t('fv.pHalfLife')], ['FEEDBACK.kBlend', FC.FEEDBACK.kBlend, t('fv.pKBlend')], ['FEEDBACK.sharp', FC.FEEDBACK.sharp, t('fv.pSharp')],
     ['SERIES_KEEP_DAYS', FC.SERIES_KEEP_DAYS, t('fv.pKeep')], ['SERIES_MIN.ags', FC.SERIES_MIN.ags, t('fv.pSerAgs')], ['SERIES_MIN.group', FC.SERIES_MIN.group, t('fv.pSerGroup')], ['SERIES_MIN.groupMax', FC.SERIES_MIN.groupMax, t('fv.pSerMax')],
     ['baseH', OPS.baseH, t('fv.pBase')], ['minPerSpot', OPS.minPerSpot, t('fv.pMinSpot')], ['maxPerSpot', OPS.maxPerSpot, t('fv.pMaxSpot')], ['spotRadiusM', OPS.spotRadiusM, t('fv.pRadius')], ['horizonH', OPS.horizonH, t('fv.pHorizon')], ['prelimH', OPS.prelimH, t('fv.pPrelim')],
@@ -344,7 +360,7 @@ const NOT_KEYS = ['nStrike', 'nTrain', 'nEvents', 'nWarn', 'nRoad', 'nOp', 'nZon
 export function steckbrief(ctx, S0, L, G, sel) {
   const g = gradeOf(S0, sel, G, L), scopeTxt = scopeLabel(ctx, sel), gates = { ...FC.GATES, ...(L?.gates || {}) }, now = dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: TZ }).format(new Date());
   const strip = (h) => String(h).replace(/<[^>]+>/g, '');
-  const levelName = (x) => (x.k === 'scope' ? t('fv.gRowScope', { s: scopeTxt }) : x.k === 'gh' ? t('fv.gRowGH') : t('fv.gRowGD'));
+  const levelName = (x) => (x.k === 'live' ? t('fv.gRowLive') : x.k === 'scope' ? t('fv.gRowScope', { s: scopeTxt }) : x.k === 'gh' ? t('fv.gRowGH') : t('fv.gRowGD'));
   const jTxt = (j) => (j ? t(j === 'better' ? 'fv.gBetter' : j === 'worse' ? 'fv.gWorse' : 'fv.gEqual') : '–');
   const out = [];
   out.push(`# ${t('fv.mdTitle')}\n`, `${t('fv.mdStand', { time: now, data: timeTxt(L?.generatedAt), url: location.href.split('#')[0] })}\n`);
@@ -353,7 +369,7 @@ export function steckbrief(ctx, S0, L, G, sel) {
   out.push(`## ${t('fv.mdWhat')}\n`, `${t('fv.mdWhatTxt', { g: n0(L?.learn?.groups ?? Object.keys(L?.groups || {}).length), m: n0(Object.keys(L?.municipalities || {}).length) })}\n`);
   out.push(`## ${t('fv.mdModels')}\n`, '```\n' + `${t('fv.formula')}\n` + '```\n');
   for (const [m, k] of [['profile', 'fv.mProfile'], ['pooled', 'fv.mPooled'], ['pooledWx', 'fv.mPooledWx'], ['adaptive', 'fv.mAdaptive'], ['naive', 'fv.mNaive']]) out.push(`- **${modelName(m)}**${m === L?.active ? ` (${t('fv.activeTag')})` : ''}: ${t(k, { hl: FC.FEEDBACK.halfLifeDays })}`);
-  out.push('', `${t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain) })}\n`, `${t('fv.mdActive', { model: L?.active ? modelName(L.active) : '–', reason: L?.reason || '–' })}\n`);
+  out.push('', `${t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays })}\n`, `${t('fv.mdActive', { model: L?.active ? modelName(L.active) : '–', reason: L?.reason || '–' })}\n`);
   const x = L?.learn;
   out.push(`## ${t('fv.mdLearn')}\n`, `${t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })}\n`);
   if (x) { out.push(`${t('fv.learnedLead', { days: n1(x.days), own: n0(x.leanOwn), pool: n0(x.leanPool), mixed: n0(x.mixed), judged: n0(x.judged), share: pc(x.ownShare), eo: pc(x.errOwn), ep: pc(x.errPooled) })}\n`);
@@ -363,6 +379,8 @@ export function steckbrief(ctx, S0, L, G, sel) {
   const ev = G?.evals || {}, evRows = [];
   for (const d of Object.keys(ev).sort()) for (const m of MODEL_ORDER) { const r = ev[d]?.models?.[m]; if (r) evRows.push([d, ev[d].trainDays ?? '–', modelName(m), pc(FC.scoreOf(r), 1), pc(r.wapeGD, 1), pc(r.wapeGH, 1), sg(r.bias, 1), pc(r.cover80)]); }
   out.push(`\n## ${t('fv.mdEval')}\n`, `${strip(t('fv.raceNote'))}\n`, evRows.length ? mdTable([t('fv.colDay'), t('fv.colTrain'), t('fv.colModel'), t('fv.colScore'), t('fv.colGD'), t('fv.colGH'), t('fv.colBias'), t('fv.colCover')], evRows) : `${t('fv.accNone')}\n`);
+  const lvAll = (L?.live || []).slice().reverse();
+  if (lvAll.length) out.push(`\n## ${t('fv.liveTitle')}\n`, mdTable([t('fv.colIssued'), t('fv.colModel'), t('fv.colHours'), t('fv.colErrOp'), t('fv.colNaive'), t('fv.colSkill')], lvAll.map(x => [dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)), x.model ? modelName(x.model) : '–', x.hours ?? 24, pc(x.wapeOpH), pc(x.naiveOpH), x.skill == null ? '–' : sg(x.skill)])), `\n${strip(t('fv.liveNote', { min: FC.GATES.liveMinHours }))}\n`);
   const pr = S0 ? accRows(S0, sel, G) : [];
   out.push(`\n## ${t('fv.mdPlan', { scope: scopeTxt })}\n`, pr.length ? mdTable([t('fv.colDay'), t('fv.colIst'), t('fv.colPlan'), t('fv.colBias'), t('fv.colErr'), t('fv.colNaive'), t('fv.colSkill'), t('fv.colTrain')], pr.map(r => [r.d, n0(r.ist), n0(r.plan), sg(r.bias, 1), pc(r.wape), pc(r.naive), r.skill == null ? '–' : sg(r.skill), r.train ?? '–'])) : `${t('fv.accNone')}\n`, `\n${strip(t('fv.accNote'))}\n`);
   out.push(`\n## ${t('fv.mdParams')}\n`, mdTable([t('fv.colParam'), t('fv.colValue'), t('fv.colEffect')], paramRows(L).map(([k, v, d]) => [k, v, d])));
@@ -593,6 +611,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
     [t('fv.kvGroups'), n0(nGroups), t('fv.kvGroupsSub', { m: n0(nMuni) })],
     [t('fv.kvExcl'), n0(L.excluded || 0), ck?.ruleNow ? t('fv.kvExclSub', { rule: esc(ck.ruleNow) }) : t('fv.kvExclSub0')],
     [t('fv.kvPhi'), n1v(L.phi), t('fv.kvPhiSub')],
+    (() => { const d = evKeys.filter(x => G?.evals?.[x]?.expoErr != null).at(-1); return [t('fv.kvExpo'), d ? pc(G.evals[d].expoErr) : '–', d ? t('fv.kvExpoSub', { d: esc(dayTxt(d)) }) : t('fv.kvExpoNone')]; })(),
     [t('fv.kvWx'), esc(L.weather?.source || '–'), L.weather?.used ? t('fv.kvWxOn') : t('fv.kvWxOff', { range: n1v(wg.tempRangeK), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, miss: pc(wg.missingShare) })],
     [t('fv.kvCal'), cal?.source ? esc(cal.source) : t('fv.kvCalNone'), cal?.from ? `${esc(cal.from)} – ${esc(cal.to)}` : t('fv.kvCalFallback')],
     [t('fv.kvHorizon'), t('fv.kvHorizonV', { h: L.horizon?.hours ?? 24 }), L.horizon?.from ? t('fv.kvHorizonSub', { time: timeTxt(new Date(L.horizon.from).toISOString()), d: esc(L.horizon.tomorrow || '') }) : ''],
@@ -602,7 +621,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['naive', t('fv.mNaive')]];
   const p3 = `<div class="panel">${head(t('fv.modelTitle'), t('fv.modelSub'))}<code class="fv-formula">${esc(t('fv.formula'))}</code>`
     + `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.modelTitle'))}"><table style="margin-top:var(--s3)"><thead><tr><th>${t('fv.colModel')}</th><th>${t('fv.colWhat')}</th></tr></thead><tbody>${modelRows.map(([m, d]) => `<tr><td>${m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`)}${m === L.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="wrap">${esc(d)}</td></tr>`).join('')}</tbody></table></div>`
-    + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain) }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(L.reason)}</i></p>` : ''}</div>`;
+    + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(L.reason)}</i></p>` : ''}</div>`;
   // Panel 4: gemessen · abgeleitet · modelliert · vermutet
   const A = [
     ['derived', t('fv.aStarts'), t('fv.aStartsHow')], ['measured', t('fv.aExposure'), t('fv.aExposureHow')], ['external', t('fv.aDayType'), t('fv.aDayTypeHow')],
