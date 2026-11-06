@@ -11,16 +11,17 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw5bywr0';
-import { hourOf, dayOf } from './pulse-track.js?v=mw5bywr0';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw5bywr0';
+import * as E from './pulse-econ.js?v=mw5cjlal';
+import { hourOf, dayOf } from './pulse-track.js?v=mw5cjlal';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw5cjlal';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 export const FORECAST_VERSION = 1;
 // Fassung der Selbstprüfung: 2 = Prüfzeilen mit der Exposition der Vortage (lastExposure) wie Plan und Live-Prognose; bis 6.11.2026 rechnete
 // die Prüfung mit den tatsächlichen Fahrzeugstunden des Prüftags (Vorwissen) und lag zu günstig. 3 = Hybrid. 4 = Wetter der Tage vor dem 3.11.
-// nachgeholt, Umgebungsmerkmale und Langzeitgedächtnis im Modell mit Umgebung. Andere Fassung im Log → evals und Lernstand neu.
-export const EVAL_VERSION = 4;
+// nachgeholt, Umgebungsmerkmale und Langzeitgedächtnis im Modell mit Umgebung. 5 = Art × Stunde, Anbieter-Prior, jüngere Tage zählen mehr (POOLED).
+// Andere Fassung im Log → evals und Lernstand neu.
+export const EVAL_VERSION = 5;
 export const GATES = {
   minTrainDays: 2,        // weniger Tage: keine Prognose
   minEvalDays: 3,         // ausgewertete Tage, ab denen ein Modell zur Wahl steht
@@ -41,11 +42,14 @@ export const MODELS = ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid'];
 /** Wertung eines Modells an einem Tag: Mittel aus Abweichung je Gruppe und Tag (Niveau) und je Gruppe und Stunde (Tagesgang); ohne Stundenwert nur der Tageswert */
 export const scoreOf = (x) => (x?.wapeGD == null ? null : x.wapeGH == null ? x.wapeGD : (x.wapeGD + x.wapeGH) / 2);
 const NCLS = 4, CLS = { W: 0, F: 1, S: 2, H: 3 }, NERA = 8;
-const NCTX = CTX_KEYS.length, I_HOUR = 0, I_CLS = 24, I_ERA = I_CLS + NCLS * 24, I_WX = I_ERA + NERA, I_CTX = I_WX + 3, P = I_CTX + NCTX;
+// Fahrzeugarten für Art × Stunde (Option typeHour); unbekannte → other
+export const TYPES = ['scooter', 'bike', 'ebike', 'cargo', 'other'];
+const NTY = TYPES.length, typeIx = (key) => { const t = TYPES.indexOf(String(key).split('|')[2]); return t < 0 ? NTY - 1 : t; };
+const NCTX = CTX_KEYS.length, I_HOUR = 0, I_CLS = 24, I_ERA = I_CLS + NCLS * 24, I_WX = I_ERA + NERA, I_CTX = I_WX + 3, I_TH = I_CTX + NCTX, P = I_TH + NTY * 24;
 /** Wirkungen mit Langzeitgedächtnis: Wetter (kalt, warm, Regen) und Umgebungsmerkmale, Reihenfolge wie im Parametervektor ab I_WX */
 export const EFFECTS = ['cold', 'warm', 'rain', ...CTX_KEYS];
 const NE = EFFECTS.length;
-const LAMBDA = (j) => (j < I_CLS ? 1e-3 : j < I_ERA ? 20 : j < I_WX ? 5 : 8);
+const LAMBDA = (j) => (j < I_CLS ? 1e-3 : j < I_ERA ? 20 : j < I_WX ? 5 : j < I_TH ? 8 : 20);
 const Z80 = 1.2816, ALPHA = 4;
 const sum = (a) => a.reduce((s, x) => s + x, 0);
 
@@ -94,7 +98,7 @@ function solveSpd(H, b) {
 }
 
 const ctxPart = (m, R, i) => { let s = 0; if (m.ctx?.length && R.c) for (const k of m.ctx) if (R.c[k][i]) s += m.beta[I_CTX + k]; return s; };
-const eta = (m, R, i, wxOn) => m.beta[I_HOUR + R.hr[i]] + m.beta[I_CLS + R.cl[i] * 24 + R.hr[i]] + (R.era[i] > 0 ? m.beta[I_ERA + R.era[i] - 1] : 0)
+const eta = (m, R, i, wxOn) => m.beta[I_HOUR + R.hr[i]] + m.beta[I_CLS + R.cl[i] * 24 + R.hr[i]] + (R.era[i] > 0 ? m.beta[I_ERA + R.era[i] - 1] : 0) + (m.typeHour ? m.beta[I_TH + m.gType[R.g[i]] * 24 + R.hr[i]] : 0)
   + (wxOn ? m.beta[I_WX] * R.w[0][i] + m.beta[I_WX + 1] * R.w[1][i] + m.beta[I_WX + 2] * R.w[2][i] : 0) + ctxPart(m, R, i);
 
 /** Gelernte Wetterwirkung eines Modells: Steigung je 10 K unter/über 10 °C (Log-Skala) und Faktor bei Regen */
@@ -107,11 +111,14 @@ export const ctxEffect = (m, key) => Math.exp(m.beta[I_CTX + CTX_KEYS.indexOf(ke
  * prior = Langzeitgedächtnis { b, P } über EFFECTS (Mittel und Präzision aus Tagen außerhalb des Fensters): ersetzt für die eingeschalteten Wirkungen
  * die Schrumpfung Richtung 0 durch eine Schrumpfung Richtung des bisher Gelernten.
  */
-export function fitPooled(R, sel, { weather = false, ctx = [], prior = null, outer = 5, newton = 3 } = {}) {
-  const beta = new Float64Array(P), a = new Float64Array(R.nGroups), m = { beta, a, weather, ctx: R.c ? [...ctx] : [], phi: 1, nRows: sel.length };
+export function fitPooled(R, sel, { weather = false, ctx = [], prior = null, outer = 5, newton = 3, typeHour = POOLED.typeHour, hier = POOLED.hier, halfLife = POOLED.halfLife } = {}) {
+  const beta = new Float64Array(P), a = new Float64Array(R.nGroups), m = { beta, a, weather, ctx: R.c ? [...ctx] : [], phi: 1, nRows: sel.length, typeHour, hier, gType: Int8Array.from(R.keys, typeIx) };
+  // Aktualitätsgewicht je Zeile (Option halfLife in Tagen, jüngster Trainingstag = 1)
+  let dMax = -Infinity; if (halfLife) for (const i of sel) if (R.day[i] > dMax) dMax = R.day[i];
+  const wOf = halfLife ? (i) => 2 ** (-(dMax - R.day[i]) / halfLife) : () => 1;
   const act = [...(weather ? [0, 1, 2] : []), ...m.ctx.map(k => 3 + k)]; // eingeschaltete Wirkungen (Index in EFFECTS)
   const hy = new Float64Array(24), he = new Float64Array(24), beta0 = new Float64Array(P);
-  for (const i of sel) { hy[R.hr[i]] += R.y[i]; he[R.hr[i]] += R.e[i]; }
+  for (const i of sel) { const w = wOf(i); hy[R.hr[i]] += w * R.y[i]; he[R.hr[i]] += w * R.e[i]; }
   const tot = sum([...hy]) / Math.max(1e-9, sum([...he])), known = [];
   for (let h = 0; h < 24; h++) if (he[h] > 0) known.push(h);
   // Stundenprior: beobachtete Rate je Stunde; Stunden ohne Trainingsdaten (Nachtlücken früher Tage) erben die Rate der nächsten beobachteten
@@ -130,35 +137,51 @@ export function fitPooled(R, sel, { weather = false, ctx = [], prior = null, out
     for (let it = 0; it < newton; it++) {
       const s = new Float64Array(P), H = new Float64Array(P * P);
       for (const i of sel) {
-        const mu = R.e[i] * Math.exp(a[R.g[i]] + eta(m, R, i, weather)), r = R.y[i] - mu; let nz = 0;
+        const w = wOf(i), mu = R.e[i] * Math.exp(a[R.g[i]] + eta(m, R, i, weather)), r = w * (R.y[i] - mu), wmu = w * mu; let nz = 0;
         idx[nz] = I_HOUR + R.hr[i]; val[nz++] = 1; idx[nz] = I_CLS + R.cl[i] * 24 + R.hr[i]; val[nz++] = 1;
+        if (typeHour) { idx[nz] = I_TH + m.gType[R.g[i]] * 24 + R.hr[i]; val[nz++] = 1; }
         if (R.era[i] > 0) { idx[nz] = I_ERA + R.era[i] - 1; val[nz++] = 1; }
         if (weather) for (let k = 0; k < 3; k++) if (R.w[k][i] !== 0) { idx[nz] = I_WX + k; val[nz++] = R.w[k][i]; }
         for (const k of m.ctx) if (R.c[k][i]) { idx[nz] = I_CTX + k; val[nz++] = 1; }
-        for (let p = 0; p < nz; p++) { s[idx[p]] += r * val[p]; for (let q = 0; q < nz; q++) H[idx[p] * P + idx[q]] += mu * val[p] * val[q]; }
+        for (let p = 0; p < nz; p++) { s[idx[p]] += r * val[p]; for (let q = 0; q < nz; q++) H[idx[p] * P + idx[q]] += wmu * val[p] * val[q]; }
       }
       for (let j = 0; j < P; j++) { s[j] -= LAMBDA(j) * (beta[j] - beta0[j]); H[j * P + j] += LAMBDA(j); }
       if (prior) for (const e of act) for (const f of act) { const pv = prior.P[e * NE + f]; if (!pv) continue; s[I_WX + e] -= pv * (beta[I_WX + f] - prior.b[f]); H[(I_WX + e) * P + I_WX + f] += pv; }
       const d = solveSpd(H, s);
       for (let j = 0; j < P; j++) beta[j] += Math.max(-1, Math.min(1, d[j]));
     }
-    // Gruppeneffekte: Gamma(α, α)-Prior → a_g = log((Σy + α) ÷ (Σμ ohne a + α))
+    // Gruppeneffekte: Gamma(α, α)-Prior → a_g = log((Σy + α) ÷ (Σμ ohne a + α)); Option hier: Prior-Mittel = Niveau desselben Anbieters und
+    // derselben Art über alle Gemeinden (a_g = log((Σy + α·e^{a_ot}) ÷ (Σμ + α))) – eine neue oder kleine Gruppe startet beim Anbieter, nicht beim Durchschnitt
     const sy = new Float64Array(R.nGroups), sm = new Float64Array(R.nGroups);
-    for (const i of sel) { sy[R.g[i]] += R.y[i]; sm[R.g[i]] += R.e[i] * Math.exp(eta(m, R, i, weather)); }
-    for (let g = 0; g < R.nGroups; g++) a[g] = sy[g] + sm[g] > 0 ? Math.log((sy[g] + ALPHA) / (sm[g] + ALPHA)) : 0;
+    for (const i of sel) { const w = wOf(i); sy[R.g[i]] += w * R.y[i]; sm[R.g[i]] += w * R.e[i] * Math.exp(eta(m, R, i, weather)); }
+    let aot = null;
+    if (hier) { const oy = new Map(), om = new Map(); for (let g = 0; g < R.nGroups; g++) { const k = R.keys[g].split('|').slice(1).join('|'); oy.set(k, (oy.get(k) || 0) + sy[g]); om.set(k, (om.get(k) || 0) + sm[g]); }
+      aot = new Map([...oy].map(([k, y]) => [k, Math.log((y + ALPHA) / ((om.get(k) || 0) + ALPHA))])); m.aot = aot; }
+    for (let g = 0; g < R.nGroups; g++) { const pm = aot ? Math.exp(aot.get(R.keys[g].split('|').slice(1).join('|')) ?? 0) : 1; a[g] = sy[g] + sm[g] > 0 ? Math.log((sy[g] + ALPHA * pm) / (sm[g] + ALPHA)) : (aot ? Math.log(pm) : 0); }
   }
   let chi = 0, n = 0; for (const i of sel) { const mu = R.e[i] * Math.exp(a[R.g[i]] + eta(m, R, i, weather)); if (mu >= 0.3) { chi += (R.y[i] - mu) ** 2 / mu; n++; } }
   m.phi = n > P ? Math.max(1, chi / (n - P)) : 1;
   return m;
 }
+// Gepooltes Modell und Profil (seit 6.11.2026 abends, EVAL_VERSION 5), geprüft an den echten Tagen 3.–5.11.2026 (ehrliche Selbstprüfung):
+//   typeHour – eigener Tagesgang je Fahrzeugart (E-Scooter, Rad, E-Rad, Lastenrad) statt einem für alle,
+//   hier     – Gruppeneffekt schrumpft Richtung Anbieter × Art über alle Gemeinden statt Richtung Durchschnittsgruppe (neue Städte bekannter Anbieter),
+//   halfLife – jüngere Tage zählen mehr (Halbwertszeit in Tagen), damit ein Saisonabfall nicht vom Fenstermittel verdeckt wird.
+// Wertung gepoolt 19,3 → 18,8 %, Profil 17,1 → 17,0 %, Hybrid 16,2 → 16,1 %; an keinem der drei Tage schlechter. Halbwertszeit 3 Tage war auf den
+// kurzen Fenstern noch etwas besser (gepoolt 18,6 %), nimmt bei 21 Tagen aber Wochenenden zu viel Gewicht (letzter Samstag zählte ein Fünftel).
+// Nowcast (Rest des Tages aus den heute schon gezählten Stunden nachskalieren) wurde geprüft und verworfen: je Gruppe, Gemeinde, Anbieter oder
+// bundesweit schlechter um 8 und 16 Uhr (z. B. je Anbieter und Stunde 14,9 → 17,5–19,5 % um 8 Uhr), um 12 Uhr gleichauf. Die Live-Prognose
+// lernt die heutigen Stunden ohnehin mit (sie sind Teil des Trainings).
+export const POOLED = { typeHour: true, hier: true, halfLife: 7 };
 export const predictPooled = (m, R, sel) => Float64Array.from(sel, (i) => R.e[i] * Math.exp(m.a[R.g[i]] + eta(m, R, i, m.weather)));
 
 /** Profil je Gruppe ohne Pooling (Vergleichsmodell): Rate je Gruppe × Tagtyp × Stunde, sonst je Gruppe × Stunde, sonst missing (Standard 0) */
-export function predictProfile(R, trainSel, testSel, T = R, missing = 0) {
+export function predictProfile(R, trainSel, testSel, T = R, missing = 0, { halfLife = POOLED.halfLife } = {}) {
   const A = new Map(), B = new Map();
+  let dMax = -Infinity; if (halfLife) for (const i of trainSel) if (R.day[i] > dMax) dMax = R.day[i];
   for (const i of trainSel) {
-    const ka = (R.g[i] * NCLS + R.cl[i]) * 24 + R.hr[i], kb = R.g[i] * 24 + R.hr[i];
-    const a = A.get(ka) || [0, 0], b = B.get(kb) || [0, 0]; a[0] += R.y[i]; a[1] += R.e[i]; b[0] += R.y[i]; b[1] += R.e[i]; A.set(ka, a); B.set(kb, b);
+    const ka = (R.g[i] * NCLS + R.cl[i]) * 24 + R.hr[i], kb = R.g[i] * 24 + R.hr[i], w = halfLife ? 2 ** (-(dMax - R.day[i]) / halfLife) : 1;
+    const a = A.get(ka) || [0, 0], b = B.get(kb) || [0, 0]; a[0] += w * R.y[i]; a[1] += w * R.e[i]; b[0] += w * R.y[i]; b[1] += w * R.e[i]; A.set(ka, a); B.set(kb, b);
   }
   return Float64Array.from(testSel, (i) => { const a = A.get((T.g[i] * NCLS + T.cl[i]) * 24 + T.hr[i]) || B.get(T.g[i] * 24 + T.hr[i]); return a && a[1] > 0 ? T.e[i] * a[0] / a[1] : missing; });
 }

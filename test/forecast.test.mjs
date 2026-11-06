@@ -139,6 +139,7 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(Math.abs(s - 0.2) < 1e-12 && s1 === 0.1, 'Wertung = Mittel aus Tagessumme und Stundenverlauf je Gruppe (ohne Stundenwert: Tageswert)');
 }
 {
+  // (Abstand 0,15: seit Art × Stunde lernt das gepoolte Modell einen Teil des Sondergangs mit, die Sondergruppen brauchen ihr Profil etwas weniger)
   // Welt mit vier mittelgroßen Gruppen mit eigenem Tagesgang (Spitze am späten Abend), den das gepoolte Modell nicht kennt: diese Gruppen sollen sich
   // auf ihr eigenes Profil stützen, die vielen kleinen auf alle; das lernende Modell soll damit besser sein als beide Ausgangsmodelle
   const special = new Set([...groups].sort((a, b) => b[1] * b[2] - a[1] * a[2]).slice(6, 10).map(g => g[0])), own = (h) => 0.25 + 1.8 * Math.exp(-((h - 22) ** 2) / 5);
@@ -146,7 +147,7 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const ds = days12.map(mk), NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`);
   const r = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW }), W = F.feedbackWeights(r.log.feedback);
   const ws = [...special].map(k => W.of(k).w), small = groups.filter(g => !special.has(g[0])).map(g => W.of(g[0]).w), mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
-  assert(ws.every(w => w >= 0.6) && mean(small) < mean(ws) - 0.2, `Eigener Tagesgang → eigenes Profil (Gewichte ${ws.map(w => w.toFixed(2)).join(', ')}), kleine Gruppen im Mittel ${mean(small).toFixed(2)}`);
+  assert(ws.every(w => w >= 0.6) && mean(small) < mean(ws) - 0.15, `Eigener Tagesgang → eigenes Profil (Gewichte ${ws.map(w => w.toFixed(2)).join(', ')}), kleine Gruppen im Mittel ${mean(small).toFixed(2)}`);
   const ev = Object.values(r.log.evals).filter(e => e.models.adaptive), avg = (m) => mean(ev.map(e => F.scoreOf(e.models[m])));
   assert(ev.length >= 5 && avg('adaptive') < Math.min(avg('pooled'), avg('profile')), `Lernendes Modell schlägt beide Ausgangsmodelle (Wertung ${(avg('adaptive') * 100).toFixed(1)} % gegen gepoolt ${(avg('pooled') * 100).toFixed(1)} %, Profil ${(avg('profile') * 100).toFixed(1)} %)`);
   const ch = F.chooseModel(r.log.evals, { trainDays: NDAY });
@@ -404,4 +405,29 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const ds = F.assignEras(docs.slice(0, 3).map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds, F.wxLookup(WX)), sel = Array.from({ length: R.n }, (_, i) => i);
   const g0 = F.weatherGate(R, sel), g1 = F.weatherGate(R, sel, [[-2, 4, 1, 0], [12, 20, 0, 1], [3, 9, 1, 0]]);
   assert(g1.rainDays === g0.rainDays + 2 && g1.dryDays === g0.dryDays + 1 && g1.tempRangeK >= 22 && g1.memDays === 3, `Wetter-Gate mit Gedächtnis: ${g0.rainDays}→${g1.rainDays} Regentage, Spanne ${g0.tempRangeK}→${g1.tempRangeK} K`);
+}
+
+// ---------- Gepooltes Modell: Art × Stunde, Anbieter-Prior, jüngere Tage zählen mehr (POOLED)
+{
+  assert(F.POOLED.typeHour && F.POOLED.hier && F.POOLED.halfLife === 7, 'POOLED: Art × Stunde, Anbieter-Prior und Halbwertszeit 7 Tage sind eingeschaltet');
+  // Räder mit Spitze am Morgen, E-Scooter am Abend: mit Art × Stunde trifft das gepoolte Modell beide Tagesgänge
+  const sh = (ty, h) => (ty === 'bike' ? 0.2 + 1.6 * Math.exp(-((h - 8) ** 2) / 4) : 0.2 + 1.6 * Math.exp(-((h - 20) ** 2) / 5));
+  const mkT = (day) => { const d = makeDoc(day); for (const g of groups) { const ty = g[0].split('|')[2]; d.groups[g[0]].start = d.groups[g[0]].start.map((_, h) => pois(g[1] * g[2] * sh(ty, h))); } return d; };
+  const ds = F.assignEras(days12.slice(0, 7).map(d => F.dayFromDoc(mkT(d), null))), R = F.buildRows(ds);
+  const train = [], test = []; for (let i = 0; i < R.n; i++) (R.day[i] < 6 ? train : test).push(i);
+  const a = F.scoreDay(R, test, F.predictPooled(F.fitPooled(R, train, { typeHour: true }), R, test)), b = F.scoreDay(R, test, F.predictPooled(F.fitPooled(R, train, { typeHour: false }), R, test));
+  assert(a.wapeGH < b.wapeGH - 0.05, `Art × Stunde: Räder morgens, E-Scooter abends → Abweichung je Gruppe und Stunde ${(a.wapeGH * 100).toFixed(1)} % statt ${(b.wapeGH * 100).toFixed(1)} %`);
+  // Neue Stadt eines bekannten Anbieters: startet beim Niveau des Anbieters (Voi doppelt so stark wie die übrigen), nicht beim Durchschnitt
+  const lvl = (k) => (k.split('|')[1] === 'Voi' ? 2 : 1), NEW = '99999999|Voi|scooter';
+  const mkH = (day, withNew) => { const d = makeDoc(day); for (const g of groups) d.groups[g[0]].start = d.groups[g[0]].start.map((_, h) => pois(g[1] * g[2] * lvl(g[0]) * shape(h, isWe(day)))); if (withNew) d.groups[NEW] = { start: Array.from({ length: 24 }, (_, h) => pois(20 * 0.4 * 2 * shape(h, isWe(day)))), vmin: new Array(24).fill(20 * 60) }; return d; };
+  const dsH = F.assignEras(days12.slice(0, 7).map((d, i) => F.dayFromDoc(mkH(d, i === 6), null))), RH = F.buildRows(dsH);
+  const trH = [], teH = []; for (let i = 0; i < RH.n; i++) { if (RH.day[i] < 6) trH.push(i); else if (RH.keys[RH.g[i]] === NEW) teH.push(i); }
+  const truth = teH.reduce((s0, i) => s0 + 20 * 0.4 * 2 * shape(RH.hr[i], isWe(dsH[6].day)), 0), sumP = (o) => F.predictPooled(F.fitPooled(RH, trH, o), RH, teH).reduce((x, y) => x + y, 0);
+  const pH = sumP({ hier: true }), p0 = sumP({ hier: false }), voiLevel = groups.filter(g => g[0].includes('|Voi|')).reduce((s0, g) => s0 + g[2], 0) / groups.filter(g => g[0].includes('|Voi|')).length;
+  assert(Math.abs(Math.log(pH / truth)) < Math.abs(Math.log(p0 / truth)), `Anbieter-Prior: neue Voi-Stadt ohne Historie → ${pH.toFixed(0)} statt ${p0.toFixed(0)} Fahrtbeginne erwartet (wahr ≈ ${truth.toFixed(0)}, Voi-Niveau ${voiLevel.toFixed(2)})`);
+  // Abfall −8 % je Tag: mit Halbwertszeit liegt das gepoolte Modell am nächsten Tag weniger zu hoch
+  const dsD = F.assignEras(days12.slice(0, 11).map((d, i) => F.dayFromDoc(makeDoc(d, { level: 0.92 ** i }), null))), RD = F.buildRows(dsD);
+  const trD = [], teD = []; for (let i = 0; i < RD.n; i++) (RD.day[i] < 10 ? trD : teD).push(i);
+  const bH = F.scoreDay(RD, teD, F.predictPooled(F.fitPooled(RD, trD, { halfLife: 7 }), RD, teD)).bias, b0 = F.scoreDay(RD, teD, F.predictPooled(F.fitPooled(RD, trD, { halfLife: 0 }), RD, teD)).bias;
+  assert(bH < b0 - 0.05 && bH > 0, `Jüngere Tage zählen mehr: im Abfall liegt gepoolt nur ${(bH * 100).toFixed(0)} % statt ${(b0 * 100).toFixed(0)} % zu hoch`);
 }

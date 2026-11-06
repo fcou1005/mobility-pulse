@@ -5,13 +5,13 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw5bywr0';
-import * as SP from './pulse-spots.js?v=mw5bywr0';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw5bywr0';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw5bywr0';
-import { toCsv } from './pulse-report.js?v=mw5bywr0';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw5bywr0';
-import { mapKeys } from './mapkeys.js?v=mw5bywr0';
+import * as FC from './pulse-forecast.js?v=mw5cjlal';
+import * as SP from './pulse-spots.js?v=mw5cjlal';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw5cjlal';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw5cjlal';
+import { toCsv } from './pulse-report.js?v=mw5cjlal';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw5cjlal';
+import { mapKeys } from './mapkeys.js?v=mw5cjlal';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -371,7 +371,7 @@ function paramRows(L) {
     ['adGain', gates.adGain ?? FC.GATES.adGain, t('fv.pAdGain')], ['evalWindow', gates.evalWindow, t('fv.pWindow')], ['minEvalTrainDays', gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays, t('fv.pMinEvalTrain')],
     ['liveMinHours', gates.liveMinHours ?? FC.GATES.liveMinHours, t('fv.pLiveMin')], ['wxShareDay', gates.wxShareDay ?? FC.GATES.wxShareDay, t('fv.pWxShare')],
     ['HYBRID.k', FC.HYBRID.k, t('fv.pHybK')], ['HYBRID.maxBack', FC.HYBRID.maxBack, t('fv.pHybBack')],
-    ['ctxMinRows', gates.ctxMinRows ?? FC.GATES.ctxMinRows, t('fv.pCtxRows')], ['ctxMinDays', gates.ctxMinDays ?? FC.GATES.ctxMinDays, t('fv.pCtxDays')], ['MEMORY.halfLifeDays', FC.MEMORY.halfLifeDays, t('fv.pMemHl')],
+    ['ctxMinRows', gates.ctxMinRows ?? FC.GATES.ctxMinRows, t('fv.pCtxRows')], ['ctxMinDays', gates.ctxMinDays ?? FC.GATES.ctxMinDays, t('fv.pCtxDays')], ['MEMORY.halfLifeDays', FC.MEMORY.halfLifeDays, t('fv.pMemHl')], ['POOLED.typeHour', String(FC.POOLED.typeHour), t('fv.pTypeHour')], ['POOLED.hier', String(FC.POOLED.hier), t('fv.pHier')], ['POOLED.halfLife', FC.POOLED.halfLife, t('fv.pHalfLife7')],
     ['FEEDBACK.halfLifeDays', FC.FEEDBACK.halfLifeDays, t('fv.pHalfLife')], ['FEEDBACK.kBlend', FC.FEEDBACK.kBlend, t('fv.pKBlend')], ['FEEDBACK.sharp', FC.FEEDBACK.sharp, t('fv.pSharp')],
     ['SERIES_KEEP_DAYS', FC.SERIES_KEEP_DAYS, t('fv.pKeep')], ['SERIES_MIN.ags', FC.SERIES_MIN.ags, t('fv.pSerAgs')], ['SERIES_MIN.group', FC.SERIES_MIN.group, t('fv.pSerGroup')], ['SERIES_MIN.groupMax', FC.SERIES_MIN.groupMax, t('fv.pSerMax')],
     ['baseH', OPS.baseH, t('fv.pBase')], ['minPerSpot', OPS.minPerSpot, t('fv.pMinSpot')], ['maxPerSpot', OPS.maxPerSpot, t('fv.pMaxSpot')], ['spotRadiusM', OPS.spotRadiusM, t('fv.pRadius')], ['horizonH', OPS.horizonH, t('fv.pHorizon')], ['prelimH', OPS.prelimH, t('fv.pPrelim')],
