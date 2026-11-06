@@ -130,7 +130,9 @@ jobs:
           TAKT_IN: ${{ inputs.takt }}
           BIS_IN: ${{ inputs.takt_bis }}
         run: |
-          andere() { gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId != $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
+          # nur Läufe, die NACH diesem erstellt wurden (größere Run-ID): der Lauf, der diesen angestoßen hat, steht bei GitHub oft noch Minuten auf
+          # „läuft“ – bis 6.11.2026 hielt ihn der neue Lauf für eine zweite Kette und hörte auf (Lücke 4.11. 16:53–18:58 Uhr)
+          andere() { gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId > $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
           if [ "$(andere)" -gt 0 ]; then echo "Ein anderer Lauf ist aktiv oder wartet, keine zweite Kette"; exit 0; fi
           TAKT="$TAKT_IN"; BIS="$BIS_IN"
           case "$TAKT" in ''|*[!0-9]*) TAKT=20 ;; esac
@@ -142,5 +144,11 @@ jobs:
           echo "Takt ${TAKT} Min. (bis ${BIS:-unbegrenzt}), warte ${WARTEN} s"
           sleep "$WARTEN"
           if [ "$(andere)" -gt 0 ]; then echo "Inzwischen läuft ein anderer Lauf, keine zweite Kette"; exit 0; fi
-          if [ "$TAKT" != 20 ]; then gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main -f takt="$TAKT" -f takt_bis="$BIS"
-          else gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main; fi
+          anstossen() { if [ "$TAKT" != 20 ]; then gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main -f takt="$TAKT" -f takt_bis="$BIS"; else gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main; fi; }
+          # bis zu 6 Versuche: GitHub antwortet beim Anstoßen gelegentlich mit HTTP 500 (5.11.2026 16:13 Uhr → Lücke bis 20:04 Uhr)
+          for i in 1 2 3 4 5 6; do
+            if anstossen; then echo "Nächster Lauf angestoßen"; exit 0; fi
+            echo "Anstoßen fehlgeschlagen (Versuch $i), neuer Versuch in 30 s"; sleep 30
+            if [ "$(andere)" -gt 0 ]; then echo "Inzwischen wartet ein neuerer Lauf, keine zweite Kette"; exit 0; fi
+          done
+          exit 1
