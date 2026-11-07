@@ -5,14 +5,14 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw6e9hbb';
-import * as SP from './pulse-spots.js?v=mw6e9hbb';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw6e9hbb';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw6e9hbb';
-import { toCsv } from './pulse-report.js?v=mw6e9hbb';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw6e9hbb';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw6e9hbb';
-import { mapKeys } from './mapkeys.js?v=mw6e9hbb';
+import * as FC from './pulse-forecast.js?v=mw6fcul7';
+import * as SP from './pulse-spots.js?v=mw6fcul7';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw6fcul7';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw6fcul7';
+import { toCsv } from './pulse-report.js?v=mw6fcul7';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw6fcul7';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw6fcul7';
+import { mapKeys } from './mapkeys.js?v=mw6fcul7';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();

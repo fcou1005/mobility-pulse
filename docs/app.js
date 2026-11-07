@@ -1,18 +1,18 @@
-import * as C from './pulse-core.js?v=mw6e9hbb';
-import * as Ops from './ops.js?v=mw6e9hbb';
-import * as E from './pulse-econ.js?v=mw6e9hbb';
-import * as K from './pulse-calib.js?v=mw6e9hbb';
-import * as Rp from './report.js?v=mw6e9hbb';
-import * as R from './pulse-report.js?v=mw6e9hbb';
-import * as Fl from './flows.js?v=mw6e9hbb';
-import * as Cov from './coverage.js?v=mw6e9hbb';
-import * as Cmp from './compare.js?v=mw6e9hbb';
-import * as Sp from './spots.js?v=mw6e9hbb';
-import * as Fv from './forecast.js?v=mw6e9hbb';
-import { mapKeys } from './mapkeys.js?v=mw6e9hbb';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw6e9hbb';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw6e9hbb';
-import { idleClassText } from './pulse-ops.js?v=mw6e9hbb';
+import * as C from './pulse-core.js?v=mw6fcul7';
+import * as Ops from './ops.js?v=mw6fcul7';
+import * as E from './pulse-econ.js?v=mw6fcul7';
+import * as K from './pulse-calib.js?v=mw6fcul7';
+import * as Rp from './report.js?v=mw6fcul7';
+import * as R from './pulse-report.js?v=mw6fcul7';
+import * as Fl from './flows.js?v=mw6fcul7';
+import * as Cov from './coverage.js?v=mw6fcul7';
+import * as Cmp from './compare.js?v=mw6fcul7';
+import * as Sp from './spots.js?v=mw6fcul7';
+import * as Fv from './forecast.js?v=mw6fcul7';
+import { mapKeys } from './mapkeys.js?v=mw6fcul7';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw6fcul7';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw6fcul7';
+import { idleClassText } from './pulse-ops.js?v=mw6fcul7';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -1462,36 +1462,54 @@ async function renderMonitor() {
   const GAP = 45 * 60e3, now = Date.now(), last = runs[runs.length - 1];
   const gaps = []; for (let i = 1; i < runs.length; i++) { const a = runs[i - 1][ix.at], b = runs[i][ix.at]; if (b - a > GAP) gaps.push([a, b, false]); }
   if (!DEMO && now - last[ix.at] > GAP && now - last[ix.at] < 7 * 86400e3) gaps.push([last[ix.at], now, true]);
-  const t0 = runs[0][ix.at], t1 = Math.max(gaps.some(g => g[2]) ? now : last[ix.at], t0 + 3600e3);
-  const W = chartWidth(box, () => renderMonitor().catch(e => console.error('Monitor', e))), H = W < 520 ? 180 : 150, P = { l: 44, r: 12, t: 14, b: 24 };
+  const W = chartWidth(box, () => renderMonitor().catch(e => console.error('Monitor', e))), H = W < 520 ? 170 : 150, P = { l: 44, r: 12, t: 12, b: 24 }, plotW = W - P.l - P.r;
+  // Statt eines Punkts je Lauf (gut 500 in 7 Tagen) ein Wert je Zeitabschnitt: Median der Läufe als Linie; Punkt nur, wo ein Lauf deutlich unter
+  // dem Üblichen lag (am niedrigsten Lauf). Abschnitt 1 Stunde, auf schmalen Bildschirmen länger (mind. 4 px je Abschnitt).
+  const span0 = Math.max((gaps.some(g => g[2]) ? now : last[ix.at]) - runs[0][ix.at], 3600e3);
+  const B = [1, 2, 3, 4, 6].find(b => plotW / (span0 / (b * 3600e3)) >= 4) || 6, BMS = B * 3600e3;
+  const bStart = (tq) => { const hs = Math.floor(tq / 3600e3) * 3600e3; return B > 1 ? hs - (hourOf(hs) % B) * 3600e3 : hs; };
+  const bk = new Map(); for (const r of runs) { const s = bStart(r[ix.at]); let b = bk.get(s); if (!b) bk.set(s, b = { s, runs: [] }); b.runs.push(r); }
+  const buckets = [...bk.values()].sort((a, b) => a.s - b.s).map(b => {
+    const v = b.runs.map(share).filter(x => x != null).sort((p, q) => p - q), n = v.length;
+    const low = b.runs.reduce((m, r) => (share(r) != null && (m == null || share(r) < share(m)) ? r : m), null);
+    return { ...b, med: n ? (v[(n - 1) >> 1] + v[n >> 1]) / 2 : null, min: n ? v[0] : null, low };
+  });
+  const t0 = buckets[0].s, t1 = Math.max(buckets[buckets.length - 1].s + BMS, gaps.some(g => g[2]) ? now : 0, t0 + 3600e3), span = t1 - t0;
   const lo = Math.max(0, Math.floor(((shares[0] ?? 0) - 0.05) * 10) / 10), hi = Math.min(1, Math.ceil(((shares[shares.length - 1] ?? 1) + 0.02) * 10) / 10) || 1;
-  const x = (tq) => P.l + ((tq - t0) / (t1 - t0)) * (W - P.l - P.r), y = (v) => P.t + (1 - ((v ?? lo) - lo) / Math.max(0.05, hi - lo)) * (H - P.t - P.b);
-  const dt = (tq) => new Date(tq).toLocaleString(fmtLocale(), { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const x = (tq) => P.l + ((tq - t0) / span) * plotW, y = (v) => P.t + (1 - ((v ?? lo) - lo) / Math.max(0.05, hi - lo)) * (H - P.t - P.b);
+  const dt = (tq) => dateTimeText(tq, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const pct = (v) => (v == null ? '–' : `${fmt(v * 100)} %`);
   let g = '';
-  for (const v of [lo, (lo + hi) / 2, hi]) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v * 100)} %</text>`;
-  const span = t1 - t0;
+  // y: unten, oben und der übliche Wert (gestrichelt) – Beschriftung entfällt, wo sie sich überdecken würde
+  for (const v of [lo, hi]) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>${med != null && Math.abs(y(v) - y(med)) < 12 ? '' : `<text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v * 100)} %</text>`}`;
   // Tagesmarken: Wochentag nur, wenn ein Tag ≥ 90 px breit ist; unter 48 px nur jeder zweite Tag
-  const dayPx = (W - P.l - P.r) / Math.max(1, span / 86400e3), dayOpt = dayPx >= 90 ? { weekday: 'short', day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit' };
-  if (span > 30 * 3600e3) { const d = new Date(t0); d.setHours(24, 0, 0, 0); let k = 0; for (let tq = +d; tq < t1; tq += 86400e3, k++) g += `<line class="grid" x1="${x(tq).toFixed(1)}" x2="${x(tq).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/>${dayPx >= 48 || !(k % 2) ? `<text x="${(x(tq) + 4).toFixed(1)}" y="${H - 8}">${new Date(tq).toLocaleDateString(fmtLocale(), dayOpt)}</text>` : ''}`; }
-  else { const fit = Math.max(1, Math.floor((W - P.l - P.r) / 56)), step = [1, 2, 3, 4, 6, 12].find(s => span / (s * 3600e3) <= fit) || 12; for (let tq = Math.ceil(t0 / 3600e3) * 3600e3; tq < t1; tq += 3600e3) { if (hourOf(tq) % step) continue; g += `<text x="${x(tq).toFixed(1)}" y="${H - 8}" text-anchor="middle">${timeText(tq)}</text>`; } }
-  for (const [a, b, open] of gaps) { const w = Math.max(2, x(b) - x(a)); g += `<rect class="mon-gap" x="${x(a).toFixed(1)}" y="${P.t}" width="${w.toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.gapToWithoutRun', { a: dt(a), v1: open ? t('app.now') : dt(b), v2: durText(b - a) })}</title></rect>${w > 34 ? `<text class="mon-gap-t" x="${(x(a) + w / 2).toFixed(1)}" y="${P.t + 10}" text-anchor="middle">${t('app.gap')}</text>` : ''}`; }
-  // Linie zwischen Läufen, an Lücken unterbrochen
-  let d = ''; runs.forEach((r, i) => { const v = share(r); if (v == null) return; const brk = i === 0 || r[ix.at] - runs[i - 1][ix.at] > GAP; d += `${brk ? 'M' : 'L'}${x(r[ix.at]).toFixed(1)} ${y(v).toFixed(1)} `; });
+  const dayPx = plotW / Math.max(1, span / 86400e3), dayOpt = dayPx >= 90 ? { weekday: 'short', day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit' };
+  if (span > 30 * 3600e3) { const d = new Date(t0); d.setHours(24, 0, 0, 0); let k = 0; for (let tq = +d; tq < t1; tq += 86400e3, k++) { const lab = new Date(tq).toLocaleDateString(fmtLocale(), dayOpt); g += `<line class="grid" x1="${x(tq).toFixed(1)}" x2="${x(tq).toFixed(1)}" y1="${P.t}" y2="${H - P.b}"/>${(dayPx >= 48 || !(k % 2)) && x(tq) + 4 + lab.length * 6.8 <= W ? `<text x="${(x(tq) + 4).toFixed(1)}" y="${H - 8}">${lab}</text>` : ''}`; } }
+  else { const fit = Math.max(1, Math.floor(plotW / 56)), step = [1, 2, 3, 4, 6, 12].find(s => span / (s * 3600e3) <= fit) || 12; for (let tq = Math.ceil(t0 / 3600e3) * 3600e3; tq < t1; tq += 3600e3) { if (hourOf(tq) % step) continue; g += `<text x="${x(tq).toFixed(1)}" y="${H - 8}" text-anchor="middle">${timeText(tq)}</text>`; } }
+  for (const [a, b, open] of gaps) g += `<rect class="gap" x="${x(a).toFixed(1)}" y="${P.t}" width="${Math.max(2, x(b) - x(a)).toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.gapToWithoutRun', { a: dt(a), v1: open ? t('app.now') : dt(b), v2: durText(b - a) })}</title></rect>`;
+  if (med != null) g += `<line class="mon-med" x1="${P.l}" x2="${W - P.r}" y1="${y(med).toFixed(1)}" y2="${y(med).toFixed(1)}"/><text class="mon-med-t" x="${P.l - 6}" y="${(y(med) + 3).toFixed(1)}" text-anchor="end">${fmt(med * 100)} %</text>`;
+  // Linie durch die Abschnittsmitten, unterbrochen, wo ein Abschnitt ohne Lauf dazwischen liegt
+  const xc = (b) => x(b.s + BMS / 2);
+  let d = '', prev = null; for (const b of buckets) { if (b.med == null) { prev = null; continue; } d += `${!prev || b.s - prev.s > BMS ? 'M' : 'L'}${xc(b).toFixed(1)} ${y(b.med).toFixed(1)} `; prev = b; }
   g += `<path class="mon-line" d="${d}"/>`;
-  g += runs.map(r => { const v = share(r); return `<circle class="mon-pt ${lvl(v)}" cx="${x(r[ix.at]).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${runs.length > 300 ? 2 : 3}"><title>${t('app.ofSourcesCurrentErrors', { v0: dt(r[ix.at]), v1: esc(TRIGGER[r[ix.ausloeser]] || r[ix.ausloeser] || '–'), v2: fmt(r[ix.aktuell]), v3: fmt(r[ix.quellen]), v4: v == null ? '–' : fmt(v * 100) + ' %', v5: fmt(r[ix.fehler]), v6: fmt(r[ix.fahrzeuge]), v7: fmt(r[ix.fahrten]), v8: r[ix.dauer_ms] == null ? '–' : fmt(r[ix.dauer_ms] / 1000, 1) + ' s' })}</title></circle>`; }).join('');
+  // Einbrüche: Stiel vom Abschnittswert zum niedrigsten Lauf, Punkt mit Rand in Flächenfarbe
+  for (const b of buckets) { const l = b.min == null ? 'ok' : lvl(b.min); if (l === 'ok') continue; const cx = xc(b).toFixed(1); g += `<line class="mon-stem ${l}" x1="${cx}" x2="${cx}" y1="${y(b.med).toFixed(1)}" y2="${y(b.min).toFixed(1)}"/><circle class="mon-pt ${l}" cx="${cx}" cy="${y(b.min).toFixed(1)}" r="4"/>`; }
+  // Trefferflächen je Abschnitt: Zusammenfassung und der niedrigste Lauf mit allen Werten
+  const runTip = (r) => t('app.ofSourcesCurrentErrors', { v0: dt(r[ix.at]), v1: esc(TRIGGER[r[ix.ausloeser]] || r[ix.ausloeser] || '–'), v2: fmt(r[ix.aktuell]), v3: fmt(r[ix.quellen]), v4: pct(share(r)), v5: fmt(r[ix.fehler]), v6: fmt(r[ix.fahrzeuge]), v7: fmt(r[ix.fahrten]), v8: r[ix.dauer_ms] == null ? '–' : fmt(r[ix.dauer_ms] / 1000, 1) + ' s' });
+  for (const b of buckets) g += `<rect class="hit" x="${x(b.s).toFixed(1)}" y="${P.t}" width="${(x(b.s + BMS) - x(b.s)).toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.monBucketTip', { when: `${dt(b.s)}–${timeText(b.s + BMS)}`, n: fmt(b.runs.length), med: pct(b.med), min: pct(b.min) })}${b.low ? `\n\n${runTip(b.low)}` : ''}</title></rect>`;
   const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
   const today = runs.filter(r => r[ix.at] >= +midnight).length;
   const trig = {}; for (const r of runs) { const k = r[ix.ausloeser] || t('app.unknown'); trig[k] = (trig[k] || 0) + 1; }
+  const trigTxt = Object.entries(trig).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${fmt(n)} ${esc(TRIGGER[k] || k)}`).join(' · ');
   const closed = gaps.filter(gp => !gp[2]); const longest = closed.length ? Math.max(...closed.map(([a, b]) => b - a)) : 0;
-  const lastAge = now - last[ix.at];
+  const lastAge = now - last[ix.at], dips = buckets.filter(b => b.min != null && lvl(b.min) !== 'ok').length;
   box.innerHTML = `<div class="mon-stats">
     <div>${t('app.lastRun')}<b style="color:var(--${!DEMO && lastAge > GAP ? 'warn' : 'fg'})">${timeText(last[ix.at])}</b>${t('app.ofSourcesCurrent', { v0: DEMO ? new Date(last[ix.at]).toLocaleDateString(fmtLocale()) : t('app.ago2', { lastAge: ageText(lastAge) }), v1: last[ix.dauer_ms] == null ? '' : `${fmt(last[ix.dauer_ms] / 1000, 1)} s · `, v2: fmt(last[ix.aktuell]), v3: fmt(last[ix.quellen]) })}</div>
-    <div>${t('app.runsTodayInScheduleEvery20', { today: fmt(today), length: fmt(runs.length), max: fmt(Math.max(1, Math.round((last[ix.at] - t0) / 86400e3))), v3: Math.round((last[ix.at] - t0) / 86400e3) > 1 ? t('app.days') : t('app.day2') })}</div>
-    <div>${t('app.triggersScheduledSchedule', { v0: fmt(trig.schedule || 0), v1: fmt(trig.workflow_dispatch || 0), v2: Object.keys(trig).filter(k => !['schedule', 'workflow_dispatch'].includes(k)).map(k => ` · ${fmt(trig[k])} ${esc(TRIGGER[k] || k)}`).join('') })}</div>
+    <div>${t('app.runsTodayInScheduleEvery20', { today: fmt(today), length: fmt(runs.length), max: fmt(Math.max(1, Math.round((last[ix.at] - runs[0][ix.at]) / 86400e3))), v3: Math.round((last[ix.at] - runs[0][ix.at]) / 86400e3) > 1 ? t('app.days') : t('app.day2') })}<span class="mon-sub">${trigTxt}</span></div>
     <div>${t('app.gapsOver45Min')}<b style="color:var(--${gaps.length ? 'warn' : 'fg'})">${fmt(gaps.length)}</b>${gaps.length ? t('app.longest', { v0: durText(Math.max(longest, ...gaps.filter(gp => gp[2]).map(([a, b]) => b - a))), v1: gaps.some(gp => gp[2]) ? ` · ${t('app.openSinceLastRun')}` : '' }) : t('app.collectorRanWithoutGaps')}</div>
   </div>
-  <svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.collectorRunsOfLast7Days')}. ${t('app.monitorSummary', { n: fmt(runs.length), med: med == null ? '–' : fmt(med * 100), gaps: fmt(gaps.length) })}`)}">${g}</svg>
-  <div class="legend"><span><i class="dot" style="background:var(--ok)"></i>${t('app.usualShareOfCurrentSources', { v0: med == null ? '–' : fmt(med * 100) + ' %' })}</span><span><i class="dot" style="background:var(--warn)"></i>${t('app.n515PointsBelow')}</span><span><i class="dot" style="background:var(--bad)"></i>${t('app.moreThan15PointsBelow')}</span><span><i class="sq" style="background:color-mix(in srgb,var(--bad) 14%,transparent);border-color:transparent"></i>${t('app.gapOver45MinWithoutRun')}</span></div>`;
+  <svg class="chart mon-chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.collectorRunsOfLast7Days')}. ${t('app.monitorSummary', { n: fmt(runs.length), med: med == null ? '–' : fmt(med * 100), gaps: fmt(gaps.length) })}`)}">${g}</svg>
+  <div class="legend"><span><i class="lnk"></i>${t('app.monLineKey', { b: B === 1 ? t('app.monHour') : t('app.monHours', { n: B }) })}</span><span><i class="lnk dash"></i>${t('app.usualShareOfCurrentSources', { v0: pct(med) })}</span>${dips ? `<span><i class="dot" style="background:var(--warn)"></i>${t('app.n515PointsBelow')}</span><span><i class="dot" style="background:var(--bad)"></i>${t('app.moreThan15PointsBelow')}</span>` : ''}${gaps.length ? `<span><i class="sq gap-key"></i>${t('app.gapOver45MinWithoutRun')}</span>` : ''}</div>`;
 }
 function renderQuality() {
   const L0 = state.latest; const box = $('#quality');
