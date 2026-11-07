@@ -53,6 +53,8 @@ export async function startExtra() {
     const json = (b, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
     const [, kind, file] = u.pathname.split('/');
     if (kind === 'p' && p[file]) return json(p[file]());
+    // erster Abruf eines Teilfeeds mit 429 (wie Yoio/rideatom): der Sammler wiederholt einmal
+    if (u.pathname === '/rk/d/free_bike_status.json' && !st.flakyServed) { st.flakyServed = true; return json({}, 429); }
     if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
     if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);
     if (kind === 'weather') { // Bright-Sky-Format: stündliche Zeilen von date 00:00 bis last_date 00:00 (UTC); ein unplausibler Temperaturwert (999) pro Antwort

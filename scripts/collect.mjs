@@ -82,6 +82,12 @@ async function fetchJson(url, { retry = 1 } = {}) {
         if (hop >= 5) throw Object.assign(new Error('zu viele Weiterleitungen'), { final: true });
         target = next.href;
       }
+      // 429/503: einmal nach Retry-After (höchstens 5 s, sonst 1,5 s) wiederholen – Yoio (rideatom) antwortet einzelne Teilfeeds mit 429, die ganze
+      // Quelle fiel dann für den Lauf aus (Erfurt 07.11.2026: 214 → 0). Nicht bei api.citybik.es: dort zählt jeder Abruf gegen das Kontingent.
+      if ((r.status === 429 || r.status === 503) && attempt < retry && !/(^|\.)citybik\.es$/.test(new URL(target).host)) {
+        const ra = Number(r.headers.get('retry-after')); await r.body?.cancel().catch(() => {}); clearTimeout(timer);
+        await new Promise(res => setTimeout(res, Math.min(5000, ra > 0 ? ra * 1000 : 1500))); continue;
+      }
       corsByUrl.set(url, r.headers.get('access-control-allow-origin'));
       let json = null, error = null;
       if (r.ok) { try { json = JSON.parse(await C.readLimited(r, MAX_BYTES)); } catch (e) { error = e.message === 'Antwort zu groß' ? e.message : e.name === 'AbortError' ? 'Timeout' : 'kein JSON'; } }
@@ -155,9 +161,14 @@ await setupMobidrom(active);
 const expanded = (await pool(active, expandSource, 6)).flat();
 log(`Quellen: ${active.length} → ${expanded.length} Systeme`);
 
+// CityBikes-Kopien (Status duplicate im vorigen Lauf) nur alle CB_RECHECK_MS neu abrufen: api.citybik.es antwortet ab etwa 50 Abrufen je Lauf
+// mit 429 (07.11.2026: 17 von 68 Netzen), darunter Netze ohne andere Quelle; Kopien zählen ohnehin nicht. Status und Verweis bleiben aus dem vorigen Lauf,
+// solange das Original im vorigen Lauf lieferte (fällt es aus, wird die Kopie wieder abgerufen und kann zählen).
+const CB_RECHECK_MS = 2 * 3600e3;
 const results = await pool(expanded, async (src) => {
   try {
     if (src._probe) return { src, sys: null, probe: src._probe };
+    if (src.api === 'citybikes') { const p = prevSources.get(src.id); if (p?.status === 'duplicate' && p.duplicateOf && p.dupCheckedAt && now - p.dupCheckedAt < CB_RECHECK_MS && ['live', 'delayed'].includes(prevSources.get(p.duplicateOf)?.status)) return { src, sys: null, reuse: p }; }
     // leerer Hauptfeed mit Ersatz auf anderem Host: Ersatz zählt (C.readGbfsWithFallback → sources[].viaAlt, Hinweis in der Feed-Prüfung)
     const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, fetchJson, { now }) : await C.readGbfsWithFallback(src, fetchJson, { now });
     return { src, sys };
@@ -182,7 +193,8 @@ const addCheck = (rec, msg, n = null) => {
   const k = items.findIndex(x => x.level !== 'error'); items.splice(k < 0 ? items.length : k, 0, { level: 'warning', feed: (rec.feeds || []).includes('vehicle_status') ? 'vehicle_status' : 'free_bike_status', msg, ...(n != null ? { n } : {}) });
   c.items = items.slice(0, 5); c.warnings = (c.warnings || 0) + 1;
 };
-for (const { src, sys, probe, error } of results) {
+for (const { src, sys, probe, error, reuse } of results) {
+  if (reuse) { sourceOut.push({ ...reuse, checkedAt: now, reused: true }); continue; }
   if (operatorBySystem[src.id]) src.operator = operatorBySystem[src.id]; // Marke je System (DB Connect → RegioRad Stuttgart, StadtRAD …)
   const rec = { id: src.id, parent: src.parent || null, operator: src.operator, name: src.name, api: src.api, url: src.url, directories: src.directories, priority: src.priority ?? 2, candidate: !!src.candidate,
     status: 'error', httpStatus: probe?.status ?? sys?.httpStatus ?? null, latencyMs: probe?.latencyMs ?? sys?.latencyMs ?? null, errors: [], license: null, licenseId: null, licenseUrl: null, attribution: null, attributionUrl: null, checks: null, version: sys?.version || null,
@@ -448,9 +460,10 @@ const dupOf = new Map(); // sourceId → Quelle, die stattdessen zählt
   const root = (id) => { const seen = new Set(); while (cp.has(id) && !seen.has(id)) { seen.add(id); id = cp.get(id).of; } return id; };
   for (const [id, c] of cp) {
     const r = recOf.get(id), of = root(id), o = recOf.get(of);
-    dupOf.set(id, of); r.feedStatus = r.status; r.status = 'duplicate'; r.duplicateOf = of; r.duplicateShare = c.share;
+    dupOf.set(id, of); r.feedStatus = r.status; r.status = 'duplicate'; r.duplicateOf = of; r.duplicateShare = c.share; r.dupCheckedAt = now;
     if (o?.quality != null && r.quality != null && r.quality >= o.quality) r.quality = Math.max(0, o.quality - 1); // Kopie nie besser bewertet als das Original
   }
+  for (const r of sourceOut) if (r.reused && r.status === 'duplicate' && r.duplicateOf) dupOf.set(r.id, r.duplicateOf);
   if (dupOf.size) log(`Quellen-Dubletten: ${[...dupOf].map(([a, b]) => `${a} → ${b}`).join(', ')}`);
 }
 allVehicles = allVehicles.filter(v => !dupOf.has(v.sourceId));

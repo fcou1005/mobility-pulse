@@ -159,6 +159,7 @@ assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1
   // Reichweiten-Schwelle relativ zur Quelle: Bird-Test (kein Ladestand, Reichweite 0–11,8 km, p95 11,2 km) → 2,2 km statt 5 km
   {
     const O3 = await import('../lib/pulse-ops.js');
+    assert(S3('rl_test').status === 'live' && S3('rl_test').counts.vehicles === 60 && ex.log.filter(x => x.path === '/rk/d/free_bike_status.json').length >= 2, 'HTTP 429 eines Teilfeeds: einmal wiederholt, Quelle liefert');
     const rl = S3('rl_test'), birdV = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'Bird'), gB = l3.groups['08111000|Bird|scooter'];
     assert(rl?.rangeLimitKm === 2.2 && rl.rangeLimit?.p95Km === 11.2 && rl.rangeLimit.maxP95Km === 25 && rl.checks.items.some(i => i.msg.startsWith('Reichweite klein') && i.msg.includes('2,2 km')) && birdV.length === 60 && birdV.every(v => v[10] === 2.2) && ops3.vehicles.filter(v => ops3.ops[v[2]] !== 'Bird').every(v => v[10] == null),
       `Reichweiten-Schwelle: sources[].rangeLimitKm ${rl?.rangeLimitKm} km (p95 ${rl?.rangeLimit?.p95Km} km), Hinweis in der Feed-Prüfung, ops-Feld 11 je Fahrzeug (andere Quellen ohne Wert)`);
@@ -185,8 +186,12 @@ await writeFile('test/out/calendar.json', calOld);
 { const dT = `test/out/cells/${T.dayOf(Date.now())}`; for (const f of (await readdir(dT).catch(() => [])).filter(f => f.endsWith('.json'))) { const doc = JSON.parse(await readFile(path.join(dT, f), 'utf8')); delete doc.suppress; await writeFile(path.join(dT, f), JSON.stringify(doc)); } }
 await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }, { name: 'Hallen', url: `${ex.base}/kal/hallen`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
+const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0' });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+{ const cb4 = l4.sources.find(s => s.id === 'citybikes_stadtrad-stuttgart');
+  assert(cbCalls3 > 0 && cb4?.status === 'duplicate' && cb4.reused === true && cb4.duplicateOf === 'p_test' && ex.log.filter(x => x.path.startsWith('/cb/')).length === cbCalls3 && !l4.groups['08111000|DB Connect|bike'],
+    'CityBikes-Kopie: im nächsten Lauf nicht neu abgerufen, Status aus dem vorigen Lauf, zählt weiter nicht'); }
 {
   const sp = JSON.parse(await readFile('test/out/sport.json', 'utf8')), e = sp.entries[0] || {};
   assert(sp.license === 'ODbL-1.0' && sp.active === true && sp.entries.length === 1 && e.art === 'veranstaltung' && e.gebiet?.ags?.[0] === '08416041' && /^\d{4}-\d{2}-\d{2}T\d{2}:00$/.test(e.von) && e.quelle.includes('/getmatchdata/bl1/'),
