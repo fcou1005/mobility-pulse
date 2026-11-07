@@ -1269,12 +1269,12 @@ if (process.env.FORECAST !== '0') {
       const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
       const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung');
       if (curOk.length < cur.ok.length) log(`Ereignisliste: ${cur.ok.length - curOk.length} Veranstaltungen vorgemerkt, in der Prognose ab ${curDoc.veranstaltungenAb}`);
-      // Chronos-2 als Schattenkandidat (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py);
-      // fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
+      // Chronos-2 (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py) – Vergleich „chronos“ und
+      // Mischung „blend“ (lernt mit, wählbar ab BLEND.activeFrom); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
       let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
-      const extraShadows = chronos ? (rows, fut, h) => { const x = CH.chronosShadow(chronos, rows, fut, h); return x ? { chronos: x } : {}; } : null;
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, extraShadows });
+      const ext = chronos ? CH.chronosLookup(chronos) : null;
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext });
       if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
       if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
       await mkdir(dir, { recursive: true });

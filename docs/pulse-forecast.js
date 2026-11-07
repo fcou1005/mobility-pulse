@@ -11,17 +11,18 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw6ajwqj';
-import { hourOf, dayOf } from './pulse-track.js?v=mw6ajwqj';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw6ajwqj';
+import * as E from './pulse-econ.js?v=mw6cw2sf';
+import { hourOf, dayOf } from './pulse-track.js?v=mw6cw2sf';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw6cw2sf';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 export const FORECAST_VERSION = 1;
 // Fassung der Selbstprüfung: 2 = Prüfzeilen mit der Exposition der Vortage (lastExposure) wie Plan und Live-Prognose; bis 6.11.2026 rechnete
 // die Prüfung mit den tatsächlichen Fahrzeugstunden des Prüftags (Vorwissen) und lag zu günstig. 3 = Hybrid. 4 = Wetter der Tage vor dem 3.11.
 // nachgeholt, Umgebungsmerkmale und Langzeitgedächtnis im Modell mit Umgebung. 5 = Art × Stunde, Anbieter-Prior, jüngere Tage zählen mehr (POOLED).
-// 6 = Spitzen je Modell und Vergleich „gleicher Wochentag der Vorwoche“. Andere Fassung im Log → evals und Lernstand neu.
-export const EVAL_VERSION = 6;
+// 6 = Spitzen je Modell und Vergleich „gleicher Wochentag der Vorwoche“. 7 = Chronos-2 (Vortagsprognosen) und blend mit Lernstand log.feedbackC.
+// Andere Fassung im Log → evals und Lernstand neu.
+export const EVAL_VERSION = 7;
 export const GATES = {
   minTrainDays: 2,        // weniger Tage: keine Prognose
   minEvalDays: 3,         // ausgewertete Tage, ab denen ein Modell zur Wahl steht
@@ -38,7 +39,13 @@ export const GATES = {
   ctxMinRows: 100,        // Umgebungsmerkmal (Warnung, Autobahn, Streik, Veranstaltung) ins Modell erst ab so vielen Gemeinde-Stunden mit Ereignis (Fenster + Gedächtnis)
   ctxMinDays: 2,          // … und an mindestens so vielen verschiedenen Tagen
 };
-export const MODELS = ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid'];
+export const MODELS = ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid', 'blend'];
+// Chronos-2 (lib/pulse-chronos.js, seit 7.11.2026): „chronos“ läuft nur als Vergleich mit (nie wählbar). „blend“ mischt je Gruppe Chronos und das
+// Hybrid-Modell: Gewicht nach den bisherigen Fehlern beider (wie adaptive: Bates–Granger, geschrumpft Richtung Gesamtgewicht, Halbwertszeit
+// FEEDBACK.halfLifeDays), gelernt aus den Vortagsprognosen von Chronos in der Selbstprüfung (log.feedbackC). Ohne Chronos-Wert gilt Hybrid.
+// Wählbar wie jede Erweiterung (GATES.adGain bzw. Live-Regel), aber erst ab BLEND.activeFrom (Ende der Lernphase) – bis dahin lernt es nur mit.
+export const SHADOW_ONLY = ['chronos'];
+export const BLEND = { activeFrom: Date.parse('2026-11-28T10:00:00+01:00') };
 /** Wertung eines Modells an einem Tag: Mittel aus Abweichung je Gruppe und Tag (Niveau) und je Gruppe und Stunde (Tagesgang); ohne Stundenwert nur der Tageswert */
 export const scoreOf = (x) => (x?.wapeGD == null ? null : x.wapeGH == null ? x.wapeGD : (x.wapeGD + x.wapeGH) / 2);
 const NCLS = 4, CLS = { W: 0, F: 1, S: 2, H: 3 }, NERA = 8;
@@ -427,7 +434,7 @@ const blendBase = (muP, muQ) => Float64Array.from(muQ, (q, j) => (Number.isFinit
 /**
  * Rolling-Origin-Auswertung der Tage evalIdx (Indizes in R.day; nur vollständige, bisher nicht ausgewertete). Rückgabe { [dayIdx]: { trainDays, models } }.
  */
-export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, dayName = (d) => String(d), expoBefore = null, days = null, mem = null, prior = null } = {}) {
+export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, dayName = (d) => String(d), expoBefore = null, days = null, mem = null, prior = null, ext = null, fbC = null } = {}) {
   const out = {};
   for (const d of evalIdx) {
     const train = [], test = []; for (let i = 0; i < R.n; i++) { if (R.day[i] < d) train.push(i); else if (R.day[i] === d) test.push(i); }
@@ -457,7 +464,19 @@ export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, day
     // Hybrid (Niveau des Bezugstags, Tagesgang aus profile/pooled) und Vergleich der Flottenannahmen (nur mitgeschrieben)
     if (days) {
       const rows = test.map(i => ({ g: R.g[i], h: R.hr[i], ags: String(R.keys[R.g[i]]).split('|')[0], cls: R.cl[i] }));
-      res.models.hybrid = scoreDay(R, test, hybridAdjust(R, days, d, rows, blendBase(muP, muQ)), m1.phi, { split: true });
+      const muH = hybridAdjust(R, days, d, rows, blendBase(muP, muQ));
+      res.models.hybrid = scoreDay(R, test, muH, m1.phi, { split: true });
+      // Chronos: Vortagsprognose (Kontext bis 0 Uhr des Tags, Fahrzeugstunden wie oben aus den Vortagen); fehlende Gruppen nehmen Hybrid
+      if (ext?.hasBack?.(day)) {
+        const tH = Array.from({ length: 24 }, (_, h) => localToUtcMs(day, h)), muC = Float64Array.from(test, (i) => ext.back(R.keys[R.g[i]], tH[R.hr[i]]));
+        if (muC.some(Number.isFinite)) {
+          res.models.chronos = scoreDay(R, test, Float64Array.from(muC, (c, j) => (Number.isFinite(c) ? c : muH[j])), m1.phi, { split: true });
+          if (fbC && !(fbC.upto && fbC.upto >= day)) {
+            res.models.blend = scoreDay(R, test, predictAdaptive(muC, muH, (j) => R.keys[R.g[test[j]]], feedbackWeights(fbC)), m1.phi, { split: true });
+            feedbackUpdate(fbC, day, R, test, muC, muH);
+          }
+        }
+      }
       if (last) { const alt = {}; for (const mode of ['class', 'mean']) { const lx = lastExposure(days, d, { target: days[d].cls, mode }); let se = 0, sa = 0; for (const i of test) { const v = lx.get(R.keys[R.g[i]])?.[R.hr[i]] ?? 0; se += R.e[i]; sa += Math.abs(v - R.e[i]); } alt[mode] = se > 0 ? +(sa / se).toFixed(4) : null; } res.expoErrAlt = alt; }
     }
     out[d] = res;
@@ -523,12 +542,12 @@ function chooseModelSelf(evals, { trainDays = 0, without = [] } = {}) {
   // Überlernen); bei beiden gewinnt der größere Vorsprung
   if (active && pool && prof) {
     let best = null;
-    for (const c of ['adaptive', 'hybrid']) {
+    for (const c of ['adaptive', 'hybrid', 'blend']) {
       if (without.includes(c)) continue;
       const ds = days.filter(d => scoreOf(evals[d]?.models?.[c]) != null && scoreOf(evals[d]?.models?.[active]) != null), a = mean(c, ds), cur = mean(active, ds);
       if (a && cur && a.w <= cur.w * (1 - GATES.adGain) && (!best || a.w / cur.w < best.r)) best = { c, r: a.w / cur.w, a, cur };
     }
-    if (best) { reason = `${best.c === 'hybrid' ? 'Niveau wie gestern, Tagesgang aus dem Modell' : 'lernt aus Fehlern je Gruppe'}: ${P0(best.a.w)} statt ${P0(best.cur.w)} (${active}) über ${best.a.n} Tage`; active = best.c; }
+    if (best) { reason = `${best.c === 'hybrid' ? 'Niveau wie gestern, Tagesgang aus dem Modell' : best.c === 'blend' ? 'Mischung aus Chronos-2 und Hybrid' : 'lernt aus Fehlern je Gruppe'}: ${P0(best.a.w)} statt ${P0(best.cur.w)} (${active}) über ${best.a.n} Tage`; active = best.c; }
   }
   return { active, status: pool && prof ? 'active' : 'learning', reason, scores: Object.fromEntries(MODELS.map(m => [m, sc[m] ? +sc[m].w.toFixed(4) : null])), evalDays: days.length };
 }
@@ -563,7 +582,7 @@ export function predictBaseline(R, days, before, F, sel, kind, dayOfRow) {
  * Alle gewünschten Modelle auf denselben Zukunftszeilen (Plan, Live-Prognose, Schattenprognosen): want = Set der Modellnamen (MODELS, 'naive', 'week').
  * envFit = Umgebung für das gepoolte Modell mit Umgebung (auch Basis von adaptive/hybrid), before = Index des Zieltags für Hybrid und Vergleichswerte.
  */
-export function predictAll(R, days, before, trainSel, F, sel, want, { envFit = {}, fb = null, dayOfRow = () => null } = {}) {
+export function predictAll(R, days, before, trainSel, F, sel, want, { envFit = {}, fb = null, dayOfRow = () => null, chronosOf = null, fbC = null } = {}) {
   const out = new Map(); let phiQ = 1, phiP = 1, muPn = null, muQ = null;
   const profN = () => (muPn ??= predictProfile(R, trainSel, sel, F, NaN));
   const envQ = () => { if (!muQ) { const m = fitPooled(R, trainSel, envFit); phiQ = m.phi; muQ = predictPooled(m, F, sel); } return muQ; };
@@ -572,7 +591,13 @@ export function predictAll(R, days, before, trainSel, F, sel, want, { envFit = {
   if (want.has('pooledWx')) out.set('pooledWx', envQ());
   if (want.has('profile')) out.set('profile', Float64Array.from(profN(), x => (Number.isFinite(x) ? x : 0)));
   if (want.has('adaptive')) out.set('adaptive', predictAdaptive(profN(), envQ(), (j) => R.keys[F.g[sel[j]]], feedbackWeights(fb)));
-  if (want.has('hybrid') || want.has('naive') || want.has('week')) out.set('hybrid', hybridAdjust(R, days, before, rows(), blendBase(profN(), envQ())));
+  if (['hybrid', 'naive', 'week', 'blend', 'chronos'].some(m => want.has(m))) out.set('hybrid', hybridAdjust(R, days, before, rows(), blendBase(profN(), envQ())));
+  // Chronos (chronosOf(i) = Wert der Zukunftszeile i oder NaN): ohne Wert gilt Hybrid; blend mit den gelernten Gewichten (ohne Lernstand: Gesamtgewicht 0,5)
+  if (want.has('chronos') || want.has('blend')) {
+    const hyb = out.get('hybrid'), muC = chronosOf ? Float64Array.from(sel, (i) => chronosOf(i)) : null;
+    if (want.has('chronos') && muC) out.set('chronos', Float64Array.from(muC, (c, j) => (Number.isFinite(c) ? c : hyb[j])));
+    if (want.has('blend')) out.set('blend', muC ? predictAdaptive(muC, hyb, (j) => R.keys[F.g[sel[j]]], feedbackWeights(fbC)) : Float64Array.from(hyb));
+  }
   for (const k of ['naive', 'week']) if (want.has(k)) { const b = predictBaseline(R, days, before, F, sel, k, dayOfRow), fill = out.get('hybrid'); out.set(k, Float64Array.from(b, (x, j) => (Number.isFinite(x) ? x : fill[j]))); }
   // Überstreuung je Modell für das 80-%-Band: gepoolt aus seinem Fit, Profil 1, sonst aus dem Modell mit Umgebung
   return { mu: out, phi: (m) => (m === 'pooled' ? phiP : m === 'profile' ? 1 : phiQ) };
@@ -693,7 +718,7 @@ export function lastExposure(days, beforeIdx = days.length, { target = null, mod
  * Plan eines Tags (Index di in days): Modell nur mit Tagen < di, Fahrzeugstunden vom letzten beobachteten Wert vor di, Wetter des Tags.
  * Modellwahl wie im Betrieb: chooseModel über die Auswertungen der Tage < Tag. Rückgabe { model, trainDays, scopes } oder null (zu wenige Tage).
  */
-export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem = null, prior: memPrior = null, ctx = null, live = null } = {}) {
+export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem = null, prior: memPrior = null, ctx = null, live = null, ext = null, fbC = null } = {}) {
   const trainSel = []; for (let i = 0; i < R.n; i++) if (R.day[i] < di) trainSel.push(i);
   const trainDays = new Set(trainSel.map(i => R.day[i])).size;
   if (trainDays < GATES.minTrainDays) return null;
@@ -701,12 +726,17 @@ export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem 
   const env = envOf(R, trainSel, mem, memPrior), envFit = env.on ? { weather: env.weather, ctx: env.ctx, prior: memPrior } : {}, pick = (a) => (a === 'pooledWx' ? (env.on ? 'pooledWx' : 'pooled') : a || 'pooled');
   // Entscheidungsregel wie im Betrieb, mit dem, was vor dem Tag bekannt war (Selbstprüfung bis Vortag, Live-Prognosen, die vor Tagesbeginn ausgewertet waren)
   const dayStart = localToUtcMs(day, 0);
-  let model = pick(chooseModel(prior, { trainDays, live, untilMs: dayStart, nowMs: dayStart }).active);
+  const gate = dayStart < BLEND.activeFrom ? ['blend'] : [];
+  let model = pick(chooseModel(prior, { trainDays, live, untilMs: dayStart, nowMs: dayStart, without: gate }).active);
   // lernendes Modell nur, wenn der Lernstand ausschließlich Tage vor dem geplanten Tag kennt (rückwirkende Pläne sonst ohne Rückkopplung)
-  if (model === 'adaptive' && !(fb?.upto && fb.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
+  if (model === 'adaptive' && !(fb?.upto && fb.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['adaptive', ...gate], live, untilMs: dayStart, nowMs: dayStart }).active);
+  if (model === 'blend' && !(fbC?.upto && fbC.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
   const rec = dayFromDoc({ day, runs: [], groups: {} }, calendar), fut = Array.from({ length: 24 }, (_, h) => ({ day, h, cls: rec.cls }));
   const last = lastExposure(days, di, { target: rec.cls }), F = buildFuture(R, fut, (k, h) => last.get(k)?.[h] ?? 0, wx, ctx), sel = Array.from({ length: F.n }, (_, i) => i);
-  const mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day }).mu.get(model);
+  // Chronos für den Plan: Vortagsprognose des Tags, sonst der Lauf, der den Tag abdeckt
+  const tH = Array.from({ length: 24 }, (_, h) => localToUtcMs(day, h)), useBack = !!ext?.hasBack(day);
+  const chronosOf = ext ? (i) => { const t = tH[F.hr[i]], k = R.keys[F.g[i]]; return useBack ? ext.back(k, t) : ext.live(k, t); } : null;
+  const mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC }).mu.get(model);
   const scopes = new Map(); for (const [sc, d] of aggregateFuture(R, F, mu, fut)) scopes.set(sc, d[day]);
   return { day, model, trainDays, scopes };
 }
@@ -753,9 +783,8 @@ const wape = (rows) => { let y = 0, a = 0, m = 0; for (const [yy, mm] of rows) {
  * Ergebnis { latest, log }: latest = Prognose der nächsten 24 Ortsstunden (Gruppe → Starts je Stunde, Gemeinde-Summen, Modellwahl, Gates),
  * log = Rolling-Origin-Auswertungen je Tag (evals), ausgegebene Prognosen mit Live-Abgleich (issued/live), Verlauf der Modellwahl.
  */
-// extraShadows(rows, fut, horizon) → { name: { byOp, meta } }: Schatten aus anderen Quellen (Chronos-2, lib/pulse-chronos.js), nur im Live-Abgleich,
-// nie wählbar (chooseModel kennt nur MODELS); rows = [{ key, fi, v }] mit v = Wert des aktiven Modells
-export function runForecast({ docs, calendar = null, weather = [], incidents = [], curated = [], prevLog = null, prevSeries = null, now = Date.now(), horizon = 24, minGroupDay = 3, issueEveryMs = 6 * 3600e3, exclude = null, extraShadows = null }) {
+// ext = chronosLookup(chronos.json) aus lib/pulse-chronos.js oder null (ohne Chronos: kein „chronos“, „blend“ = Hybrid)
+export function runForecast({ docs, calendar = null, weather = [], incidents = [], curated = [], prevLog = null, prevSeries = null, now = Date.now(), horizon = 24, minGroupDay = 3, issueEveryMs = 6 * 3600e3, exclude = null, ext = null }) {
   const days = assignEras((docs || []).filter(d => d?.day && d.groups).map(d => dayFromDoc(d, calendar)).sort((a, b) => (a.day < b.day ? -1 : 1)));
   // Gruppen mit rotem Befund der Ereignis-Ampel (nicht plausibel gezählt) bleiben aus Training und Prognose
   if (exclude?.size) for (const d of days) { const g = {}; for (const [k, v] of Object.entries(d.groups)) if (!exclude.has(k)) g[k] = v; d.groups = g; }
@@ -775,10 +804,13 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
   // Modell sofort Vergleichswerte hat – Tage werden in zeitlicher Reihenfolge bewertet und erst danach in den Lernstand übernommen
   const pfb = evalSame && prev?.feedback?.v === FEEDBACK.v ? prev.feedback : null;
   const fb = pfb ? { ...emptyFeedback(), upto: pfb.upto, days: pfb.days || 0, groups: Object.fromEntries(Object.entries(pfb.groups || {}).map(([k, s]) => [k, [...s]])) } : emptyFeedback();
+  // Lernstand der Mischung Chronos/Hybrid: nur fortschreiben, wenn auch der Lernstand von adaptive weiterläuft (sonst beide neu aus dem Fenster)
+  const pfbC = pfb && prev?.feedbackC?.v === FEEDBACK.v ? prev.feedbackC : null;
+  const fbC = pfbC ? { ...emptyFeedback(), upto: pfbC.upto, days: pfbC.days || 0, groups: Object.fromEntries(Object.entries(pfbC.groups || {}).map(([k, s]) => [k, [...s]])) } : emptyFeedback();
   // Rolling Origin: jeder volle, abgeschlossene Tag, der noch nicht ausgewertet ist (ältere Tage ohne Vortraining entfallen von selbst)
   const win = days.map((d, i) => (d.complete && d.day < today ? i : -1)).filter(i => i >= 0).slice(-(GATES.evalWindow + 2));
   const evalIdx = pfb ? win.filter(i => !log.evals[days[i].day]) : win;
-  const ev = evaluateDays(R, evalIdx, { fb, dayName: (i) => days[i].day, expoBefore: (d) => lastExposure(days, d, { target: days[d].cls }), days, mem, prior });
+  const ev = evaluateDays(R, evalIdx, { fb, dayName: (i) => days[i].day, expoBefore: (d) => lastExposure(days, d, { target: days[d].cls }), days, mem, prior, ext, fbC });
   for (const [di, e] of Object.entries(ev)) {
     const test = []; for (let i = 0; i < R.n; i++) if (R.day[i] === +di) test.push(i);
     e.models.naive = scoreDay(R, test, predictNaive(R, test, +di), 1, { split: true });
@@ -786,7 +818,7 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
     log.evals[days[+di].day] = { trainDays: e.trainDays, wxGate: e.wxGate, ...(e.env ? { env: e.env } : {}), ...(e.expoErr != null ? { expoErr: e.expoErr } : {}), ...(e.expoErrAlt ? { expoErrAlt: e.expoErrAlt } : {}), models: e.models };
   }
   for (const d of Object.keys(log.evals).sort().slice(0, -21)) delete log.evals[d];
-  log.feedback = compactFeedback(fb);
+  log.feedback = compactFeedback(fb); log.feedbackC = compactFeedback(fbC);
   const all = Array.from({ length: R.n }, (_, i) => i);
   // neue vollständige Tage ins Gedächtnis (Beiträge aus einem Fenstermodell mit allen Wirkungen, die Daten haben; nur Zeilen mit Wetter, sofern vorhanden)
   {
@@ -839,7 +871,7 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
   }
   for (const k of Object.keys(log.live).sort().slice(0, -60)) delete log.live[k];
   const prevActive = [...(prev?.history || [])].reverse().find(h => h.active)?.active ?? null;
-  const choice = chooseModel(log.evals, { trainDays, live: log.live, prevActive, nowMs: now }), fbw = feedbackWeights(fb);
+  const choice = chooseModel(log.evals, { trainDays, live: log.live, prevActive, nowMs: now, without: now < BLEND.activeFrom ? ['blend'] : [] }), fbw = feedbackWeights(fb);
   const env = envOf(R, all, mem, prior), gate = env.gate, usesEnv = ['pooledWx', 'adaptive', 'hybrid', 'naive', 'week'].includes(choice.active) && env.on;
   const useWx = usesEnv && env.weather, envFit = env.on ? { weather: env.weather, ctx: env.ctx, prior } : {};
   const incSum = { days: incidents.filter(d => d?.ags).length, warnAt: incidents.map(d => d?.sources?.warn?.at).filter(Boolean).sort().at(-1) ?? null, roadAt: incidents.map(d => d?.sources?.road?.at).filter(Boolean).sort().at(-1) ?? null, curated: curated.length,
@@ -849,7 +881,9 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
     excluded: exclude?.size || 0, gates: { ...GATES }, weather: { gate, used: useWx, source: weather.length ? weather[0].source ?? null : null },
     env: { keys: CTX_KEYS, ready: env.ctx.map(k => CTX_KEYS[k]), active: usesEnv ? env.ctx.map(k => CTX_KEYS[k]) : [], support, sources: incSum }, memory: null,
     decision: { rule: { ...DECIDE }, live: choice.live || null, combined: choice.combined || null },
-    learn: fb.upto ? learnSummary(fb, fbw) : null, horizon: null, totals: null, groups: {}, municipalities: {} };
+    learn: fb.upto ? learnSummary(fb, fbw) : null,
+    blend: { activeFrom: new Date(BLEND.activeFrom).toISOString(), chronos: ext ? { at: ext.at, model: ext.model, backDays: ext.backDays } : null, learn: fbC.upto ? learnSummary(fbC, feedbackWeights(fbC)) : null },
+    horizon: null, totals: null, groups: {}, municipalities: {} };
   const tomorrow = dayOf(localToUtcMs(today, 12) + 24 * 3600e3);
   let live = new Map(); const liveFrom = {};
   if (out.active) {
@@ -867,8 +901,9 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
     const F = buildFuture(R, fut, expo, wx, ctx), sel = Array.from({ length: F.n }, (_, i) => i);
     // Ausgabe fällig? Dann alle Kandidaten mitrechnen (Schattenprognosen für den Live-Abgleich)
     const lastIssued = Math.max(0, ...Object.keys(log.issued).map(Number)), issuing = now - lastIssued >= issueEveryMs;
-    const cands = MODELS.filter(m => m !== 'pooledWx' || env.on), want = new Set([out.active, ...(issuing ? cands : [])]);
-    const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day });
+    const chronosOn = !!ext?.usable(t0), chronosOf = chronosOn ? (i) => ext.live(R.keys[F.g[i]], fut[F.fh[i]].t) : null;
+    const cands = [...MODELS.filter(m => (m !== 'pooledWx' || env.on) && (m !== 'blend' || chronosOn)), ...(chronosOn ? SHADOW_ONLY : [])], want = new Set([out.active, ...(issuing ? cands : [])]);
+    const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day, chronosOf, fbC });
     let mu = PA.mu.get(out.active), phi = PA.phi(out.active);
     out.phi = +phi.toFixed(2);
     live = aggregateFuture(R, F, mu, fut);
@@ -887,9 +922,10 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
     if (issuing) {
       const opOf = (m) => { const o = new Map(); sel.forEach((i, j) => { if (F.fh[i] >= horizon) return; const op = R.keys[F.g[i]].split('|')[1]; let a = o.get(op); if (!a) o.set(op, a = new Array(horizon).fill(0)); a[F.fh[i]] += m[j]; }); return Object.fromEntries([...o].map(([k, a]) => [k, a.map(x => Math.round(x * 10) / 10)])); };
       const shadow = Object.fromEntries([...PA.mu].filter(([m]) => m !== out.active && cands.includes(m)).map(([m, v]) => [m, opOf(v)]));
-      let ext = null;
-      if (extraShadows) { try { const rows = sel.map((i, j) => ({ key: R.keys[F.g[i]], fi: F.fh[i], v: mu[j] })); for (const [m, x] of Object.entries(extraShadows(rows, fut, horizon) || {})) if (x?.byOp && !MODELS.includes(m)) { shadow[m] = x.byOp; (ext ??= {})[m] = x.meta ?? null; } } catch { /* Schatten aus anderen Quellen sind optional */ } }
-      log.issued[now] = { v: 2, model: out.active, from: t0, phi: +phi.toFixed(2), local: out.horizon.local, total: out.totals, byOp: Object.fromEntries([...byOp].map(([k, a]) => [k, a.slice(0, horizon).map(x => Math.round(x * 10) / 10)])), shadow, ...(ext ? { ext } : {}) };
+      // Chronos-Meta: Stand des Laufs, Alter bei Ausgabe, Anteil der Fahrten (aktives Modell) in Gruppen mit Chronos-Wert
+      let extMeta = null;
+      if (chronosOn) { let cov = 0, tot = 0; sel.forEach((i, j) => { if (F.fh[i] >= horizon) return; tot += mu[j]; if (Number.isFinite(chronosOf(i))) cov += mu[j]; }); extMeta = { chronos: { at: ext.at, ageH: +((t0 - Date.parse(ext.at)) / 3600e3).toFixed(1), cover: tot > 0 ? +(cov / tot).toFixed(3) : 0 } }; }
+      log.issued[now] = { v: 2, model: out.active, from: t0, phi: +phi.toFixed(2), local: out.horizon.local, total: out.totals, byOp: Object.fromEntries([...byOp].map(([k, a]) => [k, a.slice(0, horizon).map(x => Math.round(x * 10) / 10)])), shadow, ...(extMeta ? { ext: extMeta } : {}) };
     }
     log.history.push({ at: out.generatedAt, active: out.active, status: out.status, reason: out.reason });
   } else log.history.push({ at: out.generatedAt, active: null, status: out.status, reason: `${trainDays} Tage Daten – zu wenig` });
@@ -899,8 +935,8 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
   // Stundenreihen für das Dashboard: Plan heute (und für noch nicht gespeicherte, abgeschlossene Tage), Ist, Live-Prognose bis Ende morgen
   const plans = new Map(), has = (d) => Object.values(prevSeries?.version === 1 ? prevSeries.days?.[d] || {} : {}).some(x => x.p), keepFrom = dayOf(now - (SERIES_KEEP_DAYS - 1) * 86400e3);
   if (trainDays >= GATES.minTrainDays) {
-    days.forEach((d, pi) => { if (d.day >= keepFrom && d.day < today && d.complete && !has(d.day)) { const r = planDay(R, days, pi, d.day, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live }); if (r) plans.set(d.day, r); } });
-    if (!has(today)) { const ti = days.findIndex(d => d.day === today), r = planDay(R, days, ti >= 0 ? ti : days.filter(d => d.day < today).length, today, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live }); if (r) plans.set(today, r); }
+    days.forEach((d, pi) => { if (d.day >= keepFrom && d.day < today && d.complete && !has(d.day)) { const r = planDay(R, days, pi, d.day, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live, ext, fbC }); if (r) plans.set(d.day, r); } });
+    if (!has(today)) { const ti = days.findIndex(d => d.day === today), r = planDay(R, days, ti >= 0 ? ti : days.filter(d => d.day < today).length, today, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live, ext, fbC }); if (r) plans.set(today, r); }
   }
   const series = buildSeries({ days, today, tomorrow, plans, live, liveFrom, prev: prevSeries, now, status: out.status, active: out.active });
   return { latest: out, log, series };
