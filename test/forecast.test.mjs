@@ -564,6 +564,12 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const tday = F.dayOfLocal(NOW), cDE = ser.days[tday]?.DE?.c, hNow = new Date(ff).getUTCHours() + 1, other = Object.entries(ser.days[tday] || {}).find(([sc]) => sc.startsWith('op:') && sc !== `op:${k0.split('|')[1]}`);
   assert(cDE && cDE[hNow - 1] === null && cDE[hNow] === 2 && ser.days[ser.tomorrow]?.DE?.c?.every(x => x === 2) && ser.days[tday][`op:${k0.split('|')[1]}`]?.c?.[hNow] === 2 && !other?.[1].c && ser.chronos?.from === ff,
     `Verlauf: Chronos-Linie (Feld c) ab der Laufstunde für Deutschland und den Anbieter der Gruppe, morgen ganztägig (${cDE?.slice(hNow - 1, hNow + 2)})`);
+  // vergangene Tage und frühe Stunden von heute: Vortagsprognose (back), wo der jüngste Lauf nicht hinreicht
+  const yday = addDays(tday, -1), ser2 = JSON.parse(JSON.stringify(r.series));
+  CH.chronosSeries(ser2, { ...doc, groups: { [k0]: { m: new Array(48).fill(2) } }, back: { [yday]: { from: F.localToUtcMs(yday, 0), hours: 24, groups: { [k0]: new Array(24).fill(5) } }, [tday]: { from: F.localToUtcMs(tday, 0), hours: 24, groups: { [k0]: new Array(24).fill(7) } } } });
+  const cY = ser2.days[yday]?.DE?.c, cT = ser2.days[tday]?.DE?.c;
+  assert(ser2.days[yday] && cY?.every(x => x === 5) && cT?.[0] === 7 && cT[hNow - 1] === 7 && cT[hNow] === 2 && ser2.chronos.backDays.join() === [yday, tday].join(),
+    `Verlauf: vergangene Tage mit der Chronos-Vortagsprognose (${yday}: ${cY?.[0]}), heute vor dem Lauf Vortagsprognose, danach der Lauf`);
   const stale = { ...doc, at: new Date(NOW - 31 * 3600e3).toISOString() }, late = { ...doc, from: ff + 5 * 3600e3 };
   const rs = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, ext: CH.chronosLookup(stale) }), rh = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, ext: CH.chronosLookup(late) });
   assert([rs, rh].every(x => { const s0 = Object.values(x.log.issued)[0].shadow; return !s0.chronos && !s0.blend; }), 'Ohne verwendbaren Chronos-Lauf (älter als 30 h oder beginnt nach der Ausgabe) weder chronos noch blend');
