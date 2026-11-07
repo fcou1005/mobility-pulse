@@ -41,6 +41,17 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   const keep = await C.readGbfsWithFallback({ id: 'zl', url: 'https://md/gbfs.json', altUrls: ['https://md/gbfs.json?v=3'], operator: 'Zeus' }, fj, { now });
   assert(via.vehicles.length === 1 && via.viaAlt?.url === 'https://m/gbfs.json' && via.viaAlt.from === 'https://md/gbfs.json' && keep.vehicles.length === 0 && !keep.viaAlt,
     'Leerer Hauptfeed: Ersatzfeed auf anderem Host zählt (viaAlt), gleicher Host nicht');
+  // Kombinieren: nur Fahrzeuge, die im Hauptfeed fehlen (Kennung, Nummer, ≤ 10 m), nicht gesperrt, Meldung ≤ 72 h
+  const P = (id, lat, extra = {}) => ({ bike_id: id, lat, lon: 9.93, is_disabled: false, is_reserved: false, last_reported: fresh, ...extra });
+  const two = { 'https://md2/gbfs.json': { data: { en: { feeds: [{ name: 'free_bike_status', url: 'https://md2/fbs.json' }] } }, last_updated: fresh },
+    'https://md2/fbs.json': { last_updated: fresh, ttl: 60, data: { bikes: [P('ZEU:1', 49.790, { rental_uris: { android: 'https://ridezeus.app.link/101' } }), P('ZEU:2', 49.795, { rental_uris: { android: 'https://ridezeus.app.link/SL2AB6' } })] } },
+    'https://z/gbfs.json': { data: { en: { feeds: [{ name: 'free_bike_status', url: 'https://z/fbs.json' }] } }, last_updated: fresh },
+    'https://z/fbs.json': { last_updated: fresh, ttl: 60, data: { bikes: [P('h101', 49.7901, { rental_uris: { web: 'https://zeus.city/api/v1/applinks?vehicle=101' } }), P('h200', 49.80, { rental_uris: { web: 'https://zeus.city/api/v1/applinks?vehicle=200' } }),
+      P('h201', 49.81, { is_disabled: true, rental_uris: { web: 'https://zeus.city/api/v1/applinks?vehicle=201' } }), P('h202', 49.82, { last_reported: old, rental_uris: { web: 'https://zeus.city/api/v1/applinks?vehicle=202' } }),
+      P('h203', 49.79503, { rental_uris: { web: 'https://zeus.city/api/v1/applinks?vehicle=203' } })] } } };
+  const mg = await C.readGbfsWithFallback({ id: 'zw', url: 'https://md2/gbfs.json', altUrls: ['https://z/gbfs.json'], operator: 'Zeus' }, async (u) => ({ ok: !!two[u], status: two[u] ? 200 : 404, json: two[u] }), { now });
+  assert(mg.vehicles.length === 3 && mg.merged?.added === 1 && mg.vehicles.find(v => v.fromAlt)?.rawId === 'h200' && mg.primaryVehicles.length === 2 && mg.altRead?.vehicles.length === 5,
+    `Kombinieren: gleiche Nummer, ≤ 10 m, gesperrt und veraltet bleiben draußen, nur das fehlende Fahrzeug kommt dazu (${mg.vehicles.map(v => v.rawId).join()})`);
 }
 // M9: virtuelle Stationen getrennt zählen (leere Abstellzone ≠ leere Dockstation)
 {

@@ -208,7 +208,8 @@ for (const { src, sys, probe, error } of results) {
   if (sys.rangeLimit) { rec.rangeLimitKm = sys.rangeLimit.limitKm; if (sys.rangeLimit.n) rec.rangeLimit = { ...sys.rangeLimit, maxP95Km: C.RANGE_LIMIT.maxP95Km, share: C.RANGE_LIMIT.share }; }
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
-  if (sys.viaAlt) { rec.url = sys.viaAlt.url; rec.primaryUrl = sys.viaAlt.from; rec.viaAlt = true; addCheck(rec, `Hauptfeed ohne Fahrzeuge (${new URL(sys.viaAlt.from).host}) – Ersatzfeed des Betreibers gezählt`); }
+  if (sys.viaAlt) { rec.url = sys.viaAlt.url; rec.primaryUrl = sys.viaAlt.from; rec.viaAlt = true; addCheck(rec, `Hauptfeed ohne Fahrzeuge (${new URL(sys.viaAlt.from).host}${sys.viaAlt.httpStatus !== 200 ? `, HTTP ${sys.viaAlt.httpStatus}` : ''}) – Ersatzfeed gezählt`); }
+  if (sys.merged) { rec.merged = sys.merged; addCheck(rec, `${sys.merged.added} Fahrzeuge nur im Ersatzfeed (${new URL(sys.merged.url).host}) – dazugezählt`, sys.merged.added); }
   // Ausblenden bei niedrigem Akku (C.batteryFloorCheck, Z4): ab 500 Fahrzeugen 0,5-Perzentil p005; hides → Verfolgung zählt Verschwinden bis p005 + 5 als hide
   if (sys.batteryFloor?.p005 != null) { const f = sys.batteryFloor; rec.batteryFloor = { p005: f.p005, p001: f.p001, n: f.n, hides: f.hides }; if (f.hides) addCheck(rec, `Fahrzeuge unter ${f.p005} % Ladestand nicht im Feed (Ausblendung): Verschwinden bis ${f.p005 + T.HIDE_BAND} % zählt nicht als Fahrt`, f.n); }
   if (goneHttp(sys.httpStatus)) rec.status = 'gone';
@@ -385,15 +386,16 @@ const consistency = { at: now, systems: [], pairs: [] };
 
   const altTargets = results.filter(r => r.sys && !r.sys.viaAlt && r.src.altUrls?.length && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status));
   await pool(altTargets, async ({ src, sys }) => {
-    const altUrl = src.altUrls[0];
+    // Ersatz schon beim Abruf gelesen (C.readGbfsWithFallback: anderer Host) → kein zweiter Abruf; verglichen wird der Hauptfeed ohne Ergänzungen
+    const altUrl = sys.altRead?.url || src.altUrls[0], pv = sys.primaryVehicles || sys.vehicles;
     try {
-      const alt = await C.readGbfsSystem({ ...src, url: altUrl }, fetchJson, { now });
+      const alt = sys.altRead || await C.readGbfsSystem({ ...src, url: altUrl }, fetchJson, { now });
       const rec = sourceOut.find(x => x.id === src.id);
       const kind = hostOf(altUrl) === hostOf(src.url) ? 'version' : (/mobidata-bw|mobilitaetsdaten\.nrw/.test(hostOf(src.url)) ? 'land_vs_betreiber' : 'betreiber_vs_land');
-      const entry = { sourceId: src.id, operator: src.operator, kind, primary: { url: src.url, version: sys.version, vehicles: sys.vehicles.length, available: sys.vehicles.filter(v => !v.disabled && !v.reserved).length, stations: sys.stations.length, feedAgeMs: rec?.feedAgeMs ?? null },
+      const entry = { sourceId: src.id, operator: src.operator, kind, primary: { url: src.url, version: sys.version, vehicles: pv.length, available: pv.filter(v => !v.disabled && !v.reserved).length, stations: sys.stations.length, feedAgeMs: rec?.feedAgeMs ?? null },
         alt: { url: altUrl, version: alt.version, httpStatus: alt.httpStatus, vehicles: alt.vehicles.length, available: alt.vehicles.filter(v => !v.disabled && !v.reserved).length, stations: alt.stations.length, feedAgeMs: (() => { const a = [alt.feedAges.vehicle_status ?? alt.feedAges.free_bike_status, alt.feedAges.station_status].filter(x => x != null); return a.length ? Math.max(...a) : null; })(), errors: alt.errors.slice(0, 2) } };
       if (!alt.vehicles.length && !alt.stations.length) { entry.verdict = 'alt_unreachable'; consistency.systems.push(entry); rec.consistency = entry.verdict; return; }
-      const A = new Map(sys.vehicles.map(v => [C.normalizeId(v.rawId), v])), B = new Map(alt.vehicles.map(v => [C.normalizeId(v.rawId), v]));
+      const A = new Map(pv.map(v => [C.normalizeId(v.rawId), v])), B = new Map(alt.vehicles.map(v => [C.normalizeId(v.rawId), v]));
       let common = 0; const dists = [];
       for (const [id, v] of A) { const w = B.get(id); if (!w) continue; common++; if (C.validLatLon(v.lat, v.lon) && C.validLatLon(w.lat, w.lon)) dists.push(C.haversineM(v.lat, v.lon, w.lat, w.lon)); }
       const union = A.size + B.size - common;
@@ -410,6 +412,7 @@ const consistency = { at: now, systems: [], pairs: [] };
         const s1 = entry.primary.stations, s2 = entry.alt.stations; const sd = Math.max(s1, s2) ? Math.abs(s1 - s2) / Math.max(s1, s2) : 0;
         entry.countDiff = +sd.toFixed(3); entry.stationsOnly = true; entry.verdict = sd <= 0.05 ? 'consistent' : sd <= 0.15 ? 'minor' : 'divergent';
       } else entry.verdict = judge(countDiff, entry.idOverlap, entry.medianDistM, entry.posMatch);
+      if (sys.merged) entry.merged = sys.merged.added; // nur im Ersatz, zum Hauptfeed gezählt
       consistency.systems.push(entry); rec.consistency = entry.verdict;
     } catch (e) { consistency.systems.push({ sourceId: src.id, operator: src.operator, alt: { url: altUrl }, verdict: 'error', error: e.message }); }
   }, 6);
