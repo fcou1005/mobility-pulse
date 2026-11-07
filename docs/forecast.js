@@ -5,14 +5,14 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw67jj04';
-import * as SP from './pulse-spots.js?v=mw67jj04';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw67jj04';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw67jj04';
-import { toCsv } from './pulse-report.js?v=mw67jj04';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw67jj04';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw67jj04';
-import { mapKeys } from './mapkeys.js?v=mw67jj04';
+import * as FC from './pulse-forecast.js?v=mw6a07zi';
+import * as SP from './pulse-spots.js?v=mw6a07zi';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw6a07zi';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw6a07zi';
+import { toCsv } from './pulse-report.js?v=mw6a07zi';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw6a07zi';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw6a07zi';
+import { mapKeys } from './mapkeys.js?v=mw6a07zi';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -232,8 +232,8 @@ function accRows(S0, sel, G, { withToday = false } = {}) {
 /** Mittlere Kennzahlen je Modell über die letzten ausgewerteten Tage (Selbstprüfung aus log.json); sc = Wertung (Tag und Stunde je Gruppe), nach der gewählt wird */
 // 80-%-Band als Häufigkeit (Laien lesen Intervalle als harte Grenzen): Soll „etwa 8 von 10“, dazu die letzte bewertete Trefferquote
 const bandFreq = (live) => { const x = (live || []).find(r => Number.isFinite(r?.cover80)); return x ? ` ${t('fv.bandFreq', { k: Math.round(x.cover80 * 10) })}` : ''; };
-const MODEL_ORDER = ['hybrid', 'adaptive', 'pooled', 'pooledWx', 'profile', 'naive', 'week'];
-const MODEL_COLOR = { week: 'var(--muted)', hybrid: '#8b5cf6', adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
+const MODEL_ORDER = ['hybrid', 'adaptive', 'pooled', 'pooledWx', 'profile', 'chronos', 'naive', 'week'];
+const MODEL_COLOR = { week: 'var(--muted)', chronos: '#14b8a6', hybrid: '#8b5cf6', adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
 const modelName = (m) => (m === 'naive' ? t('fv.naive') : m === 'week' ? t('fv.week') : t(`fc.model.${m}`));
 const mature = (G, d) => !(G?.evals?.[d]?.trainDays < (FC.GATES.minEvalTrainDays ?? 0)); // wie chooseModel: unreife Starttage zählen nicht
 function raceOf(G, L) {
@@ -410,7 +410,7 @@ export function steckbrief(ctx, S0, L, G, sel) {
   if (g.lv.length) out.push(mdTable([t('fv.gLevel'), t('fv.gModel'), t('fv.gNaive'), t('fv.gVerdict')], g.lv.map(x => [levelName(x), pc(x.a), pc(x.b), jTxt(x.j)])), `\n${strip(t('fv.gHow'))}\n`);
   out.push(`## ${t('fv.mdWhat')}\n`, `${t('fv.mdWhatTxt', { g: n0(L?.learn?.groups ?? Object.keys(L?.groups || {}).length), m: n0(Object.keys(L?.municipalities || {}).length) })}\n`);
   out.push(`## ${t('fv.mdModels')}\n`, '```\n' + `${t('fv.formula')}\n` + '```\n');
-  for (const [m, k] of [['profile', 'fv.mProfile'], ['pooled', 'fv.mPooled'], ['pooledWx', 'fv.mPooledWx'], ['adaptive', 'fv.mAdaptive'], ['hybrid', 'fv.mHybrid'], ['naive', 'fv.mNaive']]) out.push(`- **${modelName(m)}**${m === L?.active ? ` (${t('fv.activeTag')})` : ''}: ${t(k, { hl: FC.FEEDBACK.halfLifeDays, k: FC.HYBRID.k, back: FC.HYBRID.maxBack })}`);
+  for (const [m, k] of [['profile', 'fv.mProfile'], ['pooled', 'fv.mPooled'], ['pooledWx', 'fv.mPooledWx'], ['adaptive', 'fv.mAdaptive'], ['hybrid', 'fv.mHybrid'], ['chronos', 'fv.mChronos'], ['naive', 'fv.mNaive']]) out.push(`- **${modelName(m)}**${m === L?.active ? ` (${t('fv.activeTag')})` : ''}: ${t(k, { hl: FC.FEEDBACK.halfLifeDays, k: FC.HYBRID.k, back: FC.HYBRID.maxBack, min: L?.external?.chronos?.minStarts ?? 20 })}`);
   out.push('', `${t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays })}\n`, `${t('fv.mdActive', { model: L?.active ? modelName(L.active) : '–', reason: L?.reason || '–' })}\n`);
   const x = L?.learn;
   out.push(`## ${t('fv.mdLearn')}\n`, `${t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })}\n`);
@@ -675,7 +675,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
     [t('fv.kvStand'), timeTxt(L.generatedAt), t('fv.kvStandSub', { time: timeTxt(S0.generatedAt) })],
   ])}${provTbl}</div>`;
   // Panel 3: Modell
-  const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['hybrid', t('fv.mHybrid', { k: FC.HYBRID.k, back: FC.HYBRID.maxBack })], ['naive', t('fv.mNaive')]];
+  const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['hybrid', t('fv.mHybrid', { k: FC.HYBRID.k, back: FC.HYBRID.maxBack })], ['chronos', t('fv.mChronos', { min: L?.external?.chronos?.minStarts ?? 20 })], ['naive', t('fv.mNaive')]];
   const p3 = `<div class="panel">${head(t('fv.modelTitle'), t('fv.modelSub'))}<code class="fv-formula">${esc(t('fv.formula'))}</code>`
     + `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.modelTitle'))}"><table style="margin-top:var(--s3)"><thead><tr><th>${t('fv.colModel')}</th><th>${t('fv.colWhat')}</th></tr></thead><tbody>${modelRows.map(([m, d]) => `<tr><td>${m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`)}${m === L.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="wrap">${esc(d)}</td></tr>`).join('')}</tbody></table></div>`
     + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(L.reason)}</i></p>` : ''}</div>`;

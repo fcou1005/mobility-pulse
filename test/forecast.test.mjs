@@ -539,3 +539,45 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   assert(CX.venueEntries(rows, vA.map(v => ({ ...v, cap: 4000 })), { now: Date.parse('2026-11-06T12:00:00Z') }).length === 0 && CX.venueEntries(rows, vs, { now: Date.parse('2026-11-06T12:00:00Z') }).length === 0, 'Einträge: nur Orte ab 5.000 Plätzen und mit Gemeinde');
   assert(CX.robotsAllowed('User-agent: *\nDisallow: /intern\nAllow: /intern/frei', '/intern/x') === false && CX.robotsAllowed('User-agent: *\nDisallow: /intern\nAllow: /intern/frei', '/intern/frei/y') && CX.robotsAllowed('User-agent: other\nDisallow: /', '/x') && CX.robotsAllowed('', '/x'), 'robots.txt: Disallow, längeres Allow, fremder User-agent, leer');
 }
+// ---------- Chronos-2 als Schattenkandidat (lib/pulse-chronos.js, scripts/chronos.py)
+{
+  const CH = await import('../lib/pulse-chronos.js');
+  const NOW = Date.parse(`${addDays(DAY0, NDAY - 2)}T05:20:00Z`), dd = docs.slice(0, NDAY - 1); // laufender Tag bis 6 Uhr Ortszeit beobachtet
+  const h3 = F.localToUtcMs(dd.at(-1).day, 3); // laufender Tag: um 3 Uhr kein Lauf (Lücke)
+  dd[dd.length - 1] = { ...dd.at(-1), runs: dd.at(-1).runs.filter(r => r[0] < NOW && !(r[0] >= h3 && r[0] < h3 + 3600e3)) };
+  const inp = CH.chronosInput({ docs: dd, calendar: null, weather: WX, now: NOW });
+  const g = inp.groups[0], ff = Math.floor(NOW / 3600e3) * 3600e3, big = groups.filter(x => inp.groups.some(y => y.k === x[0])).length;
+  assert(inp.futureFrom === ff && inp.from === F.localToUtcMs(DAY0, 0) && inp.n === (ff - inp.from) / 3600e3 && g.y.length === inp.n && g.e.length === inp.n + 48 && inp.lh.length === inp.n + 48
+    && Object.values(inp.cov).every(c => c.c.length === inp.n + 48 && c.t.length === inp.n + 48) && big < groups.length && big > 0,
+    `Chronos-Eingabe: ${inp.n} Stunden Kontext ab 0 Uhr Ortszeit, 48 Stunden ab der laufenden Stunde, ${big} von ${groups.length} Gruppen (ab ${CH.CHRONOS.minStarts} Fahrten in 7 Tagen)`);
+  const i3 = (h3 - inp.from) / 3600e3;
+  assert(g.y[i3] === null && g.e[i3] === null && Number.isInteger(g.y[i3 - 1]) && Number.isInteger(g.y.at(-1)) && g.y.slice(0, 24).every(x => Number.isInteger(x)) && inp.cov[AGS[0]].c.slice(0, 24) === 'W'.repeat(24) && inp.cov[AGS[0]].c.includes('S') && inp.lh[0] === 0,
+    'Chronos-Eingabe: nicht beobachtete Stunden null, Tagtyp je Ortstag, Ortsstunde je Schritt');
+  // Ausgabe: alle Chronos-Werte 0 für die erste Gruppe, Rest fehlt → Schatten = aktives Modell bis auf diese Gruppe
+  const k0 = inp.groups[0].k, doc = { version: 1, model: 'test', at: new Date(NOW).toISOString(), from: ff, hours: 48, groups: { [k0]: { m: new Array(48).fill(0) } } };
+  const ext = (d) => (rows, fut, h) => { const x = CH.chronosShadow(d, rows, fut, h); return x ? { chronos: x } : {}; };
+  const r = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, extraShadows: ext(doc) }), iss = Object.values(r.log.issued)[0], op0 = k0.split('|')[1];
+  const act = iss.byOp[op0].reduce((a, b) => a + b, 0), ch = iss.shadow.chronos?.[op0]?.reduce((a, b) => a + b, 0);
+  assert(iss.shadow.chronos && iss.ext?.chronos?.cover > 0 && iss.ext.chronos.cover < 1 && ch < act && Math.abs(iss.shadow.chronos.Voi?.reduce((a, b) => a + b, 0) - iss.byOp.Voi.reduce((a, b) => a + b, 0)) < (op0 === 'Voi' ? Infinity : 0.5) && r.latest.active !== 'chronos',
+    `Schatten chronos: ${op0} ${ch?.toFixed(1)} statt ${act.toFixed(1)} (eine Gruppe 0), Abdeckung ${iss.ext?.chronos?.cover}, andere Anbieter wie das aktive Modell, veröffentlicht bleibt ${r.latest.active}`);
+  const stale = { ...doc, at: new Date(NOW - 31 * 3600e3).toISOString() }, short = { ...doc, hours: 10 };
+  const rs = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, extraShadows: ext(stale) }), rh = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, extraShadows: ext(short) });
+  assert(!Object.values(rs.log.issued)[0].shadow.chronos && !Object.values(rh.log.issued)[0].shadow.chronos, 'Schatten chronos entfällt bei Eingabe älter als 30 h oder zu kurzer Prognose');
+  const r2 = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(r.log)), now: Date.parse(`${addDays(DAY0, NDAY)}T09:00:00Z`) });
+  const lv = Object.values(r2.log.live).find(x => x.v === 2);
+  assert(lv?.models.chronos?.w > 0 && lv.ext?.chronos && !F.MODELS.includes('chronos') && r2.latest.active !== 'chronos' && r2.latest.decision.live?.chronos?.n >= 1,
+    `Live-Abgleich wertet chronos mit (${(lv?.models.chronos?.w * 100).toFixed(1)} %), wählbar bleibt es nicht (${r2.latest.active})`);
+  // scripts/chronos.py im Testmodus (ohne Modell): Eingabe → Ausgabe mit Stunden je Gruppe
+  const { spawnSync } = await import('node:child_process'), { writeFileSync, readFileSync, mkdtempSync } = await import('node:fs'), { tmpdir } = await import('node:os'), { join } = await import('node:path');
+  const py = spawnSync('python3', ['-c', 'import pandas, numpy'], { encoding: 'utf8' });
+  if (py.status === 0) {
+    const dir = mkdtempSync(join(tmpdir(), 'chronos-')); writeFileSync(join(dir, 'in.json'), JSON.stringify(inp));
+    const run = spawnSync('python3', ['scripts/chronos.py', join(dir, 'in.json'), join(dir, 'out.json')], { encoding: 'utf8', env: { ...process.env, CHRONOS_FAKE: '1' } });
+    const out = run.status === 0 ? JSON.parse(readFileSync(join(dir, 'out.json'), 'utf8')) : null, o0 = out?.groups?.[k0];
+    assert(out && out.from === ff && out.hours === 48 && Object.keys(out.groups).length === inp.groups.length && o0.m.length === 48 && o0.m.every(x => x >= 0) && out.at === inp.at,
+      `scripts/chronos.py (Testmodus): ${Object.keys(out?.groups || {}).length} Gruppen, 48 Stunden ab der laufenden Stunde${run.status ? ' – ' + run.stderr.slice(-200) : ''}`);
+    const fr = spawnSync('python3', ['-c', `import json,sys; sys.path.insert(0,'scripts'); import chronos; inp=json.load(open('${join(dir, 'in.json')}')); df,fu=chronos.frames(inp); print(len(df), len(fu), str(df['c'].dtype), int(df['target'].isna().sum()), sorted(set(fu['item_id']))==sorted(set(df['item_id'])))`], { encoding: 'utf8' });
+    const [nDf, nFu, dt, nNan, same] = fr.stdout.trim().split(' ');
+    assert(fr.status === 0 && +nDf === inp.groups.length * inp.n && +nFu === inp.groups.length * 48 && dt === 'category' && +nNan > 0 && same === 'True', `chronos.py: Tabellen für Chronos-2 (Kontext ${nDf}, Zukunft ${nFu} Zeilen, Tagtyp kategorial, fehlende Stunden NaN)${fr.status ? ' – ' + fr.stderr.slice(-200) : ''}`);
+  } else console.log('übersprungen: chronos.py (python3 mit pandas fehlt)');
+}

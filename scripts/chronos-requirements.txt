@@ -1,0 +1,3 @@
+# Chronos-2-Schattenkandidat (scripts/chronos.py); torch vorher aus dem CPU-Index installieren (siehe scripts/chronos-workflow.yml)
+chronos-forecasting==2.3.2
+pandas>=2,<4

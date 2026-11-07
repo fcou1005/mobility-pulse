@@ -1,0 +1,54 @@
+# Vorlage für .github/workflows/chronos.yml – über die GitHub-Weboberfläche unter fcou1005 anlegen (geplante Läufe laufen unter dem Konto,
+# das die Datei zuletzt geändert hat; nicht aus einer Sitzung pushen).
+# Schattenkandidat der Prognose (lib/pulse-chronos.js): viermal täglich Chronos-2 (amazon/chronos-2, Apache 2.0) auf CPU,
+# Ergebnis chronos.json im Branch tsfm. Der Sammler liest es und vergleicht es live; veröffentlicht wird weiter das eigene Modell.
+name: Chronos-2
+on:
+  schedule:
+    - cron: '41 2,8,14,20 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: chronos
+  cancel-in-progress: false
+jobs:
+  chronos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Datenstand holen (events, weather, calendar.json)
+        run: |
+          git clone -q --depth 1 --branch data --filter=blob:none --no-checkout "https://github.com/${GITHUB_REPOSITORY}" datastand
+          git -C datastand sparse-checkout set --no-cone '/events/' '/weather/' '/calendar.json'
+          git -C datastand checkout -q data
+      - name: Eingabe bauen
+        run: node scripts/chronos-input.mjs datastand chronos-input.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/chronos-requirements.txt
+      - name: Modell-Cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface
+          key: hf-chronos-2-v1
+      - name: Pakete (torch nur CPU)
+        run: |
+          pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -q -r scripts/chronos-requirements.txt
+      - name: Prognose
+        run: python scripts/chronos.py chronos-input.json chronos.json
+      - name: Veröffentlichen (Branch tsfm)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir pub && cp chronos.json pub/ && cd pub
+          git init -q && git checkout -q --orphan tsfm && git add chronos.json
+          git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Chronos-2 $(date -u +%FT%TZ)"
+          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" tsfm:tsfm
