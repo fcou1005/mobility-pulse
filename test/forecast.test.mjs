@@ -560,6 +560,11 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const act = iss.byOp[op0].reduce((a, b) => a + b, 0), ch = iss.shadow.chronos?.[op0]?.reduce((a, b) => a + b, 0);
   assert(iss.shadow.chronos && iss.ext?.chronos?.cover > 0 && iss.ext.chronos.cover < 1 && ch < act && Math.abs(iss.shadow.chronos.Voi?.reduce((a, b) => a + b, 0) - iss.byOp.Voi.reduce((a, b) => a + b, 0)) < (op0 === 'Voi' ? Infinity : 0.5) && r.latest.active !== 'chronos',
     `Schatten chronos: ${op0} ${ch?.toFixed(1)} statt ${act.toFixed(1)} (eine Gruppe 0), Abdeckung ${iss.ext?.chronos?.cover}, andere Anbieter wie das aktive Modell, veröffentlicht bleibt ${r.latest.active}`);
+  // Linie im Verlauf: Feld c je Gebiet (nur Gebiete, die schon in series.json stehen), vor dem Chronos-Lauf leer
+  const ser = JSON.parse(JSON.stringify(r.series)); CH.chronosSeries(ser, { ...doc, groups: { [k0]: { m: new Array(48).fill(2) } } });
+  const tday = F.dayOfLocal(NOW), cDE = ser.days[tday]?.DE?.c, hNow = new Date(ff).getUTCHours() + 1, other = Object.entries(ser.days[tday] || {}).find(([sc]) => sc.startsWith('op:') && sc !== `op:${k0.split('|')[1]}`);
+  assert(cDE && cDE[hNow - 1] === null && cDE[hNow] === 2 && ser.days[ser.tomorrow]?.DE?.c?.every(x => x === 2) && ser.days[tday][`op:${k0.split('|')[1]}`]?.c?.[hNow] === 2 && !other?.[1].c && ser.chronos?.from === ff,
+    `Verlauf: Chronos-Linie (Feld c) ab der Laufstunde für Deutschland und den Anbieter der Gruppe, morgen ganztägig (${cDE?.slice(hNow - 1, hNow + 2)})`);
   const stale = { ...doc, at: new Date(NOW - 31 * 3600e3).toISOString() }, short = { ...doc, hours: 10 };
   const rs = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, extraShadows: ext(stale) }), rh = F.runForecast({ docs: dd, calendar: null, weather: WX, prevLog: null, now: NOW, extraShadows: ext(short) });
   assert(!Object.values(rs.log.issued)[0].shadow.chronos && !Object.values(rh.log.issued)[0].shadow.chronos, 'Schatten chronos entfällt bei Eingabe älter als 30 h oder zu kurzer Prognose');

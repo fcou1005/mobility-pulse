@@ -39,6 +39,7 @@ const CSS = `
 .fv-legend .k-a{width:12px;height:12px;border-radius:2px;background:var(--accent)}
 .fv-legend .k-l{width:12px;height:12px;border-radius:2px;background:color-mix(in srgb,var(--accent) 28%,transparent);border:1px dashed var(--accent)}
 .fv-legend .k-p{width:18px;height:0;border-top:2.5px solid var(--info);margin-bottom:3px;vertical-align:middle}
+.fv-legend .k-c{width:18px;height:0;border-top:2px dashed #14b8a6;margin-bottom:3px;vertical-align:middle}
 .fv-chart{width:100%;overflow:hidden}
 .fv-chart svg{display:block;width:100%;height:auto;max-width:1100px}
 .fv-chart text{fill:var(--fg-2);font-size:11px;font-family:var(--sans)}
@@ -46,6 +47,7 @@ const CSS = `
 .fv-chart .bar-a{fill:var(--accent)}
 .fv-chart .bar-l{fill:color-mix(in srgb,var(--accent) 26%,transparent);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2}
 .fv-chart .ln-p{fill:none;stroke:var(--info);stroke-width:2.2;stroke-linejoin:round}
+.fv-chart .ln-c{fill:none;stroke:#14b8a6;stroke-width:2;stroke-dasharray:5 3;stroke-linejoin:round}
 .fv-chart .now{stroke:var(--fg-2);stroke-width:1.2;stroke-dasharray:3 3}
 .fv-chart .mid{stroke:var(--line-2);stroke-width:1}
 .fv-chart .dayl{font-weight:600;fill:var(--fg)}
@@ -160,8 +162,8 @@ export function pickScope(series, st) {
 }
 /** Reihen eines Tags: Summe über die gewählten Schlüssel (null bleibt null, wenn kein Schlüssel einen Wert hat) */
 export function seriesOf(series, day, sel) {
-  const out = { p: null, a: null, l: null }, d = series?.days?.[day] || {};
-  for (const f of ['p', 'a', 'l']) for (const k of sel.keys) { const x = d[k]?.[f]; if (!x) continue; out[f] ||= new Array(24).fill(null); x.forEach((v, h) => { if (v != null) out[f][h] = (out[f][h] || 0) + v; }); }
+  const out = { p: null, a: null, l: null, c: null }, d = series?.days?.[day] || {};
+  for (const f of ['p', 'a', 'l', 'c']) for (const k of sel.keys) { const x = d[k]?.[f]; if (!x) continue; out[f] ||= new Array(24).fill(null); x.forEach((v, h) => { if (v != null) out[f][h] = (out[f][h] || 0) + v; }); }
   return out;
 }
 /** Kennzahlen eines Tags: Ist gegen Plan über die Stunden mit beiden Werten (Abweichung je Stunde = Σ|Ist − Plan| ÷ Σ Ist, Verzerrung = Σ Plan ÷ Σ Ist − 1) und gegen den naiven Vortag */
@@ -176,7 +178,7 @@ export function dayStats(e, prevA = null) {
 const niceMax = (v) => { const e = 10 ** Math.floor(Math.log10(Math.max(v, 1))), m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e; };
 function timeline(ctx, rows, { nowIdx = null, width = 720, blocks = [] } = {}) {
   const W = Math.max(320, Math.min(1100, Math.round(width))), H = 260, pl = 40, pr = 8, pt = 18, pb = 38, N = rows.length, bw = (W - pl - pr) / N, gap = bw > 9 ? 1.5 : 0.7;
-  const vals = rows.flatMap(r => [r.p, r.a, r.l]).filter(Number.isFinite), top = niceMax(Math.max(1, ...vals) * 1.05), y = (v) => pt + (H - pt - pb) * (1 - v / top), x = (i) => pl + i * bw, every = W < 520 ? 6 : 3;
+  const vals = rows.flatMap(r => [r.p, r.a, r.l, r.c]).filter(Number.isFinite), top = niceMax(Math.max(1, ...vals) * 1.05), y = (v) => pt + (H - pt - pb) * (1 - v / top), x = (i) => pl + i * bw, every = W < 520 ? 6 : 3;
   const grid = [0, 0.25, 0.5, 0.75, 1].map(f => `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y(top * f).toFixed(1)}" y2="${y(top * f).toFixed(1)}"/><text x="${pl - 5}" y="${(y(top * f) + 4).toFixed(1)}" text-anchor="end">${fK(top * f)}</text>`).join('');
   const bars = rows.map((r, i) => {
     const v = r.a ?? r.l; if (v == null) return '';
@@ -185,12 +187,15 @@ function timeline(ctx, rows, { nowIdx = null, width = 720, blocks = [] } = {}) {
   }).join('');
   let d = '', open = false;
   rows.forEach((r, i) => { if (r.p == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(r.p).toFixed(1)}L${x(i + 1).toFixed(1)} ${y(r.p).toFixed(1)}`; open = true; });
+  // Chronos-2 (KI, nur Vergleich): gestrichelte Linie durch die Stundenmitten
+  let dc = '', openC = false;
+  rows.forEach((r, i) => { if (r.c == null) { openC = false; return; } dc += `${openC ? 'L' : 'M'}${(x(i) + bw / 2).toFixed(1)} ${y(r.c).toFixed(1)}`; openC = true; });
   const labels = rows.map((r, i) => (r.h % every === 0 ? `<text x="${(x(i) + bw / 2).toFixed(1)}" y="${H - pb + 14}" text-anchor="middle">${r.h}</text>` : '')).join('');
-  const hit = rows.map((r, i) => `<rect class="hit" x="${x(i).toFixed(1)}" y="${pt}" width="${bw.toFixed(1)}" height="${H - pt - pb}"><title>${ctx.esc(`${String(r.h).padStart(2, '0')}:00 · ${r.a != null ? `${t('fv.ist')} ${n0(r.a)}` : r.l != null ? `${t('fv.live')} ${n0(r.l)}` : t('fv.notObserved')}${r.p != null ? ` · ${t('fv.plan')} ${n0(r.p)}` : ''}`)}</title></rect>`).join('');
+  const hit = rows.map((r, i) => `<rect class="hit" x="${x(i).toFixed(1)}" y="${pt}" width="${bw.toFixed(1)}" height="${H - pt - pb}"><title>${ctx.esc(`${String(r.h).padStart(2, '0')}:00 · ${r.a != null ? `${t('fv.ist')} ${n0(r.a)}` : r.l != null ? `${t('fv.live')} ${n0(r.l)}` : t('fv.notObserved')}${r.p != null ? ` · ${t('fv.plan')} ${n0(r.p)}` : ''}${r.c != null ? ` · ${t('fv.chronos')} ${n0(r.c)}` : ''}`)}</title></rect>`).join('');
   const sepAndDays = blocks.map((b, k) => `${k ? `<line class="mid" x1="${x(b.from).toFixed(1)}" x2="${x(b.from).toFixed(1)}" y1="${pt}" y2="${H - pb}"/>` : ''}<text class="dayl" x="${(x(b.from) + (b.to - b.from) * bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${ctx.esc(b.label)}</text>`).join('');
   const now = nowIdx != null ? `<line class="now" x1="${x(nowIdx).toFixed(1)}" x2="${x(nowIdx).toFixed(1)}" y1="${pt - 6}" y2="${H - pb}"/><text x="${(x(nowIdx) + 4).toFixed(1)}" y="${pt - 6}">${ctx.esc(t('fv.now'))}</text>` : '';
   const total = sum(rows.map(r => r.a ?? r.l ?? 0));
-  return `<div class="fv-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(t('fv.chartAria', { total: n0(total) }))}">${grid}${bars}<path class="ln-p" d="${d}"/>${now}${sepAndDays}${labels}${hit}</svg></div>`;
+  return `<div class="fv-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(t('fv.chartAria', { total: n0(total) }))}">${grid}${bars}<path class="ln-p" d="${d}"/>${dc ? `<path class="ln-c" d="${dc}"/>` : ''}${now}${sepAndDays}${labels}${hit}</svg></div>`;
 }
 
 // ---------- Daten für die Spots ----------
@@ -555,7 +560,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   const eT = seriesOf(S0, T, sel), eM = seriesOf(S0, TM, sel);
   if (live) eT.a = live;
   // Zeilen des Diagramms
-  const mk = (day, e, withLive) => Array.from({ length: 24 }, (_, h) => ({ day, h, p: e.p?.[h] ?? null, a: e.a?.[h] ?? null, l: withLive ? (e.l?.[h] ?? null) : null }));
+  const mk = (day, e, withLive) => Array.from({ length: 24 }, (_, h) => ({ day, h, p: e.p?.[h] ?? null, a: e.a?.[h] ?? null, l: withLive ? (e.l?.[h] ?? null) : null, c: e.c?.[h] ?? null }));
   let rows, blocks, nowIdx = null, title;
   if (view === 'ahead') {
     rows = [...mk(T, eT, true), ...mk(TM, eM, true)];
@@ -584,13 +589,13 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
     + `<div class="fv-grid">${gradePanel(ctx, S0, sel, G, L)}`
     + `<div class="panel">${head(title, t('fv.chartSub'), `<span class="fv-scope">${t('fv.scope')}: <b>${esc(scopeTxt)}</b></span>`)}${lead || ''}`
     + `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.dayAria'))}">${segs.map(([v, l]) => `<button data-v="${esc(v)}" aria-pressed="${v === view}">${esc(l)}</button>`).join('')}</div></div>`
-    + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span></div>${timeline(ctx, rows, { nowIdx: view === 'ahead' ? nowIdx : null, width: el.clientWidth - 40, blocks })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${esc(notes)}</div>${dataTable}`) + '</div>'
+    + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span>${rows.some(r => r.c != null) ? `<span title="${esc(t('fv.chronosTip'))}"><i class="k-c"></i>${t('fv.chronos')}</span>` : ''}</div>${timeline(ctx, rows, { nowIdx: view === 'ahead' ? nowIdx : null, width: el.clientWidth - 40, blocks })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${esc(notes)}</div>${dataTable}`) + '</div>'
     + `${accuracyPanel(ctx, S0, sel, G, L)}${curvePanel(ctx, G, L, el.clientWidth - 40)}${learnPanel(ctx, L, G)}<p class="fv-sub">${t('fv.moreBasis')} <a href="#prognose-basis">${t('fv.segBasis')}</a>.</p></div>`;
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
   el.querySelectorAll('.fv-tog button').forEach(b => b.addEventListener('click', () => { s.day = b.dataset.v; renderForecastView(el, ctx, { part: 'verlauf' }); }));
   if (!noSeries) fillWx(el.querySelector('.fv-wx'), ctx, rows, sel, el.clientWidth - 40);
   el.querySelector('[data-fv-csv="series"]')?.addEventListener('click', () => download(`prognose_stundenreihe_${fileTag(ctx, sel)}_${view === 'ahead' ? today : view}.csv`,
-    [[t('fv.colScope'), t('fv.colDay'), t('fv.colHour'), t('fv.colIst'), t('fv.colPlan'), t('fv.colLive')], ...rows.map(r => [scopeTxt, r.day, r.h, r.a == null ? null : [r.a, 1], r.p == null ? null : [r.p, 1], r.l == null ? null : [r.l, 1]])]));
+    [[t('fv.colScope'), t('fv.colDay'), t('fv.colHour'), t('fv.colIst'), t('fv.colPlan'), t('fv.colLive'), t('fv.chronos')], ...rows.map(r => [scopeTxt, r.day, r.h, r.a == null ? null : [r.a, 1], r.p == null ? null : [r.p, 1], r.l == null ? null : [r.l, 1], r.c == null ? null : [r.c, 0]])]));
   el.querySelector('[data-fv-csv="days"]')?.addEventListener('click', () => download(`prognose_tage_${fileTag(ctx, sel)}.csv`,
     [[t('fv.colScope'), t('fv.colDay'), t('fv.colIst'), t('fv.colPlan'), t('fv.colBias'), t('fv.colErr'), t('fv.colNaive'), t('fv.colSkill'), t('fv.colTrain')], ...accRowsNow.map(r => [scopeTxt, r.d, [r.ist, 0], [r.plan, 0], r.bias == null ? null : [r.bias, 4], r.wape == null ? null : [r.wape, 4], r.naive == null ? null : [r.naive, 4], r.skill == null ? null : [r.skill, 4], r.train])]));
 }

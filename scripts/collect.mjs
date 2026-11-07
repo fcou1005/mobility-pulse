@@ -1275,6 +1275,7 @@ if (process.env.FORECAST !== '0') {
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
       const extraShadows = chronos ? (rows, fut, h) => { const x = CH.chronosShadow(chronos, rows, fut, h); return x ? { chronos: x } : {}; } : null;
       const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, extraShadows });
+      if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
       if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
       await mkdir(dir, { recursive: true });
       await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
