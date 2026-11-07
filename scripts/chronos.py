@@ -70,6 +70,12 @@ def predict_fake(inp):
 
 
 def predict_chronos(inp):
+    # Dieses Skript heißt wie das Paket: beim Aufruf als scripts/chronos.py steht scripts/ vorn in sys.path und „import chronos“ fände die
+    # Datei selbst (erster Lauf 07.11.2026: ImportError Chronos2Pipeline). Verzeichnis entfernen, damit das installierte Paket geladen wird.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.getcwd()) != here]
+    if getattr(sys.modules.get("chronos"), "__file__", None) and os.path.dirname(os.path.abspath(sys.modules["chronos"].__file__)) == here:
+        del sys.modules["chronos"]
     import torch
     from chronos import Chronos2Pipeline
 

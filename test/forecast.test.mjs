@@ -579,5 +579,16 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
     const fr = spawnSync('python3', ['-c', `import json,sys; sys.path.insert(0,'scripts'); import chronos; inp=json.load(open('${join(dir, 'in.json')}')); df,fu=chronos.frames(inp); print(len(df), len(fu), str(df['c'].dtype), int(df['target'].isna().sum()), sorted(set(fu['item_id']))==sorted(set(df['item_id'])))`], { encoding: 'utf8' });
     const [nDf, nFu, dt, nNan, same] = fr.stdout.trim().split(' ');
     assert(fr.status === 0 && +nDf === inp.groups.length * inp.n && +nFu === inp.groups.length * 48 && dt === 'category' && +nNan > 0 && same === 'True', `chronos.py: Tabellen für Chronos-2 (Kontext ${nDf}, Zukunft ${nFu} Zeilen, Tagtyp kategorial, fehlende Stunden NaN)${fr.status ? ' – ' + fr.stderr.slice(-200) : ''}`);
+    // echter Pfad mit Ersatzpaketen chronos/torch: das installierte Paket wird gefunden, obwohl das Skript chronos.py heißt (erster Lauf 07.11.2026)
+    const { mkdirSync } = await import('node:fs'), stub = join(dir, 'pkgs');
+    mkdirSync(join(stub, 'chronos'), { recursive: true }); mkdirSync(join(stub, 'torch'), { recursive: true });
+    writeFileSync(join(stub, 'torch', '__init__.py'), 'def set_num_threads(n): pass\n');
+    writeFileSync(join(stub, 'chronos', '__init__.py'), [
+      'class Chronos2Pipeline:', '    @classmethod', '    def from_pretrained(cls, name, device_map=None): return cls()',
+      '    def predict_df(self, df, future_df=None, id_column=None, timestamp_column=None, target=None, prediction_length=None, quantile_levels=None, batch_size=None):',
+      '        out = future_df[[id_column, timestamp_column]].copy(); out["predictions"] = 2.5; out["0.1"] = 1.0; out["0.5"] = 2.5; out["0.9"] = 4.0', '        return out', ''].join('\n'));
+    const real = spawnSync('python3', ['scripts/chronos.py', join(dir, 'in.json'), join(dir, 'out2.json')], { encoding: 'utf8', env: { ...process.env, PYTHONPATH: stub } });
+    const o2 = real.status === 0 ? JSON.parse(readFileSync(join(dir, 'out2.json'), 'utf8')) : null;
+    assert(o2?.model === 'amazon/chronos-2' && o2.groups[k0]?.m.every(x => x === 2.5) && o2.groups[k0].q90[0] === 4, `chronos.py lädt das Paket chronos, nicht sich selbst${real.status ? ' – ' + real.stderr.slice(-300) : ''}`);
   } else console.log('übersprungen: chronos.py (python3 mit pandas fehlt)');
 }
