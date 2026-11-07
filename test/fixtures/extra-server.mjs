@@ -53,6 +53,8 @@ export async function startExtra() {
     const json = (b, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
     const [, kind, file] = u.pathname.split('/');
     if (kind === 'p' && p[file]) return json(p[file]());
+    // Chronos-Lauf (Branch tsfm): eine Gruppe, 48 Stunden ab der laufenden Stunde, Vortagsprognose für heute
+    if (u.pathname === '/tsfm/chronos.json') { const from = Math.floor(Date.now() / 3600e3) * 3600e3, d0 = new Date(from).toISOString().slice(0, 10); return json({ version: 1, model: 'test', at: '2026-11-07T12:00:00.000Z', from, hours: 48, groups: { '08416041|Bolt|scooter': { m: new Array(48).fill(3) } }, back: { [d0]: { from: from - 3600e3 * 2, hours: 24, groups: { '08416041|Bolt|scooter': new Array(24).fill(4) } } } }); }
     // erster Abruf eines Teilfeeds mit 429 (wie Yoio/rideatom): der Sammler wiederholt einmal
     if (u.pathname === '/rk/d/free_bike_status.json' && !st.flakyServed) { st.flakyServed = true; return json({}, 429); }
     if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }

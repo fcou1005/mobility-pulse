@@ -318,7 +318,11 @@ assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.co
   const f = path.join(TRACK_DIR, 'state.json.gz'); const s5 = JSON.parse(gunzipSync(await readFile(f)).toString('utf8'));
   s5.at -= 2 * 3600e3; await writeFile(f, gzipSync(JSON.stringify(s5)));
 }
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0' });
+const ser4 = JSON.parse(await readFile('test/out/forecast/series.json', 'utf8').catch(() => 'null'));
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0', TSFM_URL: `${ex.base}/tsfm/chronos.json` });
+{ const ser5 = JSON.parse(await readFile('test/out/forecast/series.json', 'utf8').catch(() => 'null'));
+  assert(ser4?.version === 1 && ser5?.chronos?.at === '2026-11-07T12:00:00.000Z' && ser5.generatedAt === ser4.generatedAt && ex.log.some(x => x.path === '/tsfm/chronos.json'),
+    'Zwischen zwei Prognose-Läufen: neuer Chronos-Lauf landet trotzdem in den Stundenreihen (nur Feld c, Stand der Reihen bleibt)'); }
 const ev5 = await evWork();
 const h5 = JSON.parse(await readFile(`test/out/history/${T.dayOf(Date.now())}.json`, 'utf8')); // Tagesschnitt Europe/Berlin
 assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(-1)[0] === 0, 'Lauf nach Lücke: runs-Flag 0, gapHours, history f = 0');

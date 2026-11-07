@@ -1281,6 +1281,13 @@ if (process.env.FORECAST !== '0') {
       await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
       const l = res.latest;
       log(`Prognose: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
+    } else {
+      // zwischen zwei Prognose-Läufen: neuen Chronos-Lauf (viermal täglich) trotzdem in die Stundenreihen übernehmen, nur Feld c
+      const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`, ser = await rd(fSeries);
+      if (tsfmUrl && ser?.version === 1) {
+        const r = await fetchJson(tsfmUrl);
+        if (r.ok && r.json?.version === 1 && r.json.groups && (r.json.at !== ser.chronos?.at || !ser.chronos?.backDays)) { CH.chronosSeries(ser, r.json); await writeFile(fSeries, JSON.stringify(ser)); log(`Chronos: Stundenreihen auf den Lauf ${r.json.at} gebracht`); }
+      }
     }
   } catch (e) { log(`Prognose: ${e.message} – alte Dateien bleiben`); }
 }
