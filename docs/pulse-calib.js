@@ -13,9 +13,9 @@
 //     bis zur Plausibilitätsgrenze (rvdLimits), gekennzeichnet (capped).
 //  3. Abdeckung = eigene E-Scooter ÷ amtliche Flotte (Stand und Art der Zahl laut Quelle).
 //  4. Plausibilität ohne Faktor: Frankfurt (Jahresfahrten ÷ Tage ÷ Obergrenze = Untergrenze), Düsseldorf (SMM-CPI, alle Arten), Europa, Voi Konzern.
-import { DEFAULT_RIDE } from './pulse-econ.js?v=mw661t5h';
-import { capLimit, SUSPENDED, hourQuality } from './pulse-report.js?v=mw661t5h';
-import { PERIODIC_RATE } from './pulse-track.js?v=mw661t5h';
+import { DEFAULT_RIDE } from './pulse-econ.js?v=mw67jj04';
+import { capLimit, SUSPENDED, hourQuality } from './pulse-report.js?v=mw67jj04';
+import { PERIODIC_RATE } from './pulse-track.js?v=mw67jj04';
 export { SUSPENDED };
 
 export const BERLIN = '11000000';

@@ -158,7 +158,8 @@ log(`Quellen: ${active.length} → ${expanded.length} Systeme`);
 const results = await pool(expanded, async (src) => {
   try {
     if (src._probe) return { src, sys: null, probe: src._probe };
-    const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, fetchJson, { now }) : await C.readGbfsSystem(src, fetchJson, { now });
+    // leerer Hauptfeed mit Ersatz auf anderem Host: Ersatz zählt (C.readGbfsWithFallback → sources[].viaAlt, Hinweis in der Feed-Prüfung)
+    const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, fetchJson, { now }) : await C.readGbfsWithFallback(src, fetchJson, { now });
     return { src, sys };
   } catch (e) { return { src, sys: null, error: e.message }; }
 });
@@ -207,6 +208,7 @@ for (const { src, sys, probe, error } of results) {
   if (sys.rangeLimit) { rec.rangeLimitKm = sys.rangeLimit.limitKm; if (sys.rangeLimit.n) rec.rangeLimit = { ...sys.rangeLimit, maxP95Km: C.RANGE_LIMIT.maxP95Km, share: C.RANGE_LIMIT.share }; }
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
+  if (sys.viaAlt) { rec.url = sys.viaAlt.url; rec.primaryUrl = sys.viaAlt.from; rec.viaAlt = true; addCheck(rec, `Hauptfeed ohne Fahrzeuge (${new URL(sys.viaAlt.from).host}) – Ersatzfeed des Betreibers gezählt`); }
   // Ausblenden bei niedrigem Akku (C.batteryFloorCheck, Z4): ab 500 Fahrzeugen 0,5-Perzentil p005; hides → Verfolgung zählt Verschwinden bis p005 + 5 als hide
   if (sys.batteryFloor?.p005 != null) { const f = sys.batteryFloor; rec.batteryFloor = { p005: f.p005, p001: f.p001, n: f.n, hides: f.hides }; if (f.hides) addCheck(rec, `Fahrzeuge unter ${f.p005} % Ladestand nicht im Feed (Ausblendung): Verschwinden bis ${f.p005 + T.HIDE_BAND} % zählt nicht als Fahrt`, f.n); }
   if (goneHttp(sys.httpStatus)) rec.status = 'gone';
@@ -381,7 +383,7 @@ const consistency = { at: now, systems: [], pairs: [] };
     return 'divergent';
   };
 
-  const altTargets = results.filter(r => r.sys && r.src.altUrls?.length && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status));
+  const altTargets = results.filter(r => r.sys && !r.sys.viaAlt && r.src.altUrls?.length && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status));
   await pool(altTargets, async ({ src, sys }) => {
     const altUrl = src.altUrls[0];
     try {
@@ -456,6 +458,9 @@ for (const x of [...allVehicles, ...allStations]) if (!munis.has(x.ags)) munis.s
 // Dedupe über alle Quellen (je Anbieter)
 allVehicles.sort((a, b) => a.priority - b.priority);
 const dv = C.dedupeVehicles(allVehicles);
+// gleiche Fahrzeugnummer aus zwei Quellen (dedupeVehicles, zweite Stufe): Verlierer wie Spiegel-Zwillinge still aus dem Verfolgungszustand
+for (const { v, of } of dv.dropped || []) { ghostKeys.push(vkey(v.operator, v.rawId)); v.codeDupOf = of; }
+for (const v of [...dv.vehicles, ...(dv.dropped || []).map(d => d.v)]) delete v.code; // Nummer nur für den Abgleich, nirgends gespeichert
 // Spiegelquellen mit umgeschlüsselten Kennungen (consistency.pairs: idsRekeyed): schwächere Quelle je Gemeinde ganz bzw. räumliche Zwillinge
 // verwerfen (lib/pulse-core.js dropMirrorVehicles). Stärke: Priorität, direkte Quelle vor Manifest-Kind (MOBIDROM fiel in 14 von 44 Läufen aus),
 // nicht CityBikes, dann Kennung – bewusst ohne Fahrzeugzahl, damit der Sieger nicht von Lauf zu Lauf wechselt.
@@ -468,7 +473,7 @@ const mirrorInfo = new Map(); // verlierende Quelle → { of: Map(Sieger → n),
   const extra = (prev?.mirrors || []).filter(m => recOf.has(m.of) && recOf.has(m.source) && now - (m.seen || 0) <= 7 * 86400e3); // bekannte Paare höchstens 7 Tage ohne neuen Beleg
   const mr = C.dropMirrorVehicles(dv.vehicles, { pairs: consistency.pairs, rank, extra });
   dv.vehicles = mr.vehicles;
-  for (const { v, of, why } of mr.dropped) {
+  for (const { v, of, why } of [...(dv.dropped || []).map(d => ({ ...d, why: 'code' })), ...mr.dropped]) {
     const m = mirrorInfo.get(v.sourceId) || { of: new Map(), ags: new Set(), n: 0, why: new Set(), op: v.operator };
     m.n++; m.of.set(of, (m.of.get(of) || 0) + 1); m.ags.add(v.ags); m.why.add(why); mirrorInfo.set(v.sourceId, m);
     ghostKeys.push(vkey(v.operator, v.rawId));
@@ -488,7 +493,7 @@ const mirrorInfo = new Map(); // verlierende Quelle → { of: Map(Sieger → n),
   if (mr.dropped.length) log(`Spiegelquellen (umgeschlüsselt): ${mr.dropped.length} Fahrzeuge verworfen (${dv.stats.mirrorWhole} ganze Quelle je Gemeinde, ${dv.stats.mirrorTwins} Zwillinge) aus ${mirrorInfo.size} Quellen`);
 }
 const ds = C.dedupeStations(allStations);
-log(`Fahrzeuge ${allVehicles.length} → ${dv.vehicles.length} (Dubletten ${dv.stats.duplicates}, Kennungs-Wiederverwendung ${dv.stats.reusedIds}, Spiegel ${dv.stats.mirrorDropped}); Stationen ${allStations.length} → ${ds.stations.length}`);
+log(`Fahrzeuge ${allVehicles.length} → ${dv.vehicles.length} (Dubletten ${dv.stats.duplicates}, gleiche Fahrzeugnummer ${dv.stats.codeDuplicates || 0}, Kennungs-Wiederverwendung ${dv.stats.reusedIds}, Spiegel ${dv.stats.mirrorDropped}); Stationen ${allStations.length} → ${ds.stations.length}`);
 
 // Aggregation: Gemeinde × Anbieter × Fahrzeugart
 const groups = C.aggregateGroups(dv.vehicles, ds.stations, { chargeThreshold, rangeThreshold });
@@ -1205,8 +1210,11 @@ let venueCurated = [];
         if (!CX.robotsAllowed(robots[host].txt, u.pathname + u.search)) { fetched[q.id] = { at: now, error: 'robots.txt verbietet den Abruf' }; lines.push(`${q.name || host}: robots.txt`); continue; }
         const r = await get(q.url, 20e3, q.art === 'ics' ? 'text/calendar' : 'text/html'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const body = (await r.text()).slice(0, V.maxBytes), got = CX.calendarRows(body, q);
-        // Neues ersetzt Gespeichertes dieser Quelle ab jetzt (verschobene, abgesagte Termine verschwinden); Vergangenes bleibt
-        rows = [...rows.filter(x => !(String(x[0]).startsWith(`${q.id}|`) && x[2] >= now - 6 * 3600e3)), ...got.filter(x => x[2] >= now - 6 * 3600e3)];
+        // Neues ersetzt Gespeichertes dieser Quelle für die Zukunft (verschobene, abgesagte Termine verschwinden); Begonnenes bleibt, auch wenn die
+        // Seite es schon entfernt hat. Neu aufgenommen wird ab heute 0 Uhr (Ortszeit), damit Termine von heute ohne Uhrzeit oder mehrtägige (Zeile
+        // je Tag um 0 Uhr) beim ersten Abruf am Tag nicht fehlen; Neues steht vorn und gewinnt bei gleichem Ort und Beginn (Abgleich unten).
+        const dayStart = CX.berlinUtc(T.dayOf(now), 0, 0);
+        rows = [...got.filter(x => x[2] >= dayStart), ...rows.filter(x => !(String(x[0]).startsWith(`${q.id}|`) && x[2] >= now))];
         fetched[q.id] = { at: now, n: got.length }; lines.push(`${q.name || host} ${got.length}`);
       } catch (e) { fetched[q.id] = { ...(fetched[q.id] || {}), at: now, error: String(e?.message || e).slice(0, 80) }; lines.push(`${q.name || host}: ${e?.message || e}`); }
       await new Promise(res => setTimeout(res, 500));

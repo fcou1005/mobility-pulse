@@ -21,6 +21,27 @@ const feeds = { 'https://x/gbfs.json': { data: { en: { feeds: [{ name: 'free_bik
     { bike_id: 'c', lat: 49.0, lon: 12.1, is_disabled: false, is_reserved: false, last_reported: old } ] } } };
 const sys = await C.readGbfsSystem({ id: 'zeus_t', url: 'https://x/gbfs.json', operator: 'Zeus' }, async (u) => ({ ok: true, status: 200, json: feeds[u] }), { now });
 assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v.rawId === 'c'), 'gesperrt + 40 Tage stumm = verwaist; frei + alt bleibt (Bikes ohne Statusmeldung)');
+// 07.11.2026: Zeus über MobiData BW (Ludwigsburg leer, Renningen mit anderen Kennungen als Zeus direkt)
+{
+  const RC = C.rentalCode;
+  assert(RC({ web: 'https://zeus.city/api/v1/applinks?vehicle=8148' }) === '8148' && RC({ android: 'https://ridezeus.app.link/sl2ab6', web: 'https://ridezeus.app.link/' }) === 'SL2AB6' && RC({ web: 'https://ridezeus.app.link/' }) === null && RC(null) === null,
+    'Fahrzeugnummer aus Ausleih-Links (Abfrageparameter oder letzter Pfadteil), allgemeiner Link ohne Nummer');
+  const fb = (bikes) => ({ 'https://m/gbfs.json': { data: { en: { feeds: [{ name: 'free_bike_status', url: 'https://m/fbs.json' }] } }, last_updated: fresh }, 'https://m/fbs.json': { last_updated: fresh, ttl: 60, data: { bikes } } });
+  const rd = async (bikes) => C.readGbfsSystem({ id: 'm', url: 'https://m/gbfs.json', operator: 'Zeus' }, async (u) => ({ ok: true, status: 200, json: fb(bikes)[u] }), { now });
+  const B = (id, uri) => ({ bike_id: id, lat: 48.77, lon: 8.93, is_disabled: false, is_reserved: false, rental_uris: { android: uri } });
+  const s1 = await rd([B('a', 'https://x.app.link/101'), B('b', 'https://x.app.link/102')]), s2 = await rd([B('a', 'https://x.app.link/download'), B('b', 'https://x.app.link/download')]);
+  assert(s1.vehicles.map(v => v.code).join() === '101,102' && s2.vehicles.every(v => v.code === undefined), 'Fahrzeugnummer nur, wenn je Quelle eindeutig (gleicher Link für alle = keine Nummer)');
+  const Z = (src, id, code, lat, extra = {}) => ({ operator: 'Zeus', rawId: id, sourceId: src, code, lat, lon: 8.93, type: 'scooter', priority: src === 'md' ? 1 : 2, ...extra });
+  const dd = C.dedupeVehicles([Z('md', 'ZEU:1', '5430', 48.7700), Z('md', 'ZEU:2', 'SL2AB6', 48.7710), Z('dir', 'f69', '5430', 48.77001, { reportedAt: now }), Z('dir', 'f70', '7777', 48.7800), Z('dir', 'f71', '9999', 48.7700), Z('md', 'ZEU:3', '9999', 48.7900)]);
+  assert(dd.vehicles.length === 5 && dd.stats.codeDuplicates === 1 && dd.dropped[0].v.rawId === 'ZEU:1' && dd.dropped[0].of === 'dir' && dd.vehicles.some(v => v.rawId === 'ZEU:3'),
+    'Gleiche Fahrzeugnummer aus zwei Quellen ≤ 300 m: eins bleibt (jüngste Meldung), gleiche Nummer 2 km entfernt bleibt doppelt');
+  const empty = { 'https://md/gbfs.json': { data: { en: { feeds: [{ name: 'free_bike_status', url: 'https://md/fbs.json' }] } }, last_updated: fresh }, 'https://md/fbs.json': { last_updated: fresh, ttl: 60, data: { bikes: [] } } };
+  const both = { ...empty, ...fb([B('a', 'https://x.app.link/101')]) }, fj = async (u) => ({ ok: !!both[u], status: both[u] ? 200 : 404, json: both[u] });
+  const via = await C.readGbfsWithFallback({ id: 'zl', url: 'https://md/gbfs.json', altUrls: ['https://m/gbfs.json'], operator: 'Zeus' }, fj, { now });
+  const keep = await C.readGbfsWithFallback({ id: 'zl', url: 'https://md/gbfs.json', altUrls: ['https://md/gbfs.json?v=3'], operator: 'Zeus' }, fj, { now });
+  assert(via.vehicles.length === 1 && via.viaAlt?.url === 'https://m/gbfs.json' && via.viaAlt.from === 'https://md/gbfs.json' && keep.vehicles.length === 0 && !keep.viaAlt,
+    'Leerer Hauptfeed: Ersatzfeed auf anderem Host zählt (viaAlt), gleicher Host nicht');
+}
 // M9: virtuelle Stationen getrennt zählen (leere Abstellzone ≠ leere Dockstation)
 {
   const st3 = [S('v1', 52.60, 13.50, { isVirtual: true }), S('v2', 52.61, 13.51, { isVirtual: true, bookable: 2, physicalAvailable: 2 }), S('d1', 52.62, 13.52, { isVirtual: false }), S('d2', 52.63, 13.53)];

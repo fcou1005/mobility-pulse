@@ -5,6 +5,7 @@ import path from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { startExtra } from './fixtures/extra-server.mjs';
 import * as T from '../lib/pulse-track.js';
+import * as CX from '../lib/pulse-context.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
@@ -182,7 +183,7 @@ const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.00
 await writeFile('test/out/calendar.json', calOld);
 // laufender Tag ohne Sekundärunterdrückung (veröffentlicht vor dem 6.11.2026): der nächste Lauf zieht nach
 { const dT = `test/out/cells/${T.dayOf(Date.now())}`; for (const f of (await readdir(dT).catch(() => [])).filter(f => f.endsWith('.json'))) { const doc = JSON.parse(await readFile(path.join(dT, f), 'utf8')); delete doc.suppress; await writeFile(path.join(dT, f), JSON.stringify(doc)); } }
-await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }] }));
+await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }, { name: 'Hallen', url: `${ex.base}/kal/hallen`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0' });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
@@ -196,8 +197,11 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   assert(vd.venues.length === 1 && vd.venues[0].id === 'Q1' && vd.venues[0].cap === 8000 && vd.venues[0].ags === '08416041' && vd.venues[0].web === 'https://testarena.example/' && Number.isFinite(vd.venuesAt),
     'Veranstaltungsorte aus Wikidata: Arena ab 5.000 Plätzen mit Gemeinde, Friedhof und kleine Halle entfallen, deutsche Website bevorzugt');
   const qs = Object.fromEntries(vd.quellen.map(q => [q.name, q]));
-  assert(vd.version === 2 && vd.events.length === 2 && vd.events.some(e => e[1] === 'Band X' && e[3] === 'Q1' && e[7] === 0) && vd.events.some(e => e[1] === 'Messe Test' && e[7] === 1) && qs.Testarena?.n === 1 && qs.Messe?.n === 1 && /robots/.test(qs.Gesperrt?.error || '') && !ex.log.some(x => x.path === '/kal/geheim') && vd.entries === 2,
+  assert(vd.version === 2 && vd.events.length === 3 && vd.events.some(e => e[1] === 'Band X' && e[3] === 'Q1' && e[7] === 0) && vd.events.some(e => e[1] === 'Messe Test' && e[7] === 1) && qs.Testarena?.n === 1 && qs.Messe?.n === 1 && /robots/.test(qs.Gesperrt?.error || '') && !ex.log.some(x => x.path === '/kal/geheim') && vd.entries === 3,
     'Veranstaltungskalender: Termin der Programmseite und ICS-Termin der Arena, 31-tägige Spanne entfällt, robots.txt-Sperre beachtet');
+  const hz = vd.events.find(e => e[1] === 'Heute ohne Zeit');
+  assert(qs.Hallen?.n === 1 && hz?.[7] === 2 && hz[6] === `${ex.base}/kal/hallen` && hz[2] === CX.berlinUtc(T.dayOf(Date.now()), 0, 0),
+    `Veranstaltungskalender: Termin von heute ohne Uhrzeit bleibt (0 Uhr Ortszeit), Name aus …title statt Kartenlink, Adresse = Programmseite (${hz?.[6]})`);
 }
 {
   const wd = T.dayOf(Date.now()), wDay = (await readdir('test/out/weather').catch(() => [])).filter(n => n.endsWith('.json')).map(n => n.slice(0, -5)).sort(), wf = wDay.length ? JSON.parse(await readFile(`test/out/weather/${wDay[0]}.json`, 'utf8')) : null;

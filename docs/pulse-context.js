@@ -8,7 +8,7 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw661t5h';
+import { hourOf, dayOf } from './pulse-track.js?v=mw67jj04';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -243,9 +243,22 @@ export function jsonLdEvents(tree) {
   return out;
 }
 const SKIP_LINK = /^(tickets?( kaufen)?|infos?( & tickets)?|mehr( lesen| infos)?|details?|weiter|kaufen|ticket|tickets & infos|infos & tickets)$/i;
-/** Programmseite (HTML) → Termine: je Link (optional nur Pfade nach linkRe) der nächste Block mit Datum (höchstens 6 Ebenen, < 600 Zeichen) */
+const MON_RE = MONTHS.join('|') + '|maerz';
+const LEAD_RE = new RegExp(`^\\s*(?:\\d{1,2}\\.\\s?(?:\\d{1,2}\\.|${MON_RE})\\s?(?:20\\d{2})?|(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\\.?,?|(?:mo|di|mi|do|fr|sa|so)\\.,?|[-–—,|/:]|\\d{1,2}[:.]\\d{2}\\s*(?:uhr)?)(?=\\s|$)`, 'i');
+/** Name aus Kartentext: Datum, Wochentag und Uhrzeit vorn weg, ab „Einlass“, „Beginn“, „Ausverkauft“, „Sell out“, „Tickets“ abgeschnitten (Lanxess: „07. November 2026 Samstag Sa. Felix Lobrecht Sell out Einlass: …“) */
+export function cleanEventName(s) {
+  let x = ` ${String(s || '')}`.replace(/\s+/g, ' ').replace(/\s(?:sell[ -]?out|ausverkauft|einlass|beginn|tickets?)(?=[\s:]|$).*$/i, '');
+  for (let k = 0; k < 12 && LEAD_RE.test(x); k++) x = x.replace(LEAD_RE, '');
+  return x.replace(/\d{1,2}\.\s?\d{1,2}\.\s?(20\d{2})?|\d{1,2}[:.]\d{2}\s*Uhr/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+const hostOf = (u) => { try { return new URL(u).host.replace(/^www\./, ''); } catch { return ''; } };
+/**
+ * Programmseite (HTML) → Termine: je Link (optional nur Pfade nach linkRe) der nächste Block mit Datum (höchstens 6 Ebenen, < 600 Zeichen).
+ * Links auf andere Seiten (Hallenduo: Kartenlink je Termin) liefern nur den Block, Name dann aus Überschrift oder Element mit Klasse …title/…name,
+ * Adresse ist die Programmseite. Je Termin und Tag eine Zeile, die mit Uhrzeit gewinnt (Lanxess, SAP Arena: Bild- und Textlink je Termin).
+ */
 export function htmlEvents(tree, baseUrl, { link = null } = {}) {
-  const re = link ? new RegExp(link) : null, out = [], seen = new Set();
+  const re = link ? new RegExp(link) : null, out = [], at = new Map(), home = hostOf(baseUrl);
   walk(tree, (a) => {
     if (a.tag !== 'a' || !a.attrs.href) return;
     let href; try { href = new URL(a.attrs.href, baseUrl).href; } catch { return; }
@@ -253,9 +266,15 @@ export function htmlEvents(tree, baseUrl, { link = null } = {}) {
     let el = a, txt = '', dt = null;
     for (let i = 0; i < 6 && el && el.tag !== '#root'; i++, el = el.parent) { txt = textOf(el); if (txt.length > 600) break; dt = parseDateText(txt); if (dt) break; }
     if (!dt) return;
-    let name = textOf(a); if (!name || name.length < 3 || SKIP_LINK.test(name) || /^\W*\d/.test(name)) { let h = null; walk(el, (x) => { if (!h && /^h[1-5]$/.test(x.tag)) h = textOf(x); }); name = h || txt.replace(/\d{1,2}\.\s?\d{1,2}\.\s?(20\d{2})?|\d{1,2}[:.]\d{2}\s*Uhr|Tickets?.*$/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 80); }
-    const key = `${href}|${dt.days[0]}|${dt.time}`; if (seen.has(key)) return; seen.add(key);
-    out.push({ name: name.slice(0, 140), days: dt.days, time: dt.time, text: txt.slice(0, 300), url: href });
+    const ext = hostOf(href) !== home;
+    let name = ext ? '' : textOf(a);
+    if (!name || name.length < 3 || SKIP_LINK.test(name) || /^\W*\d/.test(name)) {
+      let h = null; walk(el, (x) => { if (!h && x !== a && (/^h[1-5]$/.test(x.tag) || /(^|[\s_-])(title|titel|headline|name)([\s_-]|$)/i.test(x.attrs.class || ''))) { const v = cleanEventName(textOf(x)); if (v.length >= 3) h = v; } });
+      name = h || cleanEventName(txt).slice(0, 80);
+    } else name = cleanEventName(name) || name;
+    if (!name) return;
+    const url = ext ? baseUrl : href, key = `${ext ? name : url}|${dt.days[0]}`, ev = { name: name.slice(0, 140), days: dt.days, time: dt.time, text: txt.slice(0, 300), url };
+    const j = at.get(key); if (j == null) { at.set(key, out.length); out.push(ev); } else if (!out[j].time && ev.time) out[j] = ev;
   });
   return out;
 }
