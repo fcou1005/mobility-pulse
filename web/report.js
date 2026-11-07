@@ -8,6 +8,7 @@ import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { decodeFleet } from './pulse-ops.js';
 import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
+import { weatherFor, weatherSvg, WX_CSS } from './weather.js';
 import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
@@ -1686,7 +1687,7 @@ export async function renderForecast(el, ctx) {
       + tile(t('fc.backtest'), evAvg(fc.active || 'pooled') == null ? '—' : pct(evAvg(fc.active || 'pooled')), evAvg('pooled') == null ? t('fc.backtestNone') : t('fc.backtestSub', { n: evDays.length, profile: pct(evAvg('profile')), pooled: pct(evAvg('pooled')) }))
       + tile(t('fc.weather'), fc.weather?.used ? t('fc.weatherOn') : t('fc.weatherOff'), t('fc.weatherSub', { k: fmt(wg.tempRangeK ?? 0, 1), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, kmin: G.wxTempRangeK ?? 5, dmin: G.wxRainDays ?? 2 }))
       + `</div>`;
-    const chart = series ? `<div style="margin-top:var(--s3)">${fcBars(ctx, series, local, el.clientWidth - 40)}</div>` : `<div class="note" style="margin-top:var(--s3)">${t('fc.noMuni')}</div>`;
+    const chart = series ? `<div style="margin-top:var(--s3)">${fcBars(ctx, series, local, el.clientWidth - 40)}<div class="rp-chart fc-wx"></div></div>` : `<div class="note" style="margin-top:var(--s3)">${t('fc.noMuni')}</div>`;
     // Auslastung: erwartete Fahrtbeginne je Fahrzeug gegen den Median der Fahrzeugart (Gruppen ab FC_MIN_FLEET Fahrzeugen)
     const rows = Object.entries(fc.groups || {}).map(([k, g]) => { const [a, op, ty] = k.split('|'); return { k, ags: a, op, ty, fleet: g.fleet, starts: g.start.reduce((x, y) => x + y, 0), perVeh: g.perVeh }; });
     const med = {}; for (const key of new Set(rows.map(r => `${r.op}|${r.ty}`))) { const v = rows.filter(r => `${r.op}|${r.ty}` === key && r.fleet >= FC_MIN_FLEET && r.perVeh != null).map(r => r.perVeh).sort((a, b) => a - b); if (v.length >= 3) med[key] = v[Math.floor(v.length / 2)]; }
@@ -1706,6 +1707,13 @@ export async function renderForecast(el, ctx) {
         + `<h3 style="margin:var(--s3) 0 var(--s1);font-size:14px">${t('fc.topLow', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topLow', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${lo.map(r => line(r, true)).join('')}</tbody></table></div></div></div>`;
     }
     el.innerHTML = title + badge + tiles + chart + body + `<div class="note small" style="margin-top:var(--s3)">${t('fc.note', { min: FC_MIN_FLEET })}</div>`;
+    // Wetter der nächsten 24 Stunden unter den Balken (gleiche x-Achse wie fcBars: W, Rand 4)
+    const wxBox = el.querySelector('.fc-wx');
+    if (wxBox && series && Array.isArray(local)) weatherFor(local.map(([d, h]) => [d, h]), ags, ctx.getJson, ctx.CFG.DATA).then((vals) => {
+      if (!wxBox.isConnected || tok !== s.tok) return; const W = Math.max(300, Math.min(1100, Math.round(el.clientWidth - 40 || 720)));
+      const svg = weatherSvg(vals, { W, pl: 4, pr: 4, hours: local.map(([, h]) => h), esc, svgAttrs: `width="100%" style="display:block;max-width:${W}px"` });
+      wxBox.innerHTML = svg ? `<style>${WX_CSS}.fc-wx text{fill:currentColor;opacity:.75;font-size:11px}.fc-wx .gl{stroke:var(--line);stroke-width:1}.fc-wx rect.hit{fill:transparent}</style>${svg}<div class="note small">${t('wx.legend', { scope: scopeTxt })}</div>` : '';
+    });
   } catch (e) { console.error('Prognose', e); if (tok === s.tok) el.innerHTML = title + emptyBox(t('rep.notComputable'), t('fc.noneHint')); }
   finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
 }

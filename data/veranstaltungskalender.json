@@ -1,0 +1,12 @@
+{
+  "hinweis": "Programmseiten und Kalender großer Veranstaltungsorte für die Liste der Veranstaltungen und das Merkmal event der Prognose (ab veranstaltungenAb in data/ereignisse.json). Je Quelle: name, url (öffentliche Programmseite oder ICS-Kalender), art = seite | ics, ort = Wikidata-ID des Orts (siehe veranstaltungen.json → venues) oder orte = { Stichwort: Wikidata-ID } für Seiten mehrerer Orte (Stichwort mit null schließt aus, steht vor dem allgemeineren). link = Muster für Links zu einzelnen Terminen (optional). Gelesen wird schema.org-Event (JSON-LD), sonst Datum und Uhrzeit neben dem Link. Kein Konto, kein Schlüssel; robots.txt wird beachtet; je Quelle höchstens alle 6 Stunden. Neue Quelle: Seite mit Datum im HTML (nicht erst per JavaScript geladen) eintragen und nach dem nächsten Lauf in veranstaltungen.json → quellen die Zahl n prüfen.",
+  "quellen": [
+    { "name": "Uber Arena Berlin", "url": "https://www.uber-arena.de/events-tickets", "art": "seite", "ort": "Q265463", "link": "/events/detail/" },
+    { "name": "Barclays Arena Hamburg", "url": "https://www.barclays-arena.de/events", "art": "seite", "ort": "Q265107", "link": "/events/[a-z0-9-]+$" },
+    { "name": "Lanxess Arena Köln", "url": "https://www.lanxess-arena.de/events-tickets/eventkalender", "art": "seite", "ort": "Q310525", "link": "/eventdetail/" },
+    { "name": "Hallenduo Stuttgart (Porsche-Arena, Schleyer-Halle)", "url": "https://www.hallenduo.de/de/home", "art": "seite", "orte": { "Porsche-Arena": "Q536202", "Schleyer-Halle": "Q648057" } },
+    { "name": "SAP Arena Mannheim", "url": "https://saparena.de/events/", "art": "seite", "ort": "Q125432", "link": "/events/[a-z0-9-]+" },
+    { "name": "Olympiapark München", "url": "https://www.olympiapark.de/de/veranstaltungen/", "art": "seite", "orte": { "Kleine Olympiahalle": null, "Olympia-Eissportzentrum": null, "Olympiahalle": "Q48849", "Olympiastadion": "Q131610" } },
+    { "name": "ZAG Arena Hannover", "url": "https://www.zag-arena-hannover.de/", "art": "seite", "ort": "Q266140", "link": "/veranstaltung/" }
+  ]
+}

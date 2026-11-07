@@ -1176,17 +1176,17 @@ let sportCurated = [];
 }
 
 // Veranstaltungen an großen Orten (lib/pulse-context.js VENUES): Orte ab 5.000 Plätzen aus Wikidata (CC0, wöchentlich, Gemeinde über die Grenzen),
-// Veranstaltungen dort aus der Ticketmaster Discovery API (kostenloser Schlüssel TICKETMASTER_KEY, Kontingent 5.000 Abrufe am Tag; nur Orte in Gemeinden
-// mit Sharing-Daten, je Lauf höchstens VENUES.perRun Orte, jeder alle 6 h; 14 Tage voraus, 60 Tage zurück) → veranstaltungen.json (Liste mit Ort,
-// Adresse, Plätzen, Kategorie). In die Prognose wie data/ereignisse.json erst ab veranstaltungenAb. WIKIDATA_URL leer = keine Orte; ohne Schlüssel nur Orte.
+// Termine aus den öffentlichen Programmseiten bzw. ICS-Kalendern der Orte (data/veranstaltungskalender.json; kein Konto, kein Schlüssel; robots.txt
+// wird beachtet; je Lauf höchstens VENUES.perRun Quellen, jede alle 6 h; 14 Tage voraus, 60 Tage behalten) → veranstaltungen.json (Liste mit Ort,
+// Adresse, Plätzen). In die Prognose wie data/ereignisse.json erst ab veranstaltungenAb. WIKIDATA_URL leer = keine Orte; KALENDER_FILE leer = keine Termine.
 let venueCurated = [];
 {
   const vf = path.join(DATA, 'veranstaltungen.json');
   try {
     const prev = existsSync(vf) ? JSON.parse(await readFile(vf, 'utf8')) : null;
-    let venues = Array.isArray(prev?.venues) ? prev.venues : [], venuesAt = prev?.venuesAt ?? null, rows = Array.isArray(prev?.events) ? prev.events : [];
-    const fetchedAt = { ...(prev?.fetchedAt || {}) }, V = CX.VENUES, wd = process.env.WIKIDATA_URL ?? 'https://query.wikidata.org/sparql';
-    const get = async (url, ms) => { const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), ms); try { return await fetch(url, { headers: { 'User-Agent': UA, accept: 'application/json' }, signal: ctrl.signal }); } finally { clearTimeout(tm); } };
+    let venues = Array.isArray(prev?.venues) ? prev.venues : [], venuesAt = prev?.venuesAt ?? null, rows = Array.isArray(prev?.events) && prev.version >= 2 ? prev.events : [];
+    const fetched = { ...(prev?.version >= 2 ? prev.fetched || {} : {}) }, robots = { ...(prev?.robots || {}) }, V = CX.VENUES, wd = process.env.WIKIDATA_URL ?? 'https://query.wikidata.org/sparql';
+    const get = async (url, ms, accept = 'application/json') => { const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), ms); try { return await fetch(url, { headers: { 'User-Agent': UA, accept }, signal: ctrl.signal, redirect: 'follow' }); } finally { clearTimeout(tm); } };
     if (wd && (!venuesAt || now - venuesAt > V.refreshDays * 86400e3)) {
       try {
         const r = await get(`${wd}?format=json&query=${encodeURIComponent(CX.wikidataVenueQuery())}`, 60e3); if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1194,30 +1194,32 @@ let venueCurated = [];
         if (list.length) { venues = list.map(v => ({ ...v, ags: index ? C.assignMunicipality(index, v.lat, v.lon)?.ags ?? null : null })); venuesAt = now; }
       } catch (e) { log(`Veranstaltungsorte (Wikidata): ${e?.message || e}`); }
     }
-    const covered = venues.filter(v => v.ags && munis.has(v.ags)), key = process.env.TICKETMASTER_KEY, tm = process.env.TICKETMASTER_URL ?? 'https://app.ticketmaster.com/discovery/v2';
-    if (key && tm && covered.length) {
-      const due = covered.filter(v => !(now - (fetchedAt[v.id] || 0) < V.refreshH * 3600e3)).slice(0, V.perRun), iso = (t) => new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z');
-      const got = []; let ok = 0, fail = 0; const t0 = Date.now();
-      for (const v of due) {
-        if (Date.now() - t0 > 45e3) break;
-        try {
-          const r = await get(`${tm}/events.json?apikey=${encodeURIComponent(key)}&latlong=${v.lat},${v.lon}&radius=${V.radiusKm}&unit=km&startDateTime=${iso(now - 12 * 3600e3)}&endDateTime=${iso(now + V.aheadDays * 86400e3)}&size=200&sort=date,asc&locale=*`, 15e3);
-          if (r.status === 429) { fail++; break; } if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          got.push(...CX.parseTmEvents(await r.json())); fetchedAt[v.id] = now; ok++;
-        } catch { fail++; }
-        await new Promise(res => setTimeout(res, 600)); // höchstens 2 Abrufe je Sekunde
-      }
-      // neu Abgerufenes ersetzt Gespeichertes desselben Orts im abgefragten Zeitraum (verschobene oder abgesagte Termine verschwinden)
-      const doneIds = new Set(due.filter(v => fetchedAt[v.id] === now).map(v => v.id));
-      rows = [...rows.filter(r => !(doneIds.has(r[3]) && r[2] >= now - 12 * 3600e3)), ...CX.matchEvents(got, venues)];
-      log(`Veranstaltungen (Ticketmaster): ${ok} Orte abgefragt${fail ? `, ${fail} Fehler` : ''}, ${got.length} Termine`);
+    const kf = process.env.KALENDER_FILE ?? path.join(ROOT, 'data', 'veranstaltungskalender.json');
+    const srcs = kf && existsSync(kf) ? (JSON.parse(await readFile(kf, 'utf8')).quellen || []).filter(q => q?.url && (q.ort || q.orte)).map(q => ({ ...q, id: q.id || q.url, art: q.art === 'ics' ? 'ics' : 'seite' })) : [];
+    const due = srcs.filter(q => !(now - (fetched[q.id]?.at || 0) < V.refreshH * 3600e3)).slice(0, V.perRun), t0 = Date.now(), lines = [];
+    for (const q of due) {
+      if (Date.now() - t0 > 60e3) break;
+      const u = new URL(q.url), host = u.origin;
+      try {
+        if (!robots[host] || now - robots[host].at > 7 * 86400e3) { let txt = ''; try { const r = await get(`${host}/robots.txt`, 10e3, 'text/plain'); if (r.ok) txt = (await r.text()).slice(0, 20e3); } catch { /* ohne robots.txt: erlaubt */ } robots[host] = { at: now, txt }; }
+        if (!CX.robotsAllowed(robots[host].txt, u.pathname + u.search)) { fetched[q.id] = { at: now, error: 'robots.txt verbietet den Abruf' }; lines.push(`${q.name || host}: robots.txt`); continue; }
+        const r = await get(q.url, 20e3, q.art === 'ics' ? 'text/calendar' : 'text/html'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const body = (await r.text()).slice(0, V.maxBytes), got = CX.calendarRows(body, q);
+        // Neues ersetzt Gespeichertes dieser Quelle ab jetzt (verschobene, abgesagte Termine verschwinden); Vergangenes bleibt
+        rows = [...rows.filter(x => !(String(x[0]).startsWith(`${q.id}|`) && x[2] >= now - 6 * 3600e3)), ...got.filter(x => x[2] >= now - 6 * 3600e3)];
+        fetched[q.id] = { at: now, n: got.length }; lines.push(`${q.name || host} ${got.length}`);
+      } catch (e) { fetched[q.id] = { ...(fetched[q.id] || {}), at: now, error: String(e?.message || e).slice(0, 80) }; lines.push(`${q.name || host}: ${e?.message || e}`); }
+      await new Promise(res => setTimeout(res, 500));
     }
-    // Fenster, und je Ort und Beginn nur eine Zeile (Pakete, Logen)
-    const seen = new Set(); rows = rows.filter(r => r[2] >= now - V.pastDays * 86400e3 && r[2] <= now + V.aheadDays * 86400e3).sort((a, b) => a[2] - b[2] || String(a[3]).localeCompare(String(b[3])) || a[1].length - b[1].length).filter(r => { const k = `${r[3]}|${r[2]}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    if (lines.length) log(`Veranstaltungskalender: ${lines.join(' · ')}`);
+    // Fenster; je Ort und Beginn nur eine Zeile
+    const seen = new Set(); rows = rows.filter(r => r[2] >= now - V.pastDays * 86400e3 && r[2] <= now + V.aheadDays * 86400e3).sort((a, b) => a[2] - b[2] || String(a[3]).localeCompare(String(b[3]))).filter(r => { const k = `${r[3]}|${r[2]}`; if (seen.has(k)) return false; seen.add(k); return true; });
     venueCurated = CX.checkCurated({ ereignisse: CX.venueEntries(rows, venues, { now }) }).ok;
-    await writeFile(vf, JSON.stringify({ version: 1, at: now, sources: { orte: 'Wikidata (CC0 1.0): Bauwerke in Deutschland mit Kapazität (P1083) ab ' + V.minCap + ' Plätzen', veranstaltungen: key ? 'Ticketmaster Discovery API (Nutzungsbedingungen von Ticketmaster: nur nichtkommerziell, Speicherung begrenzt – hier 60 Tage)' : 'keine (TICKETMASTER_KEY fehlt)' },
-      venuesAt, venueFields: 'id (Wikidata), name, cap (Plätze), lat, lon, web, addr, types, ags', venues, fetchedAt, eventFields: ['id', 'name', 'beginn_utc_ms', 'ort', 'kategorie', 'genre', 'url'], events: rows, entries: venueCurated.length }));
-    log(`Veranstaltungsorte: ${venues.length} (${covered.length} in Gemeinden mit Sharing-Daten), ${rows.length} Termine, ${venueCurated.length} für die Prognose${key ? '' : ' · ohne TICKETMASTER_KEY keine Termine'}`);
+    const covered = venues.filter(v => v.ags && munis.has(v.ags));
+    await writeFile(vf, JSON.stringify({ version: 2, at: now, sources: { orte: 'Wikidata (CC0 1.0): Bauwerke in Deutschland mit Kapazität (P1083) ab ' + V.minCap + ' Plätzen', termine: 'öffentliche Programmseiten und Kalender der Orte (data/veranstaltungskalender.json), je Termin mit Link; robots.txt beachtet' },
+      venuesAt, venueFields: 'id (Wikidata), name, cap (Plätze), lat, lon, web, addr, types, ags', venues, quellen: srcs.map(q => ({ id: q.id, name: q.name || null, url: q.url, art: q.art, ...(fetched[q.id] || {}) })), fetched, robots,
+      eventFields: ['id', 'name', 'beginn_utc_ms', 'ort', 'art', 'genre', 'url', 'ohneZeit (0 = mit Uhrzeit, 1 = mehrtägig, 2 = ohne Uhrzeit)'], events: rows, entries: venueCurated.length }));
+    log(`Veranstaltungsorte: ${venues.length} (${covered.length} in Gemeinden mit Sharing-Daten), ${srcs.length} Kalender, ${rows.length} Termine, ${venueCurated.length} für die Prognose`);
   } catch (e) { log(`Veranstaltungen: ${e?.message || e}`); }
 }
 
@@ -1295,7 +1297,7 @@ if (boundaries) {
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
     '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
     '- Umgebungsereignisse (`incidents/<Tag>.json`, nur Kennzeichen je Gemeinde und Stunde, keine Meldungstexte): Wetterwarnungen des Deutschen Wetterdienstes (DWD Open Data, über Bright Sky); Sperrungen und Staus auf Autobahnen aus der Verkehrsinformation der Autobahn GmbH des Bundes (verkehr.autobahn.de; ausdrückliche Nutzungsbedingungen der Schnittstelle nicht gefunden, Quelle: Die Autobahn GmbH des Bundes). Streiks und Veranstaltungen aus der gepflegten Liste `data/ereignisse.json` im Code-Zweig (je Eintrag mit Quelle).',
-    '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine aus der Ticketmaster Discovery API (Nutzungsbedingungen von Ticketmaster, nur nichtkommerziell; Termine werden höchstens 60 Tage behalten, je Termin mit Link zu Ticketmaster).',
+    '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine (Name, Beginn, Ort, Link) aus den öffentlichen Programmseiten und Kalendern der Orte (Quelle je Termin verlinkt; `data/veranstaltungskalender.json`), höchstens 60 Tage behalten.',
     '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
     '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',

@@ -497,21 +497,37 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
     'Sport: Merkmal event in Stuttgart 17–21 Uhr, nicht davor, danach oder anderswo');
   assert(resolve('Münster', 'NW') === null && CX.sportEntries(rows, { ...venues, vereine: { 'VfB Stuttgart': { ort: 'Nirgendwo', land: 'BW' } } }, { now, resolve }).noAgs.join() === 'Nirgendwo (BW)', 'Sport: Ort ohne Gemeinde gemeldet, Land muss passen');
 }
-// ---------- Veranstaltungsorte (Wikidata) und Termine (Ticketmaster) → Veranstaltungen (lib/pulse-context.js)
+// ---------- Veranstaltungsorte (Wikidata) und Termine aus Programmseiten und ICS → Veranstaltungen (lib/pulse-context.js)
 {
   const B = (id, l, c, p, t) => ({ i: { value: `http://www.wikidata.org/entity/${id}` }, l: { value: l }, c: { value: String(c) }, p: { value: p }, types: { value: t } });
   const vs = CX.parseVenues({ results: { bindings: [B('Q10', 'Arena', 15500, 'Point(9.2 48.79)', 'Mehrzweckhalle'), B('Q10', 'Arena', 15000, 'Point(9.2 48.79)', 'Mehrzweckhalle'), B('Q11', 'Friedhof X', 40000, 'Point(9.1 48.7)', 'Waldfriedhof'),
     B('Q12', 'Stadion', 60000, 'Point(9.232 48.792)', 'Fußballstadion'), B('Q13', 'Klein', 4000, 'Point(9 48)', 'Mehrzweckhalle'), B('Q14', 'Ohne Ort', 9000, '', 'Arena')] } });
   assert(vs.map(v => `${v.id}:${v.cap}`).join() === 'Q12:60000,Q10:15500', 'Orte: größte Kapazität je Objekt, Friedhof, zu klein und ohne Koordinate entfallen, nach Plätzen sortiert');
-  const at = Date.parse('2026-11-20T19:00:00Z');
-  const E = (id, name, dt, lat, lon, extra = {}) => ({ id, name, url: `https://tm/${id}`, dates: { start: dt ? { dateTime: dt } : { localDate: '2026-11-20' }, status: { code: extra.status || 'onsale' } }, classifications: [{ segment: { name: 'Music' }, genre: { name: 'Undefined' } }], _embedded: { venues: [{ name: 'Arena', location: { latitude: String(lat), longitude: String(lon) } }] } });
-  const evs = CX.parseTmEvents({ _embedded: { events: [E('a', 'Konzert', '2026-11-20T19:00:00Z', 48.7902, 9.2003), E('b', 'Konzert | VIP', '2026-11-20T19:00:00Z', 48.7901, 9.2001), E('c', 'Abgesagt', '2026-11-21T19:00:00Z', 48.79, 9.2, { status: 'cancelled' }),
-    E('d', 'Ohne Zeit', null, 48.79, 9.2), E('e', 'Nebenan', '2026-11-22T19:00:00Z', 48.7955, 9.2), E('f', 'Stadionkonzert', '2026-11-23T17:00:00Z', 48.7921, 9.2318)] } });
-  assert(evs.length === 4 && evs[0].genre === null && evs[0].seg === 'Music', 'Termine: abgesagte und zeitlose entfallen, Genre „Undefined“ leer');
-  const rows = CX.matchEvents(evs, vs);
-  assert(rows.length === 2 && rows[0][1] === 'Konzert' && rows[0][3] === 'Q10' && rows[1][3] === 'Q12', 'Zuordnung: nächster Ort ≤ 400 m, gleiche Zeit am gleichen Ort einmal (kürzester Name), 600 m daneben entfällt');
-  const vA = vs.map(v => ({ ...v, ags: '08111000' })), ent = CX.venueEntries(rows, vA, { now: at - 86400e3 });
-  assert(ent.length === 1 && ent[0].von === '2026-11-20T19:00' && ent[0].bis === '2026-11-20T23:00' && ent[0].gebiet.ags[0] === '08111000' && /15500 Plätze/.test(ent[0].titel) && ent[0].quelle === 'https://tm/a',
-    `Einträge: Beginn 20 Uhr → 19–23 Uhr Ortszeit, mit Plätzen; Termin in 3+ Tagen noch nicht (${ent.map(e => e.von).join()})`);
-  assert(CX.venueEntries(rows, vA.map(v => ({ ...v, cap: 4000 })), { now: at - 86400e3 }).length === 0 && CX.venueEntries(rows, vs, { now: at - 86400e3 }).length === 0, 'Einträge: nur Orte ab 5.000 Plätzen und mit Gemeinde');
+  const D = (s) => { const r = CX.parseDateText(s); return r ? `${r.days[0]}${r.days.length > 1 ? `..${r.days.at(-1)}` : ''} ${r.time || '--'}` : null; };
+  const cases = [['Konzert Samstag, 07.11.2026, 20:00 Uhr Tokio Hotel', '2026-11-07 20:00'], ['Sa. 07.11.2026 20:00 Uhr Felix Lobrecht Einlass: 18:30 Uhr Beginn: 20:00 Uhr', '2026-11-07 20:00'],
+    ['Einlass: 18:00 Uhr Beginn: 19:30 Uhr 10.11.2026', '2026-11-10 --'], ['04. - 05.12.2026 SDP', '2026-12-04..2026-12-05 --'], ['11.11.2026 - 15.11.2026 Reitturnier', '2026-11-11..2026-11-15 --'],
+    ['Dienstag, 10. November 2026, 19:30 Uhr, Einlass: 18:00 Uhr', '2026-11-10 19:30'], ['koRn 13.11.2026 // 19:30 -', '2026-11-13 19:30'], ['30.12. - 02.01.2027 Show', '2026-12-30..2027-01-02 --'], ['ohne Datum 20:00 Uhr', null]];
+  const bad = cases.filter(([s, w]) => D(s) !== w).map(([s, w]) => `${s} → ${D(s)} (erwartet ${w})`);
+  assert(!bad.length, `Datum und Uhrzeit aus Programmtext (Beginn vor Einlass, Spannen, ausgeschriebene Monate, Jahreswechsel)${bad.length ? ': ' + bad.join('; ') : ''}`);
+  assert(CX.berlinUtc('2026-11-07', 20, 0) === Date.parse('2026-11-07T19:00:00Z') && CX.berlinUtc('2026-07-01', 20, 30) === Date.parse('2026-07-01T18:30:00Z'), 'Ortszeit → UTC (Winter- und Sommerzeit)');
+  const page = `<html><body><div class="list"><div class="card"><span>Konzert</span><span>Samstag, 07.11.2026, 20:00 Uhr</span><a href="/events/detail/band-x/2026-11-07">Band X</a><a href="/events/detail/band-x/2026-11-07">Tickets &amp; Infos</a></div>
+    <div class="card"><h3>Reitturnier</h3><p>11.11.2026 - 15.11.2026</p><a href="/events/detail/reiten">Tickets</a></div><div class="card"><h3>Tour</h3><p>07.01. - 06.02.2027</p><a href="/events/detail/tour">Infos</a></div>
+    <div><a href="/impressum">Impressum</a></div><script>var x = "<a href='/events/detail/fake'>01.01.2027</a>";</script></div></body></html>`;
+  const tree = CX.htmlTree(page), hev = CX.htmlEvents(tree, 'https://arena.example/programm', { link: '/events/detail/' });
+  assert(hev.length === 3 && hev[0].name === 'Band X' && hev[0].time === '20:00' && hev[1].name === 'Reitturnier' && hev[1].days.length === 5 && hev[2].days.length === 31 && hev.every(e => !e.url.includes('fake')), 'Programmseite: Name aus Link oder Überschrift, Uhrzeit, Spannen; Skripte werden nicht gelesen');
+  const rows = CX.calendarRows(page, { id: 'arena', url: 'https://arena.example/programm', ort: 'Q10', link: '/events/detail/' });
+  assert(rows.length === 6 && rows[0][1] === 'Band X' && rows[0][2] === Date.parse('2026-11-07T19:00:00Z') && rows[0][7] === 0 && rows[1][7] === 1 && rows.filter(r => r[1] === 'Reitturnier').length === 5 && !rows.some(r => r[1] === 'Tour') && rows.every(r => r[3] === 'Q10'),
+    `Zeilen: Uhrzeit → Beginn UTC, mehrtägig je Tag (ohneZeit 1), Tourneen über 5 Tage entfallen (${rows.length} Zeilen)`);
+  const ld = `<script type="application/ld+json">{"@type":"ItemList","itemListElement":[{"@type":"Event","name":"Let's Dance","startDate":"2026-11-07 20:00","location":{"@type":"Place","name":"Olympiahalle"}},{"@type":"MusicEvent","name":"Klein","startDate":"2026-11-08 19:00","location":{"name":"Kleine Olympiahalle"}},{"@type":"SportsEvent","name":"Spiel","startDate":"2026-11-09","location":{"name":"Olympiastadion"}}]}</script>`;
+  const lr = CX.calendarRows(ld, { id: 'op', url: 'https://op.example/', orte: { 'Kleine Olympiahalle': null, Olympiahalle: 'Q10', Olympiastadion: 'Q12' } });
+  assert(lr.length === 2 && lr[0][3] === 'Q10' && lr[0][2] === Date.parse('2026-11-07T19:00:00Z') && lr[1][3] === 'Q12' && lr[1][4] === 'Sports' && lr[1][7] === 2, 'JSON-LD (ItemList): Ort je Stichwort, „Kleine Olympiahalle“ ausgeschlossen, Art aus @type, Tag ohne Uhrzeit (ohneZeit 2)');
+  const ics = 'BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Messe X\r\nDTSTART;VALUE=DATE:20261120\r\nLOCATION:Halle 1\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nSUMMARY:Konzert\r\n  mit Umbruch\r\nDTSTART:20261121T190000Z\r\nURL:https://x.example/k\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nSUMMARY:Abgesagt\r\nDTSTART;TZID=Europe/Berlin:20261122T200000\r\nSTATUS:CANCELLED\r\nEND:VEVENT\r\nEND:VCALENDAR';
+  const ir = CX.calendarRows(ics, { id: 'ics', url: 'https://x.example/cal.ics', art: 'ics', ort: 'Q10' });
+  assert(ir.length === 2 && ir[0][1] === 'Messe X' && ir[0][7] === 1 && ir[1][1] === 'Konzert mit Umbruch' && ir[1][2] === Date.parse('2026-11-21T19:00:00Z') && ir[1][6] === 'https://x.example/k', 'ICS: ganztägig, UTC-Zeit, entfaltete Zeilen, abgesagte entfallen');
+  const vA = vs.map(v => ({ ...v, ags: '08111000' })), ent = CX.venueEntries([...rows, ...lr], vA, { now: Date.parse('2026-11-06T12:00:00Z') });
+  const e1 = ent.find(e => e.titel.startsWith('Band X')), e2 = ent.find(e => e.titel.startsWith('Spiel'));
+  assert(e1?.von === '2026-11-07T19:00' && e1.bis === '2026-11-07T23:00' && /15500 Plätze/.test(e1.titel) && e2?.von === '2026-11-09T17:00' && e2.bis === '2026-11-09T23:00' && !ent.some(e => e.von.startsWith('2026-11-11')),
+    `Einträge: Beginn 20 Uhr → 19–23 Uhr; ohne Uhrzeit 17–23 Uhr; nur bis 3 Tage voraus (${ent.map(e => e.von).join()})`);
+  assert(CX.venueEntries(rows, vA.map(v => ({ ...v, cap: 4000 })), { now: Date.parse('2026-11-06T12:00:00Z') }).length === 0 && CX.venueEntries(rows, vs, { now: Date.parse('2026-11-06T12:00:00Z') }).length === 0, 'Einträge: nur Orte ab 5.000 Plätzen und mit Gemeinde');
+  assert(CX.robotsAllowed('User-agent: *\nDisallow: /intern\nAllow: /intern/frei', '/intern/x') === false && CX.robotsAllowed('User-agent: *\nDisallow: /intern\nAllow: /intern/frei', '/intern/frei/y') && CX.robotsAllowed('User-agent: other\nDisallow: /', '/x') && CX.robotsAllowed('', '/x'), 'robots.txt: Disallow, längeres Allow, fremder User-agent, leer');
 }

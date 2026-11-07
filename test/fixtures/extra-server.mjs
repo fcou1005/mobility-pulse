@@ -78,11 +78,13 @@ export async function startExtra() {
       return json({ results: { bindings: [B('Q1', 'Testarena', 8000, 'Point(9.06 48.52)', 'Mehrzweckhalle', 'https://testarena.example/en/'), B('Q1', 'Testarena', 8000, 'Point(9.06 48.52)', 'Mehrzweckhalle', 'https://testarena.example/'),
         B('Q2', 'Waldfriedhof', 20000, 'Point(9.07 48.53)', 'Friedhof'), B('Q3', 'Kleine Halle', 3000, 'Point(9.05 48.51)', 'Mehrzweckhalle')] } });
     }
-    if (kind === 'tm') { // Ticketmaster Discovery: Konzert in 5 h an der Arena, dasselbe als Paket, Testeintrag, weit weg, ohne Uhrzeit
-      if (u.searchParams.get('apikey') !== 'tm-test') return json({ fault: 'Invalid ApiKey' }, 401);
-      const t = new Date(Math.floor(Date.now() / 3600e3 + 5) * 3600e3).toISOString().replace('.000Z', 'Z'), V = (lat, lon) => ({ _embedded: { venues: [{ name: 'Testarena', location: { latitude: String(lat), longitude: String(lon) } }] } });
-      const E = (id, name, dt, lat, lon) => ({ id, name, url: `https://www.ticketmaster.de/event/${id}`, dates: { start: dt ? { dateTime: dt, localDate: dt.slice(0, 10) } : { localDate: '2026-12-01' }, status: { code: 'onsale' } }, classifications: [{ segment: { name: 'Music' }, genre: { name: 'Rock' } }], ...V(lat, lon) });
-      return json({ _embedded: { events: [E('e1', 'Band X', t, 48.5202, 9.0601), E('e2', 'Band X | Premium Packages', t, 48.5202, 9.0601), E('e3', 'Evelyn Test GCP', t, 48.5202, 9.0601), E('e4', 'Fern', t, 52.5, 13.4), E('e5', 'Ohne Zeit', null, 48.52, 9.06)] }, page: { totalElements: 5 } });
+    if (kind === 'robots.txt') return (res.writeHead(200, { 'content-type': 'text/plain' }), res.end('User-agent: *\nDisallow: /kal/geheim\n'));
+    if (kind === 'kal') { // Programmseite der Testarena (Termin morgen 20 Uhr, mehrtägig, Tournee), ICS-Kalender, gesperrte Seite
+      const d = new Date(Date.now() + 86400e3), dd = `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()}`;
+      const ymd = d.toISOString().slice(0, 10).replace(/-/g, '');
+      if (file === 'programm') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(`<html><body><div class="e"><span>${dd}, 20:00 Uhr</span><a href="/kal/detail/x">Band X</a></div><div class="e"><h3>Festival</h3><p>01.01.2030 - 31.01.2030</p><a href="/kal/detail/f">Infos</a></div></body></html>`); }
+      if (file === 'cal.ics') { res.writeHead(200, { 'content-type': 'text/calendar' }); return res.end(`BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Messe Test\r\nDTSTART;VALUE=DATE:${ymd}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`); }
+      return json({}, 404);
     }
     if (kind === 'getmatchdata') { // OpenLigaDB: bl1 mit Heimspiel in 2 h (Testverein → Tübingen), unbekanntem Heimverein, altem Spiel, Spiel ohne Anstoß; bl2 leer; bl3 Fehler
       const [, , lg] = u.pathname.split('/'), t = Math.floor(Date.now() / 3600e3 + 2) * 3600e3 + 30 * 60e3, iso = (x) => new Date(x).toISOString().replace('.000Z', 'Z');

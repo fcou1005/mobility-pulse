@@ -8,7 +8,7 @@ import * as T from '../lib/pulse-track.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -182,8 +182,9 @@ const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.00
 await writeFile('test/out/calendar.json', calOld);
 // laufender Tag ohne Sekundärunterdrückung (veröffentlicht vor dem 6.11.2026): der nächste Lauf zieht nach
 { const dT = `test/out/cells/${T.dayOf(Date.now())}`; for (const f of (await readdir(dT).catch(() => [])).filter(f => f.endsWith('.json'))) { const doc = JSON.parse(await readFile(path.join(dT, f), 'utf8')); delete doc.suppress; await writeFile(path.join(dT, f), JSON.stringify(doc)); } }
+await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, TICKETMASTER_URL: `${ex.base}/tm`, TICKETMASTER_KEY: 'tm-test', FORECAST_EVERY_MIN: '0' });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0' });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 {
   const sp = JSON.parse(await readFile('test/out/sport.json', 'utf8')), e = sp.entries[0] || {};
@@ -194,8 +195,9 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   const vraw = await readFile('test/out/veranstaltungen.json', 'utf8'), vd = JSON.parse(vraw), ev = vd.events[0] || [];
   assert(vd.venues.length === 1 && vd.venues[0].id === 'Q1' && vd.venues[0].cap === 8000 && vd.venues[0].ags === '08416041' && vd.venues[0].web === 'https://testarena.example/' && Number.isFinite(vd.venuesAt),
     'Veranstaltungsorte aus Wikidata: Arena ab 5.000 Plätzen mit Gemeinde, Friedhof und kleine Halle entfallen, deutsche Website bevorzugt');
-  assert(vd.events.length === 1 && ev[1] === 'Band X' && ev[3] === 'Q1' && ev[4] === 'Music' && vd.entries === 1 && vd.fetchedAt.Q1 > 0 && !vraw.includes('tm-test') && ex.log.some(x => x.path === '/tm/events.json' && x.q.latlong === '48.52,9.06' && x.q.radius === '1'),
-    'Veranstaltungen (Ticketmaster): Termin der Arena zugeordnet, Paket zusammengefasst, Test, ferne und zeitlose Termine entfallen, Schlüssel nicht im Datenstand');
+  const qs = Object.fromEntries(vd.quellen.map(q => [q.name, q]));
+  assert(vd.version === 2 && vd.events.length === 2 && vd.events.some(e => e[1] === 'Band X' && e[3] === 'Q1' && e[7] === 0) && vd.events.some(e => e[1] === 'Messe Test' && e[7] === 1) && qs.Testarena?.n === 1 && qs.Messe?.n === 1 && /robots/.test(qs.Gesperrt?.error || '') && !ex.log.some(x => x.path === '/kal/geheim') && vd.entries === 2,
+    'Veranstaltungskalender: Termin der Programmseite und ICS-Termin der Arena, 31-tägige Spanne entfällt, robots.txt-Sperre beachtet');
 }
 {
   const wd = T.dayOf(Date.now()), wDay = (await readdir('test/out/weather').catch(() => [])).filter(n => n.endsWith('.json')).map(n => n.slice(0, -5)).sort(), wf = wDay.length ? JSON.parse(await readFile(`test/out/weather/${wDay[0]}.json`, 'utf8')) : null;
