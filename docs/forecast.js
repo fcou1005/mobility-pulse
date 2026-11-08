@@ -5,15 +5,15 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw7lh3kx';
-import * as CX from './pulse-context.js?v=mw7lh3kx';
-import * as SP from './pulse-spots.js?v=mw7lh3kx';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw7lh3kx';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7lh3kx';
-import { toCsv } from './pulse-report.js?v=mw7lh3kx';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw7lh3kx';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw7lh3kx';
-import { mapKeys } from './mapkeys.js?v=mw7lh3kx';
+import * as FC from './pulse-forecast.js?v=mw7ly33p';
+import * as CX from './pulse-context.js?v=mw7ly33p';
+import * as SP from './pulse-spots.js?v=mw7ly33p';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw7ly33p';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7ly33p';
+import { toCsv } from './pulse-report.js?v=mw7ly33p';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw7ly33p';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw7ly33p';
+import { mapKeys } from './mapkeys.js?v=mw7ly33p';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -369,10 +369,13 @@ function envHtml(ctx, L, { title = true } = {}) {
     const e = M?.effects?.[k] || {}, isWx = ['cold', 'warm', 'rain'].includes(k), inv = k === 'cold'; // kalt: Merkmal ≤ 0, „10 K kälter“ = exp(−b)
     const f = e.b == null ? null : Math.exp(inv ? -e.b : e.b), lo = e.b == null ? null : inv ? 1 / e.hi : e.lo, hi = e.b == null ? null : inv ? 1 / e.lo : e.hi;
     const sup = E?.support?.[k], n = isWx ? e.n : (sup ? sup.rows + sup.memRows : e.n), days = isWx ? e.days : (sup ? sup.days + sup.memDays : e.days);
-    const st = isWx ? (wxUsed ? 'on' : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : n > 0 ? 'wait' : 'none';
+    let st = isWx ? (wxUsed ? 'on' : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : n > 0 ? 'wait' : 'none';
+    // Lernphase: erfasst, aber noch zurückgehalten (Sport, Veranstaltungen, Volksfeste ab E.pendingFrom) – Erfahrung = was sie kennzeichnen würden
+    if (!isWx && st === 'none' && sup?.pending?.rows) return { k, f, lo, hi, n: sup.pending.rows, days: sup.pending.days, st: 'held' };
     return { k, f, lo, hi, n, days, st };
   });
-  const chip = (st) => `<span class="fv-chip${st === 'on' ? ' A' : st === 'ready' ? ' B' : ''}">${t(`fv.envSt.${st}`)}</span>`;
+  const heldFrom = E?.pendingFrom && Number.isFinite(Date.parse(E.pendingFrom)) ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(E.pendingFrom)) : '–';
+  const chip = (st) => `<span class="fv-chip${st === 'on' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: heldFrom })}</span>`;
   const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}</td><td>${chip(r.st)}</td></tr>`).join('')}</tbody></table></div>`;
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(' · ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
@@ -782,6 +785,13 @@ async function fillEventsMain(box, ctx, sel, S0) {
     const cities = [...by].sort((a, b) => b[1] - a[1]).slice(0, 14);
     if (cities.length) html += `<div class="fv-ev-cities" role="list" aria-label="${esc(t('fv.evCities'))}">${cities.map(([a, n]) => `<a role="listitem" class="chip" href="?scope=${esc(a)}#prognose">${esc(muni(a))} <b>${n0(n)}</b></a>`).join('')}</div>`;
   }
+  // gemessene Wirkung über alle Städte (letzte 8 Tage), Median je Art – zeigt, was die Prognose ab der Freischaltung lernen kann
+  { const grp = (e) => (e.src === 'sport' ? (e.liga === 'del' ? 'icehockey' : 'football') : e.src === 'ort' ? 'venue' : e.kind === 'volksfest' ? 'fair' : e.kind === 'messe' ? 'tradefair' : 'other');
+    const by = new Map();
+    for (const e of ev?.list || []) { if (e.ags.length !== 1 || !(endMs(e) < now) || e.beginn < now - 8 * 864e5) continue; const f = evEffect(S0, e); if (!f) continue; const g = grp(e); let a = by.get(g); if (!a) by.set(g, a = []); a.push(f.uplift); }
+    const med = (a) => { const b = [...a].sort((x, y) => x - y), n = b.length; return (b[(n - 1) >> 1] + b[n >> 1]) / 2; }, pct = (x) => (Math.round(Math.abs(x) * 100) === 0 ? '±0 %' : `${x >= 0 ? '+' : '−'}${n0(Math.abs(x) * 100)} %`);
+    const parts = ['football', 'icehockey', 'venue', 'tradefair', 'fair', 'other'].filter(g => (by.get(g) || []).length >= 3).map(g => t('fv.evEffPart', { what: t(`fv.evGrp.${g}`), eff: pct(med(by.get(g))), n: n0(by.get(g).length) }));
+    if (parts.length) html += `<p class="fv-sub">${t('fv.evEffAll', { list: parts.join(' · ') })}</p>`; }
   const upRuns = evRuns(up);
   const upRow = (r) => `<tr><td>${esc(evWhen(r.e, r.until))}</td>${withWhere ? `<td>${esc(muni(r.e.ags[0]))}</td>` : ''}<td class="wrap">${evWhat(ctx, r.e)}</td><td class="mh">${esc(r.e.ort || (r.e.src === 'liste' ? (r.e.kind ? evKind(r.e) : '–') : evKind(r.e)))}</td><td class="n mh">${r.e.cap ? n0(r.e.cap) : '–'}</td></tr>`;
   const upHead = `<thead><tr><th>${t('fv.evColWhen')}</th>${withWhere ? `<th>${t('fv.evColWhere')}</th>` : ''}<th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n mh">${t('fv.evColCap')}</th></tr></thead>`;

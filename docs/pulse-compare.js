@@ -2,8 +2,8 @@
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: ops/<Land>.json, dekodiert mit pulse-ops.js decodeFleet
 // ({ vehicles: [{ lat, lon, operator, type, reserved, disabled, battery, rangeKm, idleMin, ags }], stations: [{ lat, lon, operator, name, bookable, docks, capacity, ags, physical, virtual }] }).
 // physical ist der physische Bestand an der Station (physicalAvailable, Fahrzeuge), kein Merkmal der Station; virtuell/physisch: isVirtualStation.
-import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mw7lh3kx';
-import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mw7lh3kx';
+import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mw7ly33p';
+import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mw7ly33p';
 
 export const RADII = [25, 50, 100];          // Meter: Station gilt als geteilt, wenn eine Station eines anderen Anbieters so nah liegt
 export const DEFAULT_RADIUS = 50;

@@ -11,9 +11,9 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw7lh3kx';
-import { hourOf, dayOf } from './pulse-track.js?v=mw7lh3kx';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw7lh3kx';
+import * as E from './pulse-econ.js?v=mw7ly33p';
+import { hourOf, dayOf } from './pulse-track.js?v=mw7ly33p';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw7ly33p';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 export const FORECAST_VERSION = 1;
@@ -795,7 +795,7 @@ const wape = (rows) => { let y = 0, a = 0, m = 0; for (const [yy, mm] of rows) {
  * log = Rolling-Origin-Auswertungen je Tag (evals), ausgegebene Prognosen mit Live-Abgleich (issued/live), Verlauf der Modellwahl.
  */
 // ext = chronosLookup(chronos.json) aus lib/pulse-chronos.js oder null (ohne Chronos: kein „chronos“, „blend“ = Hybrid)
-export function runForecast({ docs, calendar = null, weather = [], incidents = [], curated = [], prevLog = null, prevSeries = null, now = Date.now(), horizon = 24, minGroupDay = 3, issueEveryMs = 6 * 3600e3, exclude = null, ext = null }) {
+export function runForecast({ docs, calendar = null, weather = [], incidents = [], curated = [], prevLog = null, prevSeries = null, now = Date.now(), horizon = 24, minGroupDay = 3, issueEveryMs = 6 * 3600e3, exclude = null, ext = null, pending = [], pendingFrom = null }) {
   const days = assignEras((docs || []).filter(d => d?.day && d.groups).map(d => dayFromDoc(d, calendar)).sort((a, b) => (a.day < b.day ? -1 : 1)));
   // Gruppen mit rotem Befund der Ereignis-Ampel (nicht plausibel gezählt) bleiben aus Training und Prognose
   if (exclude?.size) for (const d of days) { const g = {}; for (const [k, v] of Object.entries(d.groups)) if (!exclude.has(k)) g[k] = v; d.groups = g; }
@@ -888,9 +888,16 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
   const incSum = { days: incidents.filter(d => d?.ags).length, warnAt: incidents.map(d => d?.sources?.warn?.at).filter(Boolean).sort().at(-1) ?? null, roadAt: incidents.map(d => d?.sources?.road?.at).filter(Boolean).sort().at(-1) ?? null, curated: curated.length,
     upcoming: curated.filter(e => String(e.bis ?? e.von).slice(0, 10) >= today).slice(0, 10).map(e => ({ art: e.art, von: e.von, bis: e.bis ?? e.von, gebiet: e.gebiet, titel: e.titel ?? null, quelle: e.quelle })) };
   const support = Object.fromEntries(CTX_KEYS.map((k, j) => { let n = 0; const ds = new Set(); for (const i of all) if (R.c[j][i]) { n++; ds.add(R.day[i]); } return [k, { rows: n, days: ds.size, memRows: Math.round(prior?.n?.[3 + j] || 0), memDays: +(prior?.dk?.[3 + j] || 0).toFixed(1) }]; }));
+  // zurückgehaltene Einträge (Lernphase: Veranstaltungen, Sport, Volksfeste erst ab pendingFrom): nur zählen, wie viele Gemeinde-Stunden sie
+  // im Training kennzeichnen würden – fließt nicht ins Modell, zeigt im Dashboard „erfasst, wirkt ab …“
+  if (pending?.length) {
+    const pc = ctxLookup([], pending), agsOf = R.keys.map(k => k.split('|')[0]), pn = CTX_KEYS.map(() => 0), pd = CTX_KEYS.map(() => new Set());
+    for (const i of all) { const x = pc(agsOf[R.g[i]], days[R.day[i]].day, R.hr[i]); for (let j = 0; j < NCTX; j++) if (x[j]) { pn[j]++; pd[j].add(R.day[i]); } }
+    CTX_KEYS.forEach((k, j) => { if (pn[j]) support[k].pending = { rows: pn[j], days: pd[j].size }; });
+  }
   const out = { version: FORECAST_VERSION, generatedAt: new Date(now).toISOString(), status: trainDays < GATES.minTrainDays ? 'insufficient' : choice.status, active: trainDays < GATES.minTrainDays ? null : (choice.active === 'pooledWx' && !env.on ? 'pooled' : choice.active), reason: choice.reason, scores: choice.scores, evalDays: choice.evalDays, trainDays,
     excluded: exclude?.size || 0, gates: { ...GATES }, weather: { gate, used: useWx, source: weather.length ? weather[0].source ?? null : null },
-    env: { keys: CTX_KEYS, ready: env.ctx.map(k => CTX_KEYS[k]), active: usesEnv ? env.ctx.map(k => CTX_KEYS[k]) : [], support, sources: incSum }, memory: null,
+    env: { keys: CTX_KEYS, ready: env.ctx.map(k => CTX_KEYS[k]), active: usesEnv ? env.ctx.map(k => CTX_KEYS[k]) : [], support, sources: incSum, ...(pending?.length && pendingFrom ? { pendingFrom } : {}) }, memory: null,
     decision: { rule: { ...DECIDE }, live: choice.live || null, combined: choice.combined || null },
     learn: fb.upto ? learnSummary(fb, fbw) : null,
     blend: { activeFrom: new Date(BLEND.activeFrom).toISOString(), chronos: ext ? { at: ext.at, model: ext.model, backDays: ext.backDays } : null, learn: fbC.upto ? learnSummary(fbC, feedbackWeights(fbC)) : null },

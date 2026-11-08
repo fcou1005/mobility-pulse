@@ -1164,7 +1164,7 @@ try {
 // Sport-Ereignisse (lib/pulse-context.js SPORT): Heimspiele 1.–3. Liga aus OpenLigaDB (ODbL), je Liga höchstens alle 6 h abgefragt; Spielorte aus
 // data/sport-spielorte.json → sport.json (kompakte Spiele im Fenster, Einträge wie data/ereignisse.json, Vereine ohne Spielort). In die Prognose
 // (Merkmal event) erst ab aktivAb – gesammelt wird vorher schon. Fällt OpenLigaDB aus, bleiben die zuletzt geholten Spiele. SPORT_URL leer = aus.
-let sportCurated = [];
+let sportCurated = [], sportPending = [], sportFrom = null; // Pending: gesammelt, aber erst ab aktivAb in der Prognose (nur gezählt)
 {
   const base = process.env.SPORT_URL ?? 'https://api.openligadb.de', sf = path.join(DATA, 'sport.json');
   try {
@@ -1188,7 +1188,7 @@ let sportCurated = [];
     rows = rows.filter(x => x[2] >= now - CX.SPORT.pastDays * 86400e3 && x[2] <= now + CX.SPORT.keepAheadDays * 86400e3).sort((a, b) => a[2] - b[2] || String(a[0]).localeCompare(String(b[0])));
     const sp = CX.sportEntries(rows, venues, { now, resolve: CX.placeResolver(boundaries?.features), base: base || 'https://api.openligadb.de' });
     const activeFrom = Date.parse(venues.aktivAb ?? ''), active = !Number.isFinite(activeFrom) || now >= activeFrom;
-    sportCurated = active ? CX.checkCurated({ ereignisse: sp.entries }).ok : [];
+    sportCurated = active ? CX.checkCurated({ ereignisse: sp.entries }).ok : []; sportPending = active ? [] : CX.checkCurated({ ereignisse: sp.entries }).ok; sportFrom = venues.aktivAb ?? null;
     await writeFile(sf, JSON.stringify({ version: 1, at: now, source: 'OpenLigaDB (https://www.openligadb.de), Open Database License (ODbL) 1.0', license: 'ODbL-1.0', leagues: CX.SPORT.leagues,
       window: { beforeMin: CX.SPORT.beforeMin, afterMin: CX.SPORT.afterMin, pastDays: CX.SPORT.pastDays, aheadDays: CX.SPORT.aheadDays }, activeFrom: venues.aktivAb ?? null, active, fetched,
       matchFields: ['id', 'liga', 'anstoss_utc_ms', 'heim', 'gast'], matches: rows, entries: sp.entries, unknown: sp.unknown, noAgs: sp.noAgs }));
@@ -1270,13 +1270,15 @@ if (process.env.FORECAST !== '0') {
       // Veranstaltungen (Konzerte, Feste) wie Sport erst ab veranstaltungenAb in die Prognose (Ende der Lernphase); Streiks sofort
       const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
       const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung' && e.art !== 'volksfest'); // Volksfeste (Merkmal fest) ebenso
+      // Zurückgehaltenes nur zählen (Dashboard: „erfasst, wirkt ab …“), nicht ins Modell
+      const pending = [...(evOn ? [] : cur.ok.filter(e => e.art === 'veranstaltung' || e.art === 'volksfest')), ...sportPending, ...(evOn ? [] : venueCurated)], pendingFrom = curDoc?.veranstaltungenAb ?? sportFrom;
       if (curOk.length < cur.ok.length) log(`Ereignisliste: ${cur.ok.length - curOk.length} Veranstaltungen vorgemerkt, in der Prognose ab ${curDoc.veranstaltungenAb}`);
       // Chronos-2 (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py) – Vergleich „chronos“ und
       // Mischung „blend“ (lernt mit, wählbar ab BLEND.activeFrom); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
       let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
       const ext = chronos ? CH.chronosLookup(chronos) : null;
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext });
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext, pending, pendingFrom });
       if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
       if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
       await mkdir(dir, { recursive: true });

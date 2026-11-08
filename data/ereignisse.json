@@ -95,6 +95,64 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2026-10-31T11:00",
+      "bis": "2026-10-31T23:00",
+      "beginn": "2026-10-31T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "14612000"
+        ]
+      },
+      "titel": "Dresdner Herbstvolksfest 2026 (Pieschener Allee), erster Festtag nicht belegt – lief spätestens ab 13.10.",
+      "ort": "Pieschener Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.sachsen-fernsehen.de/amp/mediathek/video/herbstvolksfest-bringt-dresden-in-fahrt/",
+      "id": "recherche:117434790e",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-10-31T12:00",
+      "bis": "2026-11-01T00:00",
+      "beginn": "2026-10-31T13:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Freimarkt 2026 (Bürgerweide), letzte Tage im Zeitraum",
+      "ort": "Bürgerweide",
+      "besucher": 88200,
+      "kategorie": "volksfest",
+      "quelle": "https://www.weser-kurier.de/bremen/freimarkt.html",
+      "id": "recherche:27474915da",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-10-31T13:00",
+      "bis": "2026-10-31T23:00",
+      "beginn": "2026-10-31T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:d43c0daa43",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2026-10-31T17:00",
       "bis": "2026-10-31T23:00",
@@ -233,6 +291,64 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2026-11-01T11:00",
+      "bis": "2026-11-01T23:00",
+      "beginn": "2026-11-01T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "14612000"
+        ]
+      },
+      "titel": "Dresdner Herbstvolksfest 2026 (Pieschener Allee), erster Festtag nicht belegt – lief spätestens ab 13.10.",
+      "ort": "Pieschener Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.sachsen-fernsehen.de/amp/mediathek/video/herbstvolksfest-bringt-dresden-in-fahrt/",
+      "id": "recherche:b3cbf45463",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-01T12:00",
+      "bis": "2026-11-02T00:00",
+      "beginn": "2026-11-01T13:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Freimarkt 2026 (Bürgerweide), letzte Tage im Zeitraum",
+      "ort": "Bürgerweide",
+      "besucher": 88200,
+      "kategorie": "volksfest",
+      "quelle": "https://www.weser-kurier.de/bremen/freimarkt.html",
+      "id": "recherche:933c4c1f4e",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-01T13:00",
+      "bis": "2026-11-01T23:00",
+      "beginn": "2026-11-01T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:779e45f917",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2026-11-01T14:00",
       "bis": "2026-11-01T18:00",
@@ -286,6 +402,44 @@
       "kategorie": "sport",
       "quelle": "https://www.telekom-baskets-bonn.de/presse/newsarchiv/der-klassiker-gegen-den-deutschen-meister",
       "id": "recherche:8f58660bf2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-02T13:00",
+      "bis": "2026-11-02T23:00",
+      "beginn": "2026-11-02T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:c8e4526784",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-03T13:00",
+      "bis": "2026-11-03T23:00",
+      "beginn": "2026-11-03T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:3bb834714d",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -389,6 +543,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2026-11-04T13:00",
+      "bis": "2026-11-04T23:00",
+      "beginn": "2026-11-04T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:9bb72847d1",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2026-11-04T19:00",
       "bis": "2026-11-04T23:00",
@@ -482,6 +655,25 @@
       "kategorie": "messe",
       "quelle": "https://www.bazaar-berlin.de/",
       "id": "recherche:be6e3e626c",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-05T13:00",
+      "bis": "2026-11-05T23:00",
+      "beginn": "2026-11-05T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:33e37861bb",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -680,6 +872,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2026-11-06T13:00",
+      "bis": "2026-11-06T23:00",
+      "beginn": "2026-11-06T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:bdab9f0470",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2026-11-06T17:00",
       "bis": "2026-11-06T23:00",
@@ -852,6 +1063,25 @@
       "kategorie": "messe",
       "quelle": "https://www.messe-dresden.de/veranstaltung/spielraum-2026",
       "id": "recherche:c3c1d00bcd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-07T13:00",
+      "bis": "2026-11-07T23:00",
+      "beginn": "2026-11-07T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:6d845ea3c4",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -1205,6 +1435,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2026-11-08T13:00",
+      "bis": "2026-11-08T23:00",
+      "beginn": "2026-11-08T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:78bf046e38",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2026-11-08T13:00",
       "bis": "2026-11-08T17:30",
@@ -1318,6 +1567,25 @@
       "kategorie": "konzert",
       "quelle": "https://www.mitsubishi-electric-halle.de/event/blue-08-11-2026",
       "id": "recherche:75dba09fad",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2026-11-09T13:00",
+      "bis": "2026-11-09T23:00",
+      "beginn": "2026-11-09T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2026 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Sonstige_Maerkte/Dokumente/Veranstaltungsuebersicht_2026.pdf",
+      "id": "recherche:4ecb438205",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -14589,6 +14857,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-03-19T13:00",
+      "bis": "2027-03-20T00:00",
+      "beginn": "2027-03-19T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:784baba62c",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-19T14:00",
+      "bis": "2027-03-20T00:00",
+      "beginn": "2027-03-19T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:9b94762051",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-03-20T10:00",
       "bis": "2027-03-20T22:00",
@@ -14649,6 +14955,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-03-20T13:00",
+      "bis": "2027-03-21T00:00",
+      "beginn": "2027-03-20T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:2fa625415d",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-20T14:00",
+      "bis": "2027-03-21T00:00",
+      "beginn": "2027-03-20T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:8e4c563b12",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-03-21T10:00",
       "bis": "2027-03-21T22:00",
@@ -14689,6 +15033,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-03-21T13:00",
+      "bis": "2027-03-22T00:00",
+      "beginn": "2027-03-21T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:7331e9a6f6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-21T14:00",
+      "bis": "2027-03-22T00:00",
+      "beginn": "2027-03-21T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:055ff07643",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-03-22T10:00",
       "bis": "2027-03-22T22:00",
@@ -14707,6 +15089,44 @@
       "id": "recherche:449ad9f5cc",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-22T13:00",
+      "bis": "2027-03-23T00:00",
+      "beginn": "2027-03-22T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:befb9a3984",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-22T14:00",
+      "bis": "2027-03-23T00:00",
+      "beginn": "2027-03-22T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:1485e0f735",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -14729,6 +15149,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-03-23T13:00",
+      "bis": "2027-03-24T00:00",
+      "beginn": "2027-03-23T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:e7bb1129a7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-23T14:00",
+      "bis": "2027-03-24T00:00",
+      "beginn": "2027-03-23T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:0fa15aa9e1",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-03-24T10:00",
       "bis": "2027-03-24T22:00",
@@ -14749,6 +15207,652 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-03-24T13:00",
+      "bis": "2027-03-25T00:00",
+      "beginn": "2027-03-24T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:6c50a710fb",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-24T14:00",
+      "bis": "2027-03-25T00:00",
+      "beginn": "2027-03-24T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:35cbbb26d2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-25T13:00",
+      "bis": "2027-03-26T00:00",
+      "beginn": "2027-03-25T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:1c7dc41c35",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-25T14:00",
+      "bis": "2027-03-26T00:00",
+      "beginn": "2027-03-25T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:741d74957e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-26T13:00",
+      "bis": "2027-03-27T00:00",
+      "beginn": "2027-03-26T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:a2871276b6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-26T14:00",
+      "bis": "2027-03-27T00:00",
+      "beginn": "2027-03-26T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:2a1eefcb90",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-27T13:00",
+      "bis": "2027-03-28T00:00",
+      "beginn": "2027-03-27T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:076c4f19d5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-27T13:00",
+      "bis": "2027-03-28T00:00",
+      "beginn": "2027-03-27T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:4c12773e97",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-27T14:00",
+      "bis": "2027-03-27T22:00",
+      "beginn": "2027-03-27T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:f42efd9855",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-27T14:00",
+      "bis": "2027-03-28T00:00",
+      "beginn": "2027-03-27T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:53d8aa89b6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-28T13:00",
+      "bis": "2027-03-29T00:00",
+      "beginn": "2027-03-28T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:39e0f3e1c7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-28T13:00",
+      "bis": "2027-03-29T00:00",
+      "beginn": "2027-03-28T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:209bf62ff6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-28T14:00",
+      "bis": "2027-03-28T22:00",
+      "beginn": "2027-03-28T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:e701a4198e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-28T14:00",
+      "bis": "2027-03-29T00:00",
+      "beginn": "2027-03-28T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:a1688dd109",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-29T13:00",
+      "bis": "2027-03-30T00:00",
+      "beginn": "2027-03-29T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:94bd8e8dc2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-29T13:00",
+      "bis": "2027-03-30T00:00",
+      "beginn": "2027-03-29T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:504091abf9",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-29T14:00",
+      "bis": "2027-03-29T22:00",
+      "beginn": "2027-03-29T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:897ae407fb",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-29T14:00",
+      "bis": "2027-03-30T00:00",
+      "beginn": "2027-03-29T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:5002a021bd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-30T13:00",
+      "bis": "2027-03-31T00:00",
+      "beginn": "2027-03-30T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:3b05bf85f8",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-30T13:00",
+      "bis": "2027-03-31T00:00",
+      "beginn": "2027-03-30T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:03b23f3b60",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-30T14:00",
+      "bis": "2027-03-30T22:00",
+      "beginn": "2027-03-30T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:f8431155aa",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-30T14:00",
+      "bis": "2027-03-31T00:00",
+      "beginn": "2027-03-30T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:bb512d44df",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-31T13:00",
+      "bis": "2027-04-01T00:00",
+      "beginn": "2027-03-31T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:0677df465b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-31T13:00",
+      "bis": "2027-04-01T00:00",
+      "beginn": "2027-03-31T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:f6a2195d1f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-31T14:00",
+      "bis": "2027-03-31T22:00",
+      "beginn": "2027-03-31T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:bf0793dd39",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-03-31T14:00",
+      "bis": "2027-04-01T00:00",
+      "beginn": "2027-03-31T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:9a6e8f95e3",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-01T13:00",
+      "bis": "2027-04-02T00:00",
+      "beginn": "2027-04-01T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:176ca540df",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-01T13:00",
+      "bis": "2027-04-02T00:00",
+      "beginn": "2027-04-01T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:d86232d109",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-01T14:00",
+      "bis": "2027-04-01T22:00",
+      "beginn": "2027-04-01T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:d4d1fbf6f4",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-01T14:00",
+      "bis": "2027-04-02T00:00",
+      "beginn": "2027-04-01T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:6bf3112b70",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-02T13:00",
+      "bis": "2027-04-03T00:00",
+      "beginn": "2027-04-02T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:d3f4aad584",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-02T13:00",
+      "bis": "2027-04-03T00:00",
+      "beginn": "2027-04-02T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:3b59d29e01",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-02T14:00",
+      "bis": "2027-04-02T22:00",
+      "beginn": "2027-04-02T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:8afe8fca3a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-02T14:00",
+      "bis": "2027-04-03T00:00",
+      "beginn": "2027-04-02T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:0edb2ab689",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-03T10:00",
       "bis": "2027-04-03T22:00",
@@ -14765,6 +15869,82 @@
       "kategorie": "fest",
       "quelle": "https://www.stadt-muenster.de/send/startseite.html",
       "id": "recherche:657764ffe5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-03T13:00",
+      "bis": "2027-04-04T00:00",
+      "beginn": "2027-04-03T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:1d251ec12b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-03T13:00",
+      "bis": "2027-04-04T00:00",
+      "beginn": "2027-04-03T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:87abc21758",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-03T14:00",
+      "bis": "2027-04-03T22:00",
+      "beginn": "2027-04-03T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:87a63d6f20",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-03T14:00",
+      "bis": "2027-04-04T00:00",
+      "beginn": "2027-04-03T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:6612dab47e",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -14809,6 +15989,82 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-04T13:00",
+      "bis": "2027-04-05T00:00",
+      "beginn": "2027-04-04T14:00",
+      "gebiet": {
+        "ags": [
+          "04011000"
+        ]
+      },
+      "titel": "Bremer Osterwiese 2027",
+      "ort": "Bürgerweide",
+      "besucher": 29400,
+      "kategorie": "volksfest",
+      "quelle": "https://www.bremen.eu/osterwiese",
+      "id": "recherche:f665c19cbb",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-04T13:00",
+      "bis": "2027-04-05T00:00",
+      "beginn": "2027-04-04T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:dc9e5cfe42",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-04T14:00",
+      "bis": "2027-04-04T22:00",
+      "beginn": "2027-04-04T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:a9d0cf2e8b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-04T14:00",
+      "bis": "2027-04-05T00:00",
+      "beginn": "2027-04-04T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:f536123344",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-05T10:00",
       "bis": "2027-04-05T22:00",
@@ -14845,6 +16101,63 @@
       "kategorie": "fest",
       "quelle": "https://www.stadt-muenster.de/send/startseite.html",
       "id": "recherche:a8db4fdcf1",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-05T13:00",
+      "bis": "2027-04-06T00:00",
+      "beginn": "2027-04-05T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:8958fa6015",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-05T14:00",
+      "bis": "2027-04-05T22:00",
+      "beginn": "2027-04-05T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:d1e3388aec",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-05T14:00",
+      "bis": "2027-04-06T00:00",
+      "beginn": "2027-04-05T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:5807b24587",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -14889,6 +16202,63 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-06T13:00",
+      "bis": "2027-04-07T00:00",
+      "beginn": "2027-04-06T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:bd8062460f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-06T14:00",
+      "bis": "2027-04-06T22:00",
+      "beginn": "2027-04-06T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:153cc061b2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-06T14:00",
+      "bis": "2027-04-07T00:00",
+      "beginn": "2027-04-06T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:987ca6e9f7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-07T10:00",
       "bis": "2027-04-07T22:00",
@@ -14925,6 +16295,63 @@
       "kategorie": "fest",
       "quelle": "https://www.stadt-muenster.de/send/startseite.html",
       "id": "recherche:4409abd690",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-07T13:00",
+      "bis": "2027-04-08T00:00",
+      "beginn": "2027-04-07T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:5a1035bbd7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-07T14:00",
+      "bis": "2027-04-07T22:00",
+      "beginn": "2027-04-07T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:208a5eb217",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-07T14:00",
+      "bis": "2027-04-08T00:00",
+      "beginn": "2027-04-07T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:c437b93a7d",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -14985,6 +16412,63 @@
       "kategorie": "fest",
       "quelle": "https://www.stadt-muenster.de/send/startseite.html",
       "id": "recherche:956cb77200",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-08T13:00",
+      "bis": "2027-04-09T00:00",
+      "beginn": "2027-04-08T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:ee26e3eedb",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-08T14:00",
+      "bis": "2027-04-08T22:00",
+      "beginn": "2027-04-08T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:123cdf7040",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-08T14:00",
+      "bis": "2027-04-09T00:00",
+      "beginn": "2027-04-08T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:3d4874a374",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -15069,6 +16553,63 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-09T13:00",
+      "bis": "2027-04-10T00:00",
+      "beginn": "2027-04-09T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:7a62dd1dcc",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-09T14:00",
+      "bis": "2027-04-09T22:00",
+      "beginn": "2027-04-09T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:df2de3f057",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-09T14:00",
+      "bis": "2027-04-10T00:00",
+      "beginn": "2027-04-09T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:0d535e5c98",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-10T10:00",
       "bis": "2027-04-10T22:00",
@@ -15147,6 +16688,63 @@
       "id": "recherche:6927acb59c",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-10T13:00",
+      "bis": "2027-04-11T00:00",
+      "beginn": "2027-04-10T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:71a504f8ab",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-10T14:00",
+      "bis": "2027-04-10T22:00",
+      "beginn": "2027-04-10T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:b458a5335e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-10T14:00",
+      "bis": "2027-04-11T00:00",
+      "beginn": "2027-04-10T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:9b696a70c9",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -15289,6 +16887,63 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-11T13:00",
+      "bis": "2027-04-12T00:00",
+      "beginn": "2027-04-11T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:982f55fc73",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-11T14:00",
+      "bis": "2027-04-11T22:00",
+      "beginn": "2027-04-11T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:8bd17257f2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-11T14:00",
+      "bis": "2027-04-12T00:00",
+      "beginn": "2027-04-11T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Frühjahr 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/spring-dippemess",
+      "id": "recherche:8d675d471e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-12T10:00",
       "bis": "2027-04-12T22:00",
@@ -15309,6 +16964,82 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-12T13:00",
+      "bis": "2027-04-13T00:00",
+      "beginn": "2027-04-12T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:0068489bf6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-12T14:00",
+      "bis": "2027-04-12T22:00",
+      "beginn": "2027-04-12T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:8a2e8eba07",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-13T13:00",
+      "bis": "2027-04-14T00:00",
+      "beginn": "2027-04-13T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:c6e77c9034",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-13T14:00",
+      "bis": "2027-04-13T22:00",
+      "beginn": "2027-04-13T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:3c9fde49af",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-14T10:00",
       "bis": "2027-04-14T22:00",
@@ -15327,6 +17058,44 @@
       "id": "recherche:b59a26e7fe",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-14T13:00",
+      "bis": "2027-04-15T00:00",
+      "beginn": "2027-04-14T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:5e73819f15",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-14T14:00",
+      "bis": "2027-04-14T22:00",
+      "beginn": "2027-04-14T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:5b886c5391",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -15369,6 +17138,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-15T13:00",
+      "bis": "2027-04-16T00:00",
+      "beginn": "2027-04-15T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:bbb24d2912",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-15T14:00",
+      "bis": "2027-04-15T22:00",
+      "beginn": "2027-04-15T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:163c6108cd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-16T10:00",
       "bis": "2027-04-16T22:00",
@@ -15409,6 +17216,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-16T13:00",
+      "bis": "2027-04-17T00:00",
+      "beginn": "2027-04-16T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:8bb3833fae",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-16T14:00",
+      "bis": "2027-04-16T22:00",
+      "beginn": "2027-04-16T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:e608db63a9",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-17T10:00",
       "bis": "2027-04-17T22:00",
@@ -15447,6 +17292,63 @@
       "id": "recherche:80214a3276",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-17T11:00",
+      "bis": "2027-04-18T00:00",
+      "beginn": "2027-04-17T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:d0d838a877",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-17T13:00",
+      "bis": "2027-04-18T00:00",
+      "beginn": "2027-04-17T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:fb6d394a26",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-17T14:00",
+      "bis": "2027-04-17T22:00",
+      "beginn": "2027-04-17T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:0a0e2f7ffa",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -15529,6 +17431,82 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-18T11:00",
+      "bis": "2027-04-19T00:00",
+      "beginn": "2027-04-18T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:1f8c1334d8",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-18T13:00",
+      "bis": "2027-04-19T00:00",
+      "beginn": "2027-04-18T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Frühlingsvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:fd73017d02",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-18T14:00",
+      "bis": "2027-04-18T22:00",
+      "beginn": "2027-04-18T15:00",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Frühlingsfest Hannover 2027 (Schützenplatz), Mo/Di Ruhetage außer Ostermontag",
+      "ort": "Schützenplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.hannover.de/Veranstaltungskalender/Feste-Festivals/Frühlingsfest-Hannover-2027",
+      "id": "recherche:5ceac6f08e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-19T11:00",
+      "bis": "2027-04-20T00:00",
+      "beginn": "2027-04-19T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:565bec5ca8",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-20T10:00",
       "bis": "2027-04-20T22:00",
@@ -15549,6 +17527,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-20T11:00",
+      "bis": "2027-04-21T00:00",
+      "beginn": "2027-04-20T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:86f6d3cafe",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-21T10:00",
       "bis": "2027-04-21T22:00",
@@ -15567,6 +17564,25 @@
       "id": "recherche:55a64e51ac",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-21T11:00",
+      "bis": "2027-04-22T00:00",
+      "beginn": "2027-04-21T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:c80c0600f0",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -15608,6 +17624,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-22T11:00",
+      "bis": "2027-04-23T00:00",
+      "beginn": "2027-04-22T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:c994e3d86b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-23T08:00",
       "bis": "2027-04-23T19:00",
@@ -15623,6 +17658,25 @@
       "kategorie": "messe",
       "quelle": "https://www.dortmund.de/dortmund-erleben/veranstaltungskalender/termin_148297.html",
       "id": "recherche:58e95c69a6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-23T11:00",
+      "bis": "2027-04-24T00:00",
+      "beginn": "2027-04-23T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:9b79ff1864",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -15646,6 +17700,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-24T11:00",
+      "bis": "2027-04-25T00:00",
+      "beginn": "2027-04-24T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:0089171579",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-25T08:00",
       "bis": "2027-04-25T19:00",
@@ -15661,6 +17734,25 @@
       "kategorie": "messe",
       "quelle": "https://www.dortmund.de/dortmund-erleben/veranstaltungskalender/termin_148297.html",
       "id": "recherche:4f80cace58",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-25T11:00",
+      "bis": "2027-04-26T00:00",
+      "beginn": "2027-04-25T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:07363b86c0",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -15685,6 +17777,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-26T11:00",
+      "bis": "2027-04-27T00:00",
+      "beginn": "2027-04-26T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:f2a6c17859",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-27T10:00",
       "bis": "2027-04-27T22:00",
@@ -15705,6 +17816,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-27T11:00",
+      "bis": "2027-04-28T00:00",
+      "beginn": "2027-04-27T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:571553787a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-28T10:00",
       "bis": "2027-04-28T22:00",
@@ -15723,6 +17853,25 @@
       "id": "recherche:503471f987",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-28T11:00",
+      "bis": "2027-04-29T00:00",
+      "beginn": "2027-04-28T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:5233e3e4f2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -15765,6 +17914,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-04-29T11:00",
+      "bis": "2027-04-30T00:00",
+      "beginn": "2027-04-29T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:41b217e6bd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-04-30T10:00",
       "bis": "2027-04-30T22:00",
@@ -15783,6 +17951,25 @@
       "id": "recherche:8e33fbe3a7",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-04-30T11:00",
+      "bis": "2027-05-01T00:00",
+      "beginn": "2027-04-30T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:d7feb8b210",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -15805,6 +17992,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-05-01T11:00",
+      "bis": "2027-05-02T00:00",
+      "beginn": "2027-05-01T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:d5e423838a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-05-02T10:00",
       "bis": "2027-05-02T22:00",
@@ -15823,6 +18029,158 @@
       "id": "recherche:031cece55b",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-02T11:00",
+      "bis": "2027-05-03T00:00",
+      "beginn": "2027-05-02T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:d36f80d430",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-03T11:00",
+      "bis": "2027-05-04T00:00",
+      "beginn": "2027-05-03T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:54f2521005",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-04T11:00",
+      "bis": "2027-05-05T00:00",
+      "beginn": "2027-05-04T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:e2939ab130",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-05T11:00",
+      "bis": "2027-05-06T00:00",
+      "beginn": "2027-05-05T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:0adb0a6da2",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-06T11:00",
+      "bis": "2027-05-07T00:00",
+      "beginn": "2027-05-06T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:884cfd11b9",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-07T11:00",
+      "bis": "2027-05-08T00:00",
+      "beginn": "2027-05-07T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:6ec197ba00",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-08T11:00",
+      "bis": "2027-05-09T00:00",
+      "beginn": "2027-05-08T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:53a980140a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-09T11:00",
+      "bis": "2027-05-10T00:00",
+      "beginn": "2027-05-09T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Stuttgarter Frühlingsfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 95700,
+      "kategorie": "volksfest",
+      "quelle": "https://www.stuttgarter-fruehlingsfest.de/en/contact",
+      "id": "recherche:af108bb0b5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -16025,6 +18383,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-05-14T11:00",
+      "bis": "2027-05-15T01:00",
+      "beginn": "2027-05-14T12:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Wäldchestag 2027 (Am Oberforsthaus)",
+      "ort": "Stadtwald, Am Oberforsthaus",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/waeldchestag",
+      "id": "recherche:2d3bb27026",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-05-15T10:00",
       "bis": "2027-05-15T22:00",
@@ -16041,6 +18418,25 @@
       "kategorie": "fest",
       "quelle": "https://www.berlin.de/en/events/2092491-2842498-karneval-der-kulturen.en.html",
       "id": "recherche:b98f2aa307",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-15T11:00",
+      "bis": "2027-05-16T01:00",
+      "beginn": "2027-05-15T12:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Wäldchestag 2027 (Am Oberforsthaus)",
+      "ort": "Stadtwald, Am Oberforsthaus",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/waeldchestag",
+      "id": "recherche:329374976c",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -16065,6 +18461,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-05-16T11:00",
+      "bis": "2027-05-17T01:00",
+      "beginn": "2027-05-16T12:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Wäldchestag 2027 (Am Oberforsthaus)",
+      "ort": "Stadtwald, Am Oberforsthaus",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/waeldchestag",
+      "id": "recherche:c14cc38609",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-05-17T10:00",
       "bis": "2027-05-17T22:00",
@@ -16085,6 +18500,44 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-05-17T11:00",
+      "bis": "2027-05-18T01:00",
+      "beginn": "2027-05-17T12:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Wäldchestag 2027 (Am Oberforsthaus)",
+      "ort": "Stadtwald, Am Oberforsthaus",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/waeldchestag",
+      "id": "recherche:72c951e4d6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-18T11:00",
+      "bis": "2027-05-19T01:00",
+      "beginn": "2027-05-18T12:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Wäldchestag 2027 (Am Oberforsthaus)",
+      "ort": "Stadtwald, Am Oberforsthaus",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/waeldchestag",
+      "id": "recherche:b0b7602e4d",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-05-22T10:00",
       "bis": "2027-05-22T22:00",
@@ -16101,6 +18554,177 @@
       "kategorie": "fest",
       "quelle": "https://www.visitduesseldorf.de/en/experience/events/japan-tag-japan-day-dusseldorf-nrw",
       "id": "recherche:2cfc01bebb",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-27T13:00",
+      "bis": "2027-05-27T23:00",
+      "beginn": "2027-05-27T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:08d46a8ce4",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-28T13:00",
+      "bis": "2027-05-28T23:00",
+      "beginn": "2027-05-28T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:2bf3db5f8b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-29T13:00",
+      "bis": "2027-05-29T23:00",
+      "beginn": "2027-05-29T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:3c49cd16c3",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-30T13:00",
+      "bis": "2027-05-30T23:00",
+      "beginn": "2027-05-30T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:f7deb1189c",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-05-31T13:00",
+      "bis": "2027-05-31T23:00",
+      "beginn": "2027-05-31T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:b18b52f611",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-01T13:00",
+      "bis": "2027-06-01T23:00",
+      "beginn": "2027-06-01T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:585e1f7e30",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-02T13:00",
+      "bis": "2027-06-02T23:00",
+      "beginn": "2027-06-02T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:c40c2e9144",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-03T13:00",
+      "bis": "2027-06-03T23:00",
+      "beginn": "2027-06-03T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:8ba65926de",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-04T13:00",
+      "bis": "2027-06-04T23:00",
+      "beginn": "2027-06-04T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:a8ea33b3c0",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -16141,6 +18765,25 @@
       "kategorie": "konzert",
       "quelle": "https://tourismus.nuernberg.de/en/experience/music-theater-movies/rock-im-park-1/",
       "id": "recherche:7725915c88",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-05T13:00",
+      "bis": "2027-06-05T23:00",
+      "beginn": "2027-06-05T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:0c396d035d",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -16204,6 +18847,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-06T13:00",
+      "bis": "2027-06-06T23:00",
+      "beginn": "2027-06-06T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:42b0d561e4",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-06T17:00",
       "bis": "2027-06-06T23:00",
@@ -16240,6 +18902,25 @@
       "kategorie": "konzert",
       "quelle": "https://tourismus.nuernberg.de/en/experience/music-theater-movies/rock-im-park-1/",
       "id": "recherche:3b8559babc",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-07T13:00",
+      "bis": "2027-06-07T23:00",
+      "beginn": "2027-06-07T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Frühjahrsmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:443f4cc22a",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -16618,6 +19299,26 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-19T11:00",
+      "bis": "2027-06-19T23:00",
+      "beginn": "2027-06-19T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:5b62e3905b",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-19T17:00",
       "bis": "2027-06-19T23:00",
@@ -16657,6 +19358,26 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-20T11:00",
+      "bis": "2027-06-20T23:00",
+      "beginn": "2027-06-20T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:07475bc292",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-20T18:00",
       "bis": "2027-06-20T22:00",
@@ -16692,6 +19413,26 @@
       "kategorie": "messe",
       "quelle": "https://www.messen.de/de/197/in/de/nordrhein-westfalen/duesseldorf/uebersicht?page=2",
       "id": "recherche:65e95392c9",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-21T11:00",
+      "bis": "2027-06-21T23:00",
+      "beginn": "2027-06-21T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:a97afb2572",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
     },
@@ -16756,6 +19497,26 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-22T11:00",
+      "bis": "2027-06-22T23:00",
+      "beginn": "2027-06-22T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:74387d53da",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-23T10:00",
       "bis": "2027-06-23T22:00",
@@ -16812,6 +19573,26 @@
       "kategorie": "messe",
       "quelle": "https://www.messen.de/de/215/in/de/bayern/muenchen/uebersicht?page=5",
       "id": "recherche:da1f8ba197",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-23T11:00",
+      "bis": "2027-06-23T23:00",
+      "beginn": "2027-06-23T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:f025905b7a",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
     },
@@ -16876,6 +19657,26 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-24T11:00",
+      "bis": "2027-06-24T23:00",
+      "beginn": "2027-06-24T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:f0a19983c5",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-25T10:00",
       "bis": "2027-06-25T22:00",
@@ -16916,6 +19717,46 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-25T11:00",
+      "bis": "2027-06-25T23:00",
+      "beginn": "2027-06-25T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:7f89b98bc2",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-25T11:00",
+      "bis": "2027-06-25T23:00",
+      "beginn": "2027-06-25T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "07315000"
+        ]
+      },
+      "titel": "Mainzer Johannisnacht 2027 (Innenstadt und Rheinufer, mit Rummel)",
+      "ort": "Rheinufer Kaisertor bis Theodor-Heuss-Brücke, Liebfrauenplatz, Ludwigstraße, Schillerplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.mainz.de/en/pressemeldungen/Mainz/2026/juni/mainz-feiert-gutenberg-johannisnacht-ueber-zeugt-trotz-grosser-hitze-mit-friedlicher-fest-stimmung",
+      "id": "recherche:8687c7a88f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-25T17:00",
       "bis": "2027-06-25T23:00",
@@ -16952,6 +19793,46 @@
       "kategorie": "fest",
       "quelle": "https://www.muenchen.de/veranstaltungen/feste-festivals/csd-christopher-street-day",
       "id": "recherche:4f9e05f7c5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-26T11:00",
+      "bis": "2027-06-26T23:00",
+      "beginn": "2027-06-26T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:4d821be284",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-26T11:00",
+      "bis": "2027-06-26T23:00",
+      "beginn": "2027-06-26T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "07315000"
+        ]
+      },
+      "titel": "Mainzer Johannisnacht 2027 (Innenstadt und Rheinufer, mit Rummel)",
+      "ort": "Rheinufer Kaisertor bis Theodor-Heuss-Brücke, Liebfrauenplatz, Ludwigstraße, Schillerplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.mainz.de/en/pressemeldungen/Mainz/2026/juni/mainz-feiert-gutenberg-johannisnacht-ueber-zeugt-trotz-grosser-hitze-mit-friedlicher-fest-stimmung",
+      "id": "recherche:45d644e279",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17036,6 +19917,46 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-06-27T11:00",
+      "bis": "2027-06-27T23:00",
+      "beginn": "2027-06-27T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "01002000"
+        ]
+      },
+      "titel": "Kieler Woche 2027 (Kiellinie und Innenstadt)",
+      "ort": "Kiellinie, Hörn und Innenstadt",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://en.instaff.jobs/exhibitions/2027/kiel/kieler-woche-2027/20333",
+      "id": "recherche:012c929451",
+      "stand": "2026-11-08",
+      "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-27T11:00",
+      "bis": "2027-06-27T23:00",
+      "beginn": "2027-06-27T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "07315000"
+        ]
+      },
+      "titel": "Mainzer Johannisnacht 2027 (Innenstadt und Rheinufer, mit Rummel)",
+      "ort": "Rheinufer Kaisertor bis Theodor-Heuss-Brücke, Liebfrauenplatz, Ludwigstraße, Schillerplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.mainz.de/en/pressemeldungen/Mainz/2026/juni/mainz-feiert-gutenberg-johannisnacht-ueber-zeugt-trotz-grosser-hitze-mit-friedlicher-fest-stimmung",
+      "id": "recherche:c72f505d2a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-06-27T17:00",
       "bis": "2027-06-27T23:00",
@@ -17052,6 +19973,26 @@
       "kategorie": "sport",
       "quelle": "https://www.chioaachen.de/en/news/ticket-sales-for-chio-aachen-2027-have-started/",
       "id": "recherche:d653a4a972",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-06-28T11:00",
+      "bis": "2027-06-28T23:00",
+      "beginn": "2027-06-28T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "07315000"
+        ]
+      },
+      "titel": "Mainzer Johannisnacht 2027 (Innenstadt und Rheinufer, mit Rummel)",
+      "ort": "Rheinufer Kaisertor bis Theodor-Heuss-Brücke, Liebfrauenplatz, Ludwigstraße, Schillerplatz",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.mainz.de/en/pressemeldungen/Mainz/2026/juni/mainz-feiert-gutenberg-johannisnacht-ueber-zeugt-trotz-grosser-hitze-mit-friedlicher-fest-stimmung",
+      "id": "recherche:b66d110d7f",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17236,6 +20177,26 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-02T11:00",
+      "bis": "2027-07-02T23:00",
+      "beginn": "2027-07-02T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:31b012c84e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-02T13:00",
       "bis": "2027-07-02T22:00",
@@ -17351,6 +20312,26 @@
       "kategorie": "konzert",
       "quelle": "https://landstreicher-booking.de/en/artists/kraftklub",
       "id": "recherche:2528423ff0",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-03T11:00",
+      "bis": "2027-07-03T23:00",
+      "beginn": "2027-07-03T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:dcbb8ed55d",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17494,6 +20475,26 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-04T11:00",
+      "bis": "2027-07-04T23:00",
+      "beginn": "2027-07-04T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:c4e58b5483",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-04T13:00",
       "bis": "2027-07-04T22:00",
@@ -17553,6 +20554,26 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-05T11:00",
+      "bis": "2027-07-05T23:00",
+      "beginn": "2027-07-05T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:6e7f8f1fc8",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-05T13:00",
       "bis": "2027-07-05T22:00",
@@ -17568,6 +20589,26 @@
       "kategorie": "fest",
       "quelle": "https://www.hannover.de/Kultur-Freizeit/Freizeit-Sport/Feste-Saisonales/Sch%C3%BCtzenfest-Hannover/Sch%C3%BCtzenfest-Tagesprogramme/Sch%C3%BCtzenfest-Hannover-2027",
       "id": "recherche:e45860fa5e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-06T11:00",
+      "bis": "2027-07-06T23:00",
+      "beginn": "2027-07-06T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:9b1619b21c",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17611,6 +20652,26 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-07T11:00",
+      "bis": "2027-07-07T23:00",
+      "beginn": "2027-07-07T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:8bec9eeed6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-07T13:00",
       "bis": "2027-07-07T22:00",
@@ -17630,6 +20691,26 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-08T11:00",
+      "bis": "2027-07-08T23:00",
+      "beginn": "2027-07-08T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:2a80e48bfd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-08T13:00",
       "bis": "2027-07-08T22:00",
@@ -17645,6 +20726,26 @@
       "kategorie": "fest",
       "quelle": "https://www.hannover.de/Kultur-Freizeit/Freizeit-Sport/Feste-Saisonales/Sch%C3%BCtzenfest-Hannover/Sch%C3%BCtzenfest-Tagesprogramme/Sch%C3%BCtzenfest-Hannover-2027",
       "id": "recherche:3e280e0395",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-09T11:00",
+      "bis": "2027-07-09T23:00",
+      "beginn": "2027-07-09T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:7b9f0f21c8",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17688,6 +20789,26 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-10T11:00",
+      "bis": "2027-07-10T23:00",
+      "beginn": "2027-07-10T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:9470c5edef",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-10T13:00",
       "bis": "2027-07-10T22:00",
@@ -17703,6 +20824,26 @@
       "kategorie": "fest",
       "quelle": "https://www.hannover.de/Kultur-Freizeit/Freizeit-Sport/Feste-Saisonales/Sch%C3%BCtzenfest-Hannover/Sch%C3%BCtzenfest-Tagesprogramme/Sch%C3%BCtzenfest-Hannover-2027",
       "id": "recherche:2549ff93a0",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-11T11:00",
+      "bis": "2027-07-11T23:00",
+      "beginn": "2027-07-11T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:03ffe4ade5",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17726,6 +20867,66 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-07-12T11:00",
+      "bis": "2027-07-12T23:00",
+      "beginn": "2027-07-12T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:cb91053598",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-13T11:00",
+      "bis": "2027-07-13T23:00",
+      "beginn": "2027-07-13T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:ab547b8db9",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-14T11:00",
+      "bis": "2027-07-14T23:00",
+      "beginn": "2027-07-14T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:b8467f59a9",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-07-15T10:00",
       "bis": "2027-07-15T22:00",
@@ -17742,6 +20943,26 @@
       "kategorie": "fest",
       "quelle": "https://www.stadt-muenster.de/send/startseite.html",
       "id": "recherche:9522a68850",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-15T11:00",
+      "bis": "2027-07-15T23:00",
+      "beginn": "2027-07-15T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:5f073fd4f3",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17782,6 +21003,26 @@
       "kategorie": "fest",
       "quelle": "https://www.stadt-muenster.de/send/startseite.html",
       "id": "recherche:b774e3c6ca",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-16T11:00",
+      "bis": "2027-07-16T23:00",
+      "beginn": "2027-07-16T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:20b50bc4de",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17842,6 +21083,26 @@
       "kategorie": "fest",
       "quelle": "https://www.visitberlin.de/de/top-veranstaltungen-berlin?page=8",
       "id": "recherche:dd91aa2e2b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-17T11:00",
+      "bis": "2027-07-17T23:00",
+      "beginn": "2027-07-17T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:1ea24e616c",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -17942,6 +21203,26 @@
       "kategorie": "fest",
       "quelle": "https://www.visitberlin.de/de/top-veranstaltungen-berlin?page=8",
       "id": "recherche:ee5e12dd5b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-07-18T11:00",
+      "bis": "2027-07-18T23:00",
+      "beginn": "2027-07-18T11:00",
+      "ohneUhrzeit": true,
+      "gebiet": {
+        "ags": [
+          "09663000"
+        ]
+      },
+      "titel": "Kiliani-Volksfest 2027",
+      "ort": "Talavera",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://wuerzburg.de/en/visitors/wuerzburg-for-groups/culture-and-events/409581.Kiliani-Volksfest-2024-Kiliani-Fair.html",
+      "id": "recherche:16004c7ce7",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -18423,6 +21704,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-08-27T13:00",
+      "bis": "2027-08-28T00:00",
+      "beginn": "2027-08-27T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:7b6a0170ab",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-08-28T10:00",
       "bis": "2027-08-28T22:00",
@@ -18461,6 +21761,25 @@
       "id": "recherche:05320473e0",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-08-28T13:00",
+      "bis": "2027-08-29T00:00",
+      "beginn": "2027-08-28T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:dbbbdd7fca",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -18503,6 +21822,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-08-29T13:00",
+      "bis": "2027-08-30T00:00",
+      "beginn": "2027-08-29T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:cab71df045",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-08-29T17:00",
       "bis": "2027-08-29T23:00",
@@ -18543,6 +21881,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-08-30T13:00",
+      "bis": "2027-08-31T00:00",
+      "beginn": "2027-08-30T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:4bba39a421",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-08-31T10:00",
       "bis": "2027-08-31T22:00",
@@ -18561,6 +21918,25 @@
       "id": "recherche:a77ebd0ae3",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-08-31T13:00",
+      "bis": "2027-09-01T00:00",
+      "beginn": "2027-08-31T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:5fb5b2fdca",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -18583,6 +21959,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-01T13:00",
+      "bis": "2027-09-02T00:00",
+      "beginn": "2027-09-01T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:1b30c25551",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-02T10:00",
       "bis": "2027-09-02T22:00",
@@ -18601,6 +21996,25 @@
       "id": "recherche:7d81e00c6e",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-02T13:00",
+      "bis": "2027-09-03T00:00",
+      "beginn": "2027-09-02T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:ca1437a27c",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -18643,6 +22057,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-03T13:00",
+      "bis": "2027-09-04T00:00",
+      "beginn": "2027-09-03T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:dc498f8ebe",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-04T10:00",
       "bis": "2027-09-04T22:00",
@@ -18679,6 +22112,25 @@
       "kategorie": "messe",
       "quelle": "https://www.visitberlin.de/de/top-veranstaltungen-berlin?page=8",
       "id": "recherche:e6dbcbf18a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-04T13:00",
+      "bis": "2027-09-05T00:00",
+      "beginn": "2027-09-04T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:08794c37ab",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -18742,6 +22194,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-05T13:00",
+      "bis": "2027-09-06T00:00",
+      "beginn": "2027-09-05T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:f423a3777e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-06T10:00",
       "bis": "2027-09-06T22:00",
@@ -18758,6 +22229,25 @@
       "kategorie": "messe",
       "quelle": "https://www.visitberlin.de/de/top-veranstaltungen-berlin?page=8",
       "id": "recherche:a323aa64a5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-06T13:00",
+      "bis": "2027-09-07T00:00",
+      "beginn": "2027-09-06T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:9011b5550c",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -18802,6 +22292,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-07T13:00",
+      "bis": "2027-09-08T00:00",
+      "beginn": "2027-09-07T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:2d3813c05a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-08T10:00",
       "bis": "2027-09-08T22:00",
@@ -18822,6 +22331,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-08T13:00",
+      "bis": "2027-09-09T00:00",
+      "beginn": "2027-09-08T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:27f35b4f86",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-09T10:00",
       "bis": "2027-09-09T22:00",
@@ -18840,6 +22368,25 @@
       "id": "recherche:b447bf55bd",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-09T13:00",
+      "bis": "2027-09-10T00:00",
+      "beginn": "2027-09-09T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:7d948fed01",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -18882,6 +22429,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-10T13:00",
+      "bis": "2027-09-11T00:00",
+      "beginn": "2027-09-10T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:8caf53c7aa",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-10T14:00",
+      "bis": "2027-09-11T00:00",
+      "beginn": "2027-09-10T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:007a0b8abe",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-11T10:00",
       "bis": "2027-09-11T22:00",
@@ -18920,6 +22505,44 @@
       "id": "recherche:2d45b91493",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-11T13:00",
+      "bis": "2027-09-12T00:00",
+      "beginn": "2027-09-11T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:8bae570288",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-11T14:00",
+      "bis": "2027-09-12T00:00",
+      "beginn": "2027-09-11T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:47398ab615",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19001,6 +22624,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-12T13:00",
+      "bis": "2027-09-13T00:00",
+      "beginn": "2027-09-12T14:00",
+      "gebiet": {
+        "ags": [
+          "09564000"
+        ]
+      },
+      "titel": "Herbstvolksfest Nürnberg 2027",
+      "ort": "Volksfestplatz am Dutzendteich",
+      "besucher": 50000,
+      "kategorie": "volksfest",
+      "quelle": "https://www.nuernberg.de/internet/stadtportal/volksfest.html",
+      "id": "recherche:ca9955dae6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-12T14:00",
+      "bis": "2027-09-13T00:00",
+      "beginn": "2027-09-12T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:854ba478d7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-13T10:00",
       "bis": "2027-09-13T22:00",
@@ -19017,6 +22678,25 @@
       "kategorie": "fest",
       "quelle": "https://www.bonn.de/veranstaltungskalender/veranstaltungen/hauptkalender/maerkte/Puetzchens-Markt.php",
       "id": "recherche:f5079137d5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-13T14:00",
+      "bis": "2027-09-14T00:00",
+      "beginn": "2027-09-13T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:52daea5ea5",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -19041,6 +22721,25 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-14T14:00",
+      "bis": "2027-09-15T00:00",
+      "beginn": "2027-09-14T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:be47139fe5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-15T10:00",
       "bis": "2027-09-15T22:00",
@@ -19059,6 +22758,25 @@
       "id": "recherche:848e1c7442",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-15T14:00",
+      "bis": "2027-09-16T00:00",
+      "beginn": "2027-09-15T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:cf6f24e4ac",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19101,6 +22819,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-16T14:00",
+      "bis": "2027-09-17T00:00",
+      "beginn": "2027-09-16T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:3a6014fcca",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-17T10:00",
       "bis": "2027-09-17T22:00",
@@ -19139,6 +22876,44 @@
       "id": "recherche:54edd5f6b6",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-17T14:00",
+      "bis": "2027-09-18T00:00",
+      "beginn": "2027-09-17T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:49a2711719",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-18T09:00",
+      "bis": "2027-09-19T00:30",
+      "beginn": "2027-09-18T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:be1179741b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19181,6 +22956,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-18T14:00",
+      "bis": "2027-09-19T00:00",
+      "beginn": "2027-09-18T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:c87b25136c",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-19T09:00",
+      "bis": "2027-09-20T00:30",
+      "beginn": "2027-09-19T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:fb48ad5a26",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-19T10:00",
       "bis": "2027-09-19T22:00",
@@ -19221,6 +23034,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-19T14:00",
+      "bis": "2027-09-20T00:00",
+      "beginn": "2027-09-19T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:c2f74e81a1",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-20T09:00",
+      "bis": "2027-09-21T00:30",
+      "beginn": "2027-09-20T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:c8d2830abe",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-20T10:00",
       "bis": "2027-09-20T22:00",
@@ -19239,6 +23090,44 @@
       "id": "recherche:1383195308",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-20T14:00",
+      "bis": "2027-09-21T00:00",
+      "beginn": "2027-09-20T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:6e4f9ee07a",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-21T09:00",
+      "bis": "2027-09-22T00:30",
+      "beginn": "2027-09-21T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:0e17d1ae7b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19281,6 +23170,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-21T14:00",
+      "bis": "2027-09-22T00:00",
+      "beginn": "2027-09-21T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:de5afac0ad",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-22T09:00",
+      "bis": "2027-09-23T00:30",
+      "beginn": "2027-09-22T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:90b09feda5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-22T10:00",
       "bis": "2027-09-22T22:00",
@@ -19321,6 +23248,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-22T14:00",
+      "bis": "2027-09-23T00:00",
+      "beginn": "2027-09-22T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:03c5eafecc",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-23T09:00",
+      "bis": "2027-09-24T00:30",
+      "beginn": "2027-09-23T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:13278f3d1b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-23T10:00",
       "bis": "2027-09-23T22:00",
@@ -19341,6 +23306,139 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-23T14:00",
+      "bis": "2027-09-24T00:00",
+      "beginn": "2027-09-23T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:55bfbc1e28",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-24T09:00",
+      "bis": "2027-09-25T00:30",
+      "beginn": "2027-09-24T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:ff35a7b08b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-24T11:00",
+      "bis": "2027-09-25T00:00",
+      "beginn": "2027-09-24T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:51714c91d4",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-24T14:00",
+      "bis": "2027-09-25T00:00",
+      "beginn": "2027-09-24T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:470569204c",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-25T09:00",
+      "bis": "2027-09-26T00:30",
+      "beginn": "2027-09-25T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:70ee9afb69",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-25T11:00",
+      "bis": "2027-09-26T00:00",
+      "beginn": "2027-09-25T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:cc9dc2ae24",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-25T14:00",
+      "bis": "2027-09-26T00:00",
+      "beginn": "2027-09-25T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:d5c03fc88d",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-26T08:00",
       "bis": "2027-09-26T19:00",
@@ -19356,6 +23454,120 @@
       "kategorie": "lauf",
       "quelle": "https://www.visitberlin.de/de/node/2262876",
       "id": "recherche:c568e2a7fd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-26T09:00",
+      "bis": "2027-09-27T00:30",
+      "beginn": "2027-09-26T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:3618b3d91f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-26T11:00",
+      "bis": "2027-09-27T00:00",
+      "beginn": "2027-09-26T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:3d63c754ce",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-26T14:00",
+      "bis": "2027-09-27T00:00",
+      "beginn": "2027-09-26T15:00",
+      "gebiet": {
+        "ags": [
+          "06412000"
+        ]
+      },
+      "titel": "Dippemess im Herbst 2027",
+      "ort": "Festplatz am Ratsweg",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.visitfrankfurt.travel/en/experience/festival-and-events/dippemess/autumn-dippemess",
+      "id": "recherche:6993e2e0e7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-27T09:00",
+      "bis": "2027-09-28T00:30",
+      "beginn": "2027-09-27T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:d2fed93856",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-27T11:00",
+      "bis": "2027-09-28T00:00",
+      "beginn": "2027-09-27T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:e5eea8b23f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-28T09:00",
+      "bis": "2027-09-29T00:30",
+      "beginn": "2027-09-28T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:15dcb9cbf4",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
     },
@@ -19380,6 +23592,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-28T11:00",
+      "bis": "2027-09-29T00:00",
+      "beginn": "2027-09-28T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:7aa4461cd5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-29T09:00",
+      "bis": "2027-09-30T00:30",
+      "beginn": "2027-09-29T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:9ee3eddc8e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-29T10:00",
       "bis": "2027-09-29T22:00",
@@ -19400,6 +23650,44 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-09-29T11:00",
+      "bis": "2027-09-30T00:00",
+      "beginn": "2027-09-29T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:1d4ed3d278",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-30T09:00",
+      "bis": "2027-10-01T00:30",
+      "beginn": "2027-09-30T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:bfd0132606",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-09-30T10:00",
       "bis": "2027-09-30T22:00",
@@ -19418,6 +23706,120 @@
       "id": "recherche:3bcb02d0aa",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-09-30T11:00",
+      "bis": "2027-10-01T00:00",
+      "beginn": "2027-09-30T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:cbc7c2b24b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-01T09:00",
+      "bis": "2027-10-02T00:30",
+      "beginn": "2027-10-01T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:9663847515",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-01T11:00",
+      "bis": "2027-10-02T00:00",
+      "beginn": "2027-10-01T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:aeed0bda2f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-02T09:00",
+      "bis": "2027-10-03T00:30",
+      "beginn": "2027-10-02T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:531a831c60",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-02T11:00",
+      "bis": "2027-10-03T00:00",
+      "beginn": "2027-10-02T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:7a0a6e2a8d",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-03T09:00",
+      "bis": "2027-10-04T00:30",
+      "beginn": "2027-10-03T10:00",
+      "gebiet": {
+        "ags": [
+          "09162000"
+        ]
+      },
+      "titel": "Oktoberfest 2027",
+      "ort": "Theresienwiese",
+      "besucher": 462500,
+      "kategorie": "volksfest",
+      "quelle": "https://www.muenchen.de/veranstaltungen/oktoberfest/willkommen.html",
+      "id": "recherche:04f1bac1b7",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19460,6 +23862,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-10-03T11:00",
+      "bis": "2027-10-04T00:00",
+      "beginn": "2027-10-03T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:101129ffef",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-10-04T10:00",
       "bis": "2027-10-04T22:00",
@@ -19478,6 +23899,25 @@
       "id": "recherche:265ae976b9",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-04T11:00",
+      "bis": "2027-10-05T00:00",
+      "beginn": "2027-10-04T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:acc1849522",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19518,6 +23958,25 @@
       "id": "recherche:0365da2e26",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-05T11:00",
+      "bis": "2027-10-06T00:00",
+      "beginn": "2027-10-05T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:8eb4cb9e33",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19580,6 +24039,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-10-06T11:00",
+      "bis": "2027-10-07T00:00",
+      "beginn": "2027-10-06T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:4eca4adec0",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-10-07T10:00",
       "bis": "2027-10-07T22:00",
@@ -19620,6 +24098,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-10-07T11:00",
+      "bis": "2027-10-08T00:00",
+      "beginn": "2027-10-07T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:79f524c93e",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-10-08T10:00",
       "bis": "2027-10-08T22:00",
@@ -19638,6 +24135,25 @@
       "id": "recherche:5a5bf35248",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-08T11:00",
+      "bis": "2027-10-09T00:00",
+      "beginn": "2027-10-08T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:aba4c7da45",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -19680,6 +24196,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-10-09T11:00",
+      "bis": "2027-10-10T00:00",
+      "beginn": "2027-10-09T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:df7acb24fd",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-10-10T10:00",
       "bis": "2027-10-10T22:00",
@@ -19718,6 +24253,25 @@
       "id": "recherche:a7bbc0745d",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-10T11:00",
+      "bis": "2027-10-11T00:00",
+      "beginn": "2027-10-10T12:00",
+      "gebiet": {
+        "ags": [
+          "08111000"
+        ]
+      },
+      "titel": "Cannstatter Volksfest 2027",
+      "ort": "Cannstatter Wasen",
+      "besucher": 235300,
+      "kategorie": "volksfest",
+      "quelle": "https://cannstatter-volksfest.de/en",
+      "id": "recherche:b6ea787199",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -20336,6 +24890,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-10-29T13:00",
+      "bis": "2027-10-29T23:00",
+      "beginn": "2027-10-29T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:b5c0129118",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-10-30T10:00",
       "bis": "2027-10-30T22:00",
@@ -20374,6 +24947,25 @@
       "id": "recherche:4850af8bc9",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-10-30T13:00",
+      "bis": "2027-10-30T23:00",
+      "beginn": "2027-10-30T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:5e274d46e8",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -20456,6 +25048,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-10-31T13:00",
+      "bis": "2027-10-31T23:00",
+      "beginn": "2027-10-31T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:db45eb2a7b",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-11-01T10:00",
       "bis": "2027-11-01T22:00",
@@ -20474,6 +25085,25 @@
       "id": "recherche:4e941e7b2f",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-11-01T13:00",
+      "bis": "2027-11-01T23:00",
+      "beginn": "2027-11-01T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:76267c60b1",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -20496,6 +25126,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-11-02T13:00",
+      "bis": "2027-11-02T23:00",
+      "beginn": "2027-11-02T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:4ff4a0d793",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-11-03T10:00",
       "bis": "2027-11-03T22:00",
@@ -20514,6 +25163,25 @@
       "id": "recherche:1344de6d89",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-11-03T13:00",
+      "bis": "2027-11-03T23:00",
+      "beginn": "2027-11-03T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:f2c05b87b5",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -20536,6 +25204,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-11-04T13:00",
+      "bis": "2027-11-04T23:00",
+      "beginn": "2027-11-04T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:5c87924673",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-11-05T10:00",
       "bis": "2027-11-05T22:00",
@@ -20554,6 +25241,25 @@
       "id": "recherche:9c1efdab2b",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-11-05T13:00",
+      "bis": "2027-11-05T23:00",
+      "beginn": "2027-11-05T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:619fc798ce",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",
@@ -20576,6 +25282,25 @@
       "sicher": "angekündigt"
     },
     {
+      "art": "volksfest",
+      "von": "2027-11-06T13:00",
+      "bis": "2027-11-06T23:00",
+      "beginn": "2027-11-06T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:9e6c765c7f",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
       "art": "veranstaltung",
       "von": "2027-11-07T10:00",
       "bis": "2027-11-07T22:00",
@@ -20594,6 +25319,44 @@
       "id": "recherche:d4e2550c8d",
       "stand": "2026-11-08",
       "sicher": "angekündigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-11-07T13:00",
+      "bis": "2027-11-07T23:00",
+      "beginn": "2027-11-07T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:d9a6355423",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
+    },
+    {
+      "art": "volksfest",
+      "von": "2027-11-08T13:00",
+      "bis": "2027-11-08T23:00",
+      "beginn": "2027-11-08T14:00",
+      "gebiet": {
+        "ags": [
+          "08212000"
+        ]
+      },
+      "titel": "Karlsruher Herbstmess 2027 (Messplatz Durlacher Allee)",
+      "ort": "Messplatz an der Durlacher Allee",
+      "besucher": null,
+      "kategorie": "volksfest",
+      "quelle": "https://www.karlsruhe.de/fileadmin/user_upload/04_Kultur_Freizeit/049_Veranstaltungen/Maerkte/Jahrmarkt/Dokumente/Ausschreibung_Mess_.pdf",
+      "id": "recherche:05d7f592a6",
+      "stand": "2026-11-08",
+      "sicher": "bestätigt"
     },
     {
       "art": "veranstaltung",

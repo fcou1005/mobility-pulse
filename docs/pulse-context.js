@@ -8,14 +8,16 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 //   fest   – Volksfest über mehrere Wochen (Wasen, Oktoberfest, Freimarkt, Dippemess …): eigenes Merkmal, damit die Saison eines Festplatzes
 //            nicht als Wirkung einer Einzelveranstaltung gelernt wird (seit 08.11.2026; wie Veranstaltungen erst ab veranstaltungenAb)
+//   sport  – Heimspiel aus OpenLigaDB (Fußball 1.–3. Liga, DFB-Pokal, Champions League, DEL): eigenes Merkmal, weil Stadionspiele mit
+//            Zehntausenden Fans anders wirken als Hallenkonzerte (seit 08.11.2026; ab aktivAb in data/sport-spielorte.json)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw7lh3kx';
+import { hourOf, dayOf } from './pulse-track.js?v=mw7ly33p';
 
-export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest']; // neue Merkmale nur hinten anfügen (Gedächtnis, lib/pulse-forecast.js memoryResize)
+export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport']; // neue Merkmale nur hinten anfügen (Gedächtnis, lib/pulse-forecast.js memoryResize)
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
 export const WARN_MIN = 2; // Merkmal „warn“ ab Stufe 2 (markant); Stufe 1 (z. B. Frost, leichter Wind) ist fast täglich irgendwo und trägt nichts
-export const CURATED_KINDS = { 'streik-oepnv': 'strike', 'streik-bahn': 'rail', veranstaltung: 'event', volksfest: 'fest' };
+export const CURATED_KINDS = { 'streik-oepnv': 'strike', 'streik-bahn': 'rail', veranstaltung: 'event', volksfest: 'fest', sport: 'sport' };
 const LAND_OF_AGS = { '01': 'SH', '02': 'HH', '03': 'NI', '04': 'HB', '05': 'NW', '06': 'HE', '07': 'RP', '08': 'BW', '09': 'BY', '10': 'SL', '11': 'BE', '12': 'BB', '13': 'MV', '14': 'SN', '15': 'ST', '16': 'TH' };
 
 export const emptyIncidentDoc = (day) => ({ version: 1, day, updatedAt: null, sources: {}, ags: {} });
@@ -146,7 +148,7 @@ export function sportEntries(rows, venues, { now, resolve = () => null, beforeMi
     const key = `${v.ort}|${v.land}`; if (!agsOf.has(key)) agsOf.set(key, v.ags || resolve(v.ort, v.land) || null);
     const ags = agsOf.get(key); if (!ags) { noAgs.add(`${v.ort} (${v.land})`); continue; }
     const from = Math.floor((t - beforeMin * 60e3) / 3600e3) * 3600e3;
-    entries.push({ art: 'veranstaltung', von: localStamp(from), bis: localStamp(t + afterMin * 60e3), gebiet: { ags: [ags] }, titel: `${home} – ${guest} (${lg}, Anstoß ${localStamp(t).slice(11)})`,
+    entries.push({ art: 'sport', von: localStamp(from), bis: localStamp(t + afterMin * 60e3), gebiet: { ags: [ags] }, titel: `${home} – ${guest} (${lg}, Anstoß ${localStamp(t).slice(11)})`,
       quelle: `${base}/getmatchdata/${lg}/${sportSeason(t)}`, id: id == null ? null : `openligadb:${id}`, beginn: t, liga: lg });
   }
   entries.sort((a, b) => a.von.localeCompare(b.von));
@@ -368,7 +370,7 @@ export function localMs(s) {
   for (const off of [3600e3, 7200e3, 0]) if (localStamp(u - off) === want) return u - off;
   return u - 3600e3;
 }
-const ART_KIND = { 'streik-oepnv': 'strike', 'streik-bahn': 'rail', veranstaltung: 'event', volksfest: 'fest' };
+const ART_KIND = { 'streik-oepnv': 'strike', 'streik-bahn': 'rail', veranstaltung: 'event', volksfest: 'fest', sport: 'sport' };
 /**
  * Alle Veranstaltungen und Ereignisse, die die Prognose kennt, als eine Liste: sport = sport.json, venues = veranstaltungen.json,
  * curated = Einträge aus data/ereignisse.json (geprüft). Zeitfenster wie in der Prognose (Sport: Anstoß − 60 bis + 180 Min.; Orte: VENUES).
@@ -377,7 +379,7 @@ const ART_KIND = { 'streik-oepnv': 'strike', 'streik-bahn': 'rail', veranstaltun
 export function eventList({ sport = null, venues = null, curated = [], now = Date.now(), pastDays = 8, aheadDays = 21 } = {}) {
   const lo = now - pastDays * 86400e3, hi = now + aheadDays * 86400e3, out = [];
   for (const e of sport?.entries || []) if (Number.isFinite(e.beginn) && e.beginn >= lo && e.beginn <= hi)
-    out.push({ id: e.id, src: 'sport', art: 'veranstaltung', ags: e.gebiet?.ags || [], laender: [], all: false, von: e.von, bis: e.bis, beginn: e.beginn, titel: String(e.titel).replace(/ \((?:bl\d|del|dfb|ucl)[^)]*\)$/, ''), ort: '', cap: null, kind: 'sport', liga: e.liga || null, quelle: e.quelle, noTime: 0 });
+    out.push({ id: e.id, src: 'sport', art: 'sport', ags: e.gebiet?.ags || [], laender: [], all: false, von: e.von, bis: e.bis, beginn: e.beginn, titel: String(e.titel).replace(/ \((?:bl\d|del|dfb|ucl)[^)]*\)$/, ''), ort: '', cap: null, kind: 'sport', liga: e.liga || null, quelle: e.quelle, noTime: 0 });
   const rows = venues?.events || [], byId = new Map(rows.map(r => [r[0], r])), V = new Map((venues?.venues || []).map(v => [v.id, v]));
   for (const e of venueEntries(rows, venues?.venues || [], { now, pastDays, aheadDays, minCap: 0 })) {
     const r = byId.get(e.id), v = V.get(r?.[3]); if (!r || !v) continue;

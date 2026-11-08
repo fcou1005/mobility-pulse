@@ -194,8 +194,8 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
     'CityBikes-Kopie: im nächsten Lauf nicht neu abgerufen, Status aus dem vorigen Lauf, zählt weiter nicht'); }
 {
   const sp = JSON.parse(await readFile('test/out/sport.json', 'utf8')), e = sp.entries[0] || {};
-  assert(sp.license === 'ODbL-1.0' && sp.active === true && sp.entries.length === 1 && e.art === 'veranstaltung' && e.gebiet?.ags?.[0] === '08416041' && /^\d{4}-\d{2}-\d{2}T\d{2}:00$/.test(e.von) && e.quelle.includes('/getmatchdata/bl1/'),
-    `Sport: Heimspiel des Testvereins als Veranstaltung in Tübingen (${e.von} bis ${e.bis})`);
+  assert(sp.license === 'ODbL-1.0' && sp.active === true && sp.entries.length === 1 && e.art === 'sport' && e.gebiet?.ags?.[0] === '08416041' && /^\d{4}-\d{2}-\d{2}T\d{2}:00$/.test(e.von) && e.quelle.includes('/getmatchdata/bl1/'),
+    `Sport: Heimspiel des Testvereins als Eintrag sport in Tübingen (${e.von} bis ${e.bis})`);
   assert(sp.unknown.join() === 'Unbekannt FC' && sp.matches.length === 2 && sp.fetched.bl1?.n === 3 && sp.fetched.bl2?.n === 0 && sp.fetched.bl3?.error && ex.log.filter(x => x.path.startsWith('/getmatchdata/')).length === 6,
     'Sport: unbekannter Heimverein gemeldet, altes Spiel und Spiel ohne Anstoß entfallen, Liga mit Fehler protokolliert');
   const vraw = await readFile('test/out/veranstaltungen.json', 'utf8'), vd = JSON.parse(vraw), ev = vd.events[0] || [];

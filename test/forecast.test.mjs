@@ -146,6 +146,12 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const mk = (day) => { const d = makeDoc(day); for (const g of groups) if (special.has(g[0])) d.groups[g[0]].start = d.groups[g[0]].start.map((_, h) => pois(g[1] * g[2] * own(h))); return d; };
   const ds = days12.map(mk), NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`);
   const r = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW }), W = F.feedbackWeights(r.log.feedback);
+  { // zurückgehaltene Einträge (Lernphase) nur gezählt: gleiche Prognose, Unterstützung pending je Merkmal
+    const ag = String(ds[ds.length - 2].groups && Object.keys(ds[ds.length - 2].groups)[0]).split('|')[0], d1 = ds[ds.length - 2].day;
+    const rP = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW, pending: [{ art: 'sport', von: `${d1}T17:00`, bis: `${d1}T21:30`, gebiet: { ags: [ag] }, quelle: 'x' }], pendingFrom: '2026-11-28T10:00:00+01:00' });
+    const sp = rP.latest.env.support.sport;
+    assert(sp.rows === 0 && sp.pending?.rows > 0 && sp.pending.days === 1 && rP.latest.env.pendingFrom === '2026-11-28T10:00:00+01:00' && JSON.stringify(rP.latest.totals) === JSON.stringify(r.latest.totals) && !rP.latest.env.ready.includes('sport'),
+      `Zurückgehalten: Heimspiel nur gezählt (${sp.pending?.rows} Gemeinde-Stunden), Prognose unverändert`); }
   const ws = [...special].map(k => W.of(k).w), small = groups.filter(g => !special.has(g[0])).map(g => W.of(g[0]).w), mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
   assert(ws.every(w => w >= 0.6) && mean(small) < mean(ws) - 0.15, `Eigener Tagesgang → eigenes Profil (Gewichte ${ws.map(w => w.toFixed(2)).join(', ')}), kleine Gruppen im Mittel ${mean(small).toFixed(2)}`);
   const ev = Object.values(r.log.evals).filter(e => e.models.adaptive), avg = (m) => mean(ev.map(e => F.scoreOf(e.models[m])));
@@ -492,11 +498,11 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   assert(CX.sportEntries(rows, venues, { now, resolve }).entries.length === r.entries.length + 1, 'Sport: ohne Fenstervorgabe alle angesetzten Spiele der Saison (SPORT.aheadDays)');
   const vfb = r.entries.find(e => e.gebiet.ags[0] === '08111000'), cb = r.entries.find(e => e.gebiet.ags[0] === '12052000');
   assert(rows.length === 5 && CX.sportSeason(now) === 2026 && CX.sportSeason(Date.parse('2027-03-01T00:00:00Z')) === 2026 && CX.sportSeason(Date.parse('2027-07-01T00:00:00Z')) === 2027, 'Sport: Spiele ohne Anstoß entfallen; Saison = Startjahr (ab Juli)');
-  assert(vfb?.von === '2026-11-07T17:00' && vfb.bis === '2026-11-07T21:30' && vfb.art === 'veranstaltung' && vfb.quelle.endsWith('/getmatchdata/bl1/2026') && vfb.id === 'openligadb:7', `Sport: Anstoß 18:30 → Veranstaltung 17:00–21:30 Ortszeit in Stuttgart (${vfb?.von}–${vfb?.bis})`);
+  assert(vfb?.von === '2026-11-07T17:00' && vfb.bis === '2026-11-07T21:30' && vfb.art === 'sport' && vfb.quelle.endsWith('/getmatchdata/bl1/2026') && vfb.id === 'openligadb:7', `Sport: Anstoß 18:30 → Veranstaltung 17:00–21:30 Ortszeit in Stuttgart (${vfb?.von}–${vfb?.bis})`);
   assert(cb?.von === '2026-11-07T14:00' && r.entries.length === 2 && r.unknown.join() === 'Neuer Verein' && !r.entries.some(e => /Großaspach/.test(e.titel)), 'Sport: Alias und „Cottbus/Chóśebuz“ aufgelöst; 3. Liga nur gelistete Vereine; unbekannter Verein der 2. Liga gemeldet; Spiel in 14 Tagen noch nicht');
-  const ctx = CX.ctxLookup([], CX.checkCurated({ ereignisse: r.entries }).ok), iE = CX.CTX_KEYS.indexOf('event');
-  assert(ctx('08111000', '2026-11-07', 16)[iE] === 0 && ctx('08111000', '2026-11-07', 17)[iE] === 1 && ctx('08111000', '2026-11-07', 21)[iE] === 1 && ctx('08111000', '2026-11-07', 22)[iE] === 0 && ctx('09162000', '2026-11-07', 18)[iE] === 0,
-    'Sport: Merkmal event in Stuttgart 17–21 Uhr, nicht davor, danach oder anderswo');
+  const ctx = CX.ctxLookup([], CX.checkCurated({ ereignisse: r.entries }).ok), iE = CX.CTX_KEYS.indexOf('sport');
+  assert(ctx('08111000', '2026-11-07', 16)[iE] === 0 && ctx('08111000', '2026-11-07', 17)[iE] === 1 && ctx('08111000', '2026-11-07', 21)[iE] === 1 && ctx('08111000', '2026-11-07', 22)[iE] === 0 && ctx('09162000', '2026-11-07', 18)[iE] === 0 && ctx('08111000', '2026-11-07', 18)[CX.CTX_KEYS.indexOf('event')] === 0,
+    'Sport: eigenes Merkmal sport (nicht event) in Stuttgart 17–21 Uhr, nicht davor, danach oder anderswo');
   assert(resolve('Münster', 'NW') === null && CX.sportEntries(rows, { ...venues, vereine: { 'VfB Stuttgart': { ort: 'Nirgendwo', land: 'BW' } } }, { now, resolve }).noAgs.join() === 'Nirgendwo (BW)', 'Sport: Ort ohne Gemeinde gemeldet, Land muss passen');
 }
 // ---------- Veranstaltungsorte (Wikidata) und Termine aus Programmseiten und ICS → Veranstaltungen (lib/pulse-context.js)
@@ -546,12 +552,12 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   // Volksfest als eigenes Merkmal fest (hinten in CTX_KEYS), geprüft wie Veranstaltungen; Gedächtnis älterer Fassungen wird aufgefüllt
   { const fe = [{ art: 'volksfest', von: '2027-09-25T11:00', bis: '2027-09-25T23:30', gebiet: { ags: ['08111000'] }, titel: 'Cannstatter Volksfest', quelle: 'https://x.example' }];
     const iF = CX.CTX_KEYS.indexOf('fest'), iE = CX.CTX_KEYS.indexOf('event'), cx = CX.ctxLookup([], CX.checkCurated({ ereignisse: fe }).ok);
-    assert(iF === CX.CTX_KEYS.length - 1 && F.EFFECTS[F.EFFECTS.length - 1] === 'fest' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
-      'Volksfest: eigenes Merkmal fest (letztes in CTX_KEYS/EFFECTS), nicht event, nur in den Öffnungsstunden');
-    const NE = F.EFFECTS.length, k = NE - 1, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
+    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-2).join() === 'fest,sport' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
+      'Volksfest: eigenes Merkmal fest (hinten in CTX_KEYS/EFFECTS, danach sport), nicht event, nur in den Öffnungsstunden');
+    const NE = F.EFFECTS.length, k = NE - 2, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
     const d = mem.days['2026-11-02'];
     assert(d.H.length === NE * NE && d.H[1 * NE + 2] === H[1 * k + 2] && d.H[k * NE + k] === 0 && d.u.length === NE && d.u[k] === 0 && mem.old.P.length === NE * NE && mem.old.P[(k - 1) * NE + (k - 1)] === H[(k - 1) * k + (k - 1)] && mem.old.dk[k] === 0 && F.memoryResize(mem).days['2026-11-02'].H.length === NE * NE,
-      'memoryResize: Gedächtnis mit einer Wirkung weniger auf neue Länge (alte Einträge an ihrem Platz, neue 0, zweimal anwenden ändert nichts)'); }
+      'memoryResize: Gedächtnis mit zwei Wirkungen weniger auf neue Länge (alte Einträge an ihrem Platz, neue 0, zweimal anwenden ändert nichts)'); }
   assert(CX.localMs('2026-11-07T18:30') === Date.parse('2026-11-07T17:30:00Z') && CX.localMs('2026-07-01') === Date.parse('2026-06-30T22:00:00Z') && Number.isNaN(CX.localMs('7.11.')), 'localMs: Ortszeit Winter/Sommer → UTC, Unsinn → NaN');
   const now = Date.parse('2026-11-08T08:00:00Z');
   const sport = { entries: [{ von: '2026-11-07T17:00', bis: '2026-11-07T21:30', gebiet: { ags: ['08111000'] }, titel: 'VfB Stuttgart – SV Werder Bremen (bl1, Anstoß 18:30)', quelle: 'https://api.openligadb.de/x', id: 'openligadb:1', beginn: Date.parse('2026-11-07T17:30:00Z'), liga: 'bl1' }] };
