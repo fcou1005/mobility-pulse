@@ -338,3 +338,17 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   const types = sys.vehicles.map(v => v.type).join(), c1 = sys.vehicles.find(v => v.rawId === 'c1');
   assert(types === 'car,car,moped' && c1.geoOrigin === 'station' && c1.lat === 48.78 && Math.round(c1.batteryPct) === 40 && c1.rangeKm === 240 && sys.stations[0].perType.car === 2, 'readGbfsSystem: Autos an der Station (Position der Station), E-Roller frei, Ladestand 0..1 → %');
 }
+{
+  // Fahrzeugliste leer, Stationen melden Autos (deer): Stationen zählen den Bestand; bei Rädern bleibt es wie bisher
+  const mk = (ff) => ({
+    'https://d.test/gbfs.json': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { de: { feeds: ['system_information', 'vehicle_types', 'station_information', 'station_status', 'free_bike_status'].map(n => ({ name: n, url: `https://d.test/${n}` })) } } },
+    'https://d.test/system_information': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { system_id: 'd', name: 'deer', operator: 'deer', timezone: 'Europe/Berlin', language: 'de' } },
+    'https://d.test/vehicle_types': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { vehicle_types: [{ vehicle_type_id: 'x', form_factor: ff, propulsion_type: 'electric' }] } },
+    'https://d.test/station_information': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { stations: [{ station_id: 'S1', name: 'A', lat: 48.7, lon: 9.1 }] } },
+    'https://d.test/station_status': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { stations: [{ station_id: 'S1', num_bikes_available: 2, num_docks_available: 0, is_installed: true, is_renting: true, is_returning: true, last_reported: 1793280000, vehicle_types_available: [{ vehicle_type_id: 'x', count: 2 }] }] } },
+    'https://d.test/free_bike_status': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { bikes: [] } },
+  });
+  const run = async (ff) => { const f = mk(ff); return C.readGbfsSystem({ id: 'd', operator: 'deer', url: 'https://d.test/gbfs.json', api: 'gbfs' }, async (u) => (f[u] ? { ok: true, status: 200, json: f[u], headers: {} } : { ok: false, status: 404 }), { now: 1793280000e3 + 60e3 }); };
+  const car = await run('car'), bike = await run('bicycle');
+  assert(car.vehicleListPresent === false && car.vehicleListEmpty === true && bike.vehicleListPresent === true && !bike.vehicleListEmpty, 'leere Fahrzeugliste mit Autos an Stationen → Stationen zählen (deer); Räder unverändert');
+}

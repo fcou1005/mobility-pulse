@@ -92,7 +92,8 @@
   "naturenergie": "naturenergie sharing",
   "share now": "SHARE NOW",
   "miles mobility": "MILES",
-  "emmy": "emmy"
+  "emmy": "emmy",
+  "stadtteilauto": "cambio"
  },
  "operator_by_system": {
   "_comment": "Anbieter je System-ID, Vorrang vor operator_aliases (Katalog und Sammler). CityBikes führt DB-Systeme als „Deutsche Bahn AG“ (→ DB Connect); die Marke ist je System verschieden: RegioRad Stuttgart, StadtRAD (Hamburg, Lüneburg), Call a Bike (übrige Städte = DB Connect wie im GBFS-Feed callabike). Kopien werden zusätzlich über Stationskoordinaten erkannt (C.findSourceCopies).",
