@@ -62,6 +62,13 @@ assert(TM.ruleTermine(ics, { ...q, art: 'lauf', format: 'ics' })[0]?.beginn === 
 const mk = `<ul>${['MEDICA|16.–19.11.2026', 'boot|23.01. – 31.01.2027', 'ProWein|14.03.2027 - 16.03.2027'].map(x => `<li><a href="/m/${x.split('|')[0]}">${x.split('|')[0]}</a> <span>${x.split('|')[1]}</span></li>`).join('')}</ul>`;
 const mr = TM.ruleTermine(mk, qm);
 assert(mr.length === 3 && mr[0].titel === 'MEDICA' && mr[0].beginn === '2026-11-16' && mr[0].ende === '2026-11-19' && mr[1].ende === '2027-01-31' && mr[2].beginn === '2027-03-14', 'Messekalender: Name und Spanne neben dem Link, ohne Modell');
+const qs = { art: 'messe', gemeinde: 'Stuttgart' };
+assert(TM.cleanTitle('07. - Stuttgart SÜFFA Die Fachmesse', qs) === 'SÜFFA Die Fachmesse' && TM.cleanTitle('location_on Nürnberg , Deutschland BrauBeviale', qs) === 'BrauBeviale' && TM.checkTermin({ titel: '[mehr Info]', beginn: '2027-01-01', ende: '2027-01-01' }, qm, null, '2026-11-08').why === 'Titel' && TM.checkTermin({ titel: 'Termin speichern', beginn: '2027-01-01', ende: '2027-01-01' }, qm, null, '2026-11-08').why === 'Titel',
+  'Namen bereinigt (Datum, Ortsangabe, Stadt der Quelle vorn), Seitenreste („mehr Info“, „Termin speichern“) fallen weg');
+assert(TM.elsewhere('Glasstech Asia 2026', { art: 'messe', gemeinde: 'München' }) && TM.elsewhere('VeggieWorld München', { art: 'messe', gemeinde: 'Dortmund' }) && !TM.elsewhere('BrauBeviale Nürnberg', { art: 'messe', gemeinde: 'Nürnberg' }) && !TM.elsewhere('HEATEXPO', { art: 'messe', gemeinde: 'Dortmund' }) && !TM.elsewhere('Japan-Tag', { art: 'fest', gemeinde: 'Düsseldorf' }),
+  'Messekalender: Auslands- und Gastmessen anderer Städte fallen weg');
+const tr = TM.textTermin(['Stuttgarter Frühlingsfest vom 17. April bis 9. Mai 2027'], { name: 'Stuttgarter Frühlingsfest', art: 'volksfest' }, '2026-11-08');
+assert(tr[0]?.beginn === '2027-04-17' && tr[0]?.ende === '2027-05-09', 'Textregel: Spanne „17. April bis 9. Mai 2027“');
 const tt = TM.textTermin(TM.pageLines(html), q, '2026-11-08');
 assert(tt.length === 1 && tt[0].beginn === '2027-09-25' && tt[0].ende === '2027-10-11' && TM.checkTermin(tt[0], q, tt[0].datumText, '2026-11-08').ok, 'Textregel ohne Modell: Zeile mit Name und Datum');
 
@@ -94,7 +101,12 @@ assert(wc.length === 2 && wc.some(e => e.von.startsWith('2027-09-26')) && wc.som
         const j = JSON.parse(b); calls.push(j); const txt = j.messages[1].content;
         const termine = txt.includes('Rhein in Lichtern') ? [{ titel: 'Rhein in Lichtern', datumText: `Samstag, 8. Mai ${y}`, beginn: `${y}-05-08`, ende: `${y}-05-08`, uhrVon: '18:00', uhrBis: '', abgesagt: false },
           { titel: 'Erfunden', datumText: `9. Mai ${y}`, beginn: `${y}-05-09`, ende: `${y}-05-09`, uhrVon: '', uhrBis: '', abgesagt: false }] : [];
-        res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ termine }) } }] }));
+        const content = JSON.stringify({ termine });
+        if (!j.stream) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ choices: [{ message: { content } }] })); return; }
+        // wie llama-server mit stream: true – Stücke als Server-Sent Events, zuletzt [DONE]
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        for (let i = 0; i < content.length; i += 7) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: content.slice(i, i + 7) } }] })}\n\n`);
+        res.end('data: [DONE]\n\n');
       }); return;
     }
     const p = pages[req.url]; res.writeHead(p ? 200 : 404, { 'content-type': req.url === '/robots.txt' ? 'text/plain' : 'text/html; charset=utf-8' }); res.end(p || '');
@@ -113,7 +125,7 @@ assert(wc.length === 2 && wc.some(e => e.von.startsWith('2027-09-26')) && wc.som
   assert(S['Rhein in Lichtern']?.via === 'modell' && byT('Rhein in Lichtern').length === 1 && byT('Rhein in Lichtern')[0].von === `${y}-05-08T17:00` && byT('Erfunden').length === 0 && S['Rhein in Lichtern'].verworfen?.['Datum nicht im Text'] === 1 && S['Rhein in Lichtern'].beispiele?.[0]?.beginn === `${y}-05-09` && S['Rhein in Lichtern'].antworten === 2,
     'Lauf: Modell liest die Festseite; erfundener Termin (Datum nicht im Text) fällt weg');
   assert(S['Großes Stadtfest']?.via === 'modell' && S['Großes Stadtfest'].termine === 0, 'Lauf: Modell ohne Treffer → keine Termine (Textregel nur ohne Modell)');
-  assert(calls.length >= 2 && calls.every(c => c.response_format?.type === 'json_schema' && c.temperature === 0), 'Lauf: Modell mit JSON-Schema und Temperatur 0');
+  assert(calls.length >= 2 && calls.every(c => c.response_format?.type === 'json_schema' && c.temperature === 0 && c.stream === true), 'Lauf: Modell mit JSON-Schema, Temperatur 0, Antwort gestreamt');
   assert(o.termine.every(e => CX.checkCurated({ ereignisse: [e] }).ok.length === 1), 'Lauf: alle Einträge gültig für die Ereignisliste');
   // ohne Modell: Textregel für die Seite einer einzelnen Veranstaltung; Vorlauf bleibt erhalten
   await writeFile(path.join(dir, 'prev.json'), JSON.stringify(o));

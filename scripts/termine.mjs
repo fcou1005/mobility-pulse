@@ -37,13 +37,22 @@ async function render(url) {
   const page = await browser.newPage({ userAgent: UA, locale: 'de-DE' });
   try { await page.goto(url, { waitUntil: 'networkidle', timeout: 45e3 }).catch(() => {}); await page.waitForTimeout(1500); return await page.content(); } finally { await page.close(); }
 }
+// llama-server mit Streaming: die Antwort kommt Stück für Stück (ohne Streaming schickt der Server erst nach der ganzen Antwort Kopfzeilen – bei
+// langen Listen > 5 Minuten, dann bricht fetch ab: „fetch failed“)
 async function llm(messages) {
-  const c = new AbortController(), tm = setTimeout(() => c.abort(), 6 * 60e3); llmCalls++;
+  const c = new AbortController(), tm = setTimeout(() => c.abort(), 9 * 60e3); llmCalls++;
   try {
-    const r = await fetch(`${llmUrl}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: c.signal,
-      body: JSON.stringify({ messages, temperature: 0, max_tokens: TM.TERMINE.maxTokens, response_format: { type: 'json_schema', json_schema: { name: 'termine', schema: TM.TERMIN_SCHEMA } } }) });
+    const r = await fetch(`${llmUrl}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, signal: c.signal,
+      body: JSON.stringify({ messages, temperature: 0, max_tokens: TM.TERMINE.maxTokens, stream: true, response_format: { type: 'json_schema', json_schema: { name: 'termine', schema: TM.TERMIN_SCHEMA } } }) });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json(), txt = j?.choices?.[0]?.message?.content || '';
+    let txt = '';
+    if (/event-stream/.test(r.headers.get('content-type') || '')) {
+      const dec = new TextDecoder(); let buf = '';
+      for await (const part of r.body) {
+        buf += dec.decode(part, { stream: true }); let i;
+        while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line.startsWith('data:')) continue; const d = line.slice(5).trim(); if (d === '[DONE]') continue; try { txt += JSON.parse(d)?.choices?.[0]?.delta?.content || ''; } catch {} }
+      }
+    } else txt = (await r.json())?.choices?.[0]?.message?.content || '';
     llmFails = 0; return TM.parseLlm(txt);
   } catch (e) { if (++llmFails >= 3) { log(`Sprachmodell antwortet nicht (${e?.message || e}) – weiter nur mit Regeln`); llmUrl = ''; } throw e; } finally { clearTimeout(tm); }
 }
