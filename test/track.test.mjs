@@ -405,6 +405,23 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   q = T.trackRun(q.state, { vehicles: [...base, S('sw2', 48.610045, 90)], stations: [], sourceRecs: recsS, now: u0 + 2 * dt });
   assert(sumH(q.hourly, 'pickup') === 0 && sumH(q.hourly, 'swap') === 0 && sumH(q.hourly, 'start') === 2, 'abgeleiteter Ladestand 10 % → Fahrtbeginn statt Abholung; Sprung 30 → 90 kein Akkutausch');
 }
+// Akkutausch bei relativem Ladestand (seit 08.11.2026): Schwellen als Anteil der Skala der Quelle (Lime: neuer Akku ≈ 33 statt 100)
+{
+  const u0 = Date.parse('2026-11-06T16:00:00Z'), dt = 20 * 60e3;
+  const S = (id, lat, b) => V(id, lat, 9.00, { operator: 'Lime', sourceId: 'lr', batteryPct: b, batteryDerived: true });
+  const recsS = [{ id: 'lr', status: 'live' }];
+  const base = [...Array(40)].map((_, i) => S('x' + i, 48.20 + i * 0.01, 15 + (i % 19))); // Skala (95. Perzentil) 33
+  let q = T.trackRun(null, { vehicles: [...base, S('a', 48.70, 8), S('b', 48.71, 9), S('c', 48.72, 20)], stations: [], sourceRecs: recsS, now: u0 });
+  // a: gleiche Kennung am Ort 8 → 32 = Tausch; b: verschwindet, neue Kennung 6 m daneben mit 31 = Tausch mit neuer Kennung (keine Fahrt); c: 20 → 32 (nicht niedrig) = kein Tausch
+  q = T.trackRun(q.state, { vehicles: [...base, S('a', 48.70, 32), S('b2', 48.710054, 31), S('c', 48.72, 32)], stations: [], sourceRecs: recsS, now: u0 + dt });
+  const G = { swap: [sumH(q.hourly, 'swap')], start: [sumH(q.hourly, 'start')], end: [sumH(q.hourly, 'end')], rot: [sumH(q.hourly, 'rot')] };
+  assert(G.swap[0] === 2 && G.start[0] === 0 && G.end[0] === 0 && G.rot[0] === 0, `relativer Ladestand: Sprung 8 → 32 (Skala 33) am Ort = Tausch, auch unter neuer Kennung; 20 → 32 nicht (swap ${G.swap[0]}, start ${G.start[0]}, end ${G.end[0]}, rot ${G.rot[0]})`);
+  // zu wenige Fahrzeuge für eine Skala: kein Tausch über relative Schwellen
+  const few = [...Array(10)].map((_, i) => S('f' + i, 48.30 + i * 0.01, 33));
+  let r = T.trackRun(null, { vehicles: [...few, S('a', 48.70, 8)], stations: [], sourceRecs: recsS, now: u0 });
+  r = T.trackRun(r.state, { vehicles: [...few, S('a', 48.70, 32)], stations: [], sourceRecs: recsS, now: u0 + dt });
+  assert(sumH(r.hourly, 'swap') === 0, 'relativer Ladestand: unter 30 Fahrzeugen keine Skala, kein Tausch');
+}
 // M-3: Altlauf (dt > 45 Min., vor der Lückenregel gezählt) in Zellendateien – Band fällt für den Tag aus
 {
   const day = '2026-11-01', at = (hm) => Date.parse(`${day}T${hm}:00Z`); // 07:25 UTC = 08:25 Uhr (Band Morgen)

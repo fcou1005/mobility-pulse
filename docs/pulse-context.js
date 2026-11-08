@@ -8,7 +8,7 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw7k541t';
+import { hourOf, dayOf } from './pulse-track.js?v=mw7kja88';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
