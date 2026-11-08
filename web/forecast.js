@@ -740,7 +740,7 @@ const evWhen = (e, until = null) => {
   if (until) return `${d(e.beginn, day)}–${d(CX.localMs(until), { day: '2-digit', month: '2-digit' })}`;
   return e.noTime ? `${d(e.beginn, day)} · ${t(e.noTime === 1 ? 'fv.evAllDay' : 'fv.evNoTime')}` : d(e.beginn, { ...day, hour: '2-digit', minute: '2-digit' });
 };
-const evKind = (e) => (e.src === 'sport' ? `${t('fv.evSport')} · ${LIGA[e.liga] || e.liga || ''}` : e.src === 'liste' ? (e.kind ? t(`fv.evKind.${e.kind}`) : t('fv.evListe')) : e.kind || t('fv.evVenue'));
+const evKind = (e) => (e.src === 'sport' ? `${t('fv.evSport')} · ${LIGA[e.liga] || e.liga || ''}` : e.src === 'liste' ? `${e.kind ? t(`fv.evKind.${e.kind}`) : t('fv.evListe')}${e.auto ? ` · ${t('fv.evAuto')}` : ''}` : e.kind || t('fv.evVenue'));
 const evWhat = (ctx, e) => (e.quelle && /^https?:/.test(e.quelle) && e.src !== 'sport' ? `<a href="${ctx.esc(e.quelle)}" target="_blank" rel="noopener">${ctx.esc(e.titel)}</a>` : ctx.esc(e.titel));
 /** gleiche Veranstaltung an Folgetagen (Turnier, Messe) als eine Zeile */
 function evRuns(list) {
@@ -843,8 +843,8 @@ async function fillEvents(box, ctx, sel, S0 = null) {
   const { esc } = ctx, now = Date.now(), scope = sel.ags && sel.ags !== 'DE' ? sel.ags : null, vd = ev?.vd, sp = ev?.sp;
   const list = (ev?.list || []).filter(e => e.beginn >= now - 7 * 864e5 && e.beginn <= now + EV_RANGE * 864e5 && CX.eventInScope(e, scope));
   const tog = `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.evRange'))}">${[[14, t('fv.evR14')], [90, t('fv.evR90')], [400, t('fv.evRAll')]].map(([v, l]) => `<button type="button" data-evr="${v}" aria-pressed="${v === EV_RANGE}">${l}</button>`).join('')}</div></div>`;
-  const nSrc = (vd?.quellen || []).length, okSrc = (vd?.quellen || []).filter(q => q.n > 0).length, nCur = (ev?.cu?.ereignisse || []).length;
-  const notes = [t('fv.evNote', { from: activeFromTxt(ev?.cu, sp) }), nSrc ? t('fv.evSrc', { ok: okSrc, n: nSrc }) : '', t('fv.evCur', { n: n0(nCur) })].filter(Boolean).join(' ');
+  const nSrc = (vd?.quellen || []).length, okSrc = (vd?.quellen || []).filter(q => q.n > 0).length, nAuto = (ev?.cu?.ereignisse || []).filter(e => e.auto).length, nCur = (ev?.cu?.ereignisse || []).length - nAuto;
+  const notes = [t('fv.evNote', { from: activeFromTxt(ev?.cu, sp) }), nSrc ? t('fv.evSrc', { ok: okSrc, n: nSrc }) : '', t('fv.evCur', { n: n0(nCur) }), nAuto ? t('fv.evAutoN', { n: n0(nAuto) }) : ''].filter(Boolean).join(' ');
   const shown = list.slice(0, EV_RANGE > 14 ? 400 : 80);
   box.innerHTML = tog + (shown.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.evTitle'))}"><table><thead><tr><th>${t('fv.evColWhen')}</th><th>${t('fv.evColWhere')}</th><th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n">${t('fv.evColCap')}</th><th class="mh">${t('fv.evColKind')}</th><th class="n" title="${esc(t('fv.evColEffTip'))}">${t('fv.evColEff')}</th></tr></thead><tbody>`
     + shown.map(e => `<tr${e.beginn < now ? ' class="muted"' : ''}><td>${esc(evWhen(e))}</td><td>${esc(e.all ? t('fc.scopeDE') : e.laender.length ? e.laender.join(', ') : (ctx.muniName?.(e.ags[0]) || e.ags[0] || '–'))}</td><td class="wrap">${evWhat(ctx, e)}</td><td class="mh">${esc(e.ort || '–')}</td><td class="n">${e.cap ? n0(e.cap) : '–'}</td><td class="mh">${esc(evKind(e))}</td><td class="n">${e.beginn < now ? effCell(evEffect(S0, e)) : ''}</td></tr>`).join('')

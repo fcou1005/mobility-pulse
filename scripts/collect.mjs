@@ -14,6 +14,7 @@ import * as V from '../lib/pulse-coverage.js';
 import * as FC from '../lib/pulse-forecast.js';
 import * as CX from '../lib/pulse-context.js';
 import * as CH from '../lib/pulse-chronos.js';
+import * as ST from '../lib/pulse-strike.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -1248,6 +1249,55 @@ let venueCurated = [];
   } catch (e) { log(`Veranstaltungen: ${e?.message || e}`); }
 }
 
+// Streiks automatisch erkennen (lib/pulse-strike.js): Nachrichtensuche der tagesschau-App (frei, ohne Schlüssel; Regionalmeldungen der ARD-Anstalten
+// eingeschlossen), höchstens alle STRIKE.refreshMin Minuten, je Lauf etwa 12–25 Abrufe (die App erlaubt 60 je Stunde), vollständiger Text nur für
+// neue Streik-Meldungen (höchstens maxDetails) → streiks.json: nur abgeleitete Angaben (Art, Tage, Gebiet, erkannte Orte/Betriebe) und Link, keine
+// Meldungstexte. Sichere Erkennungen (Tag und Gebiet) wirken in der Prognose sofort wie Streiks der gepflegten Liste; Doppel zu ihr fallen weg.
+// Erkanntes bleibt 60 Tage (Training). STRIKE_URL leer = aus.
+let strikeAuto = [];
+{
+  const sf = path.join(DATA, 'streiks.json'), base = process.env.STRIKE_URL ?? ST.STRIKE.base;
+  try {
+    const prev = existsSync(sf) ? JSON.parse(await readFile(sf, 'utf8')) : null;
+    let doc = prev ? { erkannt: prev.erkannt || [], hinweise: prev.hinweise || [] } : { erkannt: [], hinweise: [] }, stats = prev?.abruf || null;
+    if (base && !(prev?.abgerufen && now - prev.abgerufen < ST.STRIKE.refreshMin * 60e3)) {
+      const feats = (boundaries?.features || []).filter(f => munis.has(f.properties?.ags));
+      const places = ST.strikePlaces(feats, JSON.parse(await readFile(path.join(ROOT, 'data', 'streik-betriebe.json'), 'utf8')));
+      const items = new Map(), since = Math.max(now - ST.STRIKE.maxAgeDays * 86400e3, prev?.abgerufen ? prev.abgerufen - 6 * 3600e3 : 0), errors = [];
+      let calls = 0, details = 0;
+      for (const q of ST.STRIKE.queries) for (let p = 0; p < ST.STRIKE.maxPages; p++) {
+        const r = await fetchJson(ST.strikeSearchUrl(q, p, base)); calls++;
+        if (!r.ok) { errors.push(`${q}: ${r.error || `HTTP ${r.status}`}`); break; }
+        const list = ST.searchItems(r.json);
+        for (const it of list) { const k = it.shareURL || it.details || it.title; if (k && !items.has(k) && (Date.parse(it.date) || 0) >= now - ST.STRIKE.maxAgeDays * 86400e3) items.set(k, it); }
+        if (list.length < ST.STRIKE.pageSize || Math.min(...list.map(x => Date.parse(x.date) || now)) < since) break; // neueste zuerst: weiter nur bis zum letzten Abruf
+      }
+      // schon ausgewertete Meldungen (gleicher Link, gleicher Stand) nicht erneut abrufen
+      const known = new Map([...doc.erkannt, ...doc.hinweise].filter(c => c.link).map(c => [c.link, c])), cands = [];
+      for (const it of items.values()) {
+        const link = it.shareURL || it.detailsweb || null, old = link && known.get(link), at = new Date(Date.parse(it.date) || now).toISOString();
+        if (old && old.at === at && (old.det || !ST.strikeLead(it) || !ST.detailUrlOk(it.details))) continue;
+        let full = it, det = false;
+        if (ST.strikeLead(it) && ST.detailUrlOk(it.details) && details < ST.STRIKE.maxDetails) {
+          const r = await fetchJson(it.details); calls++; details++;
+          if (r.ok && Array.isArray(r.json?.content)) { full = { ...it, content: r.json.content, regionIds: r.json.regionIds ?? it.regionIds }; det = true; }
+        }
+        const c = ST.strikeFromItem(full, places, { now }); if (c) cands.push({ ...c, ...(det ? { det: true } : {}) });
+      }
+      doc = ST.mergeStrikes(doc, cands, { now });
+      stats = { at: now, abrufe: calls, volltexte: details, meldungen: items.size, neu: cands.length, ...(errors.length ? { fehler: errors.slice(0, 5) } : {}) };
+      if (errors.length) log(`Streik-Erkennung: ${errors.length} Abfragen ohne Antwort (${errors.slice(0, 2).join('; ')})`);
+      await writeFile(sf, JSON.stringify({ version: 1, at: now, abgerufen: errors.length >= ST.STRIKE.queries.length ? prev?.abgerufen ?? null : now,
+        quelle: 'Nachrichtensuche der tagesschau-App (https://www.tagesschau.de/api2u/search/), ausgewertet im Sammler; gespeichert nur abgeleitete Angaben und der Link zur Meldung',
+        felder: 'art, tage (Ortstage), gebiet (DE | {laender} | {ags}), sicher (Tag und Gebiet erkannt, nicht abgesagt), aus (Absage/Einigung), sammel (Sammelmeldung), grund (erkannte Orte/Betriebe), link, at (Meldung), det (Volltext ausgewertet)',
+        abruf: stats, erkannt: doc.erkannt, hinweise: doc.hinweise }));
+    }
+    const curStrikes = CX.checkCurated(existsSync(path.join(ROOT, 'data', 'ereignisse.json')) ? JSON.parse(await readFile(path.join(ROOT, 'data', 'ereignisse.json'), 'utf8')) : null).ok.filter(e => String(e.art).startsWith('streik'));
+    strikeAuto = CX.checkCurated({ ereignisse: ST.strikeEntries(doc, curStrikes) }).ok;
+    log(`Streik-Erkennung: ${doc.erkannt.length} erkannt, ${doc.hinweise.length} Hinweise, ${strikeAuto.length} für die Prognose${stats?.at === now ? ` (${stats.abrufe} Abrufe, ${stats.meldungen} Meldungen, ${stats.volltexte} Volltexte)` : ''}`);
+  } catch (e) { log(`Streik-Erkennung: ${e?.message || e}`); }
+}
+
 // Prognose-Engine (lib/pulse-forecast.js): ein gepooltes Modell über alle Anbieter und Gemeinden, Selbstprüfung per Rolling Origin (ein Tag voraus)
 // und Live-Abgleich ausgegebener Prognosen mit der Realität → forecast/latest.json (nächste 24 Stunden) und forecast/log.json. Höchstens alle
 // FORECAST_EVERY_MIN Minuten (Standard 60); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
@@ -1266,7 +1316,8 @@ if (process.env.FORECAST !== '0') {
       const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
       const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
       // geprüfte Liste auch im Datenstand: das Dashboard zeigt sie mit Sport und Hallen-Terminen (Prognose › Veranstaltungen)
-      await writeFile(path.join(DATA, 'ereignisse.json'), JSON.stringify({ version: 1, at: now, quelle: 'data/ereignisse.json (gepflegte Liste, je Eintrag mit Beleg)', veranstaltungenAb: curDoc?.veranstaltungenAb ?? null, ereignisse: cur.ok, uebersprungen: cur.bad.length }));
+      // dazu die automatisch erkannten Streiks (streiks.json; Einträge mit auto: true)
+      await writeFile(path.join(DATA, 'ereignisse.json'), JSON.stringify({ version: 1, at: now, quelle: 'data/ereignisse.json (gepflegte Liste, je Eintrag mit Beleg) und automatisch erkannte Streiks (streiks.json, auto: true)', veranstaltungenAb: curDoc?.veranstaltungenAb ?? null, ereignisse: [...cur.ok, ...strikeAuto], automatisch: strikeAuto.length, uebersprungen: cur.bad.length }));
       // Veranstaltungen (Konzerte, Feste) wie Sport erst ab veranstaltungenAb in die Prognose (Ende der Lernphase); Streiks sofort
       const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
       const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung' && e.art !== 'volksfest'); // Volksfeste (Merkmal fest) ebenso
@@ -1278,7 +1329,7 @@ if (process.env.FORECAST !== '0') {
       let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
       const ext = chronos ? CH.chronosLookup(chronos) : null;
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext, pending, pendingFrom });
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...strikeAuto, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext, pending, pendingFrom });
       if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
       if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
       await mkdir(dir, { recursive: true });
@@ -1340,6 +1391,7 @@ if (boundaries) {
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
     '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
     '- Umgebungsereignisse (`incidents/<Tag>.json`, nur Kennzeichen je Gemeinde und Stunde, keine Meldungstexte): Wetterwarnungen des Deutschen Wetterdienstes (DWD Open Data, über Bright Sky); Sperrungen und Staus auf Autobahnen aus der Verkehrsinformation der Autobahn GmbH des Bundes (verkehr.autobahn.de; ausdrückliche Nutzungsbedingungen der Schnittstelle nicht gefunden, Quelle: Die Autobahn GmbH des Bundes). Streiks und Veranstaltungen aus der gepflegten Liste `data/ereignisse.json` im Code-Zweig (je Eintrag mit Quelle).',
+    '- Streiks im Nahverkehr und bei der Bahn (`streiks.json`): im Sammler automatisch erkannt aus der Nachrichtensuche der tagesschau-App (www.tagesschau.de/api2u, mit den Regionalmeldungen der ARD-Anstalten); gespeichert sind nur abgeleitete Angaben (Art, Tage, Gebiet, erkannte Orte und Betriebe) und der Link zur jeweiligen Meldung, keine Meldungstexte.',
     '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine (Name, Beginn, Ort, Link) aus den öffentlichen Programmseiten und Kalendern der Orte (Quelle je Termin verlinkt; `data/veranstaltungskalender.json`), höchstens 60 Tage behalten.',
     '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
     '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',

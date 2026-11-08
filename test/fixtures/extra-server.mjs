@@ -92,6 +92,13 @@ export async function startExtra() {
       if (file === 'cal.ics') { res.writeHead(200, { 'content-type': 'text/calendar' }); return res.end(`BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Messe Test\r\nDTSTART;VALUE=DATE:${ymd}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`); }
       return json({}, 404);
     }
+    if (kind === 'strike') { // Nachrichtensuche der tagesschau-App: „Warnstreik“ mit Busstreik morgen in Tübingen und Metall-Warnstreik (kein Verkehr); sonst leer
+      const q = u.searchParams.get('searchText'), now = new Date().toISOString();
+      if (q !== 'Warnstreik') return json({ searchText: q, totalItemCount: 0, searchResults: [] });
+      return json({ searchText: q, totalItemCount: 2, searchResults: [
+        { title: 'Warnstreik bei den Stadtwerken Tübingen', topline: 'Baden-Württemberg', firstSentence: 'In Tübingen fahren morgen wegen des Warnstreiks keine Busse.', date: now, regionIds: [1], type: 'story', shareURL: 'https://www.swr.de/test-streik', details: `${base}/strike/detail.json` },
+        { title: 'IG Metall ruft zu Warnstreiks auf', firstSentence: 'In vielen Betrieben wird morgen gestreikt.', date: now, regionIds: [1], type: 'story', shareURL: 'https://www.swr.de/test-metall' }] });
+    }
     if (kind === 'getmatchdata') { // OpenLigaDB: bl1 mit Heimspiel in 2 h (Testverein → Tübingen), unbekanntem Heimverein, altem Spiel, Spiel ohne Anstoß; bl2 leer; bl3 Fehler
       const [, , lg] = u.pathname.split('/'), t = Math.floor(Date.now() / 3600e3 + 2) * 3600e3 + 30 * 60e3, iso = (x) => new Date(x).toISOString().replace('.000Z', 'Z');
       const m = (id, at, h, g) => ({ matchID: id, matchDateTime: null, matchDateTimeUTC: at == null ? null : iso(at), leagueShortcut: lg, team1: { teamName: h, shortName: h }, team2: { teamName: g, shortName: g }, location: null });

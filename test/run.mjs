@@ -9,7 +9,7 @@ import * as CX from '../lib/pulse-context.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -187,7 +187,7 @@ await writeFile('test/out/calendar.json', calOld);
 await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }, { name: 'Hallen', url: `${ex.base}/kal/hallen`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
 const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0' });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/` });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 { const cb4 = l4.sources.find(s => s.id === 'citybikes_stadtrad-stuttgart');
   assert(cbCalls3 > 0 && cb4?.status === 'duplicate' && cb4.reused === true && cb4.duplicateOf === 'p_test' && ex.log.filter(x => x.path.startsWith('/cb/')).length === cbCalls3 && !l4.groups['08111000|DB Connect|bike'],
@@ -226,7 +226,15 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   const fl = await readFile('test/out/forecast/latest.json', 'utf8').then(JSON.parse).catch(() => null), fg = await readFile('test/out/forecast/log.json', 'utf8').then(JSON.parse).catch(() => null);
   assert(fl && fl.version === 1 && ['insufficient', 'learning', 'active'].includes(fl.status) && fg && fg.version === 1 && typeof fg.evals === 'object', `Prognose: forecast/latest.json und log.json vom Sammler geschrieben (Status ${fl?.status}, ${fl?.trainDays} Tage)`);
   const er = await readFile('test/out/ereignisse.json', 'utf8').then(JSON.parse).catch(() => null), erSrc = JSON.parse(await readFile('data/ereignisse.json', 'utf8'));
-  assert(er?.version === 1 && Array.isArray(er.ereignisse) && er.ereignisse.length === erSrc.ereignisse.length && er.veranstaltungenAb === erSrc.veranstaltungenAb, `Ereignisliste: geprüfte Einträge im Datenstand (${er?.ereignisse?.length} von ${erSrc.ereignisse.length})`);
+  assert(er?.version === 1 && Array.isArray(er.ereignisse) && er.ereignisse.length === erSrc.ereignisse.length + (er.automatisch || 0) && er.veranstaltungenAb === erSrc.veranstaltungenAb, `Ereignisliste: geprüfte Einträge im Datenstand (${er?.ereignisse?.length} = ${erSrc.ereignisse.length} + ${er?.automatisch} automatisch erkannt)`);
+  // Streik-Erkennung: Busstreik morgen in Tübingen erkannt (Detail-Adresse nicht bei tagesschau.de → nicht abgerufen), Metall-Warnstreik nicht; je Abfrage eine Seite
+  const sk = await readFile('test/out/streiks.json', 'utf8').then(JSON.parse).catch(() => null), ak = er?.ereignisse?.filter(e => e.auto) || [];
+  const ST = await import('../lib/pulse-strike.js'), sCalls = ex.log.filter(x => x.path === '/strike/');
+  assert(sk?.version === 1 && sk.erkannt.length === 1 && sk.erkannt[0].art === 'streik-oepnv' && sk.erkannt[0].gebiet?.ags?.join() === '08416041' && sk.erkannt[0].tage.join() === ST.addDay(T.dayOf(Date.now()), 1)
+    && !JSON.stringify(sk).includes('fahren morgen') && sCalls.length === ST.STRIKE.queries.length && !ex.log.some(x => x.path === '/strike/detail.json') && sk.abruf?.meldungen === 2,
+    `Streik-Erkennung: streiks.json mit Busstreik Tübingen (${sk?.erkannt?.[0]?.tage}), ohne Meldungstext, ${sCalls.length} Abrufe (eine Seite je Abfrage), Metall-Warnstreik ignoriert`);
+  assert(ak.length === 1 && ak[0].art === 'streik-oepnv' && ak[0].gebiet.ags[0] === '08416041' && ak[0].quelle === 'https://www.swr.de/test-streik' && er.automatisch === 1 && fl.env?.sources?.curated >= erSrc.ereignisse.filter(e => !['veranstaltung', 'volksfest'].includes(e.art)).length + 1,
+    `Streik-Erkennung: Eintrag in ereignisse.json (auto) und in der Prognose (Ereignisliste ${fl.env?.sources?.curated} Einträge)`);
   const pr = l4.presence, mp = Object.values(l4.municipalities || {});
   assert(pr?.version === 1 && pr.days >= 1 && mp.length && mp.every(m => ['fest', 'aktiv', 'neu', 'vereinzelt'].includes(m.presence?.status)) && l4.counts.municipalitiesShown === mp.filter(m => m.presence.status !== 'vereinzelt').length,
     `Betriebsgebiete: jede Gemeinde eingestuft (${JSON.stringify(pr?.counts)}), gezeigt ${l4.counts?.municipalitiesShown} von ${mp.length}`);
