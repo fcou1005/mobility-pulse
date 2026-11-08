@@ -1260,7 +1260,7 @@ let strikeAuto = [];
   try {
     const prev = existsSync(sf) ? JSON.parse(await readFile(sf, 'utf8')) : null;
     let doc = prev ? { erkannt: prev.erkannt || [], hinweise: prev.hinweise || [] } : { erkannt: [], hinweise: [] }, stats = prev?.abruf || null;
-    if (base && !(prev?.abgerufen && now - prev.abgerufen < ST.STRIKE.refreshMin * 60e3)) {
+    if (base && !(prev?.abgerufen && now - prev.abgerufen < ST.STRIKE.refreshMin * 60e3 && prev.v === ST.STRIKE.version)) { // neuer Auswertungsstand: sofort
       const feats = (boundaries?.features || []).filter(f => munis.has(f.properties?.ags));
       const places = ST.strikePlaces(feats, JSON.parse(await readFile(path.join(ROOT, 'data', 'streik-betriebe.json'), 'utf8')));
       const items = new Map(), since = Math.max(now - ST.STRIKE.maxAgeDays * 86400e3, prev?.abgerufen ? prev.abgerufen - 6 * 3600e3 : 0), errors = [];
@@ -1287,7 +1287,7 @@ let strikeAuto = [];
       doc = ST.mergeStrikes(doc, cands, { now });
       stats = { at: now, abrufe: calls, volltexte: details, meldungen: items.size, neu: cands.length, ...(errors.length ? { fehler: errors.slice(0, 5) } : {}) };
       if (errors.length) log(`Streik-Erkennung: ${errors.length} Abfragen ohne Antwort (${errors.slice(0, 2).join('; ')})`);
-      await writeFile(sf, JSON.stringify({ version: 1, at: now, abgerufen: errors.length >= ST.STRIKE.queries.length ? prev?.abgerufen ?? null : now,
+      await writeFile(sf, JSON.stringify({ version: 1, v: ST.STRIKE.version, at: now, abgerufen: errors.length >= ST.STRIKE.queries.length ? prev?.abgerufen ?? null : now,
         quelle: 'Nachrichtensuche der tagesschau-App (https://www.tagesschau.de/api2u/search/), ausgewertet im Sammler; gespeichert nur abgeleitete Angaben und der Link zur Meldung',
         felder: 'art, tage (Ortstage), gebiet (DE | {laender} | {ags}), sicher (Tag und Gebiet erkannt, nicht abgesagt), aus (Absage/Einigung), sammel (Sammelmeldung), grund (erkannte Orte/Betriebe), link, at (Meldung), det (Volltext ausgewertet), teile (Gemeinden mit eigenen Tagen), v (Stand der Auswertung)',
         abruf: stats, erkannt: doc.erkannt, hinweise: doc.hinweise }));
