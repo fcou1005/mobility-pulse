@@ -92,6 +92,11 @@ export async function startExtra() {
       if (file === 'cal.ics') { res.writeHead(200, { 'content-type': 'text/calendar' }); return res.end(`BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Messe Test\r\nDTSTART;VALUE=DATE:${ymd}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`); }
       return json({}, 404);
     }
+    if (u.pathname === '/termine/termine.json') { // Branch termine: ein Volksfesttag morgen in Tübingen, ein Eintrag ohne Quelle (fällt bei der Prüfung weg)
+      const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date(Date.now() + 86400e3));
+      return json({ version: 1, at: Date.now(), termine: [{ art: 'volksfest', von: `${d}T11:00`, bis: `${d}T23:00`, beginn: `${d}T11:00`, ohneUhrzeit: true, gebiet: { ags: ['08416041'] }, titel: 'Testfest', kategorie: 'volksfest', quelle: 'https://testfest.example/', id: 'termin:t1', quelleId: 'testfest', auto: true },
+        { art: 'veranstaltung', von: `${d}T17:00`, bis: `${d}T23:00`, gebiet: { ags: ['08416041'] }, titel: 'Ohne Quelle', id: 'termin:t2' }] });
+    }
     if (kind === 'strike') { // Nachrichtensuche der tagesschau-App: „Warnstreik“ mit Busstreik morgen in Tübingen und Metall-Warnstreik (kein Verkehr); sonst leer
       const q = u.searchParams.get('searchText'), now = new Date().toISOString();
       if (q !== 'Warnstreik') return json({ searchText: q, totalItemCount: 0, searchResults: [] });

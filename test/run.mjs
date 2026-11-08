@@ -9,7 +9,7 @@ import * as CX from '../lib/pulse-context.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', TERMINE_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -187,7 +187,7 @@ await writeFile('test/out/calendar.json', calOld);
 await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }, { name: 'Hallen', url: `${ex.base}/kal/hallen`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
 const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/` });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json` });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 { const cb4 = l4.sources.find(s => s.id === 'citybikes_stadtrad-stuttgart');
   assert(cbCalls3 > 0 && cb4?.status === 'duplicate' && cb4.reused === true && cb4.duplicateOf === 'p_test' && ex.log.filter(x => x.path.startsWith('/cb/')).length === cbCalls3 && !l4.groups['08111000|DB Connect|bike'],
@@ -233,7 +233,11 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   assert(sk?.version === 1 && sk.erkannt.length === 1 && sk.erkannt[0].art === 'streik-oepnv' && sk.erkannt[0].gebiet?.ags?.join() === '08416041' && sk.erkannt[0].tage.join() === ST.addDay(T.dayOf(Date.now()), 1)
     && !JSON.stringify(sk).includes('fahren morgen') && sCalls.length === ST.STRIKE.queries.length && !ex.log.some(x => x.path === '/strike/detail.json') && sk.abruf?.meldungen === 2,
     `Streik-Erkennung: streiks.json mit Busstreik Tübingen (${sk?.erkannt?.[0]?.tage}), ohne Meldungstext, ${sCalls.length} Abrufe (eine Seite je Abfrage), Metall-Warnstreik ignoriert`);
-  assert(ak.length === 1 && ak[0].art === 'streik-oepnv' && ak[0].gebiet.ags[0] === '08416041' && ak[0].quelle === 'https://www.swr.de/test-streik' && er.automatisch === 1 && fl.env?.sources?.curated >= erSrc.ereignisse.filter(e => !['veranstaltung', 'volksfest'].includes(e.art)).length + 1,
+  const tk = er?.ereignisse?.filter(e => e.auto && e.art === 'volksfest') || [];
+  assert(er?.termine === 1 && er.streiks === 1 && tk.length === 1 && tk[0].titel === 'Testfest' && tk[0].gebiet.ags[0] === '08416041' && fl.env?.support?.fest && ex.log.some(x => x.path === '/termine/termine.json'),
+    `Termine (Workflow): Eintrag aus dem Branch termine in ereignisse.json (auto), Eintrag ohne Quelle fällt weg; Volksfest vor ${erSrc.veranstaltungenAb} nur vorgemerkt`);
+  const akS = ak.filter(e => e.art.startsWith('streik'));
+  assert(akS.length === 1 && akS[0].art === 'streik-oepnv' && akS[0].gebiet.ags[0] === '08416041' && akS[0].quelle === 'https://www.swr.de/test-streik' && er.automatisch === 2 && fl.env?.sources?.curated >= erSrc.ereignisse.filter(e => !['veranstaltung', 'volksfest'].includes(e.art)).length + 1,
     `Streik-Erkennung: Eintrag in ereignisse.json (auto) und in der Prognose (Ereignisliste ${fl.env?.sources?.curated} Einträge)`);
   const pr = l4.presence, mp = Object.values(l4.municipalities || {});
   assert(pr?.version === 1 && pr.days >= 1 && mp.length && mp.every(m => ['fest', 'aktiv', 'neu', 'vereinzelt'].includes(m.presence?.status)) && l4.counts.municipalitiesShown === mp.filter(m => m.presence.status !== 'vereinzelt').length,

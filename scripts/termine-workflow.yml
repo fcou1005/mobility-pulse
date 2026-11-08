@@ -1,0 +1,82 @@
+# Vorlage für .github/workflows/termine.yml (nur über die GitHub-Weboberfläche unter fcou1005 anlegen/ändern, siehe CLAUDE.md).
+# Termine aus den Quellenseiten (lib/pulse-termine.js, scripts/termine.mjs): wöchentlich die offiziellen Seiten aus data/termin-quellen.json lesen,
+# künftige Termine mit Regeln und – wo die nicht greifen – einem kleinen lokalen Sprachmodell herausziehen (Qwen3-4B-Instruct-2507, Apache 2.0,
+# über llama.cpp auf CPU; kein Konto, kein Schlüssel) → termine.json im Branch termine. Der Sammler liest sie (TERMINE_URL) wie chronos.json.
+name: Termine
+on:
+  schedule:
+    - cron: '23 1 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: termine
+  cancel-in-progress: false
+jobs:
+  termine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      LLAMA_REPO: ggml-org/llama.cpp
+      MODEL_REPO: lmstudio-community/Qwen3-4B-Instruct-2507-GGUF
+      MODEL_QUANT: Q4_K_M
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Bisherige Termine holen (Branch termine)
+        run: curl -sfL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/termine/termine.json" -o termine-vorher.json || echo '{}' > termine-vorher.json
+      # Sprachmodell: fällt ein Schritt aus, liest der Lauf nur mit Regeln (schema.org, Kalender-Blöcke, Textregel) weiter
+      - name: llama.cpp (fertige Linux-Version der neuesten Ausgabe)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p llama
+          for TAG in $(gh release list -R "$LLAMA_REPO" --limit 8 --json tagName --jq '.[].tagName' | grep -E '^b[0-9]+$'); do
+            if gh release download "$TAG" -R "$LLAMA_REPO" -p '*bin-ubuntu-x64.tar.gz' -p '*bin-ubuntu-x64.zip' -D llama --clobber; then echo "llama.cpp $TAG"; break; fi
+          done
+          cd llama && for f in *; do case "$f" in *.tar.gz) tar xzf "$f";; *.zip) unzip -q -o "$f";; esac; done
+          BIN=$(dirname "$(find "$PWD" -name llama-server -type f | head -1)")
+          test -x "$BIN/llama-server" && echo "LLAMA_BIN=$BIN" >> "$GITHUB_ENV"
+      - name: Modell-Cache
+        uses: actions/cache@v5
+        with:
+          path: ~/models
+          key: termine-${{ env.MODEL_REPO }}-${{ env.MODEL_QUANT }}-v1
+      - name: Modell holen
+        continue-on-error: true
+        run: |
+          mkdir -p ~/models
+          if [ ! -s ~/models/model.gguf ]; then
+            F=$(curl -sf "https://huggingface.co/api/models/$MODEL_REPO" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const f=(JSON.parse(s).siblings||[]).map(x=>x.rfilename).find(n=>n.endsWith('.gguf')&&n.includes(process.env.MODEL_QUANT));if(!f)process.exit(1);console.log(f)})")
+            curl -sfL "https://huggingface.co/$MODEL_REPO/resolve/main/$F" -o ~/models/model.gguf
+          fi
+          ls -la ~/models
+      - name: Sprachmodell starten
+        continue-on-error: true
+        run: |
+          LD_LIBRARY_PATH="$LLAMA_BIN" nohup "$LLAMA_BIN/llama-server" -m ~/models/model.gguf -c 8192 -t 4 --host 127.0.0.1 --port 8080 > llama.log 2>&1 &
+          for i in $(seq 1 150); do curl -sf http://127.0.0.1:8080/health > /dev/null && break; sleep 2; done
+          curl -sf http://127.0.0.1:8080/health && echo "LLM_URL=http://127.0.0.1:8080" >> "$GITHUB_ENV" || (tail -n 30 llama.log; exit 1)
+      - name: Chromium für Seiten, die Termine per JavaScript laden
+        run: |
+          npm i --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Termine lesen
+        env:
+          RENDER: '1'
+          MAX_MIN: '170'
+        run: node scripts/termine.mjs data/termin-quellen.json termine-vorher.json termine.json
+      - name: Protokoll des Sprachmodells (Ende)
+        if: always()
+        run: tail -n 25 llama.log || true
+      - name: Veröffentlichen (Branch termine)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir pub && cp termine.json pub/ && cd pub
+          git init -q && git checkout -q --orphan termine && git add termine.json
+          git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Termine $(date -u +%FT%TZ)"
+          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" termine:termine

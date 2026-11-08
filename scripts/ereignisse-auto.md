@@ -7,6 +7,7 @@ Was automatisch läuft, macht der **Sammler** (GitHub Actions, stündlich) – k
 | Streiks ÖPNV und Bahn | Nachrichtensuche der tagesschau-App, `lib/pulse-strike.js`; Betriebe → Gemeinden in `data/streik-betriebe.json` | `streiks.json`, Einträge mit `auto: true` in `ereignisse.json` |
 | Heimspiele | OpenLigaDB, Spielorte in `data/sport-spielorte.json` | `sport.json` |
 | Termine großer Hallen | Programmseiten/ICS in `data/veranstaltungskalender.json` | `veranstaltungen.json` |
+| Volksfeste, Messen, Stadien, Läufe, Feste, Karneval | Workflow „Termine“ (wöchentlich, Regeln + lokales Sprachmodell), Quellen in `data/termin-quellen.json` | `termine.json` im Branch `termine`, Einträge mit `auto: true` in `ereignisse.json` |
 
 Von Hand bleibt `data/ereignisse.json` (Veranstaltungen, Volksfeste, Karneval, Messen; Streiks nur, wenn die automatische Erkennung einen
 verpasst hat). Grundregeln aus `CLAUDE.md`: nur Konto `fcou1005`, `.github/workflows/*` nie ändern, keine Workflows starten.
@@ -28,6 +29,12 @@ git add data/ && git commit -m "…" && git pull --rebase origin main && git pus
   Ein gepflegter Eintrag verdrängt automatische Erkennungen derselben Art im selben Gebiet an denselben Tagen.
 - Ort fehlt, weil die Meldung nur den Betrieb nennt: Betrieb in `data/streik-betriebe.json` nachtragen (`muster`, `ags`; Betriebe mit vielen Kreisen ohne `ags`).
 - Hinweise ansehen: `streiks.json` → `hinweise` (ohne Tag, ohne Ort, Sammelmeldung, abgesagt) mit Link zur Meldung.
+
+## Termin-Quellen pflegen
+
+- Neue Quelle in `data/termin-quellen.json` → `quellen`: `{ "name", "url", "ags", "art": volksfest|messe|konzert|sport|lauf|fest|karneval, "ort", "besucher", "statisch": false wenn die Seite Termine per JavaScript lädt, "stichwort", "stichwortNicht" (Regex für auszuschließende Titel) }`.
+- Nach dem nächsten Lauf im Branch `termine` → `termine.json` → `quellen` prüfen: `status`, `via` (regel/modell/textregel), `termine`, `verworfen` (warum Termine des Modells wegfielen).
+- Workflow von Hand: Actions → Termine → Run workflow (im Browser des Nutzers).
 
 ## Veranstaltungen aktualisieren (auf Zuruf in einer Sitzung)
 

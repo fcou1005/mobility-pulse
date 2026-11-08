@@ -15,6 +15,7 @@ import * as FC from '../lib/pulse-forecast.js';
 import * as CX from '../lib/pulse-context.js';
 import * as CH from '../lib/pulse-chronos.js';
 import * as ST from '../lib/pulse-strike.js';
+import * as TMN from '../lib/pulse-termine.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -1315,21 +1316,26 @@ if (process.env.FORECAST !== '0') {
       // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
       const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
       const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
+      // Termine aus dem Workflow „Termine“ (Branch termine, lib/pulse-termine.js, wöchentlich): wie Veranstaltungen der Liste (erst ab veranstaltungenAb);
+      // Doppel zur Liste fallen für die Anzeige weg (das Merkmal je Gemeinde und Stunde ist 0/1). TERMINE_URL leer = aus.
+      let termineAuto = []; const termUrl = process.env.TERMINE_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/termine/termine.json`;
+      if (termUrl) { const r = await fetchJson(termUrl); if (r.ok && r.json?.version === 1 && Array.isArray(r.json.termine)) termineAuto = TMN.withoutCurated(CX.checkCurated({ ereignisse: r.json.termine }).ok, cur.ok); else if (r.status !== 404) log(`Termine: ${r.error || `HTTP ${r.status}`}`); }
       // geprüfte Liste auch im Datenstand: das Dashboard zeigt sie mit Sport und Hallen-Terminen (Prognose › Veranstaltungen)
-      // dazu die automatisch erkannten Streiks (streiks.json; Einträge mit auto: true)
-      await writeFile(path.join(DATA, 'ereignisse.json'), JSON.stringify({ version: 1, at: now, quelle: 'data/ereignisse.json (gepflegte Liste, je Eintrag mit Beleg) und automatisch erkannte Streiks (streiks.json, auto: true)', veranstaltungenAb: curDoc?.veranstaltungenAb ?? null, ereignisse: [...cur.ok, ...strikeAuto], automatisch: strikeAuto.length, uebersprungen: cur.bad.length }));
+      // dazu die automatisch erkannten Streiks (streiks.json) und Termine (termine.json), beide mit auto: true
+      await writeFile(path.join(DATA, 'ereignisse.json'), JSON.stringify({ version: 1, at: now, quelle: 'data/ereignisse.json (gepflegte Liste, je Eintrag mit Beleg), automatisch erkannte Streiks (streiks.json) und Termine aus den Quellenseiten (Branch termine), beide auto: true', veranstaltungenAb: curDoc?.veranstaltungenAb ?? null, ereignisse: [...cur.ok, ...strikeAuto, ...termineAuto], automatisch: strikeAuto.length + termineAuto.length, streiks: strikeAuto.length, termine: termineAuto.length, uebersprungen: cur.bad.length }));
       // Veranstaltungen (Konzerte, Feste) wie Sport erst ab veranstaltungenAb in die Prognose (Ende der Lernphase); Streiks sofort
       const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
       const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung' && e.art !== 'volksfest'); // Volksfeste (Merkmal fest) ebenso
       // Zurückgehaltenes nur zählen (Dashboard: „erfasst, wirkt ab …“), nicht ins Modell
-      const pending = [...(evOn ? [] : cur.ok.filter(e => e.art === 'veranstaltung' || e.art === 'volksfest')), ...sportPending, ...(evOn ? [] : venueCurated)], pendingFrom = curDoc?.veranstaltungenAb ?? sportFrom;
+      const pending = [...(evOn ? [] : cur.ok.filter(e => e.art === 'veranstaltung' || e.art === 'volksfest')), ...sportPending, ...(evOn ? [] : venueCurated), ...(evOn ? [] : termineAuto)], pendingFrom = curDoc?.veranstaltungenAb ?? sportFrom;
       if (curOk.length < cur.ok.length) log(`Ereignisliste: ${cur.ok.length - curOk.length} Veranstaltungen vorgemerkt, in der Prognose ab ${curDoc.veranstaltungenAb}`);
+      if (termineAuto.length) log(`Termine (Workflow): ${termineAuto.length} Einträge${evOn ? '' : `, in der Prognose ab ${curDoc?.veranstaltungenAb}`}`);
       // Chronos-2 (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py) – Vergleich „chronos“ und
       // Mischung „blend“ (lernt mit, wählbar ab BLEND.activeFrom); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
       let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
       const ext = chronos ? CH.chronosLookup(chronos) : null;
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...strikeAuto, ...sportCurated, ...(evOn ? venueCurated : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext, pending, pendingFrom });
+      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...strikeAuto, ...sportCurated, ...(evOn ? [...venueCurated, ...termineAuto] : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext, pending, pendingFrom });
       if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
       if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
       await mkdir(dir, { recursive: true });
@@ -1391,6 +1397,7 @@ if (boundaries) {
     '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
     '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
     '- Umgebungsereignisse (`incidents/<Tag>.json`, nur Kennzeichen je Gemeinde und Stunde, keine Meldungstexte): Wetterwarnungen des Deutschen Wetterdienstes (DWD Open Data, über Bright Sky); Sperrungen und Staus auf Autobahnen aus der Verkehrsinformation der Autobahn GmbH des Bundes (verkehr.autobahn.de; ausdrückliche Nutzungsbedingungen der Schnittstelle nicht gefunden, Quelle: Die Autobahn GmbH des Bundes). Streiks und Veranstaltungen aus der gepflegten Liste `data/ereignisse.json` im Code-Zweig (je Eintrag mit Quelle).',
+    '- Termine aus den Quellenseiten (Branch `termine`, `termine.json`; in `ereignisse.json` mit `auto: true`): offizielle Seiten von Volksfesten, Messen, Stadien und Festen aus `data/termin-quellen.json`, wöchentlich im Workflow „Termine“ gelesen (Regeln, sonst ein kleines lokales Sprachmodell); je Termin der Link zur Quelle.',
     '- Streiks im Nahverkehr und bei der Bahn (`streiks.json`): im Sammler automatisch erkannt aus der Nachrichtensuche der tagesschau-App (www.tagesschau.de/api2u, mit den Regionalmeldungen der ARD-Anstalten); gespeichert sind nur abgeleitete Angaben (Art, Tage, Gebiet, erkannte Orte und Betriebe) und der Link zur jeweiligen Meldung, keine Meldungstexte.',
     '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine (Name, Beginn, Ort, Link) aus den öffentlichen Programmseiten und Kalendern der Orte (Quelle je Termin verlinkt; `data/veranstaltungskalender.json`), höchstens 60 Tage behalten.',
     '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
