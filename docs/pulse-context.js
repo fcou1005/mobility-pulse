@@ -8,7 +8,7 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw7kja88';
+import { hourOf, dayOf } from './pulse-track.js?v=mw7km74u';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -121,6 +121,8 @@ export function compactMatches(list, league) {
   const out = [];
   for (const m of Array.isArray(list) ? list : []) {
     const t = Date.parse(m?.matchDateTimeUTC ?? ''), h = m?.team1?.teamName, g = m?.team2?.teamName;
+    // Endspiele (DFB-Pokal in Berlin, Champions League) auf neutralem Platz: kein Heimspiel in der Stadt des erstgenannten Vereins
+    if (/^(finale|endspiel|final)$/i.test(String(m?.group?.groupName || '').trim())) continue;
     if (Number.isFinite(t) && typeof h === 'string' && h && typeof g === 'string') out.push([m.matchID ?? null, league, t, h, g]);
   }
   return out;

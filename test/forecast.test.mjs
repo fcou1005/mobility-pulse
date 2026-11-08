@@ -487,6 +487,7 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   rows[1][1] = 'bl2'; rows[2][1] = 'bl3'; rows[3][1] = 'bl2';
   const venues = { ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { 'VfB Stuttgart': { ort: 'Stuttgart', land: 'BW' }, 'FC Energie Cottbus': { ort: 'Cottbus', land: 'BB', alias: ['Energie Cottbus'] } } };
   const resolve = CX.placeResolver([{ properties: { ags: '08111000', name: 'Stuttgart', state: 'BW' } }, { properties: { ags: '12052000', name: 'Cottbus/Chóśebuz', state: 'BB' } }, { properties: { ags: 'x1', name: 'Münster', state: 'HE' } }]);
+  assert(CX.compactMatches([{ matchID: 1, matchDateTimeUTC: '2027-05-22T18:00:00Z', team1: { teamName: 'VfB Stuttgart' }, team2: { teamName: 'X' }, group: { groupName: 'Finale' } }, { matchID: 2, matchDateTimeUTC: '2027-04-22T18:00:00Z', team1: { teamName: 'VfB Stuttgart' }, team2: { teamName: 'Y' }, group: { groupName: 'Halbfinale' } }], 'dfb').map(x => x[0]).join() === '2', 'Sport: Endspiel auf neutralem Platz kein Heimspiel, Halbfinale schon');
   const r = CX.sportEntries(rows, venues, { now, resolve, aheadDays: 10 });
   assert(CX.sportEntries(rows, venues, { now, resolve }).entries.length === r.entries.length + 1, 'Sport: ohne Fenstervorgabe alle angesetzten Spiele der Saison (SPORT.aheadDays)');
   const vfb = r.entries.find(e => e.gebiet.ags[0] === '08111000'), cb = r.entries.find(e => e.gebiet.ags[0] === '12052000');
