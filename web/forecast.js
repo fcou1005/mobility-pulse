@@ -767,11 +767,11 @@ async function fillEventsMain(box, ctx, sel, S0) {
   if (!box) return;
   const ev = await loadEvents(ctx); if (!box.isConnected) return;
   const { esc } = ctx, now = Date.now(), scope = sel.ags && sel.ags !== 'DE' ? sel.ags : null, list = (ev?.list || []).filter(e => CX.eventInScope(e, scope));
+  const muni = (a) => ctx.muniName?.(a) || a || '–', known = (e) => !!e.ags[0] && muni(e.ags[0]) !== e.ags[0], withWhere = !scope;
   const endMs = (e) => CX.localMs(e.bis), big = (e) => e.src === 'liste' || (e.cap || 0) >= 10000 || ['bl1', 'ucl', 'dfb'].includes(e.liga);
   // ohne Gebiet: nur Gemeinden mit Sharing-Daten (Spielorte wie Sinsheim fallen sonst als Kennziffer auf)
   const upAll = list.filter(e => endMs(e) >= now && e.beginn <= now + 14 * 864e5 && (scope || known(e))), up = scope ? upAll : upAll.filter(e => big(e) && e.beginn <= now + 7 * 864e5);
   const past = list.filter(e => endMs(e) < now && e.beginn >= now - 7 * 864e5 && (scope || known(e))).reverse();
-  const muni = (a) => ctx.muniName?.(a) || a || '–', known = (e) => !!e.ags[0] && muni(e.ags[0]) !== e.ags[0], withWhere = !scope;
   // Zusammenfassung
   const runs = evRuns(upAll), nS = upAll.filter(e => e.src === 'sport').length, nO = runs.filter(r => r.e.src === 'ort').length, nL = runs.filter(r => r.e.src === 'liste').length;
   const top = runs.filter(r => r.e.cap).sort((a, b) => b.e.cap - a.e.cap)[0];
@@ -783,7 +783,7 @@ async function fillEventsMain(box, ctx, sel, S0) {
     if (cities.length) html += `<div class="fv-ev-cities" role="list" aria-label="${esc(t('fv.evCities'))}">${cities.map(([a, n]) => `<a role="listitem" class="chip" href="?scope=${esc(a)}#prognose">${esc(muni(a))} <b>${n0(n)}</b></a>`).join('')}</div>`;
   }
   const upRuns = evRuns(up);
-  const upRow = (r) => `<tr><td>${esc(evWhen(r.e, r.until))}</td>${withWhere ? `<td>${esc(muni(r.e.ags[0]))}</td>` : ''}<td class="wrap">${evWhat(ctx, r.e)}</td><td class="mh">${esc(r.e.ort || evKind(r.e))}</td><td class="n mh">${r.e.cap ? n0(r.e.cap) : '–'}</td></tr>`;
+  const upRow = (r) => `<tr><td>${esc(evWhen(r.e, r.until))}</td>${withWhere ? `<td>${esc(muni(r.e.ags[0]))}</td>` : ''}<td class="wrap">${evWhat(ctx, r.e)}</td><td class="mh">${esc(r.e.ort || (r.e.src === 'liste' ? (r.e.kind ? evKind(r.e) : '–') : evKind(r.e)))}</td><td class="n mh">${r.e.cap ? n0(r.e.cap) : '–'}</td></tr>`;
   const upHead = `<thead><tr><th>${t('fv.evColWhen')}</th>${withWhere ? `<th>${t('fv.evColWhere')}</th>` : ''}<th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n mh">${t('fv.evColCap')}</th></tr></thead>`;
   html += `<div class="fv-ev-h">${t(scope ? 'fv.evNext' : 'fv.evNextBig')}</div>`;
   html += upRuns.length ? `<div class="tbl fv-tbl full" data-csv="0" tabindex="0" role="region" aria-label="${esc(t('fv.evNext'))}"><table>${upHead}<tbody>${upRuns.slice(0, 8).map(upRow).join('')}</tbody></table></div>${upRuns.length > 8 ? `<details class="fv-data"><summary>${t('fv.evMore', { n: upRuns.length - 8 })}</summary><div class="tbl fv-tbl full" data-csv="0"><table>${upHead}<tbody>${upRuns.slice(8).map(upRow).join('')}</tbody></table></div></details>` : ''}` : `<p class="fv-sub">${t('fv.evNoneNext')}</p>`;

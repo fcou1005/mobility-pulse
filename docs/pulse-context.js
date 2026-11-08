@@ -8,7 +8,7 @@
 //            Schnittstelle für Streiks; Einträge mit Quelle)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mw7ji5ac';
+import { hourOf, dayOf } from './pulse-track.js?v=mw7jz9k4';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -379,7 +379,7 @@ export function eventList({ sport = null, venues = null, curated = [], now = Dat
     const b = localMs(e.von), bis = String(e.bis ?? e.von), end = localMs(bis.length === 10 ? `${bis}T23:59` : bis); if (!Number.isFinite(b) || end < lo || b > hi) continue;
     const g = e.gebiet, timed = String(e.von).length > 10;
     out.push({ id: e.id || `liste:${i}`, src: 'liste', art: e.art, ags: g?.ags || [], laender: g?.laender || [], all: g === 'DE', von: String(e.von).length === 10 ? `${e.von}T00:00` : e.von, bis: bis.length === 10 ? `${bis}T23:59` : bis, beginn: Number.isFinite(localMs(e.beginn)) ? localMs(e.beginn) : b,
-      titel: e.titel || e.art, ort: e.ort || '', cap: Number.isFinite(e.besucher) ? e.besucher : null, kind: e.kategorie || (ART_KIND[e.art] === 'event' ? null : e.art), liga: null, quelle: e.quelle, noTime: timed ? 0 : 1 });
+      titel: e.titel || e.art, ort: e.ort || '', cap: Number.isFinite(e.besucher) ? e.besucher : null, kind: e.kategorie || (ART_KIND[e.art] === 'event' ? null : e.art), liga: null, quelle: e.quelle, noTime: e.ohneUhrzeit ? 2 : timed ? 0 : 1 });
   }
   // gleiche Veranstaltung aus zwei Quellen (Liste und Programmseite): Liste gewinnt, wenn Gemeinde, Tag und Name übereinstimmen
   const key = (e) => `${e.ags[0] || ''}|${e.von.slice(0, 10)}|${norm(e.titel).replace(/[^a-z0-9]/g, '').slice(0, 12)}`, seen = new Set(out.filter(e => e.src === 'liste').map(key));
