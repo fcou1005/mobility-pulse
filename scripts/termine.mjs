@@ -56,8 +56,9 @@ for (const q of sources) {
     const r = await get(q.url, 30e3, q.format === 'ics' ? 'text/calendar' : 'text/html'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
     let body = (await r.text()).slice(0, 4e6), rendered = false;
     if (q.statisch === false && process.env.RENDER === '1') { try { body = await render(q.url); rendered = true; } catch (e) { log(`${q.name}: Darstellung fehlgeschlagen (${e?.message || e})`); } }
-    const why = {}, accepted = [];
-    const take = (t, chunk) => { const c = TM.checkTermin(t, q, chunk, today); if (c.ok) accepted.push(t); else why[c.why] = (why[c.why] || 0) + 1; };
+    const why = {}, accepted = [], beispiele = []; let chunks = 0, antworten = 0;
+    // Diagnose: je Quelle Zahl der Ausschnitte und Modell-Antworten, die ersten zwei verworfenen Datumsangaben (nur Datum, Grund)
+    const take = (t, chunk) => { const c = TM.checkTermin(t, q, chunk, today); if (c.ok) accepted.push(t); else { why[c.why] = (why[c.why] || 0) + 1; if (beispiele.length < 2) beispiele.push({ datum: String(t?.datumText || '').slice(0, 60), beginn: t?.beginn, ende: t?.ende, grund: c.why }); } };
     let via = 'regel';
     for (const t of TM.ruleTermine(body, q)) take(t, null);
     if (!accepted.length) {
@@ -66,7 +67,8 @@ for (const q of sources) {
         via = 'modell';
         for (const chunk of TM.dateChunks(lines)) {
           if (Date.now() - t0 > budget || !llmUrl) break;
-          try { for (const t of await llm(TM.llmMessages(q, chunk, today))) take(t, chunk); } catch (e) { why[`Modell: ${String(e?.message || e).slice(0, 40)}`] = (why[`Modell: ${String(e?.message || e).slice(0, 40)}`] || 0) + 1; }
+          chunks++;
+          try { const got = await llm(TM.llmMessages(q, chunk, today)); antworten += got.length; for (const t of got) take(t, chunk); } catch (e) { why[`Modell: ${String(e?.message || e).slice(0, 40)}`] = (why[`Modell: ${String(e?.message || e).slice(0, 40)}`] || 0) + 1; }
         }
       }
       if (!accepted.length && !llmUrl) { via = 'textregel'; for (const t of TM.textTermin(lines, q, today)) take(t, t.datumText); }
@@ -75,8 +77,8 @@ for (const q of sources) {
     const seen = new Set(), uniq = accepted.filter(t => { const k = `${TM.norm(t.titel)}|${t.beginn}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, TM.TERMINE.maxPerSource);
     const entries = uniq.flatMap(t => TM.terminEntries(t, q, { stand: today, via, from: today }));
     results.push({ q, ok: true, entries });
-    states.push({ ...st, at: now, status: 'ok', via, ...(rendered ? { dargestellt: true } : {}), termine: uniq.length, tage: entries.length, ...(Object.keys(why).length ? { verworfen: why } : {}), sek: Math.round((Date.now() - ts) / 1000) });
-    log(`${q.name}: ${uniq.length} Termine (${via}${rendered ? ', dargestellt' : ''})${Object.keys(why).length ? `, verworfen ${JSON.stringify(why)}` : ''}`);
+    states.push({ ...st, at: now, status: 'ok', via, ...(rendered ? { dargestellt: true } : {}), termine: uniq.length, tage: entries.length, zeilen: TM.pageLines(body).length, ...(via === 'modell' ? { ausschnitte: chunks, antworten } : {}), ...(Object.keys(why).length ? { verworfen: why, beispiele } : {}), sek: Math.round((Date.now() - ts) / 1000) });
+    log(`${q.name}: ${uniq.length} Termine (${via}${rendered ? ', dargestellt' : ''}${via === 'modell' ? `, ${chunks} Ausschnitte, ${antworten} Antworten` : ''})${Object.keys(why).length ? `, verworfen ${JSON.stringify(why)} ${JSON.stringify(beispiele)}` : ''}`);
   } catch (e) {
     results.push({ q, ok: false, entries: [] });
     states.push({ ...prevQ.get(q.id), ...st, at: now, status: 'fehler', fehler: String(e?.message || e).slice(0, 100) });

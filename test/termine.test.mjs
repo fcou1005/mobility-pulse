@@ -27,9 +27,10 @@ const q = { id: 'wasen-08111000', name: 'Cannstatter Volksfest', url: 'https://w
 const chunk = 'Das 182. Cannstatter Volksfest findet vom 25.09. – 11.10.2027 statt.\nFrühlingsfest 17. April bis 9. Mai 2027';
 const T = (o) => ({ titel: 'Cannstatter Volksfest', datumText: '25.09. – 11.10.2027', beginn: '2027-09-25', ende: '2027-10-11', uhrVon: '', uhrBis: '', abgesagt: false, ...o });
 assert(TM.checkTermin(T(), q, chunk, '2026-11-08').ok, 'Termin mit wörtlichem Datumstext und passenden Tagen');
-assert(TM.checkTermin(T({ datumText: '26.09. – 11.10.2027' }), q, chunk, '2026-11-08').why === 'Datumstext nicht im Text', 'erfundener Datumstext fällt weg');
-assert(TM.checkTermin(T({ beginn: '2027-09-24' }), q, chunk, '2026-11-08').why === 'Datum passt nicht zum Text', 'Beginn passt nicht zum Datumstext');
-assert(TM.checkTermin(T({ beginn: '2026-09-25', ende: '2026-10-11', datumText: '25.09. – 11.10.2027' }), q, chunk, '2026-11-08').why === 'Datum passt nicht zum Text', 'falsches Jahr (Text nennt 2027)');
+assert(TM.checkTermin(T({ datumText: '26.09. – 11.10.2027', beginn: '2027-09-26' }), q, chunk, '2026-11-08').why === 'Datum nicht im Text', 'erfundenes Datum (steht nirgends im Text) fällt weg');
+assert(TM.checkTermin(T({ datumText: '25. September bis 11. Oktober 2027' }), q, chunk, '2026-11-08').ok, 'umgeschriebener Datumstext: Beginn und Ende stehen als Datum im Text → gilt');
+assert(TM.checkTermin(T({ beginn: '2027-09-24' }), q, chunk, '2026-11-08').why === 'Datum passt nicht zum Datumstext', 'Beginn passt nicht zum wörtlichen Datumstext');
+assert(TM.checkTermin(T({ beginn: '2026-09-25', ende: '2026-10-11', datumText: '25.09. – 11.10.2027' }), q, chunk, '2026-11-08').why === 'Datum passt nicht zum Datumstext' && TM.checkTermin(T({ beginn: '2026-09-25', ende: '2026-10-11', datumText: 'x' }), q, chunk, '2026-11-08').why === 'Datum nicht im Text', 'falsches Jahr (Text nennt 2027)');
 assert(TM.checkTermin(T({ titel: 'Frühlingsfest', datumText: '17. April bis 9. Mai 2027', beginn: '2027-04-17', ende: '2027-05-09' }), q, chunk, '2026-11-08').ok, '„17. April bis 9. Mai 2027“: Monatsnamen und Spanne');
 assert(TM.checkTermin(T({ beginn: '2027-09-25', ende: '2027-11-30', datumText: '25.09. – 11.10.2027' }), q, chunk, '2026-11-08').ok === false, 'Ende passt nicht / zu lang');
 assert(TM.checkTermin(T({ abgesagt: true }), q, chunk, '2026-11-08').why === 'abgesagt' && TM.checkTermin(T({ titel: 'Weihnachtsmarkt am Wasen' }), q, chunk, '2026-11-08').ok === false, 'abgesagt und Weihnachtsmarkt fallen weg');
@@ -103,7 +104,7 @@ assert(wc.length === 2 && wc.some(e => e.von.startsWith('2027-09-26')) && wc.som
   const byT = (t) => o.termine.filter(e => e.titel === t);
   assert(S.Testmesse?.via === 'regel' && byT('Testmesse').length === 3 && byT('Testmesse')[0].von === `${y}-02-03T10:00`, 'Lauf: Messe aus schema.org (3 Tage), ohne Modell');
   assert(S['Gesperrt']?.status === 'fehler' && /robots/.test(S['Gesperrt'].fehler), 'Lauf: robots.txt-Sperre beachtet');
-  assert(S['Rhein in Lichtern']?.via === 'modell' && byT('Rhein in Lichtern').length === 1 && byT('Rhein in Lichtern')[0].von === `${y}-05-08T17:00` && byT('Erfunden').length === 0 && S['Rhein in Lichtern'].verworfen?.['Datumstext nicht im Text'] === 1,
+  assert(S['Rhein in Lichtern']?.via === 'modell' && byT('Rhein in Lichtern').length === 1 && byT('Rhein in Lichtern')[0].von === `${y}-05-08T17:00` && byT('Erfunden').length === 0 && S['Rhein in Lichtern'].verworfen?.['Datum nicht im Text'] === 1 && S['Rhein in Lichtern'].beispiele?.[0]?.beginn === `${y}-05-09` && S['Rhein in Lichtern'].antworten === 2,
     'Lauf: Modell liest die Festseite; erfundener Termin (Datum nicht im Text) fällt weg');
   assert(S['Großes Stadtfest']?.via === 'modell' && S['Großes Stadtfest'].termine === 0, 'Lauf: Modell ohne Treffer → keine Termine (Textregel nur ohne Modell)');
   assert(calls.length >= 2 && calls.every(c => c.response_format?.type === 'json_schema' && c.temperature === 0), 'Lauf: Modell mit JSON-Schema und Temperatur 0');
