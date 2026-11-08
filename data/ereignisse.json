@@ -20,42 +20,6 @@
   "ereignisse": [
     {
       "art": "veranstaltung",
-      "von": "2026-11-11T09:00",
-      "bis": "2026-11-11T23:00",
-      "gebiet": {
-        "ags": [
-          "05315000"
-        ]
-      },
-      "titel": "Karneval: Sessionseröffnung 11.11. (Köln, Altstadt und Zülpicher Viertel)",
-      "quelle": "https://www.koeln.de/karneval/11-11-koeln-karneval/"
-    },
-    {
-      "art": "veranstaltung",
-      "von": "2026-11-11T10:00",
-      "bis": "2026-11-11T20:00",
-      "gebiet": {
-        "ags": [
-          "05111000"
-        ]
-      },
-      "titel": "Karneval: Sessionsauftakt 11.11. mit Hoppeditz-Erwachen (Düsseldorf, Altstadt)",
-      "quelle": "https://www.visitduesseldorf.de/erleben/veranstaltungen/karneval"
-    },
-    {
-      "art": "veranstaltung",
-      "von": "2026-11-11T10:00",
-      "bis": "2026-11-11T20:00",
-      "gebiet": {
-        "ags": [
-          "07315000"
-        ]
-      },
-      "titel": "Fastnacht: Kampagnenauftakt 11.11. (Mainz, Schillerplatz)",
-      "quelle": "https://www.mainz.de/en/service/events/carnival-in-mainz.php"
-    },
-    {
-      "art": "veranstaltung",
       "von": "2026-10-31T10:00",
       "bis": "2026-10-31T22:00",
       "beginn": "2026-10-31T10:00",
@@ -406,6 +370,20 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "streik-oepnv",
+      "von": "2026-11-02",
+      "bis": "2026-11-04",
+      "gebiet": {
+        "ags": [
+          "08226098"
+        ]
+      },
+      "titel": "Warnstreik ver.di bei SWEG-Bussen (Standort Wiesloch)",
+      "quelle": "https://www.sweg.de/fileadmin/user_upload/pdf/pressemitteilungen/pressemitteilung-sweg-20261102-Verdi-Warnstreik-05._06.11.2026.pdf",
+      "id": "streik:sweg-wiesloch-2026-11-02",
+      "stand": "2026-11-08"
+    },
+    {
       "art": "volksfest",
       "von": "2026-11-02T13:00",
       "bis": "2026-11-02T23:00",
@@ -579,6 +557,24 @@
       "id": "recherche:1d417db20f",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
+    },
+    {
+      "art": "streik-oepnv",
+      "von": "2026-11-05",
+      "bis": "2026-11-06",
+      "gebiet": {
+        "ags": [
+          "08317065",
+          "08317096",
+          "08317122",
+          "08317057",
+          "08316011"
+        ]
+      },
+      "titel": "Warnstreik ver.di bei SWEG-Bussen (Lahr, Offenburg, Schutterwald, Kehl, Emmendingen)",
+      "quelle": "https://www.sweg.de/fileadmin/user_upload/pdf/pressemitteilungen/pressemitteilung-sweg-20261102-Verdi-Warnstreik-05._06.11.2026.pdf",
+      "id": "streik:sweg-ortenau-2026-11-05",
+      "stand": "2026-11-08"
     },
     {
       "art": "veranstaltung",
@@ -1241,6 +1237,27 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "streik-oepnv",
+      "von": "2026-11-08",
+      "bis": "2026-11-09",
+      "gebiet": {
+        "ags": [
+          "03241005",
+          "03241006",
+          "03241008",
+          "03241009",
+          "03241010",
+          "03241014",
+          "03241015",
+          "03241016"
+        ]
+      },
+      "titel": "Warnstreik ver.di bei Regiobus Hannover (Umland, Sprint-Linien), ganztägig",
+      "quelle": "https://www.volksstimme.de/panorama/mehrtagiger-warnstreik-bei-regiobus-angekundigt-4350541",
+      "id": "streik:regiobus-2026-11-08",
+      "stand": "2026-11-08"
+    },
+    {
       "art": "veranstaltung",
       "von": "2026-11-08T09:00",
       "bis": "2026-11-08T19:00",
@@ -1571,6 +1588,20 @@
       "sicher": "bestätigt"
     },
     {
+      "art": "streik-oepnv",
+      "von": "2026-11-09",
+      "bis": "2026-11-09",
+      "gebiet": {
+        "ags": [
+          "03241001"
+        ]
+      },
+      "titel": "Warnstreik ver.di: ÜSTRA-Betriebshof Mittelfeld (einzelne Stadtbahnlinien in Hannover eingeschränkt)",
+      "quelle": "https://www.volksstimme.de/panorama/mehrtagiger-warnstreik-bei-regiobus-angekundigt-4350541",
+      "id": "streik:uestra-mittelfeld-2026-11-09",
+      "stand": "2026-11-08"
+    },
+    {
       "art": "volksfest",
       "von": "2026-11-09T13:00",
       "bis": "2026-11-09T23:00",
@@ -1685,6 +1716,42 @@
       "id": "recherche:7a72a227d6",
       "stand": "2026-11-08",
       "sicher": "bestätigt"
+    },
+    {
+      "art": "veranstaltung",
+      "von": "2026-11-11T09:00",
+      "bis": "2026-11-11T23:00",
+      "gebiet": {
+        "ags": [
+          "05315000"
+        ]
+      },
+      "titel": "Karneval: Sessionseröffnung 11.11. (Köln, Altstadt und Zülpicher Viertel)",
+      "quelle": "https://www.koeln.de/karneval/11-11-koeln-karneval/"
+    },
+    {
+      "art": "veranstaltung",
+      "von": "2026-11-11T10:00",
+      "bis": "2026-11-11T20:00",
+      "gebiet": {
+        "ags": [
+          "05111000"
+        ]
+      },
+      "titel": "Karneval: Sessionsauftakt 11.11. mit Hoppeditz-Erwachen (Düsseldorf, Altstadt)",
+      "quelle": "https://www.visitduesseldorf.de/erleben/veranstaltungen/karneval"
+    },
+    {
+      "art": "veranstaltung",
+      "von": "2026-11-11T10:00",
+      "bis": "2026-11-11T20:00",
+      "gebiet": {
+        "ags": [
+          "07315000"
+        ]
+      },
+      "titel": "Fastnacht: Kampagnenauftakt 11.11. (Mainz, Schillerplatz)",
+      "quelle": "https://www.mainz.de/en/service/events/carnival-in-mainz.php"
     },
     {
       "art": "veranstaltung",
