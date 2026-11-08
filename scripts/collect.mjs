@@ -1276,20 +1276,20 @@ let strikeAuto = [];
       const known = new Map([...doc.erkannt, ...doc.hinweise].filter(c => c.link).map(c => [c.link, c])), cands = [];
       for (const it of items.values()) {
         const link = it.shareURL || it.detailsweb || null, old = link && known.get(link), at = new Date(Date.parse(it.date) || now).toISOString();
-        if (old && old.at === at && (old.det || !ST.strikeLead(it) || !ST.detailUrlOk(it.details))) continue;
+        if (old && old.at === at && (old.v || 1) === ST.STRIKE.version && (old.det || !ST.strikeLead(it) || !ST.detailUrlOk(it.details))) continue;
         let full = it, det = false;
         if (ST.strikeLead(it) && ST.detailUrlOk(it.details) && details < ST.STRIKE.maxDetails) {
           const r = await fetchJson(it.details); calls++; details++;
           if (r.ok && Array.isArray(r.json?.content)) { full = { ...it, content: r.json.content, regionIds: r.json.regionIds ?? it.regionIds }; det = true; }
         }
-        const c = ST.strikeFromItem(full, places, { now }); if (c) cands.push({ ...c, ...(det ? { det: true } : {}) });
+        const c = ST.strikeFromItem(full, places, { now }); if (c) cands.push({ ...c, v: ST.STRIKE.version, ...(det ? { det: true } : {}) });
       }
       doc = ST.mergeStrikes(doc, cands, { now });
       stats = { at: now, abrufe: calls, volltexte: details, meldungen: items.size, neu: cands.length, ...(errors.length ? { fehler: errors.slice(0, 5) } : {}) };
       if (errors.length) log(`Streik-Erkennung: ${errors.length} Abfragen ohne Antwort (${errors.slice(0, 2).join('; ')})`);
       await writeFile(sf, JSON.stringify({ version: 1, at: now, abgerufen: errors.length >= ST.STRIKE.queries.length ? prev?.abgerufen ?? null : now,
         quelle: 'Nachrichtensuche der tagesschau-App (https://www.tagesschau.de/api2u/search/), ausgewertet im Sammler; gespeichert nur abgeleitete Angaben und der Link zur Meldung',
-        felder: 'art, tage (Ortstage), gebiet (DE | {laender} | {ags}), sicher (Tag und Gebiet erkannt, nicht abgesagt), aus (Absage/Einigung), sammel (Sammelmeldung), grund (erkannte Orte/Betriebe), link, at (Meldung), det (Volltext ausgewertet)',
+        felder: 'art, tage (Ortstage), gebiet (DE | {laender} | {ags}), sicher (Tag und Gebiet erkannt, nicht abgesagt), aus (Absage/Einigung), sammel (Sammelmeldung), grund (erkannte Orte/Betriebe), link, at (Meldung), det (Volltext ausgewertet), teile (Gemeinden mit eigenen Tagen), v (Stand der Auswertung)',
         abruf: stats, erkannt: doc.erkannt, hinweise: doc.hinweise }));
     }
     const curStrikes = CX.checkCurated(existsSync(path.join(ROOT, 'data', 'ereignisse.json')) ? JSON.parse(await readFile(path.join(ROOT, 'data', 'ereignisse.json'), 'utf8')) : null).ok.filter(e => String(e.art).startsWith('streik'));

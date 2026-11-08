@@ -71,7 +71,15 @@ assert(m2.erkannt.length === 0 && m2.hinweise.length === 0, 'nach 60 Tagen verge
 const doc = S.mergeStrikes(null, [c1, gdl, hann], { now: Date.parse('2026-11-08T21:00:00Z') });
 const cur = [{ art: 'streik-oepnv', von: '2026-11-05', bis: '2026-11-06', gebiet: { ags: ['08317096'] }, titel: 'gepflegt', quelle: 'https://x' }];
 const ent = S.strikeEntries(doc, cur);
-assert(ent.length === 2 && ent.every(e => e.auto && e.quelle.startsWith('https://')) && !ent.some(e => e.von === '2026-11-05'), 'Doppel zum gepflegten Eintrag fällt weg');
+const e5 = ent.find(e => e.von === '2026-11-05');
+assert(ent.length === 3 && ent.every(e => e.auto && e.quelle.startsWith('https://')) && e5 && !e5.gebiet.ags.includes('08317096') && e5.gebiet.ags.length === 4, 'Gemeinde mit gepflegtem Eintrag an denselben Tagen fällt weg, die übrigen bleiben');
+// Norden und Süden mit eigenen Tagen in einer Meldung
+const ns = S.strikeFromItem(it({ date: '2026-11-01T18:00:00+01:00', title: 'Neuer Warnstreik bei der SWEG', firstSentence: 'Ab Montag fallen wieder Busse aus.', regionIds: [1], shareURL: 'https://www.swr.de/ns',
+  content: [{ type: 'text', value: 'Im Norden wird von Montag bis Mittwoch gestreikt, betroffen ist Heilbronn.' }, { type: 'text', value: 'Am Donnerstag und Freitag trifft der Streik den Süden.' }, { type: 'text', value: 'Betroffen sind dann die Standorte Lahr und Kehl.' }] }), P);
+assert(ns?.sicher && ns.teile?.length === 2 && ns.teile.find(t => t.ags.includes('08121000'))?.tage.join() === '2026-11-02,2026-11-03,2026-11-04' && ns.teile.find(t => t.ags.includes('08317065'))?.tage.join() === '2026-11-05,2026-11-06' && ns.tage.length === 5,
+  'Teile: Tage je Ort aus dem eigenen bzw. dem letzten Satz davor (Norden Mo–Mi, Süden Do–Fr)');
+const nsE = S.strikeEntries(S.mergeStrikes(null, [ns], { now: Date.parse('2026-11-01T18:00:00Z') }));
+assert(nsE.length === 2 && nsE[0].gebiet.ags.join() === '08121000' && nsE[0].bis === '2026-11-04' && nsE[1].gebiet.ags.join() === '08317057,08317065' && nsE[1].von === '2026-11-05', 'Teile → je ein Eintrag mit eigenen Gemeinden');
 assert(ent.find(e => e.art === 'streik-bahn')?.von === '2026-11-11' && ent.find(e => e.art === 'streik-bahn').bis === '2026-11-13' && /Bahnstreik/.test(ent.find(e => e.art === 'streik-bahn').titel), 'zusammenhängende Tage → ein Eintrag');
 const chk = CX.checkCurated({ ereignisse: ent });
 assert(chk.ok.length === ent.length && !chk.bad.length, 'Einträge bestehen die Prüfung der Ereignisliste');
