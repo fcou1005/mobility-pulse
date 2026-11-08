@@ -1,7 +1,7 @@
 // Recherche je Stadt (Auftrag: scripts/ereignisse-recherche.md, je Region eine JSON-Datei) → Einträge für data/ereignisse.json (art veranstaltung):
 // geprüft (Gemeinde mit Sharing-Daten, Datum, Quelle, nicht wochenlang außer Volksfesten (art volksfest, bis 31 Tage), nicht abgesagt), je Tag ein Eintrag mit Zeitfenster wie Sport/Hallen
 // (Beginn − 60 Min. bis Ende + 60 Min. bzw. Beginn + 3 Std.; Umzug/Messe ohne Ende bis 22 Uhr; ohne Uhrzeit 17–23 bzw. 10–22 Uhr), ohne Dubletten.
-// Aufruf: node scripts/ereignisse-merge.mjs <Recherche-Ordner> <boundaries/index.json> <Vorschau.json> [--write]
+// Aufruf: [FROM=JJJJ-MM-TT] [TO=JJJJ-MM-TT] node scripts/ereignisse-merge.mjs <Recherche-Ordner> <boundaries/index.json> <Vorschau.json> [--write] [--rolling]
 // --write ersetzt alle Einträge mit id „recherche:…“ in data/ereignisse.json; gepflegte Einträge ohne diese id bleiben.
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -28,10 +28,19 @@ const isT = (s) => /^\d{2}:\d{2}$/.test(String(s || ''));
 const idx = JSON.parse(await readFile(idxFile, 'utf8')), ACTIVE = new Set(Object.values(idx.states || {}).flatMap(s => s.ags || []));
 const files = (await readdir(dir)).filter(f => f.endsWith('.json') && !f.startsWith('_'));
 const cur = JSON.parse(await readFile(path.join(repo, 'data', 'ereignisse.json'), 'utf8'));
-const have = new Set(cur.ereignisse.filter(e => !String(e.id || '').startsWith('recherche:')).map(e => `${e.gebiet?.ags?.[0]}|${String(e.von).slice(0, 10)}|${norm(e.titel).slice(0, 14)}`));
+// --rolling (laufende Aktualisierung): nur ersetzen, was diese Recherche abdeckt – recherchierte Einträge ab FROM für die Gemeinden unter
+// „geprueft“ und die Art laut „umfang“ der Datei (voll = Veranstaltungen, volksfest = Volksfeste, ergaenzung/ohne Angabe = nichts ersetzen);
+// ohne --rolling ersetzt --write alle recherchierten Einträge (Neuaufbau aus allen Dateien)
+const rolling = process.argv.includes('--rolling'), docs = [];
+for (const f of files) { try { docs.push([f, JSON.parse(await readFile(path.join(dir, f), 'utf8'))]); } catch (e) { console.log(`${f}: kein JSON (${e.message})`); } }
+const ART_OF = { voll: 'veranstaltung', volksfest: 'volksfest' }, replace = new Set();
+for (const [, doc] of docs) { const art = ART_OF[doc.umfang]; if (art) for (const g of doc.geprueft || []) if (g?.ags) replace.add(`${FIX[g.ags] || g.ags}|${art}`); }
+const isRech = (e) => String(e.id || '').startsWith('recherche:');
+const gone = (e) => isRech(e) && (!rolling || (replace.has(`${e.gebiet?.ags?.[0]}|${e.art}`) && String(e.von).slice(0, 10) >= FROM && String(e.von).slice(0, 10) <= TO)); // nur im Fenster der Recherche
+const n0 = cur.ereignisse.length, kept = cur.ereignisse.filter(e => !gone(e));
+const have = new Set(kept.filter(e => rolling || !isRech(e)).map(e => `${e.gebiet?.ags?.[0]}|${String(e.von).slice(0, 10)}|${norm(e.titel).slice(0, 14)}`));
 const entries = [], drop = [], perCity = {}, checked = [];
-for (const f of files) {
-  let doc; try { doc = JSON.parse(await readFile(path.join(dir, f), 'utf8')); } catch (e) { drop.push(`${f}: kein JSON (${e.message})`); continue; }
+for (const [f, doc] of docs) {
   checked.push(...(doc.geprueft || []).map(g => `${g.stadt} (${g.ags})`));
   for (const v of doc.veranstaltungen || []) {
     if (FIX[v.ags]) v.ags = FIX[v.ags];
@@ -71,7 +80,8 @@ console.log(Object.entries(perCity).sort((a, b) => b[1] - a[1]).map(([k, n]) => 
 if (drop.length) console.log('Verworfen:\n  ' + drop.join('\n  '));
 await writeFile(out, JSON.stringify(entries, null, 1));
 if (flag === '--write') {
-  cur.ereignisse = [...cur.ereignisse.filter(e => !String(e.id || '').startsWith('recherche:')), ...entries];
+  cur.ereignisse = [...kept, ...entries].sort((a, b) => String(a.von).localeCompare(String(b.von)));
+  if (rolling) console.log(`laufend: ${n0 - kept.length} ersetzt, ${entries.length} eingetragen`);
   await writeFile(path.join(repo, 'data', 'ereignisse.json'), JSON.stringify(cur, null, 2) + '\n');
   console.log(`data/ereignisse.json: ${cur.ereignisse.length} Einträge`);
 }
