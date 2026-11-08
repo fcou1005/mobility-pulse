@@ -1265,6 +1265,8 @@ if (process.env.FORECAST !== '0') {
       // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
       const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
       const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
+      // geprüfte Liste auch im Datenstand: das Dashboard zeigt sie mit Sport und Hallen-Terminen (Prognose › Veranstaltungen)
+      await writeFile(path.join(DATA, 'ereignisse.json'), JSON.stringify({ version: 1, at: now, quelle: 'data/ereignisse.json (gepflegte Liste, je Eintrag mit Beleg)', veranstaltungenAb: curDoc?.veranstaltungenAb ?? null, ereignisse: cur.ok, uebersprungen: cur.bad.length }));
       // Veranstaltungen (Konzerte, Feste) wie Sport erst ab veranstaltungenAb in die Prognose (Ende der Lernphase); Streiks sofort
       const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
       const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung');

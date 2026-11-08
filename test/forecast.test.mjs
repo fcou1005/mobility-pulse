@@ -539,6 +539,26 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   assert(CX.venueEntries(rows, vA.map(v => ({ ...v, cap: 4000 })), { now: Date.parse('2026-11-06T12:00:00Z') }).length === 0 && CX.venueEntries(rows, vs, { now: Date.parse('2026-11-06T12:00:00Z') }).length === 0, 'Einträge: nur Orte ab 5.000 Plätzen und mit Gemeinde');
   assert(CX.robotsAllowed('User-agent: *\nDisallow: /intern\nAllow: /intern/frei', '/intern/x') === false && CX.robotsAllowed('User-agent: *\nDisallow: /intern\nAllow: /intern/frei', '/intern/frei/y') && CX.robotsAllowed('User-agent: other\nDisallow: /', '/x') && CX.robotsAllowed('', '/x'), 'robots.txt: Disallow, längeres Allow, fremder User-agent, leer');
 }
+// ---------- Veranstaltungsliste fürs Dashboard und gemessene Wirkung (lib/pulse-context.js eventList, eventEffect)
+{
+  assert(CX.localMs('2026-11-07T18:30') === Date.parse('2026-11-07T17:30:00Z') && CX.localMs('2026-07-01') === Date.parse('2026-06-30T22:00:00Z') && Number.isNaN(CX.localMs('7.11.')), 'localMs: Ortszeit Winter/Sommer → UTC, Unsinn → NaN');
+  const now = Date.parse('2026-11-08T08:00:00Z');
+  const sport = { entries: [{ von: '2026-11-07T17:00', bis: '2026-11-07T21:30', gebiet: { ags: ['08111000'] }, titel: 'VfB Stuttgart – SV Werder Bremen (bl1, Anstoß 18:30)', quelle: 'https://api.openligadb.de/x', id: 'openligadb:1', beginn: Date.parse('2026-11-07T17:30:00Z'), liga: 'bl1' }] };
+  const venues = { venues: [{ id: 'Q1', ags: '08111000', cap: 15500, name: 'Schleyer-Halle' }], events: [['e1', 'Supercross', Date.parse('2026-11-07T09:00:00Z'), 'Q1', null, null, 'https://h.example/sx', 1], ['e2', 'Placebo', Date.parse('2026-11-21T19:00:00Z'), 'Q1', 'Music', 'Rock', 'https://h.example/p', 0], ['e3', 'Später', Date.parse('2026-12-20T19:00:00Z'), 'Q1', null, null, null, 0], ['e4', 'VVK ab', Date.parse('2026-11-13T09:00:00Z'), 'Q1', null, null, null, 2]] };
+  const curated = [{ art: 'veranstaltung', von: '2026-11-21T19:00', bis: '2026-11-21T23:30', beginn: '2026-11-21T20:00', gebiet: { ags: ['08111000'] }, titel: 'Placebo', ort: 'Schleyer-Halle', besucher: 15500, kategorie: 'konzert', quelle: 'https://h.example/p' },
+    { art: 'streik-oepnv', von: '2026-11-09', bis: '2026-11-09', gebiet: { laender: ['BW'] }, titel: 'Warnstreik', quelle: 'https://x.example' }];
+  const L = CX.eventList({ sport, venues, curated, now, pastDays: 8, aheadDays: 21 });
+  const vfb = L.find(e => e.src === 'sport'), pl = L.filter(e => /Placebo/.test(e.titel));
+  assert(L.length === 4 && vfb?.titel === 'VfB Stuttgart – SV Werder Bremen' && vfb.liga === 'bl1' && !L.some(e => e.titel === 'Später'), `eventList: Sport ohne Ligazusatz, Fenster 8 Tage zurück bis 21 voraus (${L.map(e => e.titel).join(', ')})`);
+  assert(pl.length === 1 && pl[0].src === 'liste' && pl[0].beginn === Date.parse('2026-11-21T19:00:00Z') && pl[0].cap === 15500 && pl[0].kind === 'konzert', 'eventList: gleicher Termin aus Liste und Programmseite einmal, Liste gewinnt (Beginn 20 Uhr, Besucher, Art)');
+  const st = L.find(e => e.art === 'streik-oepnv');
+  assert(CX.eventInScope(st, '08111000') && !CX.eventInScope(st, '05315000') && CX.eventInScope(vfb, null) && !CX.eventInScope(vfb, '05315000'), 'eventInScope: Land, Gemeinde, ganz Deutschland');
+  // Wirkung: im Fenster 17–21 Uhr Ist 1,5 × Plan, übriger Tag 1,1 × Plan → bereinigt ≈ +36 %
+  const p = Array.from({ length: 24 }, () => 100), a = p.map((x, h) => (h >= 17 && h <= 21 ? 150 : 110));
+  const f = CX.eventEffect({ '2026-11-07': { 'ags:08111000': { p, a } } }, 'ags:08111000', vfb);
+  assert(f && f.hours === 5 && f.ist === 750 && f.plan === 500 && Math.abs(f.rel - 0.5) < 1e-9 && Math.abs(f.rest - 0.1) < 1e-9 && Math.abs(f.uplift - (1.5 / 1.1 - 1)) < 1e-9, `eventEffect: Fenster 17–21 Uhr, bereinigt um den übrigen Tag (${JSON.stringify(f)})`);
+  assert(CX.eventEffect({ '2026-11-07': { 'ags:08111000': { p: p.map(() => null), a } } }, 'ags:08111000', vfb) === null && CX.eventEffect({}, 'ags:08111000', vfb) === null, 'eventEffect: ohne Plan oder Tag keine Wirkung');
+}
 // ---------- Chronos-2: Vergleich chronos und Mischung blend (lib/pulse-chronos.js, scripts/chronos.py)
 {
   const CH = await import('../lib/pulse-chronos.js');
