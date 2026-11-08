@@ -6,6 +6,7 @@
 // wer nicht drankommt, behält seine bisherigen Termine und ist im nächsten Lauf zuerst dran. ONLY: nur diese Quellen-IDs (Komma).
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import * as TM from '../lib/pulse-termine.js';
 import { robotsAllowed } from '../lib/pulse-context.js';
 import { dayOf } from '../lib/pulse-track.js';
@@ -32,7 +33,7 @@ async function allowed(u) {
 }
 let browser = null;
 async function render(url) {
-  if (!browser) { const { chromium } = await import('playwright'); browser = await chromium.launch(); }
+  if (!browser) { let pw; try { pw = await import('playwright'); } catch { pw = createRequire(import.meta.url)('playwright'); } browser = await pw.chromium.launch(); } // global installiert: require (NODE_PATH)
   const page = await browser.newPage({ userAgent: UA, locale: 'de-DE' });
   try { await page.goto(url, { waitUntil: 'networkidle', timeout: 45e3 }).catch(() => {}); await page.waitForTimeout(1500); return await page.content(); } finally { await page.close(); }
 }
@@ -43,7 +44,7 @@ async function llm(messages) {
       body: JSON.stringify({ messages, temperature: 0, max_tokens: TM.TERMINE.maxTokens, response_format: { type: 'json_schema', json_schema: { name: 'termine', schema: TM.TERMIN_SCHEMA } } }) });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json(), txt = j?.choices?.[0]?.message?.content || '';
-    llmFails = 0; return JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1))?.termine || [];
+    llmFails = 0; return TM.parseLlm(txt);
   } catch (e) { if (++llmFails >= 3) { log(`Sprachmodell antwortet nicht (${e?.message || e}) – weiter nur mit Regeln`); llmUrl = ''; } throw e; } finally { clearTimeout(tm); }
 }
 
@@ -53,9 +54,13 @@ for (const q of sources) {
   if (Date.now() - t0 > budget) { states.push({ ...prevQ.get(q.id), ...st, status: 'nicht dran (Zeit)' }); results.push({ q, ok: false, entries: [] }); continue; }
   try {
     if (!(await allowed(q.url))) throw Object.assign(new Error('robots.txt verbietet den Abruf'), { robots: true });
-    const r = await get(q.url, 30e3, q.format === 'ics' ? 'text/calendar' : 'text/html'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    let body = (await r.text()).slice(0, 4e6), rendered = false;
-    if (q.statisch === false && process.env.RENDER === '1') { try { body = await render(q.url); rendered = true; } catch (e) { log(`${q.name}: Darstellung fehlgeschlagen (${e?.message || e})`); } }
+    // Abruf; scheitert er (manche Seiten lehnen einfache Abrufe ab) oder steht kein Datum im Text (Termine per JavaScript), mit Chromium darstellen
+    const canRender = process.env.RENDER === '1' && q.format !== 'ics';
+    let body = '', rendered = false;
+    try { const r = await get(q.url, 30e3, q.format === 'ics' ? 'text/calendar' : 'text/html'); if (!r.ok) throw new Error(`HTTP ${r.status}`); body = (await r.text()).slice(0, 4e6); }
+    catch (e) { if (!canRender) throw e; log(`${q.name}: ${e?.message || e} – Darstellung mit Chromium`); body = ''; }
+    const noDates = (b) => !TM.dateChunks(TM.pageLines(b)).length && !TM.ldTermine(b, q.url).length;
+    if (canRender && (q.statisch === false || !body || noDates(body))) { try { const h = await render(q.url); if (h && (!body || !noDates(h) || q.statisch === false)) { body = h; rendered = true; } } catch (e) { log(`${q.name}: Darstellung fehlgeschlagen (${e?.message || e})`); if (!body) throw e; } }
     const why = {}, accepted = [], beispiele = []; let chunks = 0, antworten = 0;
     // Diagnose: je Quelle Zahl der Ausschnitte und Modell-Antworten, die ersten zwei verworfenen Datumsangaben (nur Datum, Grund)
     const take = (t, chunk) => { const c = TM.checkTermin(t, q, chunk, today); if (c.ok) accepted.push(t); else { why[c.why] = (why[c.why] || 0) + 1; if (beispiele.length < 2) beispiele.push({ datum: String(t?.datumText || '').slice(0, 60), beginn: t?.beginn, ende: t?.ende, grund: c.why }); } };

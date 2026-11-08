@@ -42,6 +42,8 @@ assert(TM.checkTermin({ titel: 'Volksfest', datumText: 'September 24 – October
   && TM.dateChunks(['Race day', 'Sunday, April 25, 2027', 'x']).length === 1, 'englische Seiten: „September 24 – October 10, 2027“, „25 April 2027“');
 assert(TM.datePartsOf('5./6. Juni 2027').map(p => `${p.d}.${p.m}.${p.y}`).sort().join() === '5.6.2027,6.6.2027' && TM.datePartsOf('Sa., 14. März').some(p => p.d === 14 && p.m === 3 && p.y === null), 'Datumsteile: „5./6. Juni 2027“, „14. März“');
 
+assert(TM.parseLlm('{"termine":[{"titel":"A","beginn":"2027-01-01"},{"titel":"B","beginn":"2027-01-0').length === 1 && TM.parseLlm('{"termine":[]}').length === 0 && TM.parseLlm('kaputt').length === 0, 'abgeschnittene Modell-Antwort: vollständige Termine davor bleiben');
+
 // Zeitfenster
 const ev = TM.terminEntries(T({ beginn: '2027-09-25', ende: '2027-09-26' }), q, { stand: '2026-11-08' });
 assert(ev.length === 2 && ev[0].art === 'volksfest' && ev[0].von === '2027-09-25T11:00' && ev[0].bis === '2027-09-25T23:00' && ev[0].ohneUhrzeit && ev[0].gebiet.ags[0] === '08111000' && ev[0].auto && ev[0].quelleId === q.id && /^termin:/.test(ev[0].id), 'Volksfest ohne Uhrzeit: 11–23 Uhr je Tag');
@@ -57,6 +59,9 @@ const lr = TM.ldTermine(ld, 'https://messe.example/kalender');
 assert(lr.length === 2 && lr[0].ende === '2027-01-24' && lr[0].url === 'https://messe.example/cmt' && lr[1].abgesagt && lr[1].uhrVon === '20:00', 'schema.org: Ende, Adresse, Status abgesagt, Uhrzeit');
 const ics = 'BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Lauf\r\nDTSTART;VALUE=DATE:20270418\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n';
 assert(TM.ruleTermine(ics, { ...q, art: 'lauf', format: 'ics' })[0]?.beginn === '2027-04-18', 'ICS');
+const mk = `<ul>${['MEDICA|16.–19.11.2026', 'boot|23.01. – 31.01.2027', 'ProWein|14.03.2027 - 16.03.2027'].map(x => `<li><a href="/m/${x.split('|')[0]}">${x.split('|')[0]}</a> <span>${x.split('|')[1]}</span></li>`).join('')}</ul>`;
+const mr = TM.ruleTermine(mk, qm);
+assert(mr.length === 3 && mr[0].titel === 'MEDICA' && mr[0].beginn === '2026-11-16' && mr[0].ende === '2026-11-19' && mr[1].ende === '2027-01-31' && mr[2].beginn === '2027-03-14', 'Messekalender: Name und Spanne neben dem Link, ohne Modell');
 const tt = TM.textTermin(TM.pageLines(html), q, '2026-11-08');
 assert(tt.length === 1 && tt[0].beginn === '2027-09-25' && tt[0].ende === '2027-10-11' && TM.checkTermin(tt[0], q, tt[0].datumText, '2026-11-08').ok, 'Textregel ohne Modell: Zeile mit Name und Datum');
 
@@ -80,6 +85,7 @@ assert(wc.length === 2 && wc.some(e => e.von.startsWith('2027-09-26')) && wc.som
     '/volksfest': `<html><body><h1>Großes Stadtfest</h1><p>Das Stadtfest ${y} feiern wir vom 12.06. – 14.06.${y} in der Innenstadt.</p></body></html>`,
     '/messe': `<html><head><script type="application/ld+json">[{"@type":"Event","name":"Testmesse","startDate":"${y}-02-03","endDate":"${y}-02-05"}]</script></head><body>Messen</body></html>`,
     '/geheim': '<p>12.06.2027</p>',
+    '/js': `<html><body><h1>Lauf</h1><div id="d"></div><script>document.getElementById('d').textContent = 'Großer Stadtlauf am 18.04.${y}';</script></body></html>`,
     '/fest': `<html><body><div>Rhein in Lichtern</div><p>Am Samstag, 8. Mai ${y} ab 18 Uhr leuchtet das Ufer.</p><p>Vorverkauf ab 1. März ${y}.</p></body></html>`,
   };
   const srv = http.createServer((req, res) => {
@@ -115,5 +121,10 @@ assert(wc.length === 2 && wc.some(e => e.von.startsWith('2027-09-26')) && wc.som
   const o2 = JSON.parse(await readFile(path.join(dir, 'out2.json'), 'utf8')), S2 = Object.fromEntries(o2.quellen.map(x => [x.name, x]));
   assert(S2['Großes Stadtfest']?.via === 'textregel' && o2.termine.filter(e => e.titel === 'Großes Stadtfest').length === 3 && o2.termine.some(e => e.titel === 'Rhein in Lichtern') && o2.modell.startsWith('ohne'),
     'ohne Modell: Textregel findet das Stadtfest (3 Tage); Termine des Modells aus dem Vorlauf bleiben');
+  // Termine erst per JavaScript: ohne Datum im abgerufenen Text → mit Chromium dargestellt (RENDER=1), dann Textregel
+  await writeFile(path.join(dir, 'q3.json'), JSON.stringify({ quellen: [{ name: 'Großer Stadtlauf', url: `${base}/js`, ags: '08416041', art: 'lauf', stichwort: 'Stadtlauf' }] }));
+  await new Promise(r => spawn('node', ['scripts/termine.mjs', path.join(dir, 'q3.json'), '-', path.join(dir, 'out3.json')], { stdio: 'inherit', env: { ...process.env, TERMINE_FAKE: '1', RENDER: '1' } }).on('exit', r));
+  const o3 = JSON.parse(await readFile(path.join(dir, 'out3.json'), 'utf8'));
+  assert(o3.quellen[0]?.dargestellt === true && o3.termine.length === 1 && o3.termine[0].von === `${y}-04-18T10:00`, 'Seite lädt Termin per JavaScript: ohne Datum im Abruf → Chromium, Termin gefunden');
   srv.close(); void nextYear;
 }
