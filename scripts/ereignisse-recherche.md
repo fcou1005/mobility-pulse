@@ -63,3 +63,17 @@ Schreibe eine JSON-Datei (Pfad steht in deinem Auftrag) mit genau diesem Aufbau:
 - Gleiche Veranstaltung an mehreren Tagen in derselben Halle (z. B. Tourstopp zwei Abende): eine Zeile je Abend.
 
 Antworte am Ende in maximal 8 Zeilen: Anzahl Veranstaltungen je Stadt, welche Städte du nicht prüfen konntest und warum.
+
+## Folgerunden (Ergänzung)
+
+Für Folgerunden gilt der Auftrag oben (Kriterien, Ausschlüsse, Ausgabeformat) mit diesen Änderungen:
+
+- **Suchbudget: höchstens 45 WebSearch-Aufrufe** (das Kontingent teilen sich vier Rechercheure). Zähle mit. Nutze WebFetch auf
+  Programm- und Kalenderseiten, die in Suchergebnissen auftauchen, statt für jeden Termin neu zu suchen. Wenn das Budget zu Ende
+  geht: Ergebnis schreiben, offene Städte in `geprueft` weglassen und in der Antwort nennen.
+- **Bereits erfasst** (nicht noch einmal liefern): alles in data/ereignisse.json im Repo – lies die Datei
+  zuerst (Feld `ereignisse`, Titel, `von`, `gebiet.ags`) und liefere nur Neues.
+- **Zeitraum** steht in deinem Auftrag.
+- Ticketportale (Eventim, Ticketmaster) sind als Quelle zulässig, wenn die Halle selbst keinen abrufbaren Kalender hat; dann
+  `sicher: "angekündigt"`.
+- Volksfeste und Feste über 10 Tage weiterhin nicht (z. B. Cannstatter Wasen, Oktoberfest), Weihnachtsmärkte nicht.

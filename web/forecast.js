@@ -729,7 +729,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
 // ereignisse.json (gepflegte Liste data/ereignisse.json, vom Sammler geprüft) – Zeitfenster wie in der Prognose (lib/pulse-context.js eventList) ----------
 const loadEvents = (ctx) => memo(`events|${ctx.state?.latest?.at || ''}`, async () => {
   const [sp, vd, cu] = await Promise.all([fj(ctx, 'sport.json'), fj(ctx, 'veranstaltungen.json'), fj(ctx, 'ereignisse.json')]);
-  return { list: CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now: Date.now(), pastDays: 8, aheadDays: 400 }), sp, vd, cu };
+  return { list: CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now: Date.now(), pastDays: 8, aheadDays: 430 }), sp, vd, cu };
 });
 const LIGA = { bl1: '1. Bundesliga', bl2: '2. Bundesliga', bl3: '3. Liga', del: 'DEL', dfb: 'DFB-Pokal', ucl: 'Champions League' };
 const evWhen = (e, until = null) => {

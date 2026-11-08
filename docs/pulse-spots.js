@@ -2,9 +2,9 @@
 // Stationen) je Anbieter gegeneinander, aus Sicht eines eigenen Anbieters: was bei mir fehlt, was nur ich habe, was gepflegt werden muss.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlagen: ops/<Land>.json (decodeFleet), stations-quota.json (Leerquote bis 7 Tage),
 // optional das Nachfragemodell aus cells/<Tag>/<Land>.json (buildDemandModel) und die GBFS-Zonen des eigenen Anbieters (zones/*.json).
-import { RADII, DEFAULT_RADIUS, distM, gridIndex, compareOperators } from './pulse-compare.js?v=mw7km74u';
-import { cellOf, csvCell, needOf, operatorShare, geomContains, isAvailable, DEFAULTS, GROUP_MIN } from './pulse-ops.js?v=mw7km74u';
-import { STATION_NEAR_M } from './pulse-core.js?v=mw7km74u';
+import { RADII, DEFAULT_RADIUS, distM, gridIndex, compareOperators } from './pulse-compare.js?v=mw7l5ex5';
+import { cellOf, csvCell, needOf, operatorShare, geomContains, isAvailable, DEFAULTS, GROUP_MIN } from './pulse-ops.js?v=mw7l5ex5';
+import { STATION_NEAR_M } from './pulse-core.js?v=mw7l5ex5';
 
 export { RADII, DEFAULT_RADIUS, STATION_NEAR_M };
 export const DUP_M = 25;          // eigene Spots näher als 25 m = Dublette

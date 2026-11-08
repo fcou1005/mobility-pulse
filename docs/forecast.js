@@ -5,15 +5,15 @@
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw7km74u';
-import * as CX from './pulse-context.js?v=mw7km74u';
-import * as SP from './pulse-spots.js?v=mw7km74u';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw7km74u';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7km74u';
-import { toCsv } from './pulse-report.js?v=mw7km74u';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw7km74u';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw7km74u';
-import { mapKeys } from './mapkeys.js?v=mw7km74u';
+import * as FC from './pulse-forecast.js?v=mw7l5ex5';
+import * as CX from './pulse-context.js?v=mw7l5ex5';
+import * as SP from './pulse-spots.js?v=mw7l5ex5';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw7l5ex5';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7l5ex5';
+import { toCsv } from './pulse-report.js?v=mw7l5ex5';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw7l5ex5';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw7l5ex5';
+import { mapKeys } from './mapkeys.js?v=mw7l5ex5';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -729,7 +729,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
 // ereignisse.json (gepflegte Liste data/ereignisse.json, vom Sammler geprüft) – Zeitfenster wie in der Prognose (lib/pulse-context.js eventList) ----------
 const loadEvents = (ctx) => memo(`events|${ctx.state?.latest?.at || ''}`, async () => {
   const [sp, vd, cu] = await Promise.all([fj(ctx, 'sport.json'), fj(ctx, 'veranstaltungen.json'), fj(ctx, 'ereignisse.json')]);
-  return { list: CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now: Date.now(), pastDays: 8, aheadDays: 400 }), sp, vd, cu };
+  return { list: CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now: Date.now(), pastDays: 8, aheadDays: 430 }), sp, vd, cu };
 });
 const LIGA = { bl1: '1. Bundesliga', bl2: '2. Bundesliga', bl3: '3. Liga', del: 'DEL', dfb: 'DFB-Pokal', ucl: 'Champions League' };
 const evWhen = (e, until = null) => {
