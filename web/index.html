@@ -379,7 +379,7 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
     <button type="button" class="filters-sum" id="filters-sum" aria-expanded="false" aria-controls="filters"></button>
     <label data-f="scope"><span data-i18n="html.area">Gebiet</span><select id="sel-scope"><option data-i18n="html.allOfGermany" value="DE">Deutschlandweit</option></select></label>
     <label data-f="op"><span data-i18n="html.operator">Anbieter</span><select id="sel-operator"><option data-i18n="html.allOperatorsOnSite" value="all">Alle Anbieter vor Ort</option></select></label>
-    <label data-f="type"><span data-i18n="html.vehicleType">Fahrzeugart</span><select id="sel-type"><option data-i18n="html.allVehicleTypes" value="all">Alle Fahrzeugarten</option><option data-i18n="html.eScooters" value="scooter">E-Scooter</option><option value="ebike">E-Bikes</option><option data-i18n="html.regularBikes" value="bike">Normale Fahrräder</option><option data-i18n="html.cargoBikes" value="cargo">Lastenräder</option><option data-i18n="html.vehicleTypeUnclear" value="unknown">Fahrzeugart unbekannt</option></select></label>
+    <label data-f="type"><span data-i18n="html.vehicleType">Fahrzeugart</span><select id="sel-type"><option data-i18n="html.allVehicleTypes" value="all">Alle Fahrzeugarten</option><option data-i18n="html.eScooters" value="scooter">E-Scooter</option><option value="ebike">E-Bikes</option><option data-i18n="html.regularBikes" value="bike">Normale Fahrräder</option><option data-i18n="html.cargoBikes" value="cargo">Lastenräder</option><option data-i18n="html.mopeds" value="moped">E-Roller</option><option data-i18n="html.carSharing" value="car">Carsharing</option><option data-i18n="html.vehicleTypeUnclear" value="unknown">Fahrzeugart unbekannt</option></select></label>
     <label data-f="mode" class="internal live-only"><span data-i18n="html.dataSnapshot">Datenstand</span><select id="sel-mode"><option data-i18n="html.collectorSnapshotEvery20Min" value="collector">Sammler-Stand (alle 20 Min.)</option><option data-i18n="html.liveFetchInBrowser" value="live">Live-Abruf im Browser</option></select></label>
     <div data-i18n="html.checkingDataCoverage" class="count" id="filter-count" aria-live="polite">Datenlage wird geprüft …</div>
   </div>
@@ -470,7 +470,7 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
     <div class="panel">
       <div class="ops-form">
         <label><span data-i18n="html.fleet2">Flotte</span><select id="ops-op"></select></label>
-        <label><span data-i18n="html.vehicleType">Fahrzeugart</span><select id="ops-type"><option data-i18n="html.all" value="all">Alle</option><option data-i18n="html.eScooters" value="scooter" selected>E-Scooter</option><option value="ebike">E-Bikes</option><option data-i18n="html.bikes2" value="bike">Fahrräder</option><option data-i18n="html.cargoBikes" value="cargo">Lastenräder</option></select></label>
+        <label><span data-i18n="html.vehicleType">Fahrzeugart</span><select id="ops-type"><option data-i18n="html.all" value="all">Alle</option><option data-i18n="html.eScooters" value="scooter" selected>E-Scooter</option><option value="ebike">E-Bikes</option><option data-i18n="html.bikes2" value="bike">Fahrräder</option><option data-i18n="html.cargoBikes" value="cargo">Lastenräder</option><option data-i18n="html.mopeds" value="moped">E-Roller</option><option data-i18n="html.carSharing" value="car">Carsharing</option></select></label>
         <label><span data-i18n="html.timeOfDay">Tageszeit</span><select id="ops-band"></select></label>
         <div class="ops-actions"><button data-i18n="html.computePlan" class="primary" id="ops-run">Plan berechnen</button></div>
       </div>
@@ -480,14 +480,15 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
           <label>Spots<input type="number" id="ops-n" value="20" min="3" max="60"></label>
           <label><span data-i18n="html.spacingM">Abstand (m)</span><input type="number" id="ops-spacing" value="220" min="80" max="1500" step="10"></label>
           <label><span data-i18n="html.horizonH">Horizont (h)</span><input type="number" id="ops-horizon" value="3" min="1" max="12"></label>
-          <label><span data-i18n="html.vanVeh">Transporter (Fzg.)</span><input type="number" id="ops-van" value="20" min="2" max="80"></label>
+          <label><span data-i18n="html.vanVeh">Transporter (Fzg.)</span><input type="number" id="ops-van" value="20" min="1" max="80"></label>
           <label><span data-i18n="html.batteriesPerRunMax50">Akkus je Tour (max. 50)</span><input type="number" id="ops-swapcap" value="50" min="2" max="50"></label>
           <label data-i18n-title="html.batterySwapOnlyIfChargeAnd" title="Akkutausch nur, wenn Ladestand UND Reichweite unter der Schwelle liegen"><span data-i18n="html.swapChargeBelow">Tausch: Ladestand unter (%)</span><input type="number" id="ops-swapthr" value="20" min="5" max="60"></label>
-          <label data-i18n-title="html.batterySwapOnlyIfChargeAnd" title="Akkutausch nur, wenn Ladestand UND Reichweite unter der Schwelle liegen"><span data-i18n="html.andRangeBelowKm">und Reichweite unter (km)</span><input type="number" id="ops-swaprange" value="5" min="1" max="40" step="0.5"></label>
+          <label data-i18n-title="html.batterySwapOnlyIfChargeAnd" title="Akkutausch nur, wenn Ladestand UND Reichweite unter der Schwelle liegen"><span data-i18n="html.andRangeBelowKm">und Reichweite unter (km)</span><input type="number" id="ops-swaprange" value="5" min="1" max="150" step="0.5"></label>
           <label><span data-i18n="html.runsPerType">Touren je Art</span><input type="number" id="ops-maxruns" value="6" min="1" max="20"></label>
           <label><span data-i18n="html.timePerRunH">Einsatz je Tour (h)</span><input type="number" id="ops-maxh" value="4" min="1" max="12" step="0.5"></label>
           <label class="chk"><input type="checkbox" id="ops-osm" checked> <span data-i18n="html.publicTransportParkingAreas">ÖPNV &amp; Abstellflächen (OSM)</span></label>
           <label class="chk"><input type="checkbox" id="ops-route" checked> <span data-i18n="html.roadRoutingKmByRoadOsrm">Straßenrouting (km nach Straße, OSRM)</span></label>
+          <p id="ops-type-note" class="muted" hidden></p>
           <div class="ops-actions"><button data-i18n="html.setDepot" data-i18n-title="html.thenClickOnMap" id="ops-depot" title="Danach auf die Karte klicken">⌖ Depot setzen</button></div>
         </div>
       </details>

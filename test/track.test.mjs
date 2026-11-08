@@ -701,3 +701,50 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const ix = T.groupIndex(['2026-11'], { '2026-11': 3 }, { night });
   assert(ix.night30.Dott.share === 0.5 && ix.rules.demandMain.from === 7 && ix.rules.deployMinBattery === 85, 'Z7: groups/index.json mit Nachtanteil und Regeln');
 }
+
+// ---------- Regeln je Fahrzeugart: E-Roller und Carsharing (08.11.2026) ----------
+{
+  const R0 = T.rulesOf('scooter'), RC = T.rulesOf('car'), RM = T.rulesOf('moped');
+  assert(R0.tripMaxKmh === T.TRIP_MAX_KMH && R0.tripMaxMs === T.TRIP_MAX_MS && R0.missingKeepMs === T.MISSING_KEEP_MS && R0.pickupBattery === T.PICKUP_BATTERY && R0.swap && R0.groups
+    && ['ebike', 'bike', 'cargo', 'other', 'unknown', undefined].every(ty => T.rulesOf(ty) === R0), 'Mikromobilität: unveränderte Konstanten (METHOD_VERSION bleibt)');
+  assert(RC.tripMaxKmh === 120 && RC.tripMaxMs === 72 * 3600e3 && RC.missingKeepMs === 7 * 24 * 3600e3 && !RC.swap && !RC.groups && RC.roundTrip && RM.tripMaxKmh === 60 && RM.swap, 'Auto und E-Roller: eigene Regeln');
+  const recsC = [{ id: 'sm', status: 'live', latencyMs: 100 }], C0 = Date.parse('2026-11-09T08:00:00Z'), step = 20 * 60e3;
+  const CV = (id, lat, lon, extra = {}) => ({ operator: 'stadtmobil', rawId: id, lat, lon, batteryPct: 60, disabled: false, reserved: false, type: 'car', ags: '08111000', sourceId: 'sm', ...extra });
+  const SV = (id, lat, lon, extra = {}) => ({ ...CV(id, lat, lon, extra), operator: 'Bolt', sourceId: 'bolt', type: 'scooter', ...extra });
+  const recs2 = [...recsC, { id: 'bolt', status: 'live', latencyMs: 100 }];
+  // Lauf 1: Auto a (Tank 10 %), Auto b (Tank 30 %), Scooter s (Akku 10 %)
+  let q = T.trackRun(null, { vehicles: [CV('a', 48.78, 9.18, { batteryPct: 10 }), CV('b', 48.79, 9.19, { batteryPct: 30 }), SV('s', 48.77, 9.17, { batteryPct: 10 })], stations: [], sourceRecs: recs2, now: C0 });
+  // Lauf 2: a und s verschwinden – Auto mit wenig Energie = Ausleihe, Scooter = Abholung
+  q = T.trackRun(q.state, { vehicles: [CV('b', 48.79, 9.19, { batteryPct: 30 })], stations: [], sourceRecs: recs2, now: C0 + step });
+  const hC = q.hourly.get('08111000|stadtmobil|car'), hS = q.hourly.get('08111000|Bolt|scooter'), hh = T.hourOf(C0 + step);
+  assert(hC.start[hh] === 1 && hC.pickup[hh] === 0 && hS.pickup[hh] === 1 && hS.start[hh] === 0, 'Auto mit 10 % Tank verschwindet = Fahrtbeginn, Scooter mit 10 % = Abholung');
+  // 30 Stunden Läufe alle 20 Min.: a bleibt verschwunden (Scooter-Regel hätte die Kennung nach 24 h gelöscht), b tankt am Ort von 30 auf 90 % (kein Tausch)
+  let t = C0 + step, swaps = 0;
+  for (let i = 0; i < 90; i++) { t += step; q = T.trackRun(q.state, { vehicles: [CV('b', 48.79, 9.19, { batteryPct: i < 10 ? 30 : 90 })], stations: [], sourceRecs: recs2, now: t }); for (const [k, g] of q.hourly) if (k.endsWith('|car')) swaps += g.swap.reduce((x, y) => x + y, 0); }
+  const key = (id) => Object.keys(q.state.v).find(k => k === T.vehicleKey('stadtmobil', id));
+  assert(!!key('a') && swaps === 0, 'Auto: verschwundene Kennung nach 30 h noch im Zustand (7 Tage), Tanksprung 30 → 90 % am Ort ist kein Akkutausch');
+  // a kommt an dieselbe Station zurück (Rundfahrt, stationsgebunden): Fahrtende mit Dauer, ohne Distanz
+  t += step; q = T.trackRun(q.state, { vehicles: [CV('a', 48.78, 9.18, { batteryPct: 70 }), CV('b', 48.79, 9.19, { batteryPct: 90 })], stations: [], sourceRecs: recs2, now: t });
+  const hR = q.hourly.get('08111000|stadtmobil|car');
+  assert(hR.end[T.hourOf(t)] === 1 && hR.swap[T.hourOf(t)] === 0 && hR.tripDurN === 1 && Math.abs(hR.tripDurSum - (t - (C0 + step))) < 1 && hR.tripDistN === 0, 'Rückgabe an der Station: Fahrtende, Dauer ≈ 30,7 h, keine Distanz, kein Rückkehr-Tausch');
+  // stabile Kennungen: 25 Autos und 25 Scooter je Lauf versetzt (Modus stabil), danach je eines 25 km in 20 Min. (75 km/h)
+  const many = (f, n, d) => Array.from({ length: n }, (_, i) => f(`m${i}`, 48.70 + i * 0.002 + d, 9.10 + d));
+  let u = T.trackRun(null, { vehicles: [...many(CV, 25, 0), ...many(SV, 25, 0)], stations: [], sourceRecs: recs2, now: C0 });
+  u = T.trackRun(u.state, { vehicles: [...many(CV, 25, 0.003), ...many(SV, 25, 0.003)], stations: [], sourceRecs: recs2, now: C0 + step });
+  u = T.trackRun(u.state, { vehicles: [...many(CV, 25, 0.006), ...many(SV, 25, 0.006)], stations: [], sourceRecs: recs2, now: C0 + 2 * step });
+  assert(u.srcModes.sm === 'stable' && u.srcModes.bolt === 'stable', 'stabile Kennungen erkannt (Auto und Scooter)');
+  // m0 ≈ 25 km nach Norden; Auto mit gleichem Tank (Regel „≥ 2 km ohne Energieverlust = Umsetzung“ gilt für Autos nicht), Scooter mit Akkuverlust
+  const far = (f, extra = {}) => [...many(f, 25, 0.006).slice(1), f('m0', 48.70 + 0.225, 9.106, extra)];
+  u = T.trackRun(u.state, { vehicles: [...far(CV), ...far(SV, { batteryPct: 50 })], stations: [], sourceRecs: recs2, now: C0 + 3 * step });
+  const h3 = T.hourOf(C0 + 3 * step), uc = u.hourly.get('08111000|stadtmobil|car'), us = u.hourly.get('08111000|Bolt|scooter');
+  assert(uc.start[h3] === 1 && uc.end[h3] === 1 && uc.fast[h3] === 0 && uc.reloc[h3] === 0 && uc.tripDistN === 1 && us.fast[h3] === 1 && us.start[h3] === 0, '25 km in 20 Min.: beim Auto eine Fahrt (auch ohne Tankverlust), beim Scooter „zu schnell“');
+  // E-Roller: 12 km in 20 Min. (36 km/h) = Fahrt, beim Scooter zu schnell
+  const MV = (id, lat, lon, extra = {}) => ({ ...CV(id, lat, lon, extra), operator: 'stella', sourceId: 'st', type: 'moped' });
+  const recs3 = [{ id: 'st', status: 'live', latencyMs: 100 }];
+  let w = T.trackRun(null, { vehicles: many(MV, 25, 0), stations: [], sourceRecs: recs3, now: C0 });
+  w = T.trackRun(w.state, { vehicles: many(MV, 25, 0.003), stations: [], sourceRecs: recs3, now: C0 + step });
+  w = T.trackRun(w.state, { vehicles: many(MV, 25, 0.006), stations: [], sourceRecs: recs3, now: C0 + 2 * step });
+  w = T.trackRun(w.state, { vehicles: [...many(MV, 25, 0.006).slice(1), MV('m0', 48.70 + 0.108, 9.106, { batteryPct: 52 })], stations: [], sourceRecs: recs3, now: C0 + 3 * step });
+  const wm = w.hourly.get('08111000|stella|moped');
+  assert(wm.start[h3] === 1 && wm.fast[h3] === 0, 'E-Roller: 12 km in 20 Min. = Fahrt (bis 60 km/h Luftlinie)');
+}

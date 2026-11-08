@@ -311,3 +311,30 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   assert(sd.rangeFlat.flat && sd.batteryScale.suspect && sd.vehicles.every(v => v.rangeFlat && v.rangeKm === 1 && v.batteryPct === null) && sd.checks.items.some(x => x.msg === C.RANGE_FLAT_MSG) && sd.rangeLimit.limitKm === null,
     'readGbfsSystem (Donkey-Muster: Ladestand 0–14 %, Reichweite 1 km): Ladestand verworfen, Reichweite konstant markiert, Befund in der Feed-Prüfung');
 }
+
+// ---------- Fahrzeugarten E-Roller und Carsharing (08.11.2026) ----------
+{
+  assert(C.VEHICLE_TYPES.slice(0, 6).join() === 'scooter,ebike,bike,cargo,other,unknown' && C.VEHICLE_TYPES.slice(6).join() === 'moped,car', 'neue Arten hinten angefügt (Index in ops/<Land>.json bleibt)');
+  const K = C.classifyVehicleType;
+  assert(K({ form_factor: 'car', propulsion_type: 'combustion' }) === 'car' && K({ form_factor: 'moped', propulsion_type: 'electric' }) === 'moped' && K({ form_factor: 'other' }) === 'other'
+    && K({ form_factor: 'scooter_standing' }) === 'scooter' && K({ form_factor: 'bicycle', propulsion_type: 'electric_assist' }) === 'ebike', 'form_factor car → car, moped → moped, übrige unverändert');
+  assert(K(null, 'stadtmobil Stadtmobil Stuttgart') === 'car' && K(null, 'Carsharing Radolfzell') === 'car' && K(null, 'teilAuto TeilAuto Biberach') === 'car' && K(null, 'stella Stella') === 'moped'
+    && K(null, 'Dott Dott Stuttgart') === 'scooter' && K(null, 'nextbike nextbike Leipzig') === 'bike', 'ohne form_factor: Carsharing-/E-Roller-Namen vor den Rad-/Scooter-Wörtern');
+  assert(C.familyOf('car') === 'car' && C.familyOf('moped') === 'moped' && ['scooter', 'ebike', 'bike', 'cargo', 'other', 'unknown'].every(t => C.familyOf(t) === 'micro') && C.FAMILIES.join() === 'micro,moped,car', 'Familien: micro, moped, car');
+  const st = C.emptyStats();
+  for (const v of [{ type: 'car', rangeKm: 30 }, { type: 'car', rangeKm: 80 }, { type: 'moped', rangeKm: 8 }, { type: 'scooter', rangeKm: 8 }, { type: 'scooter', rangeKm: 4 }]) C.addVehicle(st, v);
+  assert(st.rangeKnown === 5 && st.lowRange === 3 && C.rangeLowKm('car') === 50 && C.rangeLowKm('moped') === 10 && C.rangeLowKm('scooter') === 5, 'Reichweite niedrig je Art: Auto < 50 km, E-Roller < 10 km, sonst < 5 km');
+  // GBFS-System mit Carsharing an Stationen (roundtrip_station) und E-Rollern frei
+  const feeds = {
+    'https://cs.test/gbfs.json': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { de: { feeds: ['system_information', 'vehicle_types', 'station_information', 'station_status', 'free_bike_status'].map(n => ({ name: n, url: `https://cs.test/${n}` })) } } },
+    'https://cs.test/system_information': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { system_id: 'cs', name: 'Test-Carsharing', operator: 'Test', timezone: 'Europe/Berlin', language: 'de' } },
+    'https://cs.test/vehicle_types': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { vehicle_types: [{ vehicle_type_id: 'kw', form_factor: 'car', propulsion_type: 'combustion', max_range_meters: 600000, name: 'Kleinwagen', return_constraint: 'roundtrip_station' }, { vehicle_type_id: 'er', form_factor: 'moped', propulsion_type: 'electric', max_range_meters: 100000, name: 'E-Roller' }] } },
+    'https://cs.test/station_information': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { stations: [{ station_id: 'S1', name: 'Marktplatz', lat: 48.78, lon: 9.18, capacity: 3 }] } },
+    'https://cs.test/station_status': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { stations: [{ station_id: 'S1', num_bikes_available: 2, num_docks_available: 1, is_installed: true, is_renting: true, is_returning: true, last_reported: 1793280000, vehicle_types_available: [{ vehicle_type_id: 'kw', count: 2 }] }] } },
+    'https://cs.test/free_bike_status': { last_updated: 1793280000, ttl: 60, version: '2.3', data: { bikes: [{ bike_id: 'c1', station_id: 'S1', is_reserved: false, is_disabled: false, vehicle_type_id: 'kw', current_fuel_percent: 0.4, current_range_meters: 240000, last_reported: 1793280000 }, { bike_id: 'c2', station_id: 'S1', is_reserved: false, is_disabled: false, vehicle_type_id: 'kw', current_fuel_percent: 0.9, current_range_meters: 540000, last_reported: 1793280000 }, { bike_id: 'm1', lat: 48.781, lon: 9.181, is_reserved: false, is_disabled: false, vehicle_type_id: 'er', current_fuel_percent: 0.55, current_range_meters: 55000, last_reported: 1793280000 }] } },
+  };
+  const fj = async (u) => (feeds[u] ? { ok: true, status: 200, json: feeds[u], headers: {} } : { ok: false, status: 404 });
+  const sys = await C.readGbfsSystem({ id: 'cs', operator: 'Test', url: 'https://cs.test/gbfs.json', api: 'gbfs' }, fj, { now: 1793280000e3 + 60e3 });
+  const types = sys.vehicles.map(v => v.type).join(), c1 = sys.vehicles.find(v => v.rawId === 'c1');
+  assert(types === 'car,car,moped' && c1.geoOrigin === 'station' && c1.lat === 48.78 && Math.round(c1.batteryPct) === 40 && c1.rangeKm === 240 && sys.stations[0].perType.car === 2, 'readGbfsSystem: Autos an der Station (Position der Station), E-Roller frei, Ladestand 0..1 → %');
+}

@@ -1,6 +1,6 @@
 // Wetter in den Diagrammen: Stundenwerte (Temperatur, Niederschlag) aus dem Wetter-Cache des Sammlers (weather/<UTC-Tag>.json, DWD über Bright Sky),
 // derselbe Stand, mit dem die Prognose rechnet. Gemeinde: ihre Wetterzelle; ganz Deutschland: Mittel über alle Zellen.
-import { t, numFmt } from './i18n.js?v=mw7r00jn';
+import { t, numFmt } from './i18n.js?v=mw7xqo0o';
 
 const TZ = 'Europe/Berlin';
 const hourOfB = (ms) => +new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }).format(new Date(ms)) % 24;

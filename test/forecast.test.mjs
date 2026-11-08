@@ -663,3 +663,23 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
     assert(o2?.model === 'amazon/chronos-2' && o2.groups[k0]?.m.every(x => x === 2.5) && o2.groups[k0].q90[0] === 4 && o2.back[tday]?.groups[k0]?.every(x => x === 2.5), `chronos.py lädt das Paket chronos, nicht sich selbst; Läufe je Prognoselänge (48 h, 24 h) getrennt${real.status ? ' – ' + real.stderr.slice(-300) : ''}`);
   } else console.log('übersprungen: chronos.py (python3 mit pandas fehlt)');
 }
+
+// ---------- je Fahrzeugfamilie ein eigenes Modell (08.11.2026) ----------
+{
+  // Welt wie oben, dazu Carsharing-Gruppen mit eigenem, flachem Tagesgang (Buchungen über den Tag) – das Mikro-Modell darf davon nichts sehen
+  const carG = AGS.slice(0, 3).map(a => [`${a}|stadtmobil|car`, 30, 0.04]);
+  const mk = (day) => { const d = makeDoc(day); for (const g of carG) { const start = [], vmin = []; for (let h = 0; h < 24; h++) { start.push(pois(g[1] * g[2] * (h >= 7 && h < 20 ? 1.5 : 0.3))); vmin.push(g[1] * 60); } d.groups[g[0]] = { start, vmin }; } return d; };
+  const ds = days12.slice(0, 8).map(mk), NOW = Date.parse(`${addDays(DAY0, 8)}T10:00:00Z`);
+  const micro = F.familyDocs(ds, 'micro'), car = F.familyDocs(ds, 'car'), moped = F.familyDocs(ds, 'moped');
+  assert(micro.every(d => Object.keys(d.groups).every(k => !k.endsWith('|car'))) && car.every(d => Object.keys(d.groups).length === 3 && d.runs === ds[0].runs || d.runs.length === ds[0].runs.length)
+    && F.familyHasData(car) && !F.familyHasData(moped) && F.FAMILY_DIR.micro === 'forecast' && F.FAMILY_DIR.car === 'forecast/car', 'familyDocs: Gruppen je Familie, Läufe bleiben; E-Roller ohne Daten');
+  const rM = F.runForecast({ docs: micro, calendar: null, weather: [], prevLog: null, now: NOW }), rA = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW });
+  const rC = F.runForecast({ docs: car, calendar: null, weather: [], prevLog: null, now: NOW, family: 'car' });
+  const keysM = Object.keys(rM.latest.groups), keysC = Object.keys(rC.latest.groups);
+  assert(keysM.length && keysM.every(k => !k.endsWith('|car')) && keysC.length === 3 && keysC.every(k => k.endsWith('|car')) && rC.latest.family === 'car' && rC.series.family === 'car' && rM.latest.family === undefined,
+    `getrennte Modelle: Mikro ${keysM.length} Gruppen ohne Autos, Carsharing ${keysC.length} Gruppen, Familie im Datenstand`);
+  // Carsharing lernt seinen eigenen Tagesgang (tagsüber 1,5, nachts 0,3 → Faktor ≈ 5); im gemeinsamen Modell (rA) teilten Autos Stunde und Wetter mit den Scootern
+  const loc = rC.latest.horizon?.local || [], hourIx = (h) => loc.findIndex(([, hh]) => hh === h), tot = rC.latest.totals || [];
+  const day = tot[hourIx(13)], night = tot[hourIx(3)], rat = day / Math.max(night, 1e-6);
+  assert(rC.latest.trainDays >= 2 && rat > 2.5 && rat < 10 && Object.keys(rA.latest.groups).some(k => k.endsWith('|car')), `Carsharing-Modell: eigener Tagesgang (13 Uhr ÷ 3 Uhr = ${rat.toFixed(1)}, wahr 5)`);
+}

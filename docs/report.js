@@ -2,14 +2,14 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mw7r00jn';
-import * as K from './pulse-calib.js?v=mw7r00jn';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7r00jn';
-import { decodeFleet } from './pulse-ops.js?v=mw7r00jn';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mw7r00jn';
-import { mapKeys } from './mapkeys.js?v=mw7r00jn';
-import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mw7r00jn';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mw7r00jn';
+import * as R from './pulse-report.js?v=mw7xqo0o';
+import * as K from './pulse-calib.js?v=mw7xqo0o';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7xqo0o';
+import { decodeFleet } from './pulse-ops.js?v=mw7xqo0o';
+import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mw7xqo0o';
+import { mapKeys } from './mapkeys.js?v=mw7xqo0o';
+import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mw7xqo0o';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mw7xqo0o';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
@@ -1119,7 +1119,7 @@ export function renderFeedChecks(el, ctx) {
 // ======================================================================
 // Gemeinsame Bausteine für Tabellen mit Auswahlfeldern, Sortierung und „mehr zeigen“
 // ======================================================================
-const TYPE_ORDER = ['scooter', 'ebike', 'bike', 'cargo', 'other', 'unknown'];
+const TYPE_ORDER = ['scooter', 'ebike', 'bike', 'cargo', 'moped', 'car', 'other', 'unknown'];
 function groupOptions(latest) {
   const ops = new Set(), types = new Set();
   for (const k of Object.keys(latest?.groups || {})) { const [a, op, ty] = k.split('|'); if (!a || a === 'DE') continue; ops.add(op); types.add(ty); }

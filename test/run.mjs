@@ -55,7 +55,8 @@ extra.push({ id: 'rk_direct', name: 'RK direkt', operator: 'nextbike', api: 'gbf
   { id: 'rk_land:source-rk', parent: 'rk_land', name: 'RK Land', operator: 'nextbike', api: 'gbfs', url: `${ex.base}/rk/b/gbfs.json`, directories: ['mobidrom_nrw'], priority: 2 },
   { id: 'mf_test', name: 'Manifest Test', operator: 'Lime', api: 'gbfs', url: `${ex.base}/mf/manifest.json`, directories: ['mobidrom_nrw'], priority: 2 },
   { id: 'rl_test', name: 'Bird Test', operator: 'Bird', api: 'gbfs', url: `${ex.base}/rk/d/gbfs.json`, directories: ['mobilitydata'], priority: 2 }, // kleine Reichweiten-Skala (Schwelle der Quelle)
-  { id: 'rf_test', name: 'Donkey Test', operator: 'Donkey', api: 'gbfs', url: `${ex.base}/rk/e/gbfs.json`, directories: ['mobilitydata'], priority: 2 }); // Platzhalter-Reichweite 1 km
+  { id: 'rf_test', name: 'Donkey Test', operator: 'Donkey', api: 'gbfs', url: `${ex.base}/rk/e/gbfs.json`, directories: ['mobilitydata'], priority: 2 }, // Platzhalter-Reichweite 1 km
+  { id: 'cs_test', name: 'Stadtmobil Test', operator: 'stadtmobil', api: 'gbfs', url: `${ex.base}/cs/gbfs.json`, directories: ['mobidata_bw'], priority: 1 }); // Carsharing an Stationen + E-Roller
 const slow = [{ id: 'slow_test', name: 'Langsam', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/slow/gbfs.json`, directories: ['mobilitydata'] }, { id: 'big_test', name: 'Groß', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/big/gbfs.json`, directories: ['mobilitydata'] }];
 const auth_sources = { t: { host: new URL(ex.base).host, headers: { 'x-api-key': 'MP_TEST_KEY' }, env: ['MP_TEST_KEY'] } };
 await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, ...slow] }));
@@ -136,6 +137,12 @@ assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1
     `Q-2: latest.json groups mit energyKnown/energyLow (gleich energyFromOps aus ops/BW.json, ${gk.length} Gruppen)`);
   const kidKey = Object.keys(l3.groups).find(k => k.includes('|Lime|scooter'));
   assert(kidKey && l3.groups[kidKey].energyKnown == null && S3('mf_test:mfkid').counts.batteryNative === 0, 'Q-2: Lime-Kind ohne verwendbaren Ladestand (Skala unplausibel, keine Reichweite) → keine Energieangabe; counts.batteryNative = 0');
+  // Carsharing und E-Roller (08.11.2026): Arten aus form_factor, Autos an der Stationsposition, eigene Reichweiten-Schwelle (50 km), Index in ops/BW.json
+  { const cs = S3('cs_test'), gC = l3.groups['08111000|stadtmobil|car'], gM = l3.groups['08111000|stadtmobil|moped'], iCar = ops3.types.indexOf('car'), iMop = ops3.types.indexOf('moped');
+    const rowsC = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'stadtmobil' && v[3] === iCar), rowsM = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'stadtmobil' && v[3] === iMop);
+    assert(cs?.status === 'live' && cs.vehicleTypes.includes('car') && cs.vehicleTypes.includes('moped') && gC?.total === 6 && gM?.total === 4 && gC.lowRange === 1 && gC.energyLow === 0 && gC.energyKnown === 6
+      && iCar === 7 && iMop === 6 && rowsC.length === 6 && rowsM.length === 4 && rowsC.filter(v => v[0] === 48.776).length === 3 && l3.thresholds.rangeByType?.car === 50,
+      `Carsharing: 6 Autos (Stationsposition, eines mit 30 km Reichweite: niedrig, aber Tank ≥ 20 % → Energie ausreichend) und 4 E-Roller, ops/BW.json types[7] = car`); }
   // Q-6: Grenzen je Land mit bbox
   const bIdx = JSON.parse(await readFile('test/out/boundaries/index.json', 'utf8')), bBW = JSON.parse(await readFile('test/out/boundaries/BW.json', 'utf8'));
   assert(bIdx.version === 1 && bIdx.states.BW.features === bBW.features.length && bBW.features.every(f => Array.isArray(f.bbox) && f.bbox.length === 4 && f.bbox[0] <= f.bbox[2]) && bBW.features.some(f => f.properties.ags === '08416041' && f.bbox.join() === '9,48.49,9.12,48.56') && existsSync('test/out/boundaries-active.json'),
@@ -178,7 +185,9 @@ await writeFile('test/out/latest.json', JSON.stringify(l3));
 const ydM = T.dayOf(Date.now() - 86400e3), m0 = Date.parse(`${ydM}T00:00:00Z`) - 3600e3, H24 = (f) => Array.from({ length: 24 }, (_, h) => f(h));
 await writeFile(`test/out/events/${ydM}.json`, JSON.stringify({ day: ydM, version: 2, runs: Array.from({ length: 72 }, (_, i) => [m0 + (i + 1) * 20 * 60e3, 20 * 60e3, 1, `${T.METHOD_VERSION}@test`]), gapHours: [], hourMin: new Array(24).fill(60),
   groups: { '08111000|Lime|scooter': { start: H24(h => 10 + h), end: H24(h => 10 + h), pickup: H24(h => 5 + h), swap: H24(() => 1) }, '08111000|Voi|scooter': { start: H24(h => 10 + (h % 5)), end: H24(h => 10 + (h % 5)), pickup: H24(() => 0), swap: H24(() => 1) },
-    '08111000|Zeus|scooter': { start: H24(() => 1), end: H24(() => 1), pickup: H24(() => 0), swap: H24(() => 0) } },
+    '08111000|Zeus|scooter': { start: H24(() => 1), end: H24(() => 1), pickup: H24(() => 0), swap: H24(() => 0) },
+    // Carsharing und E-Roller mit Fahrzeugminuten: die Prognose rechnet je Familie ein eigenes Modell (forecast/car/, forecast/moped/)
+    '08111000|stadtmobil|car': { start: H24(h => (h >= 8 && h < 20 ? 1 : 0)), end: H24(h => (h >= 9 && h < 21 ? 1 : 0)), vmin: H24(() => 360) }, '08111000|stadtmobil|moped': { start: H24(() => 0), end: H24(() => 0), vmin: H24(() => 240) } },
   published: { at: Date.now(), through: null, complete: true } }));
 const calOld = JSON.stringify({ version: 1, generatedAt: '2026-01-01T00:00:00.000Z', source: 'OpenHolidays API (openholidaysapi.org, ODbL)', from: '2025-01-01', to: '2026-12-31', states: { BW: { '2026-11-02': 'F' } } });
 await writeFile('test/out/calendar.json', calOld);
@@ -225,6 +234,10 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   assert(road.length === 1 && inc.sources.road?.roads === 2 && inc.sources.road.fails === 2 && inc.sources.road.items === 2, `Autobahn: Sperrung + Stau → ${road.join(', ')} zur Stunde ${h}; Baustellenhinweis zählt nicht; Ausfall einer Autobahn bricht nicht ab`);
   const fl = await readFile('test/out/forecast/latest.json', 'utf8').then(JSON.parse).catch(() => null), fg = await readFile('test/out/forecast/log.json', 'utf8').then(JSON.parse).catch(() => null);
   assert(fl && fl.version === 1 && ['insufficient', 'learning', 'active'].includes(fl.status) && fg && fg.version === 1 && typeof fg.evals === 'object', `Prognose: forecast/latest.json und log.json vom Sammler geschrieben (Status ${fl?.status}, ${fl?.trainDays} Tage)`);
+  // je Fahrzeugfamilie ein eigenes Modell: forecast/car/ und forecast/moped/ (Vortag mit Fahrzeugminuten beider Familien); Mikro-Prognose ohne sie
+  { const fc = await readFile('test/out/forecast/car/latest.json', 'utf8').then(JSON.parse).catch(() => null), fm = await readFile('test/out/forecast/moped/series.json', 'utf8').then(JSON.parse).catch(() => null);
+    assert(fc?.family === 'car' && fc.version === 1 && fm?.family === 'moped' && fl?.family === undefined && !Object.keys(fl?.groups || {}).some(k => /\|(car|moped)$/.test(k)),
+      `Prognose je Familie: forecast/car/latest.json (${fc?.status}) und forecast/moped/series.json geschrieben, Mikro-Prognose ohne Autos/E-Roller`); }
   const er = await readFile('test/out/ereignisse.json', 'utf8').then(JSON.parse).catch(() => null), erSrc = JSON.parse(await readFile('data/ereignisse.json', 'utf8'));
   assert(er?.version === 1 && Array.isArray(er.ereignisse) && er.ereignisse.length === erSrc.ereignisse.length + (er.automatisch || 0) && er.veranstaltungenAb === erSrc.veranstaltungenAb, `Ereignisliste: geprüfte Einträge im Datenstand (${er?.ereignisse?.length} = ${erSrc.ereignisse.length} + ${er?.automatisch} automatisch erkannt)`);
   // Streik-Erkennung: Busstreik morgen in Tübingen erkannt (Detail-Adresse nicht bei tagesschau.de → nicht abgerufen), Metall-Warnstreik nicht; je Abfrage eine Seite

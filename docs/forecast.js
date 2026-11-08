@@ -4,20 +4,25 @@
 // Spots (Bewertung der bekannten Spots), Grundlagen & Kontrolle (alles, was genutzt, erzeugt oder vermutet wird, mit Selbstprüfungen und Rohdaten).
 // ctx = { state, CFG, esc, fmt, getJson, muniName, setScope, setFilter, resetFilters, loadUsageIndex, loadEvents, loadCells, loadOnce };
 // Leaflet (L) global. Daten: forecast/series.json, forecast/latest.json, forecast/log.json (Sammler, lib/pulse-forecast.js); Spots über lib/pulse-spots.js.
+// Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
+// oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw7r00jn';
-import * as CX from './pulse-context.js?v=mw7r00jn';
-import * as SP from './pulse-spots.js?v=mw7r00jn';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw7r00jn';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw7r00jn';
-import { toCsv } from './pulse-report.js?v=mw7r00jn';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw7r00jn';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw7r00jn';
-import { mapKeys } from './mapkeys.js?v=mw7r00jn';
+import * as FC from './pulse-forecast.js?v=mw7xqo0o';
+import * as CX from './pulse-context.js?v=mw7xqo0o';
+import * as SP from './pulse-spots.js?v=mw7xqo0o';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw7xqo0o';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mw7xqo0o';
+import { toCsv } from './pulse-report.js?v=mw7xqo0o';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw7xqo0o';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw7xqo0o';
+import { mapKeys } from './mapkeys.js?v=mw7xqo0o';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
 let LAST_RATED = null; // zuletzt bewertete Spots (Anzeige in „Grundlagen & Kontrolle“)
+let FAM = 'micro'; // gewählte Fahrzeugfamilie der Prognose (alle drei Segmente)
+const famNow = (ctx) => { const ty = ctx.state?.type; if (ty && ty !== 'all') FAM = familyOf(ty); return FAM; };
+const famFile = (fam, f) => `${FC.FAMILY_DIR[fam] || FC.FAMILY_DIR.micro}/${f}.json`;
 const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, day: null, op: null, rows: SPOT_ROWS, map: null }; S.set(el, s); } return s; };
 /** Zwischenspeicher leeren (neuer Sammler-Lauf) */
 export function resetForecastCache() { CACHE.clear(); LAST_RATED = null; resetWeatherCache(); }
@@ -32,6 +37,7 @@ const CSS = `
 .fv-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--fg-2)}
 .fv-tog{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:10px;background:var(--bg-2);border:1px solid var(--line)}
 .fv-tog button{min-height:28px;border:0;background:transparent;color:var(--fg-2);padding:0 12px;border-radius:7px}
+.fv-top .fv-fam{margin-right:var(--s2)}
 .fv-tog button[aria-pressed="true"]{background:var(--thumb,var(--panel));color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
 .fv-scope{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--fg-2);padding:3px 10px;border:1px solid var(--line);border-radius:999px}
 .fv-scope b{color:var(--fg);font-weight:600}
@@ -529,7 +535,8 @@ function topBar(ctx, sel, extra = '') {
   const { esc } = ctx, S1 = ctx.state, ty = tMap('type', VEHICLE_TYPE_LABEL);
   const a = !!sel.ags && sel.ags !== 'DE', o = S1.operator !== 'all', y = S1.type !== 'all', ign = !!sel.ignored;
   const pill = (kind, label, val, on, off) => `<span class="fv-pill${on ? '' : ' dim'}${off ? ' ign' : ''}"${off ? ` title="${esc(t('fv.nIgnored'))}"` : ''}>${label}: <b>${esc(val)}</b>${on ? `<button type="button" data-fv-clear="${kind}" aria-label="${esc(t('fv.clearFilter', { f: label }))}">×</button>` : ''}</span>`;
-  return `<div class="fv-top" role="group" aria-label="${esc(t('fv.topAria'))}"><span class="lbl">${t('fv.filter')}</span>`
+  const fam = famNow(ctx), famTog = `<div class="fv-tog fv-fam" role="group" aria-label="${esc(t('fv.famAria'))}">${FC.FAMILIES.map(f => `<button type="button" data-fv-fam="${f}" aria-pressed="${f === fam}">${t(`fv.fam.${f}`)}</button>`).join('')}</div>`;
+  return `<div class="fv-top" role="group" aria-label="${esc(t('fv.topAria'))}">${famTog}<span class="lbl">${t('fv.filter')}</span>`
     + pill('scope', t('fv.fArea'), a ? (ctx.muniName?.(sel.ags) || sel.ags) : t('fc.scopeDE'), a, false)
     + pill('op', t('fv.fOp'), o ? S1.operator : t('fv.fAll'), o, ign && o)
     + pill('type', t('fv.fType'), y ? (ty[S1.type] || S1.type) : t('fv.fAll'), y, ign && y)
@@ -537,13 +544,18 @@ function topBar(ctx, sel, extra = '') {
     + `<span class="sp"></span>${extra}<span class="hint">${t('fv.filterHint')}</span></div>`;
 }
 function bindTop(el, ctx) {
+  // Familie wechseln: passt die gewählte Fahrzeugart nicht, wird sie aufgehoben (das rendert alle Ansichten neu), sonst nur dieses Segment
+  el.querySelectorAll('[data-fv-fam]').forEach(b => b.addEventListener('click', () => {
+    const f = b.dataset.fvFam; if (f === famNow(ctx)) return; FAM = f;
+    const ty = ctx.state?.type; if (ty && ty !== 'all' && familyOf(ty) !== f) ctx.setFilter?.('type', 'all'); else renderForecastView(el, ctx, { part: el.dataset.fvPart });
+  }));
   el.querySelectorAll('[data-fv-clear]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.fvClear; if (k === 'all') ctx.resetFilters?.(); else ctx.setFilter?.(k, k === 'scope' ? 'DE' : 'all'); }));
 }
 function download(name, rows) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + toCsv(rows, lang())], { type: 'text/csv;charset=utf-8' })); a.download = name; a.style.display = 'none';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 }
-const fileTag = (ctx, sel) => [sel.ags && sel.ags !== 'DE' ? sel.ags : 'DE', ctx.state.operator !== 'all' ? ctx.state.operator : null, ctx.state.type !== 'all' ? ctx.state.type : null].filter(Boolean).join('_').replace(/[^\w.-]+/g, '-');
+const fileTag = (ctx, sel) => [FAM !== 'micro' ? FAM : null, sel.ags && sel.ags !== 'DE' ? sel.ags : 'DE', ctx.state.operator !== 'all' ? ctx.state.operator : null, ctx.state.type !== 'all' ? ctx.state.type : null].filter(Boolean).join('_').replace(/[^\w.-]+/g, '-');
 const csvBtn = (key, label, disabled = false) => `<button type="button" class="chip" data-fv-csv="${key}"${disabled ? ' disabled' : ''}>${label}</button>`;
 
 // ---------- Hauptansicht ----------
@@ -551,15 +563,18 @@ const csvBtn = (key, label, disabled = false) => `<button type="button" class="c
 export async function renderForecastView(el, ctx, opts = {}) {
   if (!el) return;
   const part = ['spots', 'basis'].includes(opts.part) ? opts.part : 'verlauf';
-  css(); const s = st(el), tok = ++s.tok; el.classList.add('fv-root');
+  css(); const s = st(el), tok = ++s.tok; el.classList.add('fv-root'); el.dataset.fvPart = part;
   if (!el.firstChild) el.innerHTML = `<div class="note small">${t('fv.loading')}</div>`;
+  const fam = famNow(ctx);
+  // ohne Prognose der gewählten Familie: Umschalter bleibt sichtbar, damit man zurückwechseln kann
+  const none = () => { el.innerHTML = (fam === 'micro' ? '' : topBar(ctx, { ags: ctx.state?.scope || 'DE' })) + `<div class="panel"><div class="empty"><b>${fam === 'micro' ? t('fv.none') : t('fv.noneFam', { fam: t(`fv.fam.${fam}`) })}</b>${fam === 'micro' ? t('fv.noneHint') : t('fv.noneFamHint')}</div></div>`; if (fam !== 'micro') bindTop(el, ctx); };
   try {
-    const [S0, L, G] = await Promise.all([fj(ctx, 'forecast/series.json'), fj(ctx, 'forecast/latest.json'), fj(ctx, 'forecast/log.json')]); if (tok !== s.tok) return;
-    if (!S0 || S0.version !== 1 || !L) { el.innerHTML = `<div class="panel"><div class="empty"><b>${t('fv.none')}</b>${t('fv.noneHint')}</div></div>`; return; }
+    const [S0, L, G] = await Promise.all([fj(ctx, famFile(fam, 'series')), fj(ctx, famFile(fam, 'latest')), fj(ctx, famFile(fam, 'log'))]); if (tok !== s.tok) return;
+    if (!S0 || S0.version !== 1 || !L) { none(); return; }
     if (part === 'spots') return await renderSpotsPart(el, ctx, s, S0, L);
     if (part === 'basis') return renderBasisPart(el, ctx, s, S0, L, G);
     await renderVerlauf(el, ctx, s, tok, S0, L, G);
-  } catch (e) { console.error('Prognose-Ansicht', e); if (tok === s.tok) el.innerHTML = `<div class="panel"><div class="empty"><b>${t('fv.none')}</b>${t('fv.noneHint')}</div></div>`; }
+  } catch (e) { console.error('Prognose-Ansicht', e); if (tok === s.tok) none(); }
 }
 
 async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
@@ -673,7 +688,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   const { esc } = ctx, sel = pickScope(S0, ctx.state), gates = { ...FC.GATES, ...(L.gates || {}) }, race = raceOf(G, L), ck = ctx.state.latest?.eventChecks || null;
   const checks = checksOf(ctx, S0, L, G, race), nGroups = Object.keys(L.groups || {}).length, nMuni = Object.keys(L.municipalities || {}).length, cal = ctx.state.calendar || null;
   const wg = L.weather?.gate || {}, evKeys = Object.keys(G?.evals || {}).sort();
-  const files = ['latest', 'log', 'series'].map(f => `<a class="chip" href="${esc(`${ctx.CFG.DATA}forecast/${f}.json`)}" target="_blank" rel="noopener">forecast/${f}.json</a>`).join('')
+  const files = ['latest', 'log', 'series'].map(f => `<a class="chip" href="${esc(`${ctx.CFG.DATA}${famFile(FAM, f)}`)}" target="_blank" rel="noopener">${esc(famFile(FAM, f))}</a>`).join('')
     + (L?.env?.sources?.days ? `<a class="chip" href="${esc(`${ctx.CFG.DATA}incidents/${FC.dayOfLocal(Date.now())}.json`)}" target="_blank" rel="noopener">incidents/${esc(FC.dayOfLocal(Date.now()))}.json</a>` : '')
     + (ctx.CFG?.REPO ? `<a class="chip" href="${esc(`https://github.com/${ctx.CFG.REPO}/blob/main/data/ereignisse.json`)}" target="_blank" rel="noopener">data/ereignisse.json</a>` : '');
   // Panel 1: Kontrollen

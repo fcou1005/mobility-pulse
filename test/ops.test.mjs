@@ -650,3 +650,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const v = (idleMin) => ({ lat: 48.5, lon: 9.05, operator: 'Dott', type: 'scooter', battery: 80, idleMin: O.idleClassMin(idleMin) });
   assert(O.vehiclePrio('pickup', v(30 * 60)).prio === O.vehiclePrio('pickup', v(24 * 60)).prio && O.vehiclePrio('pickup', v(25 * 60)).prio > O.vehiclePrio('pickup', v(23 * 60)).prio, 'Disposition: 24-h-Grenze wirkt auch mit Klassen');
 }
+
+// Voreinstellungen je Fahrzeugart (08.11.2026)
+assert(O.presetOf('car').van === 1 && O.presetOf('car').swapRangeKm === 50 && O.presetOf('moped').van === 8 && O.presetOf('scooter').van === O.DEFAULTS.vanCapacity && O.presetOf('all').swapRangeKm === O.DEFAULTS.swapRangeKm,
+  'Disposition: Auto einzeln umgesetzt (1), Reichweite 50 km; E-Roller 8 je Transporter; übrige Standard');
+assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('car').swapRangeKm }) && !O.needsSwap({ battery: null, rangeKm: 30 }), 'needsSwap mit Auto-Schwelle: 30 km Reichweite → tanken/laden');

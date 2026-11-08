@@ -359,3 +359,11 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
     && ec.ruleCurrent === null && G['A|Lime|scooter'].level === 'bad' && ecOld.groups['A|Bolt|scooter'].level === 'warn' && !ecOld.groups['A|Bolt|scooter'].was,
     'eventChecks: Regelstand des Tags mitgeführt (dayRules, gemischt erkennbar); rot nur bei aktuellem Regelstand, sonst gelb „älterer Regelstand“ (was: bad), kein Ausschluss; ohne ruleNow wie bisher');
 }
+
+// Annahmen für E-Roller und Carsharing (08.11.2026)
+assert(E.DEFAULT_RIDE.car.min === 180 && E.DEFAULT_RIDE.moped.km === 5 && E.DEFAULT_RIDE.scooter.min === 12, 'DEFAULT_RIDE: Carsharing 180 Min./40 km, E-Roller 18 Min./5 km, E-Scooter unverändert');
+{
+  const pricing = { plans: [{ operator: 'stadtmobil', municipalities: ['08111000'], plans: [{ id: 'small_hour_daytime', name: 'Kleinwagen Stunde Tag', perMin: [{ start: 0, rate: 3, interval: 60 }], perKm: [{ start: 0, rate: 0.3, interval: 1 }] }] }] };
+  const pf = E.planFor(pricing, 'stadtmobil', '08111000', 'car');
+  assert(pf?.plan?.id === 'small_hour_daytime' && pf.refFare === 3 * 3 + 0.3 * 40, `planFor Carsharing: Stundentarif + km (Referenzfahrt 180 Min., 40 km = ${pf?.refFare} €)`);
+}

@@ -97,8 +97,16 @@ export function normalizeLicense(id, url = null) {
   return { id: n || (raw && !isUrl ? raw : null), url: url || (isUrl ? raw : null) || known || null };
 }
 
-export const VEHICLE_TYPES = ['scooter', 'ebike', 'bike', 'cargo', 'other', 'unknown'];
-export const VEHICLE_TYPE_LABEL = { scooter: 'E-Scooter', ebike: 'E-Bikes', bike: 'Normale Fahrräder', cargo: 'Lastenräder', other: 'Sonstige', unknown: 'Fahrzeugart ungeklärt' };
+// Reihenfolge = Index in ops/<Land>.json (Feld type) und Snapshots: neue Arten nur hinten anfügen. moped (E-Roller, Sitzroller) und car
+// (Carsharing, frei und stationsgebunden) seit 08.11.2026; vorher liefen beide unter other und Carsharing-Feeds waren ausgeschlossen.
+export const VEHICLE_TYPES = ['scooter', 'ebike', 'bike', 'cargo', 'other', 'unknown', 'moped', 'car'];
+export const VEHICLE_TYPE_LABEL = { scooter: 'E-Scooter', ebike: 'E-Bikes', bike: 'Normale Fahrräder', cargo: 'Lastenräder', other: 'Sonstige', unknown: 'Fahrzeugart ungeklärt', moped: 'E-Roller', car: 'Carsharing' };
+// Fahrzeugfamilien: je Familie ein eigenes Prognosemodell (forecast/, forecast/moped/, forecast/car/) und eigene Verfolgungsregeln (pulse-track TYPE_RULES)
+export const FAMILIES = ['micro', 'moped', 'car'];
+export const familyOf = (ty) => (ty === 'car' ? 'car' : ty === 'moped' ? 'moped' : 'micro');
+// „Reichweite niedrig“ je Art (km); übrige Arten: rangeThreshold des Sammlers (5 km)
+export const TYPE_RANGE_LOW_KM = { moped: 10, car: 50 };
+export const rangeLowKm = (ty, dflt = 5) => TYPE_RANGE_LOW_KM[ty] ?? dflt;
 
 export function classifyVehicleType(vt, hint = '') {
   const ff = String(vt?.form_factor || '').toLowerCase();
@@ -107,7 +115,12 @@ export function classifyVehicleType(vt, hint = '') {
   if (ff === 'scooter' || ff === 'scooter_standing' || ff === 'scooter_seated') return 'scooter';
   if (ff === 'cargo_bicycle' || /lasten|cargo/.test(h)) return 'cargo';
   if (ff === 'bicycle') return /electric/.test(prop) ? 'ebike' : 'bike';
-  if (ff === 'moped' || ff === 'car' || ff === 'other') return 'other';
+  if (ff === 'moped') return 'moped';
+  if (ff === 'car') return 'car';
+  if (ff === 'other') return 'other';
+  // ohne form_factor: Carsharing- und E-Roller-Feeds am Namen (vor den Rad-/Scooter-Wörtern: „Carsharing Radolfzell“)
+  if (/car.?sharing|stadtmobil|teilauto|flinkster|getaround|cambio|share.?now|\bmiles\b|\bdeer\b|\bauto\b|swu2go|conficars/.test(h)) return 'car';
+  if (/moped|\bemmy\b|\bstella\b|schwalbe|sitzroller/.test(h)) return 'moped';
   if (/scooter|roller|zeus|voi|bolt|lime|bird|dott|tier/.test(h)) return 'scooter';
   if (/e-?bike|pedelec/.test(h)) return 'ebike';
   if (/bike|rad|velo|nextbike|donkey|callabike|regiorad|stadtrad/.test(h)) return 'bike';
@@ -835,7 +848,7 @@ export function addVehicle(st, v, { chargeThreshold = 20, rangeThreshold = 5 } =
   if (v.reserved) st.reserved++;
   if (v.disabled) st.disabled++;
   if (v.batteryPct != null) { st.batteryKnown++; if (v.batteryPct < chargeThreshold) st.lowBattery++; }
-  if (v.rangeKm != null) { st.rangeKnown++; if (v.rangeKm < rangeThreshold) st.lowRange++; }
+  if (v.rangeKm != null) { st.rangeKnown++; if (v.rangeKm < rangeLowKm(v.type, rangeThreshold)) st.lowRange++; }
   if (v.geoOrigin === 'station') st.geoStation++;
   if (v.positionAgeMs != null && v.positionAgeMs > DELAYED_MS) st.posStale++;
 }

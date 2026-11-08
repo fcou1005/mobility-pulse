@@ -140,8 +140,7 @@ const add = (s) => {
     log(`MOBIDROM NRW: ${res.count} Datensätze${fromCache ? ' (Cache)' : ''}`);
     let tokenUrl = null, clientId = null;
     for (const ds of res.results) {
-      const tags = (ds.tags || []).map(t => t.name);
-      if (tags.some(t => /car.?sharing/i.test(t))) continue;
+      const tags = (ds.tags || []).map(t => t.name); // Carsharing-Datensätze seit 08.11.2026 dabei (Fahrzeugart car)
       const notes = ds.notes || '';
       tokenUrl ??= (notes.match(/https:\/\/www\.mobilitaetsdaten\.nrw\/keycloak\/realms\/[^\s`'")]+token/) || [])[0];
       clientId ??= (notes.match(/Client ID:\*\*\s*`?([\w-]+)/i) || [])[1];

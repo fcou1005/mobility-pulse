@@ -765,3 +765,12 @@ assert(R.csvText('Flotte_Mittel', 'en') === 'Fleet_mean' && R.csvText('Flotte_Mi
     src('alt', 'Bolt', undefined), src('tot', 'Dott', 5, 10, 'down'), src('tot2', 'Dott', 0), src('leer', 'Tier', 0, 0)]);
   assert([...ro].sort().join() === 'Dott,Lime,Zeus', 'rangeOnlyOperators: Lime immer; Zeus (keine Quelle mit Ladestand) ja; Voi/nextbike (eine Quelle mit Ladestand) nein; fehlendes batteryNative zählt als gemeldet; Ausfälle und leere Quellen zählen nicht');
 }
+
+// Energie niedrig je Fahrzeugart (08.11.2026): Auto < 50 km, E-Roller < 10 km, sonst < 5 km (Ladestand-Regel unverändert)
+assert(R.energyLow(null, 30, { type: 'car' }) === true && R.energyLow(null, 30) === false && R.energyLow(null, 8, { type: 'moped' }) === true && R.energyLow(null, 8, { type: 'scooter' }) === false
+  && R.energyLow(60, 30, { type: 'car' }) === false && R.energyLow(10, 30, { type: 'car' }) === true, 'energyLow mit type: eigene Reichweiten-Schwelle für Autos und E-Roller');
+{
+  const doc = { types: ['scooter', 'ebike', 'bike', 'cargo', 'other', 'unknown', 'moped', 'car'], ops: ['stadtmobil'], munis: ['08111000'], vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitKlasseMin,gemeinde', vehicles: [[48.7, 9.1, 0, 7, 0, null, 30, 0, 0], [48.7, 9.1, 0, 7, 0, null, 300, 0, 0]] };
+  const e = R.energyFromOps(doc, { rangeOnly: () => false }).get('08111000|stadtmobil|car'), rd = R.readinessFromOps(doc, { rangeOnly: () => false }).get('08111000');
+  assert(e.known === 2 && e.low === 1 && rd.ready === 1, 'energyFromOps/readinessFromOps: Auto mit 30 km Reichweite niedrig, mit 300 km bereit');
+}

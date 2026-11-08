@@ -214,3 +214,10 @@ const pairsOf = (rows) => { const m = new Map(); for (const [k, r] of Object.ent
   const per = r.stats.ms / r.stats.runs;
   assert(per < 3000 && r.stats.trips > 0, `Laufzeit: ${per.toFixed(0)} ms je Lauf bei ${starts} Fahrtbeginnen (${r.stats.solves} Lösungen, ${r.stats.cand} Kandidatenpaare)`);
 }
+
+// Familien E-Roller und Carsharing (08.11.2026): eigene Zielwerte, nicht die der E-Scooter
+{
+  const p = FE.paramsFor(null, null);
+  assert(p.targetKm.car === FE.TYPE_FALLBACK.car.km && p.tauMap.car === FE.TYPE_FALLBACK.car.min && p.targetKm.moped === FE.TYPE_FALLBACK.moped.km && p.targetKm.scooter === FE.TYPE_FALLBACK.scooter.km && FE.FLOW_FAMILIES.join() === 'scooter,bike,moped,car',
+    'paramsFor: Zielwert und Dauer je Familie (Auto 6 km/180 Min., E-Roller 3,5 km/18 Min.)');
+}

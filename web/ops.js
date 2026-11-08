@@ -44,7 +44,13 @@ function prioOut(lv = S.prioLevel) {
 export const opsFleet = () => S.op;
 export function applyOpsParams({ op, type } = {}) {
   if (op) S.op = op;
-  const sel = $('#ops-type'); if (type && [...sel.options].some(o => o.value === type)) sel.value = type;
+  const sel = $('#ops-type'); if (type && [...sel.options].some(o => o.value === type) && sel.value !== type) { sel.value = type; applyTypePreset(); }
+}
+// Formular-Voreinstellung je Fahrzeugart (lib/pulse-ops.js TYPE_PRESETS): Transporter, Tausch-Kapazität und Energie-Schwellen; Hinweis für Autos/E-Roller
+function applyTypePreset() {
+  const ty = $('#ops-type').value, p = O.presetOf(ty);
+  for (const [id, v] of [['#ops-van', p.van], ['#ops-swapcap', p.swapCapacity], ['#ops-swapthr', p.swapThreshold], ['#ops-swaprange', p.swapRangeKm]]) { const el = $(id); if (el) el.value = v; }
+  const note = $('#ops-type-note'); if (note) { note.textContent = ty === 'car' ? t('ops.typeNoteCar') : ty === 'moped' ? t('ops.typeNoteMoped') : ''; note.hidden = !note.textContent; }
 }
 const abbr = (text, title) => `<abbr title="${X.esc(title)}">${text}</abbr>`;
 const sig2 = (x) => { const p = 10 ** Math.max(0, Math.floor(Math.log10(Math.abs(x) || 1)) - 1); return Math.round(x / p) * p; };
@@ -66,7 +72,8 @@ export function initOps(ctx) {
   fillBands();
   $('#ops-run').addEventListener('click', () => computePlan());
   $('#ops-op').addEventListener('change', (e) => { S.op = e.target.value; computePlan(); });
-  ['#ops-type', '#ops-band', '#ops-days'].forEach(id => $(id).addEventListener('change', () => computePlan()));
+  $('#ops-type').addEventListener('change', () => { applyTypePreset(); computePlan(); });
+  ['#ops-band', '#ops-days'].forEach(id => $(id).addEventListener('change', () => computePlan()));
   $('#ops-depot').addEventListener('click', () => { S.pickDepot = !S.pickDepot; $('#ops-depot').classList.toggle('primary', S.pickDepot); status(S.pickDepot ? t('ops.clickOnMapToSetDepot') : ''); });
   // „Zu den Touren“: Textlink im Kopf der Plan-Karte (springt zur Tourliste, ohne die Ansicht zu wechseln)
   document.addEventListener('click', (e) => { const j = e.target.closest('[data-ops-jump]'); if (!j) return; e.preventDefault(); const el = $(`#${j.dataset.opsJump}`)?.closest('.panel') || $(`#${j.dataset.opsJump}`); if (!el) return; el.tabIndex = -1; el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'start' }); });

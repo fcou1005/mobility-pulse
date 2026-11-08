@@ -1,18 +1,18 @@
-import * as C from './pulse-core.js?v=mw7r00jn';
-import * as Ops from './ops.js?v=mw7r00jn';
-import * as E from './pulse-econ.js?v=mw7r00jn';
-import * as K from './pulse-calib.js?v=mw7r00jn';
-import * as Rp from './report.js?v=mw7r00jn';
-import * as R from './pulse-report.js?v=mw7r00jn';
-import * as Fl from './flows.js?v=mw7r00jn';
-import * as Cov from './coverage.js?v=mw7r00jn';
-import * as Cmp from './compare.js?v=mw7r00jn';
-import * as Sp from './spots.js?v=mw7r00jn';
-import * as Fv from './forecast.js?v=mw7r00jn';
-import { mapKeys } from './mapkeys.js?v=mw7r00jn';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw7r00jn';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw7r00jn';
-import { idleClassText } from './pulse-ops.js?v=mw7r00jn';
+import * as C from './pulse-core.js?v=mw7xqo0o';
+import * as Ops from './ops.js?v=mw7xqo0o';
+import * as E from './pulse-econ.js?v=mw7xqo0o';
+import * as K from './pulse-calib.js?v=mw7xqo0o';
+import * as Rp from './report.js?v=mw7xqo0o';
+import * as R from './pulse-report.js?v=mw7xqo0o';
+import * as Fl from './flows.js?v=mw7xqo0o';
+import * as Cov from './coverage.js?v=mw7xqo0o';
+import * as Cmp from './compare.js?v=mw7xqo0o';
+import * as Sp from './spots.js?v=mw7xqo0o';
+import * as Fv from './forecast.js?v=mw7xqo0o';
+import { mapKeys } from './mapkeys.js?v=mw7xqo0o';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw7xqo0o';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw7xqo0o';
+import { idleClassText } from './pulse-ops.js?v=mw7xqo0o';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -951,7 +951,7 @@ function renderMap() {
       const cells = new Map();
       // Energie niedrig wie überall (energyLow): Grenzen des Live-Abrufs bzw. des Sammlers, je nachdem woher die Positionen stammen
       const lim = src === coll ? { charge: state.latest?.thresholds?.chargeThreshold ?? R.ENERGY_CHARGE, range: state.latest?.thresholds?.rangeThreshold ?? R.ENERGY_RANGE_KM } : { charge: state.thresholds.charge, range: state.thresholds.range };
-      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) || !!v.batteryDerived, rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
+      for (const v of vehicles) { if (v.disabled) continue; const k = `${Math.round(v.lat / 0.0045)}:${Math.round(v.lon / 0.007)}`; const c = cells.get(k) || { lat: Math.round(v.lat / 0.0045) * 0.0045, lon: Math.round(v.lon / 0.007) * 0.007, n: 0, low: 0, known: 0 }; c.n++; const lw = R.energyLow(v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) || !!v.batteryDerived, rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat, type: v.type }); if (lw != null) { c.known++; if (lw) c.low++; } cells.set(k, c); }
       const max = Math.max(1, ...[...cells.values()].map(c => layerMode === 'energy' ? c.low : c.n));
       for (const c of cells.values()) {
         const val = layerMode === 'energy' ? c.low : c.n; if (!val) continue;
@@ -1077,7 +1077,7 @@ function liveEnergyGroups() {
   const lim = energyLimits(), key = `${state.live.at}|${lim.charge}|${lim.range}|${state.live.vehicles.length}`;
   if (liveEnergy?.key !== key) {
     const m = new Map();
-    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) || !!v.batteryDerived, rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat }); m.set(k, e); }
+    for (const v of state.live.vehicles) { const k = `${v.ags}|${v.operator}|${v.type}`; const e = m.get(k) || R.emptyEnergy(); R.addEnergy(e, v.batteryPct, v.rangeKm, { ...lim, rangeOnly: rangeOnly(v.operator) || !!v.batteryDerived, rangeDerived: !!v.rangeDerived, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat, type: v.type }); m.set(k, e); }
     liveEnergy = { key, map: m };
   }
   return liveEnergy.map;

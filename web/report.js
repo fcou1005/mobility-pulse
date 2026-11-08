@@ -1119,7 +1119,7 @@ export function renderFeedChecks(el, ctx) {
 // ======================================================================
 // Gemeinsame Bausteine für Tabellen mit Auswahlfeldern, Sortierung und „mehr zeigen“
 // ======================================================================
-const TYPE_ORDER = ['scooter', 'ebike', 'bike', 'cargo', 'other', 'unknown'];
+const TYPE_ORDER = ['scooter', 'ebike', 'bike', 'cargo', 'moped', 'car', 'other', 'unknown'];
 function groupOptions(latest) {
   const ops = new Set(), types = new Set();
   for (const k of Object.keys(latest?.groups || {})) { const [a, op, ty] = k.split('|'); if (!a || a === 'DE') continue; ops.add(op); types.add(ty); }

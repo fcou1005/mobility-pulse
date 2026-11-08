@@ -530,7 +530,7 @@ const rangeOnlyOps = R.rangeOnlyOperators(sourceOut);
 // Gruppen ohne Fahrzeug mit Energieangabe tragen die Felder nicht (latest.energy gesetzt = fehlendes Feld bedeutet 0)
 for (const v of dv.vehicles) {
   const st = groups.get(`${v.ags}|${v.operator}|${v.type}`); if (!st) continue;
-  const ro = rangeOnlyOps.has(v.operator) || !!v.batteryDerived, rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: rangeThreshold, rangeOnly: ro, rangeDerived: rd, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat });
+  const ro = rangeOnlyOps.has(v.operator) || !!v.batteryDerived, rd = !!v.rangeDerived && v.batteryPct != null, low = R.energyLow(v.batteryPct, v.rangeKm, { charge: chargeThreshold, range: C.rangeLowKm(v.type, rangeThreshold), rangeOnly: ro, rangeDerived: rd, rangeLimit: v.rangeLimitKm ?? null, rangeFlat: !!v.rangeFlat });
   if (low == null) continue;
   if (st.energyKnown == null) Object.assign(st, { energyKnown: 0, energyLow: 0, energyRangeOnly: 0, energyRangeOnlyLow: 0, ready: 0 });
   st.energyKnown++; if (low) st.energyLow++;
@@ -581,7 +581,7 @@ const latest = {
   boundaries: boundaries ? { count: boundaries.features.length, attribution: boundaries.attribution, source: boundaries.source } : null,
   counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, municipalitiesShown: presence ? Object.values(muniOut).filter(V.muniShown).length : munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
   dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size, mirrorSources: mirrorInfo.size },
-  thresholds: { chargeThreshold, rangeThreshold },
+  thresholds: { chargeThreshold, rangeThreshold, rangeByType: C.TYPE_RANGE_LOW_KM },
   energy: { version: 1, fields: ['energyKnown', 'energyLow', 'energyRangeOnly', 'energyRangeOnlyLow', 'ready'], rangeOnlyOps: [...rangeOnlyOps].sort(), // Felder je groups-Eintrag (Q-2)
     rangeLimit: { ...C.RANGE_LIMIT, rule: 'Reichweite < min(rangeThreshold, sources[].rangeLimitKm); rangeLimitKm = share × 95. Perzentil der Reichweite der Quelle, wenn dieses < maxP95Km (ab minN Fahrzeugen), sonst null' },
     rangeFlat: { ...C.RANGE_FLAT, rule: 'Reichweite der Quelle konstant (Spanne p5–p95 < maxSpreadKm oder > maxModeShare gleiche Werte, ab minN Fahrzeugen): für Energie unbekannt (sources[].rangeFlat)' } },
@@ -1299,13 +1299,14 @@ let strikeAuto = [];
   } catch (e) { log(`Streik-Erkennung: ${e?.message || e}`); }
 }
 
-// Prognose-Engine (lib/pulse-forecast.js): ein gepooltes Modell über alle Anbieter und Gemeinden, Selbstprüfung per Rolling Origin (ein Tag voraus)
+// Prognose-Engine (lib/pulse-forecast.js): je Fahrzeugfamilie ein gepooltes Modell über alle Anbieter und Gemeinden (micro → forecast/,
+// E-Roller → forecast/moped/, Carsharing → forecast/car/, gleiche Dateien je Ordner), Selbstprüfung per Rolling Origin (ein Tag voraus)
 // und Live-Abgleich ausgegebener Prognosen mit der Realität → forecast/latest.json (nächste 24 Stunden) und forecast/log.json. Höchstens alle
 // FORECAST_EVERY_MIN Minuten (Standard 60); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
 // forecast/series.json: Stundenreihen fürs Dashboard (Plan heute eingefroren, Ist, Live-Prognose bis Ende morgen, je Anbieter, Art, Gemeinde und große Gruppe).
 if (process.env.FORECAST !== '0') {
   try {
-    const dir = path.join(DATA, 'forecast'), fLatest = path.join(dir, 'latest.json'), fLog = path.join(dir, 'log.json'), fSeries = path.join(dir, 'series.json');
+    const fLatest = path.join(DATA, 'forecast', 'latest.json');
     const rd = async (f) => (existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null);
     const prevLatest = await rd(fLatest), every = (process.env.FORECAST_EVERY_MIN != null ? +process.env.FORECAST_EVERY_MIN : 60) * 60e3;
     if (!prevLatest || !(now - Date.parse(prevLatest.generatedAt) < every)) {
@@ -1335,19 +1336,29 @@ if (process.env.FORECAST !== '0') {
       let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
       const ext = chronos ? CH.chronosLookup(chronos) : null;
-      const t0 = Date.now(), res = FC.runForecast({ docs, calendar: await rd(path.join(DATA, 'calendar.json')), weather, incidents, curated: [...curOk, ...strikeAuto, ...sportCurated, ...(evOn ? [...venueCurated, ...termineAuto] : [])], prevLog: await rd(fLog), prevSeries: await rd(fSeries), now, exclude: red, ext, pending, pendingFrom });
-      if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
-      if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
-      await mkdir(dir, { recursive: true });
-      await writeFile(fLatest, JSON.stringify(res.latest)); await writeFile(fLog, JSON.stringify(res.log)); await writeFile(fSeries, JSON.stringify(res.series));
-      const l = res.latest;
-      log(`Prognose: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
+      // je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR): micro wie bisher in forecast/ (Lernphase unverändert), E-Roller und Carsharing
+      // getrennt in forecast/moped/ und forecast/car/; eine Familie ohne Fahrzeugminuten in den Tagesdateien wird übersprungen (keine Dateien)
+      const curatedAll = [...curOk, ...strikeAuto, ...sportCurated, ...(evOn ? [...venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
+      for (const fam of FC.FAMILIES) {
+        try {
+          const fdocs = FC.familyDocs(docs, fam); if (fam !== 'micro' && !FC.familyHasData(fdocs)) continue;
+          const fdir = path.join(DATA, FC.FAMILY_DIR[fam]), fL = path.join(fdir, 'latest.json'), fG = path.join(fdir, 'log.json'), fS = path.join(fdir, 'series.json');
+          const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam });
+          if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
+          if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
+          await mkdir(fdir, { recursive: true });
+          await writeFile(fL, JSON.stringify(res.latest)); await writeFile(fG, JSON.stringify(res.log)); await writeFile(fS, JSON.stringify(res.series));
+          const l = res.latest;
+          log(`Prognose${fam === 'micro' ? '' : ` (${fam})`}: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
+        } catch (e) { if (fam === 'micro') throw e; log(`Prognose (${fam}): ${e.message} – alte Dateien bleiben`); }
+      }
     } else {
       // zwischen zwei Prognose-Läufen: neuen Chronos-Lauf (viermal täglich) trotzdem in die Stundenreihen übernehmen, nur Feld c
-      const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`, ser = await rd(fSeries);
-      if (tsfmUrl && ser?.version === 1) {
+      const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
+      const famSeries = []; for (const fam of FC.FAMILIES) { const f = path.join(DATA, FC.FAMILY_DIR[fam], 'series.json'), ser = await rd(f); if (ser?.version === 1) famSeries.push([fam, f, ser]); }
+      if (tsfmUrl && famSeries.length) {
         const r = await fetchJson(tsfmUrl);
-        if (r.ok && r.json?.version === 1 && r.json.groups && (r.json.at !== ser.chronos?.at || !ser.chronos?.backDays)) { CH.chronosSeries(ser, r.json); await writeFile(fSeries, JSON.stringify(ser)); log(`Chronos: Stundenreihen auf den Lauf ${r.json.at} gebracht`); }
+        if (r.ok && r.json?.version === 1 && r.json.groups) for (const [fam, f, ser] of famSeries) if (r.json.at !== ser.chronos?.at || !ser.chronos?.backDays) { CH.chronosSeries(ser, r.json); await writeFile(f, JSON.stringify(ser)); log(`Chronos: Stundenreihen${fam === 'micro' ? '' : ` (${fam})`} auf den Lauf ${r.json.at} gebracht`); }
       }
     }
   } catch (e) { log(`Prognose: ${e.message} – alte Dateien bleiben`); }
@@ -1401,7 +1412,7 @@ if (boundaries) {
     '- Streiks im Nahverkehr und bei der Bahn (`streiks.json`): im Sammler automatisch erkannt aus der Nachrichtensuche der tagesschau-App (www.tagesschau.de/api2u, mit den Regionalmeldungen der ARD-Anstalten); gespeichert sind nur abgeleitete Angaben (Art, Tage, Gebiet, erkannte Orte und Betriebe) und der Link zur jeweiligen Meldung, keine Meldungstexte.',
     '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine (Name, Beginn, Ort, Link) aus den öffentlichen Programmseiten und Kalendern der Orte (Quelle je Termin verlinkt; `data/veranstaltungskalender.json`), höchstens 60 Tage behalten.',
     '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
-    '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
+    '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`; E-Roller und Carsharing je mit eigenem Modell in `forecast/moped/` und `forecast/car/`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',

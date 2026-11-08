@@ -47,6 +47,18 @@ export async function startExtra() {
       'free_bike_status.json': () => head({ bikes: veh }),
     };
   };
+  // /cs = Carsharing (stationsgebunden, roundtrip_station) und E-Roller frei in Stuttgart (08.11.2026): 6 Autos an 2 Stationen (ohne eigene
+  // Koordinaten, Tank 20–90 %, Auto c-1 mit 30 km Reichweite), 4 E-Roller; unverändert in jedem Lauf (Regeln der Verfolgung: test/track.test.mjs)
+  const cs = {
+    'gbfs.json': () => head({ de: { feeds: ['system_information', 'vehicle_types', 'station_information', 'station_status', 'free_bike_status'].map(f => ({ name: f, url: `${base}/cs/${f}.json` })) } }),
+    'system_information.json': () => head({ system_id: 'cs', name: 'Stadtmobil Test', operator: 'stadtmobil', timezone: 'Europe/Berlin' }),
+    'vehicle_types.json': () => head({ vehicle_types: [{ vehicle_type_id: 'kw', form_factor: 'car', propulsion_type: 'combustion', max_range_meters: 600000, name: 'Kleinwagen', return_constraint: 'roundtrip_station' }, { vehicle_type_id: 'er', form_factor: 'moped', propulsion_type: 'electric', max_range_meters: 100000, name: 'E-Roller' }] }),
+    'station_information.json': () => head({ stations: [{ station_id: 'S1', name: 'Marktplatz', lat: 48.776, lon: 9.177, capacity: 4 }, { station_id: 'S2', name: 'Bahnhof', lat: 48.784, lon: 9.182, capacity: 4 }] }),
+    'station_status.json': () => head({ stations: ['S1', 'S2'].map(id => ({ station_id: id, num_bikes_available: 3, num_docks_available: 1, is_installed: true, is_renting: true, is_returning: true, last_reported: n(), vehicle_types_available: [{ vehicle_type_id: 'kw', count: 3 }] })) }),
+    'free_bike_status.json': () => head({ bikes: [
+      ...[...Array(6)].map((_, i) => ({ bike_id: `c-${i}`, station_id: i < 3 ? 'S1' : 'S2', is_reserved: false, is_disabled: false, vehicle_type_id: 'kw', current_fuel_percent: 0.2 + i * 0.14, current_range_meters: i === 1 ? 30000 : 120000 + i * 60000, last_reported: n() })),
+      ...[...Array(4)].map((_, i) => ({ bike_id: `m-${i}`, lat: +(48.770 + i * 0.002).toFixed(5), lon: 9.170, is_reserved: false, is_disabled: false, vehicle_type_id: 'er', current_fuel_percent: 0.4 + i * 0.1, current_range_meters: 40000 + i * 10000, last_reported: n() }))] }),
+  };
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x'); const key = req.headers['x-api-key'] || null;
     log.push({ path: u.pathname, host: req.headers.host, key, q: Object.fromEntries(u.searchParams) });
@@ -58,6 +70,7 @@ export async function startExtra() {
     // erster Abruf eines Teilfeeds mit 429 (wie Yoio/rideatom): der Sammler wiederholt einmal
     if (u.pathname === '/rk/d/free_bike_status.json' && !st.flakyServed) { st.flakyServed = true; return json({}, 429); }
     if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
+    if (kind === 'cs') return cs[file] ? json(cs[file]()) : json({}, 404);
     if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);
     if (kind === 'weather') { // Bright-Sky-Format: stündliche Zeilen von date 00:00 bis last_date 00:00 (UTC); ein unplausibler Temperaturwert (999) pro Antwort
       if (st.weatherDown) return json({}, 500);

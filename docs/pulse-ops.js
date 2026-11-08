@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mw7r00jn';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mw7r00jn';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mw7xqo0o';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mw7xqo0o';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -48,6 +48,15 @@ export const DEFAULTS = {
   // detour: Rückfall ohne Straßenmatrix = Luftlinie × 1,35 (Umwegfaktor Stadtverkehr). prioLambda: Gewicht der Priorität in der Reihenfolge (PRIO_LEVELS)
   prioLambda: 1,
 };
+// Voreinstellungen des Formulars je Fahrzeugart (beim Wechsel der Art gesetzt, seit 08.11.2026): E-Roller passen zu acht in einen Transporter,
+// Reichweite niedrig unter 10 km; Autos setzt ein Fahrer einzeln um (Transporter = 1 Fahrzeug), „Tausch“ heißt bei ihnen Tanken bzw. Laden
+// (Tour = Fahrer mit Tankkarte, 8 Fahrzeuge), Energie niedrig unter 25 % und 50 km. Übrige Arten: DEFAULTS.
+export const TYPE_PRESETS = Object.freeze({
+  default: { van: DEFAULTS.vanCapacity, swapCapacity: DEFAULTS.swapCapacity, swapThreshold: DEFAULTS.swapThreshold, swapRangeKm: DEFAULTS.swapRangeKm },
+  moped: { van: 8, swapCapacity: 40, swapThreshold: 20, swapRangeKm: 10 },
+  car: { van: 1, swapCapacity: 8, swapThreshold: 25, swapRangeKm: 50 },
+});
+export const presetOf = (type) => TYPE_PRESETS[type] || TYPE_PRESETS.default;
 // Veröffentlichte Standzeit (ops/<Land>.json, idle-long.json) nur als Klasse: eine minutengenaue Standzeit zeigt, wann an einer Adresse die
 // letzte Fahrt endete. Wert = Untergrenze der Klasse in Minuten: 0 = unter 6 h, 360 = 6–24 h, ab 24 h ganze Tage (1440 = 1–2 Tage, 2880 = 2–3 Tage …).
 // Die Schwellen der Disposition (6 h Bonus, 24 h Überschuss) liegen auf Klassengrenzen und wirken unverändert.
