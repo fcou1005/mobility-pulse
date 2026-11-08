@@ -729,7 +729,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
 // ereignisse.json (gepflegte Liste data/ereignisse.json, vom Sammler geprüft) – Zeitfenster wie in der Prognose (lib/pulse-context.js eventList) ----------
 const loadEvents = (ctx) => memo(`events|${ctx.state?.latest?.at || ''}`, async () => {
   const [sp, vd, cu] = await Promise.all([fj(ctx, 'sport.json'), fj(ctx, 'veranstaltungen.json'), fj(ctx, 'ereignisse.json')]);
-  return { list: CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now: Date.now(), pastDays: 8, aheadDays: 21 }), sp, vd, cu };
+  return { list: CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now: Date.now(), pastDays: 8, aheadDays: 400 }), sp, vd, cu };
 });
 const LIGA = { bl1: '1. Bundesliga', bl2: '2. Bundesliga', bl3: '3. Liga', del: 'DEL', dfb: 'DFB-Pokal', ucl: 'Champions League' };
 const evWhen = (e, until = null) => {
@@ -791,6 +791,8 @@ async function fillEventsMain(box, ctx, sel, S0) {
   const pastRows = past.slice(0, scope ? 10 : 12).map(e => ({ e, f: evEffect(S0, e) }));
   html += `<div class="fv-ev-h">${t('fv.evPast')}</div>`;
   html += pastRows.length ? `<div class="tbl fv-tbl full" data-csv="0" tabindex="0" role="region" aria-label="${esc(t('fv.evPast'))}"><table><thead><tr><th>${t('fv.evColWhat')}</th><th class="n" title="${esc(t('fv.evColEffTip'))}">${t('fv.evColEff')}</th></tr></thead><tbody>${pastRows.map(({ e, f }) => `<tr><td class="wrap"><span class="lv">${evWhat(ctx, e)}</span><span class="lvs">${esc([evWhen(e), withWhere ? muni(e.ags[0]) : '', e.ort || evKind(e)].filter(Boolean).join(' · '))}</span></td><td class="n">${effCell(f)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="fv-sub">${t('fv.evNonePast')}</p>`;
+  const later = list.filter(e => e.beginn > now + 14 * 864e5 && (scope || known(e)));
+  if (later.length) html += `<p class="fv-sub">${t('fv.evLater', { n: n0(evRuns(later).length), d: esc(dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: TZ }).format(new Date(later[later.length - 1].beginn))) })}</p>`;
   html += `<p class="fv-sub">${t('fv.evMainNote', { d: esc(activeFromTxt(ev?.cu, ev?.sp)) })} <a href="#prognose-basis">${t('fv.evAllLink')}</a></p>`;
   box.innerHTML = html;
 }
@@ -824,17 +826,20 @@ async function markEvents(el, ctx, rows, sel) {
   el.querySelector('.fv-legend')?.insertAdjacentHTML('beforeend', `<span><i class="k-ev"></i>${t('fv.evMark')}</span>`);
 }
 // Grundlagen: vollständige Liste im gewählten Gebiet, 7 Tage zurück bis 14 Tage voraus, mit Quelle und gemessener Wirkung
+let EV_RANGE = 14; // Grundlagen: Tage voraus (14, 90 oder 400 = alles)
 async function fillEvents(box, ctx, sel, S0 = null) {
   if (!box) return;
   const ev = await loadEvents(ctx); if (!box.isConnected) return;
   const { esc } = ctx, now = Date.now(), scope = sel.ags && sel.ags !== 'DE' ? sel.ags : null, vd = ev?.vd, sp = ev?.sp;
-  const list = (ev?.list || []).filter(e => e.beginn >= now - 7 * 864e5 && e.beginn <= now + 14 * 864e5 && CX.eventInScope(e, scope));
+  const list = (ev?.list || []).filter(e => e.beginn >= now - 7 * 864e5 && e.beginn <= now + EV_RANGE * 864e5 && CX.eventInScope(e, scope));
+  const tog = `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.evRange'))}">${[[14, t('fv.evR14')], [90, t('fv.evR90')], [400, t('fv.evRAll')]].map(([v, l]) => `<button type="button" data-evr="${v}" aria-pressed="${v === EV_RANGE}">${l}</button>`).join('')}</div></div>`;
   const nSrc = (vd?.quellen || []).length, okSrc = (vd?.quellen || []).filter(q => q.n > 0).length, nCur = (ev?.cu?.ereignisse || []).length;
   const notes = [t('fv.evNote', { from: activeFromTxt(ev?.cu, sp) }), nSrc ? t('fv.evSrc', { ok: okSrc, n: nSrc }) : '', t('fv.evCur', { n: n0(nCur) })].filter(Boolean).join(' ');
-  const shown = list.slice(0, 80);
-  box.innerHTML = (shown.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.evTitle'))}"><table><thead><tr><th>${t('fv.evColWhen')}</th><th>${t('fv.evColWhere')}</th><th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n">${t('fv.evColCap')}</th><th class="mh">${t('fv.evColKind')}</th><th class="n" title="${esc(t('fv.evColEffTip'))}">${t('fv.evColEff')}</th></tr></thead><tbody>`
+  const shown = list.slice(0, EV_RANGE > 14 ? 400 : 80);
+  box.innerHTML = tog + (shown.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.evTitle'))}"><table><thead><tr><th>${t('fv.evColWhen')}</th><th>${t('fv.evColWhere')}</th><th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n">${t('fv.evColCap')}</th><th class="mh">${t('fv.evColKind')}</th><th class="n" title="${esc(t('fv.evColEffTip'))}">${t('fv.evColEff')}</th></tr></thead><tbody>`
     + shown.map(e => `<tr${e.beginn < now ? ' class="muted"' : ''}><td>${esc(evWhen(e))}</td><td>${esc(e.all ? t('fc.scopeDE') : e.laender.length ? e.laender.join(', ') : (ctx.muniName?.(e.ags[0]) || e.ags[0] || '–'))}</td><td class="wrap">${evWhat(ctx, e)}</td><td class="mh">${esc(e.ort || '–')}</td><td class="n">${e.cap ? n0(e.cap) : '–'}</td><td class="mh">${esc(evKind(e))}</td><td class="n">${e.beginn < now ? effCell(evEffect(S0, e)) : ''}</td></tr>`).join('')
     + `</tbody></table></div>` : `<p class="fv-sub">${t('fv.evNone')}</p>`) + `<p class="fv-sub">${list.length > shown.length ? `${t('fv.evMore', { n: list.length - shown.length })} ` : ''}${notes}</p>`;
+  box.querySelectorAll('[data-evr]').forEach(b => b.addEventListener('click', () => { EV_RANGE = +b.dataset.evr; fillEvents(box, ctx, sel, S0); }));
 }
 
 function scopeLabel(ctx, sel) {

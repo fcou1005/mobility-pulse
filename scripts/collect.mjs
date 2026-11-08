@@ -1199,7 +1199,7 @@ let sportCurated = [];
 
 // Veranstaltungen an großen Orten (lib/pulse-context.js VENUES): Orte ab 5.000 Plätzen aus Wikidata (CC0, wöchentlich, Gemeinde über die Grenzen),
 // Termine aus den öffentlichen Programmseiten bzw. ICS-Kalendern der Orte (data/veranstaltungskalender.json; kein Konto, kein Schlüssel; robots.txt
-// wird beachtet; je Lauf höchstens VENUES.perRun Quellen, jede alle 6 h; 14 Tage voraus, 60 Tage behalten) → veranstaltungen.json (Liste mit Ort,
+// wird beachtet; je Lauf höchstens VENUES.perRun Quellen, jede alle 6 h; bis ein Jahr voraus (alles, was die Seiten zeigen), 60 Tage behalten) → veranstaltungen.json (Liste mit Ort,
 // Adresse, Plätzen). In die Prognose wie data/ereignisse.json erst ab veranstaltungenAb. WIKIDATA_URL leer = keine Orte; KALENDER_FILE leer = keine Termine.
 let venueCurated = [];
 {

@@ -487,7 +487,8 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   rows[1][1] = 'bl2'; rows[2][1] = 'bl3'; rows[3][1] = 'bl2';
   const venues = { ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { 'VfB Stuttgart': { ort: 'Stuttgart', land: 'BW' }, 'FC Energie Cottbus': { ort: 'Cottbus', land: 'BB', alias: ['Energie Cottbus'] } } };
   const resolve = CX.placeResolver([{ properties: { ags: '08111000', name: 'Stuttgart', state: 'BW' } }, { properties: { ags: '12052000', name: 'Cottbus/Chóśebuz', state: 'BB' } }, { properties: { ags: 'x1', name: 'Münster', state: 'HE' } }]);
-  const r = CX.sportEntries(rows, venues, { now, resolve });
+  const r = CX.sportEntries(rows, venues, { now, resolve, aheadDays: 10 });
+  assert(CX.sportEntries(rows, venues, { now, resolve }).entries.length === r.entries.length + 1, 'Sport: ohne Fenstervorgabe alle angesetzten Spiele der Saison (SPORT.aheadDays)');
   const vfb = r.entries.find(e => e.gebiet.ags[0] === '08111000'), cb = r.entries.find(e => e.gebiet.ags[0] === '12052000');
   assert(rows.length === 5 && CX.sportSeason(now) === 2026 && CX.sportSeason(Date.parse('2027-03-01T00:00:00Z')) === 2026 && CX.sportSeason(Date.parse('2027-07-01T00:00:00Z')) === 2027, 'Sport: Spiele ohne Anstoß entfallen; Saison = Startjahr (ab Juli)');
   assert(vfb?.von === '2026-11-07T17:00' && vfb.bis === '2026-11-07T21:30' && vfb.art === 'veranstaltung' && vfb.quelle.endsWith('/getmatchdata/bl1/2026') && vfb.id === 'openligadb:7', `Sport: Anstoß 18:30 → Veranstaltung 17:00–21:30 Ortszeit in Stuttgart (${vfb?.von}–${vfb?.bis})`);
@@ -557,6 +558,9 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const p = Array.from({ length: 24 }, () => 100), a = p.map((x, h) => (h >= 17 && h <= 21 ? 150 : 110));
   const f = CX.eventEffect({ '2026-11-07': { 'ags:08111000': { p, a } } }, 'ags:08111000', vfb);
   assert(f && f.hours === 5 && f.ist === 750 && f.plan === 500 && Math.abs(f.rel - 0.5) < 1e-9 && Math.abs(f.rest - 0.1) < 1e-9 && Math.abs(f.uplift - (1.5 / 1.1 - 1)) < 1e-9, `eventEffect: Fenster 17–21 Uhr, bereinigt um den übrigen Tag (${JSON.stringify(f)})`);
+  { const cx = CX.ctxLookup([], [{ art: 'streik-oepnv', von: '2026-11-09', bis: '2026-11-11', gebiet: { laender: ['BW'] }, quelle: 'x' }, { art: 'veranstaltung', von: '2026-11-10T19:00', bis: '2026-11-10T23:00', gebiet: { ags: ['08111000'] }, quelle: 'x' }]), iS = CX.CTX_KEYS.indexOf('strike'), iE = CX.CTX_KEYS.indexOf('event');
+    assert(cx('08111000', '2026-11-10', 12)[iS] === 1 && cx('08111000', '2026-11-11', 23)[iS] === 1 && cx('08111000', '2026-11-12', 0)[iS] === 0 && cx('05315000', '2026-11-10', 12)[iS] === 0 && cx('08111000', '2026-11-10', 20)[iE] === 1 && cx('08111000', '2026-11-10', 18)[iE] === 0,
+      'ctxLookup mit Tagesindex: mehrtägiger Streik je Land, Veranstaltung nur in ihren Stunden'); }
   assert(CX.eventEffect({ '2026-11-07': { 'ags:08111000': { p: p.map(() => null), a } } }, 'ags:08111000', vfb) === null && CX.eventEffect({}, 'ags:08111000', vfb) === null, 'eventEffect: ohne Plan oder Tag keine Wirkung');
 }
 // ---------- Chronos-2: Vergleich chronos und Mischung blend (lib/pulse-chronos.js, scripts/chronos.py)
