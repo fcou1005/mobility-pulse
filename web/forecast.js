@@ -744,7 +744,7 @@ function evRuns(list) {
   const out = [];
   for (const e of list) {
     const last = out[out.length - 1], k = `${e.src}|${e.titel}|${e.ort}|${e.ags[0] || ''}`;
-    if (last && last.k === k && e.noTime && last.e.noTime && Date.parse(`${e.von.slice(0, 10)}T12:00:00Z`) - Date.parse(`${(last.until || last.e.von).slice(0, 10)}T12:00:00Z`) <= 86400e3) { last.until = e.von.slice(0, 10); last.days.push(e); continue; }
+    if (last && last.k === k && (e.noTime ? last.e.noTime : !last.e.noTime && e.von.slice(11) === last.e.von.slice(11)) && Date.parse(`${e.von.slice(0, 10)}T12:00:00Z`) - Date.parse(`${(last.until || last.e.von).slice(0, 10)}T12:00:00Z`) <= 86400e3) { last.until = e.von.slice(0, 10); last.days.push(e); continue; }
     out.push({ k, e, until: null, days: [e] });
   }
   return out;

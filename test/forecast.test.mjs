@@ -543,6 +543,15 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
 }
 // ---------- Veranstaltungsliste fürs Dashboard und gemessene Wirkung (lib/pulse-context.js eventList, eventEffect)
 {
+  // Volksfest als eigenes Merkmal fest (hinten in CTX_KEYS), geprüft wie Veranstaltungen; Gedächtnis älterer Fassungen wird aufgefüllt
+  { const fe = [{ art: 'volksfest', von: '2027-09-25T11:00', bis: '2027-09-25T23:30', gebiet: { ags: ['08111000'] }, titel: 'Cannstatter Volksfest', quelle: 'https://x.example' }];
+    const iF = CX.CTX_KEYS.indexOf('fest'), iE = CX.CTX_KEYS.indexOf('event'), cx = CX.ctxLookup([], CX.checkCurated({ ereignisse: fe }).ok);
+    assert(iF === CX.CTX_KEYS.length - 1 && F.EFFECTS[F.EFFECTS.length - 1] === 'fest' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
+      'Volksfest: eigenes Merkmal fest (letztes in CTX_KEYS/EFFECTS), nicht event, nur in den Öffnungsstunden');
+    const NE = F.EFFECTS.length, k = NE - 1, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
+    const d = mem.days['2026-11-02'];
+    assert(d.H.length === NE * NE && d.H[1 * NE + 2] === H[1 * k + 2] && d.H[k * NE + k] === 0 && d.u.length === NE && d.u[k] === 0 && mem.old.P.length === NE * NE && mem.old.P[(k - 1) * NE + (k - 1)] === H[(k - 1) * k + (k - 1)] && mem.old.dk[k] === 0 && F.memoryResize(mem).days['2026-11-02'].H.length === NE * NE,
+      'memoryResize: Gedächtnis mit einer Wirkung weniger auf neue Länge (alte Einträge an ihrem Platz, neue 0, zweimal anwenden ändert nichts)'); }
   assert(CX.localMs('2026-11-07T18:30') === Date.parse('2026-11-07T17:30:00Z') && CX.localMs('2026-07-01') === Date.parse('2026-06-30T22:00:00Z') && Number.isNaN(CX.localMs('7.11.')), 'localMs: Ortszeit Winter/Sommer → UTC, Unsinn → NaN');
   const now = Date.parse('2026-11-08T08:00:00Z');
   const sport = { entries: [{ von: '2026-11-07T17:00', bis: '2026-11-07T21:30', gebiet: { ags: ['08111000'] }, titel: 'VfB Stuttgart – SV Werder Bremen (bl1, Anstoß 18:30)', quelle: 'https://api.openligadb.de/x', id: 'openligadb:1', beginn: Date.parse('2026-11-07T17:30:00Z'), liga: 'bl1' }] };

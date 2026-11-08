@@ -1269,7 +1269,7 @@ if (process.env.FORECAST !== '0') {
       await writeFile(path.join(DATA, 'ereignisse.json'), JSON.stringify({ version: 1, at: now, quelle: 'data/ereignisse.json (gepflegte Liste, je Eintrag mit Beleg)', veranstaltungenAb: curDoc?.veranstaltungenAb ?? null, ereignisse: cur.ok, uebersprungen: cur.bad.length }));
       // Veranstaltungen (Konzerte, Feste) wie Sport erst ab veranstaltungenAb in die Prognose (Ende der Lernphase); Streiks sofort
       const evFrom = Date.parse(curDoc?.veranstaltungenAb ?? ''), evOn = !Number.isFinite(evFrom) || now >= evFrom;
-      const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung');
+      const curOk = evOn ? cur.ok : cur.ok.filter(e => e.art !== 'veranstaltung' && e.art !== 'volksfest'); // Volksfeste (Merkmal fest) ebenso
       if (curOk.length < cur.ok.length) log(`Ereignisliste: ${cur.ok.length - curOk.length} Veranstaltungen vorgemerkt, in der Prognose ab ${curDoc.veranstaltungenAb}`);
       // Chronos-2 (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py) – Vergleich „chronos“ und
       // Mischung „blend“ (lernt mit, wählbar ab BLEND.activeFrom); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.

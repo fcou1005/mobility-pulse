@@ -11,9 +11,9 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mw7l5ex5';
-import { hourOf, dayOf } from './pulse-track.js?v=mw7l5ex5';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw7l5ex5';
+import * as E from './pulse-econ.js?v=mw7lh3kx';
+import { hourOf, dayOf } from './pulse-track.js?v=mw7lh3kx';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mw7lh3kx';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 export const FORECAST_VERSION = 1;
@@ -340,6 +340,17 @@ export function memoryMerge(mem, beforeDay) {
 }
 function solveSmall(Pm, h, ridge = 1e-6) { const H = Float64Array.from(Pm); for (let i = 0; i < NE; i++) H[i * NE + i] += ridge; return solveSpd(H, Float64Array.from(h)); }
 /** Prior aus dem Gedächtnis zum Tag day: { b, P, n, dk, days } oder null */
+/**
+ * Gedächtnis aus einer Fassung mit weniger Wirkungen (EFFECTS) auf die aktuelle Länge bringen: neue Merkmale stehen hinten (CTX_KEYS),
+ * also bleiben alte Einträge an ihrem Platz und die neuen beginnen mit 0 (seit 08.11.2026: fest). Ändert mem an Ort und Stelle.
+ */
+export function memoryResize(mem) {
+  const vec = (a) => (Array.isArray(a) && a.length < NE ? [...a, ...new Array(NE - a.length).fill(0)] : a);
+  const mat = (a) => { if (!Array.isArray(a) || a.length >= NE * NE) return a; const k = Math.round(Math.sqrt(a.length)); if (k * k !== a.length) return a; const o = new Array(NE * NE).fill(0); for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) o[i * NE + j] = a[i * k + j]; return o; };
+  if (mem?.old) Object.assign(mem.old, { P: mat(mem.old.P), h: vec(mem.old.h), n: vec(mem.old.n), dk: vec(mem.old.dk) });
+  for (const [d, x] of Object.entries(mem?.days || {})) mem.days[d] = { ...x, H: mat(x.H), u: vec(x.u), n: vec(x.n) };
+  return mem;
+}
 export function memoryPrior(mem, day) {
   const o = mem?.old; if (!o || !(o.days > 0)) return null;
   const f = decayTo(o, day), Pm = o.P.map(v => v * f), h = o.h.map(v => v * f);
@@ -797,7 +808,7 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
   const trainDays = new Set(Array.from(R.day)).size;
   // Langzeitgedächtnis (bleibt auch bei neuer Prüffassung): Tage, die das Fenster verlassen haben, übernehmen; Prior für das Fenstermodell
   const pm = prev?.memory?.v === MEMORY.v ? prev.memory : null;
-  const mem = pm ? { v: MEMORY.v, upto: pm.upto, old: pm.old ? { ...pm.old } : null, days: { ...(pm.days || {}) }, wxDays: { ...(pm.wxDays || {}) } } : emptyMemory();
+  const mem = pm ? memoryResize({ v: MEMORY.v, upto: pm.upto, old: pm.old ? { ...pm.old } : null, days: { ...(pm.days || {}) }, wxDays: { ...(pm.wxDays || {}) } }) : emptyMemory();
   if (days.length) memoryMerge(mem, days[0].day);
   const prior = memoryPrior(mem, today);
   // Lernstand aus den eigenen Fehlern (log.feedback); fehlt er (erster Lauf, neue Fassung), wird das Fenster neu ausgewertet, damit das lernende

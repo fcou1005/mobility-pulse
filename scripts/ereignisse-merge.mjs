@@ -1,5 +1,5 @@
 // Recherche je Stadt (Auftrag: scripts/ereignisse-recherche.md, je Region eine JSON-Datei) → Einträge für data/ereignisse.json (art veranstaltung):
-// geprüft (Gemeinde mit Sharing-Daten, Datum, Quelle, nicht wochenlang, nicht abgesagt), je Tag ein Eintrag mit Zeitfenster wie Sport/Hallen
+// geprüft (Gemeinde mit Sharing-Daten, Datum, Quelle, nicht wochenlang außer Volksfesten (art volksfest, bis 31 Tage), nicht abgesagt), je Tag ein Eintrag mit Zeitfenster wie Sport/Hallen
 // (Beginn − 60 Min. bis Ende + 60 Min. bzw. Beginn + 3 Std.; Umzug/Messe ohne Ende bis 22 Uhr; ohne Uhrzeit 17–23 bzw. 10–22 Uhr), ohne Dubletten.
 // Aufruf: node scripts/ereignisse-merge.mjs <Recherche-Ordner> <boundaries/index.json> <Vorschau.json> [--write]
 // --write ersetzt alle Einträge mit id „recherche:…“ in data/ereignisse.json; gepflegte Einträge ohne diese id bleiben.
@@ -43,10 +43,11 @@ for (const f of files) {
     if (!/^https:\/\//.test(v.quelle || '')) why.push('Quelle');
     if (NO.test(`${v.titel} ${v.ort}`)) why.push('wochenlang/Weihnachtsmarkt');
     const ende = v.ende || v.beginn, dl = why.length ? [] : days(v.beginn, ende);
-    if (!why.length && dl.length > 10) why.push(`${dl.length} Tage`);
+    const fest = String(v.kategorie || '').toLowerCase() === 'volksfest'; // Volksfeste (eigenes Merkmal fest) dürfen mehrere Wochen dauern
+    if (!why.length && dl.length > (fest ? 31 : 10)) why.push(`${dl.length} Tage`);
     if (!why.length && (ende < FROM || v.beginn > TO)) why.push('außerhalb');
     if (why.length) { drop.push(`${v.stadt}: ${v.titel} (${why.join(', ')})`); continue; }
-    const kat = String(v.kategorie || '').toLowerCase(), dayLong = ['messe', 'fest', 'karneval', 'demo', 'lauf'].includes(kat);
+    const kat = String(v.kategorie || '').toLowerCase(), dayLong = ['messe', 'fest', 'karneval', 'demo', 'lauf', 'volksfest'].includes(kat);
     for (const d of dl) {
       if (d < FROM || d > TO) continue;
       let von, bis, beginn;
@@ -54,11 +55,12 @@ for (const f of files) {
         beginn = `${d}T${v.uhrVon}`; von = floorH(addMin(d, v.uhrVon, -60));
         bis = isT(v.uhrBis) ? addMin(d, v.uhrBis, (v.uhrBis < v.uhrVon ? 24 * 60 : 0) + 60) : addMin(d, v.uhrVon, 180);
         if (!isT(v.uhrBis) && dayLong && bis < `${d}T22:00`) bis = `${d}T22:00`; // Umzug, Straßenkarneval, Messe ohne Ende: bis abends
-      } else if (dayLong) { beginn = `${d}T10:00`; von = `${d}T10:00`; bis = `${d}T22:00`; }
+      } else if (kat === 'volksfest') { beginn = `${d}T11:00`; von = `${d}T11:00`; bis = `${d}T23:00`; }
+      else if (dayLong) { beginn = `${d}T10:00`; von = `${d}T10:00`; bis = `${d}T22:00`; }
       else { beginn = `${d}T17:00`; von = `${d}T17:00`; bis = `${d}T23:00`; }
       const key = `${v.ags}|${d}|${norm(v.titel).slice(0, 14)}`; if (have.has(key)) { drop.push(`${v.stadt}: ${v.titel} ${d} (doppelt)`); continue; } have.add(key);
       const id = 'recherche:' + crypto.createHash('sha1').update(`${v.ags}|${d}|${norm(v.titel)}`).digest('hex').slice(0, 10);
-      entries.push({ art: 'veranstaltung', von, bis, beginn, ...(isT(v.uhrVon) ? {} : { ohneUhrzeit: true }), gebiet: { ags: [v.ags] }, titel: cleanTitle(v.titel, v.ort).slice(0, 160), ort: v.ort || null, besucher: Number.isFinite(v.besucher) ? v.besucher : null, kategorie: kat || null, quelle: v.quelle, id, stand: STAND, sicher: v.sicher || null });
+      entries.push({ art: fest ? 'volksfest' : 'veranstaltung', von, bis, beginn, ...(isT(v.uhrVon) ? {} : { ohneUhrzeit: true }), gebiet: { ags: [v.ags] }, titel: cleanTitle(v.titel, v.ort).slice(0, 160), ort: v.ort || null, besucher: Number.isFinite(v.besucher) ? v.besucher : null, kategorie: kat || null, quelle: v.quelle, id, stand: STAND, sicher: v.sicher || null });
       perCity[v.stadt] = (perCity[v.stadt] || 0) + 1;
     }
   }
