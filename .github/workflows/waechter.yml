@@ -1,0 +1,43 @@
+name: Wächter
+
+# Hält die Sammler-Kette am Leben. Die Kette stößt jeden Lauf vom vorigen aus an; startet der angestoßene Lauf bei GitHub nicht (Fehlstart ohne
+# Job, 9.11.2026 18:21 UTC: „workflow file issue“ bei unveränderter Datei), stand bisher alles bis zum nächsten Zeitplan-Lauf (alle 4–8 h).
+# Nach jedem beendeten Sammler-Lauf 3 Min. warten und prüfen, ob ein Sammler-Lauf läuft oder wartet; wenn nicht, neu anstoßen.
+# Zusätzlich per Zeitplan (springt bei GitHub unregelmäßig an) und von Hand. Normalfall: der Folgelauf wartet schon → nichts zu tun.
+on:
+  workflow_run:
+    workflows: [Sammler]
+    types: [completed]
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: waechter
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Sammler-Kette prüfen und bei Bedarf anstoßen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          aktiv() { gh run list -R "$REPO" -w collect.yml -L 10 --json status -q '[.[] | select(.status != "completed")] | length' || echo 0; }
+          if [ "$EVENT" = workflow_run ]; then sleep 180; fi
+          n=$(aktiv); echo "Aktive Sammler-Läufe: $n"
+          if [ "$n" -gt 0 ]; then echo "Kette intakt"; exit 0; fi
+          echo "Kein Sammler-Lauf aktiv – Kette abgerissen, stoße neu an"
+          for i in 1 2 3 4 5 6; do
+            if gh workflow run collect.yml -R "$REPO" --ref main; then echo "Sammler angestoßen"; exit 0; fi
+            echo "Anstoßen fehlgeschlagen (Versuch $i), neuer Versuch in 30 s"; sleep 30
+            if [ "$(aktiv)" -gt 0 ]; then echo "Inzwischen läuft ein Sammler-Lauf"; exit 0; fi
+          done
+          exit 1
