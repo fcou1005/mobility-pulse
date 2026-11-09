@@ -168,15 +168,44 @@ log(`Quellen: ${active.length} → ${expanded.length} Systeme`);
 // mit 429 (07.11.2026: 17 von 68 Netzen), darunter Netze ohne andere Quelle; Kopien zählen ohnehin nicht. Status und Verweis bleiben aus dem vorigen Lauf,
 // solange das Original im vorigen Lauf lieferte (fällt es aus, wird die Kopie wieder abgerufen und kann zählen).
 const CB_RECHECK_MS = 2 * 3600e3;
-const results = await pool(expanded, async (src) => {
+// CityBikes (9.11.2026: weiter 12 Netze je Lauf mit HTTP 429, sprintrad in 288 von 625 Läufen): Abrufe nacheinander mit Abstand CB_GAP_MS statt
+// im Pulk; scheitert ein Netz (429, 5xx, Zeitüberschreitung), gilt der letzte gute Abruf bis CB_CACHE_MS weiter (privat in TRACK_DIR, nicht
+// veröffentlicht). Die Frische kommt aus den Zeitstempeln der Stationen: ein 20 Min. alter Stand gilt als verzögert, zählt aber.
+const CB_GAP_MS = process.env.CB_GAP_MS != null ? +process.env.CB_GAP_MS : 1200, CB_CACHE_MS = 45 * 60e3;
+const cbCacheFile = TRACK_DIR ? path.join(TRACK_DIR, 'citybikes-cache.json.gz') : null;
+const cbCache = await (async () => { if (!cbCacheFile || !existsSync(cbCacheFile)) return {}; try { return JSON.parse(gunzipSync(await readFile(cbCacheFile)).toString('utf8')); } catch { return {}; } })();
+const fetchSource = async (src) => {
   try {
     if (src._probe) return { src, sys: null, probe: src._probe };
     if (src.api === 'citybikes') { const p = prevSources.get(src.id); if (p?.status === 'duplicate' && p.duplicateOf && p.dupCheckedAt && now - p.dupCheckedAt < CB_RECHECK_MS && ['live', 'delayed'].includes(prevSources.get(p.duplicateOf)?.status)) return { src, sys: null, reuse: p }; }
+    if (src.api === 'citybikes') {
+      let cachedAt = null, lastStatus = null;
+      const fj = async (u) => {
+        const r = await fetchJson(u); lastStatus = r.status;
+        if (r.ok && r.json?.network) { cbCache[src.id] = { at: now, json: r.json }; return r; }
+        const c = cbCache[src.id]; if (c && now - c.at <= CB_CACHE_MS && !(r.status === 404 || r.status === 410)) { cachedAt = c.at; return { ok: true, status: 200, json: c.json }; }
+        return r;
+      };
+      const sys = await C.readCityBikesNetwork(src, fj, { now });
+      if (cachedAt != null) Object.assign(sys, { cbCachedAt: cachedAt, cbFailStatus: lastStatus });
+      return { src, sys };
+    }
     // leerer Hauptfeed mit Ersatz auf anderem Host: Ersatz zählt (C.readGbfsWithFallback → sources[].viaAlt, Hinweis in der Feed-Prüfung)
-    const sys = src.api === 'citybikes' ? await C.readCityBikesNetwork(src, fetchJson, { now }) : await C.readGbfsWithFallback(src, fetchJson, { now });
+    const sys = await C.readGbfsWithFallback(src, fetchJson, { now });
     return { src, sys };
   } catch (e) { return { src, sys: null, error: e.message }; }
-});
+};
+const results = new Array(expanded.length);
+{
+  const ix = expanded.map((s, i) => i), cbIx = ix.filter(i => expanded[i].api === 'citybikes'), mainIx = ix.filter(i => expanded[i].api !== 'citybikes');
+  await Promise.all([
+    pool(mainIx, async (i) => { results[i] = await fetchSource(expanded[i]); }),
+    pool(cbIx, async (i, k) => { if (k && CB_GAP_MS > 0) await new Promise(r => setTimeout(r, CB_GAP_MS)); results[i] = await fetchSource(expanded[i]); }, 1),
+  ]);
+  if (cbCacheFile) { for (const [id, c] of Object.entries(cbCache)) if (now - c.at > CB_CACHE_MS) delete cbCache[id]; await writeFile(cbCacheFile, gzipSync(JSON.stringify(cbCache))).catch(e => log(`CityBikes-Zwischenstand: ${e.message}`)); }
+  const cbN = cbIx.length, cbHit = results.filter(r => r?.sys?.cbCachedAt != null).length, cb429 = results.filter(r => r?.src?.api === 'citybikes' && (r.sys?.cbFailStatus === 429 || r.sys?.httpStatus === 429)).length;
+  if (cbN) log(`CityBikes: ${cbN} Netze nacheinander (Abstand ${CB_GAP_MS} ms), ${cb429} mit HTTP 429, ${cbHit} aus dem letzten guten Abruf`);
+}
 
 // ---------- Auswertung ----------
 let allVehicles = [], allStations = [], snapshots = [];
@@ -224,6 +253,7 @@ for (const { src, sys, probe, error, reuse } of results) {
   rec.systemName = sys.systemInfo?.name || null; rec.systemOperator = sys.systemInfo?.operator || null; rec.timezone = sys.systemInfo?.timezone || null;
   rec.feeds = Object.keys(sys.feeds || {});
   if (sys.viaAlt) { rec.url = sys.viaAlt.url; rec.primaryUrl = sys.viaAlt.from; rec.viaAlt = true; addCheck(rec, `Hauptfeed ohne Fahrzeuge (${new URL(sys.viaAlt.from).host}${sys.viaAlt.httpStatus !== 200 ? `, HTTP ${sys.viaAlt.httpStatus}` : ''}) – Ersatzfeed gezählt`); }
+  if (sys.cbCachedAt != null) { rec.cbCachedAt = sys.cbCachedAt; addCheck(rec, `CityBikes ${sys.cbFailStatus ? `HTTP ${sys.cbFailStatus}` : 'nicht erreichbar'} – Stand des letzten guten Abrufs (${Math.round((now - sys.cbCachedAt) / 60e3)} Min. alt) verwendet`); }
   if (sys.merged) { rec.merged = sys.merged; addCheck(rec, `${sys.merged.added} Fahrzeuge nur im Ersatzfeed (${new URL(sys.merged.url).host}) – dazugezählt`, sys.merged.added); }
   // Ausblenden bei niedrigem Akku (C.batteryFloorCheck, Z4): ab 500 Fahrzeugen 0,5-Perzentil p005; hides → Verfolgung zählt Verschwinden bis p005 + 5 als hide
   if (sys.batteryFloor?.p005 != null) { const f = sys.batteryFloor; rec.batteryFloor = { p005: f.p005, p001: f.p001, n: f.n, hides: f.hides }; if (f.hides) addCheck(rec, `Fahrzeuge unter ${f.p005} % Ladestand nicht im Feed (Ausblendung): Verschwinden bis ${f.p005 + T.HIDE_BAND} % zählt nicht als Fahrt`, f.n); }
@@ -797,7 +827,9 @@ if (keyId) tr.state.keyId = keyId;
     if (ecInput) { ampel(); ec = true; const g = Object.values(latest.eventChecks?.groups || {});
       if (g.length) log(`Ampel ${latest.eventChecks.day} (Regelstand ${latest.eventChecks.dayRules.join(' + ') || 'ohne Angabe'}${latest.eventChecks.ruleCurrent ? '' : `, älter als ${T.METHOD_VERSION}: rot nur als Hinweis`}): ${g.filter(x => x.level === 'bad').length} rot, ${g.filter(x => x.level === 'warn').length} gelb von ${g.length} Gruppen`); }
   } catch (e) { log(`Ampel: ${e.message}`); }
-  if (n || ec) await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(latest));
+  // Carsharing: Anbieter mit messbaren Fahrten (T.CAR_TRIPS; übrige nur Bestand) – Dashboard und Prognose
+  if (tr.carTrips) latest.carTrips = { ...tr.carTrips, note: 'unmeasurable = Buchungen im Feed nicht sichtbar (jedes Auto immer verfügbar): keine Fahrten, nur Bestand' };
+  if (n || ec || tr.carTrips) await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(latest));
   if (n) log(`Standzeit unbrauchbar: ${Object.keys(tr.idleUnusable).join(', ')}`);
 }
 if (tr.gap) log(migrated ? 'Umzugslauf – Ereignisse dieses Laufs zählen nicht' : `Lücke: ${Math.round(tr.dt / 60e3)} Min seit dem letzten Lauf – Ereignisse dieses Laufs zählen nicht`);
@@ -903,6 +935,8 @@ try {
     else if (evWork) { const last = evWork.runs?.at(-1)?.[0]; if (last != null && T.hourOf(last) !== tr.hour) evPub = await evPublish(evWork, false); }
   }
   const evDoc = T.mergeHourly(evWorkFile ? evWork : existsSync(evFile) ? JSON.parse(await readFile(evFile, 'utf8')) : null, tr.hourly, { day: tr.day, at: now, dt: tr.dt, srcModes: tr.srcModes, gap: tr.gap, rule: RULE });
+  // Carsharing ohne sichtbare Buchungen (tr.carTrips.unmeasurable): auch frühere Läufe des Tags aus der Tagesdatei nehmen (keine Nullen als Messung)
+  { const mut = new Set(tr.carTrips?.unmeasurable || []); if (mut.size) for (const k of Object.keys(evDoc.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) delete evDoc.groups[k]; } }
   if (evWorkFile) await writeFile(evWorkFile, gzipSync(JSON.stringify(evDoc)));
   else { await writeFile(evFile, JSON.stringify(evDoc)); evPub = evDoc; }
   if (!evPub && existsSync(evFile)) evPub = JSON.parse(await readFile(evFile, 'utf8')); // in dieser Stunde schon veröffentlichter Stand
@@ -1093,7 +1127,7 @@ try {
       const e = tr.state.v[vkey(v.operator, v.rawId)];
       // Standzeit null, wenn sie für die Quelle unbrauchbar ist (Z5); Feld 13 standzeitMindestens 1 = seit Beginn der Verfolgung unbewegt (Mindestwert, Z6)
       // veröffentlicht wird nur die Klasse (OPS.idleClassMin: unter 6 h, 6–24 h, ganze Tage), nicht die Minute des letzten Fahrtendes
-      const idleOk = e && !tr.idleUnusable?.[v.sourceId], idleMin = idleOk ? OPS.idleClassMin(Math.round((now - e[8]) / 60e3)) : null;
+      const idleOk = e && !tr.idleUnusable?.[v.sourceId] && !(v.type === 'car' && tr.carTrips?.unmeasurable?.includes(v.operator)), idleMin = idleOk ? OPS.idleClassMin(Math.round((now - e[8]) / 60e3)) : null;
       const idleMinOnly = idleOk && T.isCensored(T.censorLimit(tr.state), e[8], e[7]) ? 1 : null;
       // Feld 11 reichweiteSchwelleKm (null = Standard), Feld 12 reichweiteKonstant (1 = Reichweite der Quelle konstant); Felder am Zeilenende ohne
       // Wert entfallen (Leser werten fehlende Felder als null), explizites null nur vor einem späteren Wert
@@ -1314,6 +1348,8 @@ if (process.env.FORECAST !== '0') {
       const docs = []; for (const f of await list(path.join(DATA, 'events'), 21)) docs.push(JSON.parse(await readFile(f, 'utf8')));
       const weather = []; for (const f of await list(path.join(DATA, 'weather'), 30)) weather.push(JSON.parse(await readFile(f, 'utf8')));
       const red = new Set(Object.entries(latest.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k)); // rote Ampel: nicht plausibel gezählt
+      // Carsharing ohne sichtbare Buchungen: auch ältere Tagesdateien (vor 9.11.2026 noch mit Nullen) nicht ins Modell
+      { const mut = new Set(latest.carTrips?.unmeasurable || []); if (mut.size) for (const d of docs) for (const k of Object.keys(d.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) red.add(k); } }
       // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
       const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
       const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);

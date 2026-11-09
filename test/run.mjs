@@ -56,7 +56,8 @@ extra.push({ id: 'rk_direct', name: 'RK direkt', operator: 'nextbike', api: 'gbf
   { id: 'mf_test', name: 'Manifest Test', operator: 'Lime', api: 'gbfs', url: `${ex.base}/mf/manifest.json`, directories: ['mobidrom_nrw'], priority: 2 },
   { id: 'rl_test', name: 'Bird Test', operator: 'Bird', api: 'gbfs', url: `${ex.base}/rk/d/gbfs.json`, directories: ['mobilitydata'], priority: 2 }, // kleine Reichweiten-Skala (Schwelle der Quelle)
   { id: 'rf_test', name: 'Donkey Test', operator: 'Donkey', api: 'gbfs', url: `${ex.base}/rk/e/gbfs.json`, directories: ['mobilitydata'], priority: 2 }, // Platzhalter-Reichweite 1 km
-  { id: 'cs_test', name: 'Stadtmobil Test', operator: 'stadtmobil', api: 'gbfs', url: `${ex.base}/cs/gbfs.json`, directories: ['mobidata_bw'], priority: 1 }); // Carsharing an Stationen + E-Roller
+  { id: 'cs_test', name: 'Stadtmobil Test', operator: 'stadtmobil', api: 'gbfs', url: `${ex.base}/cs/gbfs.json`, directories: ['mobidata_bw'], priority: 1 }, // Carsharing an Stationen + E-Roller
+  { id: 'citybikes_cbsolo', name: 'CB Solo', operator: 'CBSolo', api: 'citybikes', url: `${ex.base}/cb2/x`, directories: ['citybikes'], priority: 3 }); // CityBikes: ab dem 2. Abruf HTTP 429
 const slow = [{ id: 'slow_test', name: 'Langsam', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/slow/gbfs.json`, directories: ['mobilitydata'] }, { id: 'big_test', name: 'Groß', operator: 'Zeus', api: 'gbfs', url: `${ex.base}/big/gbfs.json`, directories: ['mobilitydata'] }];
 const auth_sources = { t: { host: new URL(ex.base).host, headers: { 'x-api-key': 'MP_TEST_KEY' }, env: ['MP_TEST_KEY'] } };
 await writeFile(path.join(tmp, 's3.json'), JSON.stringify({ ...cat, auth_sources, sources: [...cat.sources, ...extra, ...slow] }));
@@ -198,6 +199,9 @@ await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '200
 const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json` });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+{ const so = l4.sources.find(s => s.id === 'citybikes_cbsolo'), so3 = l3.sources.find(s => s.id === 'citybikes_cbsolo');
+  assert(so3?.status === 'live' && !so3.cbCachedAt && ['live', 'delayed'].includes(so?.status) && so.cbCachedAt > 0 && so.counts?.stations === 2 && so.checks?.items?.some(i => /HTTP 429 – Stand des letzten guten Abrufs/.test(i.msg)) && l4.groups['08111000|CBSolo|unknown']?.stations === 2,
+    `CityBikes HTTP 429: letzter guter Abruf (privat in TRACK_DIR) weiter verwendet, Status ${so?.status}, Hinweis in der Feed-Prüfung`); }
 { const cb4 = l4.sources.find(s => s.id === 'citybikes_stadtrad-stuttgart');
   assert(cbCalls3 > 0 && cb4?.status === 'duplicate' && cb4.reused === true && cb4.duplicateOf === 'p_test' && ex.log.filter(x => x.path.startsWith('/cb/')).length === cbCalls3 && !l4.groups['08111000|DB Connect|bike'],
     'CityBikes-Kopie: im nächsten Lauf nicht neu abgerufen, Status aus dem vorigen Lauf, zählt weiter nicht'); }

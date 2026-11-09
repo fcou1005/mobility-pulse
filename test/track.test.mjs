@@ -714,6 +714,8 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const recs2 = [...recsC, { id: 'bolt', status: 'live', latencyMs: 100 }];
   // Lauf 1: Auto a (Tank 10 %), Auto b (Tank 30 %), Scooter s (Akku 10 %)
   let q = T.trackRun(null, { vehicles: [CV('a', 48.78, 9.18, { batteryPct: 10 }), CV('b', 48.79, 9.19, { batteryPct: 30 }), SV('s', 48.77, 9.17, { batteryPct: 10 })], stations: [], sourceRecs: recs2, now: C0 });
+  const seed = (st, op, n) => { st.carEvt = { [op]: { d: { [T.dayOf(C0)]: [20, n] } } }; }; // Anbieter mit sichtbaren Buchungen (sonst nur Bestand, CAR_TRIPS)
+  seed(q.state, 'stadtmobil', 2);
   // Lauf 2: a und s verschwinden – Auto mit wenig Energie = Ausleihe, Scooter = Abholung
   q = T.trackRun(q.state, { vehicles: [CV('b', 48.79, 9.19, { batteryPct: 30 })], stations: [], sourceRecs: recs2, now: C0 + step });
   const hC = q.hourly.get('08111000|stadtmobil|car'), hS = q.hourly.get('08111000|Bolt|scooter'), hh = T.hourOf(C0 + step);
@@ -729,7 +731,7 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   assert(hR.end[T.hourOf(t)] === 1 && hR.swap[T.hourOf(t)] === 0 && hR.tripDurN === 1 && Math.abs(hR.tripDurSum - (t - (C0 + step))) < 1 && hR.tripDistN === 0, 'Rückgabe an der Station: Fahrtende, Dauer ≈ 30,7 h, keine Distanz, kein Rückkehr-Tausch');
   // stabile Kennungen: 25 Autos und 25 Scooter je Lauf versetzt (Modus stabil), danach je eines 25 km in 20 Min. (75 km/h)
   const many = (f, n, d) => Array.from({ length: n }, (_, i) => f(`m${i}`, 48.70 + i * 0.002 + d, 9.10 + d));
-  let u = T.trackRun(null, { vehicles: [...many(CV, 25, 0), ...many(SV, 25, 0)], stations: [], sourceRecs: recs2, now: C0 });
+  let u = T.trackRun(null, { vehicles: [...many(CV, 25, 0), ...many(SV, 25, 0)], stations: [], sourceRecs: recs2, now: C0 }); seed(u.state, 'stadtmobil', 25);
   u = T.trackRun(u.state, { vehicles: [...many(CV, 25, 0.003), ...many(SV, 25, 0.003)], stations: [], sourceRecs: recs2, now: C0 + step });
   u = T.trackRun(u.state, { vehicles: [...many(CV, 25, 0.006), ...many(SV, 25, 0.006)], stations: [], sourceRecs: recs2, now: C0 + 2 * step });
   assert(u.srcModes.sm === 'stable' && u.srcModes.bolt === 'stable', 'stabile Kennungen erkannt (Auto und Scooter)');
@@ -747,4 +749,44 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   w = T.trackRun(w.state, { vehicles: [...many(MV, 25, 0.006).slice(1), MV('m0', 48.70 + 0.108, 9.106, { batteryPct: 52 })], stations: [], sourceRecs: recs3, now: C0 + 3 * step });
   const wm = w.hourly.get('08111000|stella|moped');
   assert(wm.start[h3] === 1 && wm.fast[h3] === 0, 'E-Roller: 12 km in 20 Min. = Fahrt (bis 60 km/h Luftlinie)');
+}
+
+// ---------- Carsharing: Buchungen als „reserviert“, Stationszähler, nicht messbare Anbieter (9.11.2026) ----------
+{
+  const C0 = Date.parse('2026-11-10T08:00:00Z'), step = 20 * 60e3, hh = (t) => T.hourOf(t);
+  const FV = (id, extra = {}) => ({ operator: 'Flinkster', rawId: id, lat: 48.78 + Number(id.slice(1)) * 0.001, lon: 9.18, batteryPct: 60, disabled: false, reserved: false, type: 'car', ags: '08111000', sourceId: 'fl', ...extra });
+  const SM = (id) => ({ operator: 'stadtmobil', rawId: id, lat: 48.70 + Number(id.slice(1)) * 0.001, lon: 9.10, batteryPct: 70, disabled: false, reserved: false, type: 'car', ags: '08111000', sourceId: 'sm', stationId: 'S1' });
+  const SC = (id, ex = {}) => ({ operator: 'Bolt', rawId: id, lat: 48.75, lon: 9.15 + Number(id.slice(1)) * 0.001, batteryPct: 60, disabled: false, reserved: false, type: 'scooter', ags: '08111000', sourceId: 'bolt', ...ex });
+  const ST = (bookable) => ({ id: 'D1', operator: 'deer', ags: '08111000', lat: 48.79, lon: 9.20, bookable, physicalAvailable: bookable, installed: true, renting: true, returning: true, hasVehicleList: false, perType: { car: bookable }, typeHint: 'car', sourceId: 'deer' });
+  const recs = ['fl', 'sm', 'bolt', 'deer'].map(id => ({ id, status: 'live', latencyMs: 50 }));
+  const fl = (res) => Array.from({ length: 20 }, (_, i) => FV(`f${i}`, { reserved: res.includes(i) })), sm = Array.from({ length: 30 }, (_, i) => SM(`s${i}`));
+  const run = (st, t, resIx, bookable, extra = []) => T.trackRun(st, { vehicles: [...fl(resIx), ...sm, SC('b0'), SC('b1'), ...extra], stations: [ST(bookable)], sourceRecs: recs, now: t });
+  let r = run(null, C0, [], 5);
+  r = run(r.state, C0 + step, [1, 2, 3], 3);           // 3 Buchungen beginnen; Station: 2 Autos weg
+  const t2 = C0 + 2 * step; r = run(r.state, t2, [2, 3], 4); // Buchung 1 endet (40 Min.); Station: 1 Auto zurück
+  const t3 = C0 + 3 * step; r = run(r.state, t3, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], 4); // 10 Autos auf einmal reserviert = Feedfehler (Massenregel)
+  // Flinkster: 3 Beginne (Lauf 2) ≥ 3 und ≥ 0,05 je Auto-Tag → messbar; deer: 2 Beginne + 1 Ende → Station zählt; stadtmobil: nie eine Buchung → nur Bestand
+  const ct = r.carTrips;
+  assert(ct.measurable.join() === 'Flinkster' && ct.unmeasurable.includes('stadtmobil') && ct.unmeasurable.includes('deer') && ct.perOp.Flinkster.starts === 3 && ct.perOp.deer.starts === 2,
+    `messbar je Anbieter (7 Tage): Flinkster (3 Beginne bei 20 Autos), deer erst ab 3 Beginnen, stadtmobil nie (${JSON.stringify(ct.perOp)})`);
+  assert(!r.hourly.has('08111000|stadtmobil|car') && !r.hourly.has('08111000|deer|car') && r.hourly.has('08111000|Flinkster|car') && r.hourly.has('08111000|Bolt|scooter'),
+    'nicht messbare Anbieter fallen aus den Ereignissen (keine Nullen), messbare und Mikromobilität bleiben');
+  const h3 = r.hourly.get('08111000|Flinkster|car');
+  assert(h3.start[hh(t3)] === 0, 'Massenregel: 10 Autos auf einmal reserviert zählen nicht');
+  // vierter Lauf: deer wird messbar (3. Fahrtbeginn), Buchungen 2 und 3 enden, Station wieder voll
+  const t4 = C0 + 4 * step; r = run(r.state, t4, [4, 5, 6, 7, 8, 9, 10, 11, 12, 13], 3);
+  const h4 = r.hourly.get('08111000|Flinkster|car'), d4 = r.hourly.get('08111000|deer|car');
+  assert(h4.end[hh(t4)] === 2 && h4.tripDurN === 2 && h4.tripDurSum === 2 * (t4 - (C0 + step)) && h4.tripDistN === 0 && d4?.start[hh(t4)] === 1 && d4.vmin[hh(t4)] === 3 * 20,
+    'Buchungsende = Fahrtende mit Dauer (Rundfahrt, keine Distanz); deer messbar: Stationszähler 4 → 3 = Fahrtbeginn, Fahrzeugminuten = buchbare Autos × Laufintervall');
+  // gebuchtes Auto verschwindet (Fahrt läuft) und kommt frei zurück: kein zweiter Beginn, ein Ende
+  const t5 = C0 + 5 * step; r = run(r.state, t5, [4, 5, 6, 7, 8, 9, 10, 11, 12, 13].filter(i => i !== 4), 3); // 4 frei → Ende
+  const vanish = (rr, t) => T.trackRun(rr.state, { vehicles: [...fl([5]).filter(v => v.rawId !== 'f6'), ...sm, SC('b0'), SC('b1')], stations: [ST(3)], sourceRecs: recs, now: t });
+  r = run(r.state, C0 + 6 * step, [5, 6], 3); const t7 = C0 + 7 * step; r = vanish(r, t7);
+  const h7 = r.hourly.get('08111000|Flinkster|car');
+  assert(h7.start[hh(t7)] === 0, 'reserviertes Auto verschwindet: kein zweiter Fahrtbeginn');
+  const t8 = C0 + 8 * step; r = run(r.state, t8, [5], 3); const h8 = r.hourly.get('08111000|Flinkster|car');
+  assert(h8.end[hh(t8)] >= 1, 'Rückkehr des gebuchten Autos: Fahrtende');
+  // Zellen ohne Autos (Disposition, Nachfrage je Zelle): nur die zwei Scooter sind präsent
+  const cells = r.cells.get('08111000'); const pres = [...cells.values()].reduce((a, c) => a + c[2], 0);
+  assert(pres === 2, `Zellen ohne Autos (präsent ${pres} = 2 Scooter)`);
 }

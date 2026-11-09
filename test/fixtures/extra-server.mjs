@@ -125,6 +125,9 @@ export async function startExtra() {
       return json({}, 500);
     }
     if (kind === 'cb') return json(cb());
+    // /cb2 = CityBikes-Netz ohne andere Quelle (2 Stationen in Stuttgart): erster Abruf liefert, danach HTTP 429 (Kontingent) – der Sammler nimmt den letzten guten Stand
+    if (kind === 'cb2') { st.cb2 = (st.cb2 || 0) + 1; if (st.cb2 > 1) return json({ error: 'rate limited' }, 429);
+      return json({ network: { id: 'cbsolo', name: 'CB Solo', company: ['CB Solo GmbH'], location: { city: 'Stuttgart', country: 'DE' }, stations: [0, 1].map(i => ({ id: 'z' + i, name: `Solo ${i}`, latitude: 48.7700 + i * 0.002, longitude: 9.1600, free_bikes: 2 + i, empty_slots: 3, timestamp: new Date().toISOString(), extra: { uid: 'zz' + i, renting: 1, returning: 1 } })) } }); }
     if (kind === 'auth') {
       if (key !== 'geheim-123') return json({}, 401);
       if (file === 'gbfs.json') return json(authFeeds());
