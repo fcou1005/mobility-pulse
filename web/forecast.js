@@ -13,7 +13,7 @@ import * as SP from './pulse-spots.js';
 import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js';
 import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js';
 import { toCsv } from './pulse-report.js';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js';
+import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js';
 import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js';
 import { mapKeys } from './mapkeys.js';
 
@@ -277,7 +277,7 @@ function decisionHtml(ctx, L, G) {
   if (!ms.length) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><p class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</p>`;
   const rows = ms.map(m => { const lv = D?.live?.[m], c = D?.combined?.[m], sr = m === 'naive' ? 1 : selfRel(m);
     return `<tr><td>${ctx.esc(m === 'week' ? t('fv.week') : modelName(m))}${m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="n">${f2(c?.r ?? (D?.combined ? null : sr))}</td><td class="n">${f2(lv?.r ?? null)}</td><td class="n mh">${lv ? n0(lv.n) : '–'}</td><td class="n mh">${f2(sr)}</td><td class="n mh">${c ? pc(c.w) : '–'}</td><td class="n mh">${pkOf(m) == null ? '–' : pc(pkOf(m))}</td><td class="n mh">${t3Of(m) == null ? '–' : pc(t3Of(m))}</td></tr>`; }).join('');
-  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.decTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.decColAll')}</th><th class="n">${t('fv.decColLive')}</th><th class="n mh">${t('fv.decColN')}</th><th class="n mh">${t('fv.decColSelf')}</th><th class="n mh">${t('fv.decColW')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colTop3')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</div>${L?.reason ? `<div class="fv-sub">${t('fv.reasonNow')} <i>${ctx.esc(L.reason)}</i></div>` : ''}`;
+  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.decTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.decColAll')}</th><th class="n">${t('fv.decColLive')}</th><th class="n mh">${t('fv.decColN')}</th><th class="n mh">${t('fv.decColSelf')}</th><th class="n mh">${t('fv.decColW')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colTop3')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</div>${L?.reason || L?.decision?.why ? `<div class="fv-sub">${t('fv.reasonNow')} <i>${ctx.esc(fcReason(L))}</i></div>` : ''}`;
 }
 function accuracyPanel(ctx, S0, sel, G, L) {
   const rows = accRows(S0, sel, G);
@@ -493,7 +493,7 @@ export function steckbrief(ctx, S0, L, G, sel) {
   out.push(`## ${t('fv.mdWhat')}\n`, `${t('fv.mdWhatTxt', { g: n0(L?.learn?.groups ?? Object.keys(L?.groups || {}).length), m: n0(Object.keys(L?.municipalities || {}).length) })}\n`);
   out.push(`## ${t('fv.mdModels')}\n`, '```\n' + `${t('fv.formula')}\n` + '```\n');
   for (const [m, k] of [['profile', 'fv.mProfile'], ['pooled', 'fv.mPooled'], ['pooledWx', 'fv.mPooledWx'], ['adaptive', 'fv.mAdaptive'], ['hybrid', 'fv.mHybrid'], ['blend', 'fv.mBlend'], ['chronos', 'fv.mChronos'], ['naive', 'fv.mNaive']]) out.push(`- **${modelName(m)}**${m === L?.active ? ` (${t('fv.activeTag')})` : ''}: ${m === 'blend' ? blendTxt(L) : t(k, { hl: FC.FEEDBACK.halfLifeDays, k: FC.HYBRID.k, back: FC.HYBRID.maxBack, min: L?.external?.chronos?.minStarts ?? 20 })}`);
-  out.push('', `${t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays })}\n`, `${t('fv.mdActive', { model: L?.active ? modelName(L.active) : '–', reason: L?.reason || '–' })}\n`);
+  out.push('', `${t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays })}\n`, `${t('fv.mdActive', { model: L?.active ? modelName(L.active) : '–', reason: (L?.reason || L?.decision?.why) ? fcReason(L) : '–' })}\n`);
   const x = L?.learn;
   out.push(`## ${t('fv.mdLearn')}\n`, `${t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })}\n`);
   if (x) { out.push(`${t('fv.learnedLead', { days: n1(x.days), own: n0(x.leanOwn), pool: n0(x.leanPool), mixed: n0(x.mixed), judged: n0(x.judged), share: pc(x.ownShare), eo: pc(x.errOwn), ep: pc(x.errPooled) })}\n`);
@@ -541,8 +541,14 @@ async function paintSpots(el, ctx, s, S0, L, sel) {
   const [fleet, dem, grp, quota] = await Promise.all([loadFleet(ctx, land), loadDemand(ctx, land, ags), loadGroups(ctx), Promise.resolve(ctx.loadOnce?.('quota', 'stations-quota.json')).catch(() => null)]);
   if (tok !== s.tok) return;
   if (!fleet) { box.innerHTML = `<div class="empty"><b>${t('fv.spotsNoFleet')}</b>${t('fv.spotsNoFleetHint')}</div>`; return; }
-  const ops = [...new Set([...fleet.vehicles.filter(v => v.ags === ags).map(v => v.operator), ...fleet.stations.filter(x => x.ags === ags).map(x => x.operator)])].filter(Boolean);
-  const cnt = (o) => fleet.vehicles.filter(v => v.ags === ags && v.operator === o).length + fleet.stations.filter(x => x.ags === ags && x.operator === o).length;
+  // nur Anbieter der gewählten Fahrzeugfamilie (Audit 11.11.2026, UXP-04: vorher teilAuto als Standard in Tübingen, „75 Fahrzeuge fehlen“
+  // mit Scooter-Nachfrage); Arten je Anbieter aus den Fahrzeugen und den Gruppen des Sammler-Stands (Stationen haben keine Art)
+  const fam = famNow(ctx), tys = new Map();
+  for (const v of fleet.vehicles) if (v.ags === ags) { let m = tys.get(v.operator); if (!m) tys.set(v.operator, m = new Set()); m.add(v.type); }
+  for (const k of Object.keys(ctx.state?.latest?.groups || {})) { const [a, o, y] = k.split('|'); if (a !== ags) continue; let m = tys.get(o); if (!m) tys.set(o, m = new Set()); m.add(y); }
+  const famOk = (o) => { const m = tys.get(o); return m ? [...m].some(y => familyOf(y) === fam) : fam === 'micro'; };
+  const ops = [...new Set([...fleet.vehicles.filter(v => v.ags === ags).map(v => v.operator), ...fleet.stations.filter(x => x.ags === ags).map(x => x.operator)])].filter(o => o && famOk(o));
+  const cnt = (o) => fleet.vehicles.filter(v => v.ags === ags && v.operator === o && familyOf(v.type) === fam).length + fleet.stations.filter(x => x.ags === ags && x.operator === o).length;
   ops.sort((a, b) => cnt(b) - cnt(a) || a.localeCompare(b, 'de'));
   const want = ctx.state.operator !== 'all' ? ctx.state.operator : s.op;
   const op = ops.includes(want) ? want : ops[0]; s.op = op;
@@ -771,7 +777,7 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['hybrid', t('fv.mHybrid', { k: FC.HYBRID.k, back: FC.HYBRID.maxBack })], ['blend', blendTxt(L)], ['chronos', t('fv.mChronos', { min: L?.external?.chronos?.minStarts ?? 20 })], ['naive', t('fv.mNaive')]];
   const p3 = `<div class="panel">${head(t('fv.modelTitle'), t('fv.modelSub'))}<code class="fv-formula">${esc(t('fv.formula'))}</code>`
     + `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.modelTitle'))}"><table style="margin-top:var(--s3)"><thead><tr><th>${t('fv.colModel')}</th><th>${t('fv.colWhat')}</th></tr></thead><tbody>${modelRows.map(([m, d]) => `<tr><td>${m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`)}${m === L.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="wrap">${esc(d)}</td></tr>`).join('')}</tbody></table></div>`
-    + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(L.reason)}</i></p>` : ''}</div>`;
+    + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(fcReason(L))}</i></p>` : ''}</div>`;
   // Panel 4: gemessen · abgeleitet · modelliert · vermutet
   const A = [
     ['derived', t('fv.aStarts'), t('fv.aStartsHow')], ['measured', t('fv.aExposure'), t('fv.aExposureHow')], ['external', t('fv.aDayType'), t('fv.aDayTypeHow')],
@@ -843,7 +849,7 @@ async function fillEventsMain(box, ctx, sel, S0) {
   const ev = await loadEvents(ctx); if (!box.isConnected) return;
   const { esc } = ctx, now = Date.now(), scope = sel.ags && sel.ags !== 'DE' ? sel.ags : null, list = (ev?.list || []).filter(e => CX.eventInScope(e, scope));
   const muni = (a) => ctx.muniName?.(a) || a || '–', known = (e) => !!e.ags[0] && muni(e.ags[0]) !== e.ags[0], withWhere = !scope;
-  const endMs = (e) => CX.localMs(e.bis), big = (e) => e.src === 'liste' || (e.cap || 0) >= 10000 || ['bl1', 'ucl', 'dfb'].includes(e.liga);
+  const endMs = (e) => e.endMs ?? CX.localMs(e.bis), big = (e) => e.src === 'liste' || (e.cap || 0) >= 10000 || ['bl1', 'ucl', 'dfb'].includes(e.liga);
   // ohne Gebiet: nur Gemeinden mit Sharing-Daten (Spielorte wie Sinsheim fallen sonst als Kennziffer auf)
   const upAll = list.filter(e => endMs(e) >= now && e.beginn <= now + 14 * 864e5 && (scope || known(e))), up = scope ? upAll : upAll.filter(e => big(e) && e.beginn <= now + 7 * 864e5);
   const past = list.filter(e => endMs(e) < now && e.beginn >= now - 7 * 864e5 && (scope || known(e))).reverse();

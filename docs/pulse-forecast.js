@@ -11,10 +11,10 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mwcichl2';
-import { hourOf, dayOf } from './pulse-track.js?v=mwcichl2';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwcichl2';
-import { familyOf, FAMILIES } from './pulse-core.js?v=mwcichl2';
+import * as E from './pulse-econ.js?v=mwcktwks';
+import { hourOf, dayOf } from './pulse-track.js?v=mwcktwks';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwcktwks';
+import { familyOf, FAMILIES } from './pulse-core.js?v=mwcktwks';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 // Je Fahrzeugfamilie ein eigenes Modell (seit 08.11.2026): micro (E-Scooter, Räder, Lastenräder, Sonstige) wie bisher in forecast/, E-Roller in
@@ -546,7 +546,10 @@ export function chooseModel(evals, { trainDays = 0, without = [], live = null, p
   if (keep) { act = keep; c = comb[keep]; }
   const f2 = (x) => (x == null ? '–' : x.toFixed(2).replace('.', ','));
   const reason = `Live und Selbstprüfung: ${act} liegt bei ${f2(c.r)} × „wie gestern“ (live ${f2(c.live)} aus ${c.n} Prognosen, Gewicht ${Math.round(c.w * 100)} %, Selbstprüfung ${f2(c.self)})${keep && ranked[0][0] !== keep ? `; bleibt, ${ranked[0][0]} ist nur ${f2(ranked[0][1].r)} – unter ${Math.round(DECIDE.switchGain * 100)} % Vorsprung` : ''}${['naive', 'week'].includes(act) ? ' – kein Modell schlägt die Vergleichswerte, veröffentlicht wird der bessere Vergleichswert' : ''}`;
-  return { ...base, active: act, reason, live: L, combined: Object.fromEntries(Object.entries(comb).map(([m, x]) => [m, { r: +x.r.toFixed(4), w: +x.w.toFixed(2), n: x.n }])) };
+  // why: dieselbe Begründung als Felder, damit die Oberfläche sie übersetzt und Modellnamen ausschreibt (Audit 11.11.2026, MET-08/UXM-23);
+  // ändert die Wahl nicht
+  const why = { model: act, r: +c.r.toFixed(4), live: c.live == null ? null : +c.live.toFixed(4), n: c.n, w: +c.w.toFixed(2), self: c.self == null ? null : +c.self.toFixed(4), ...(keep && ranked[0][0] !== keep ? { kept: true, best: ranked[0][0], bestR: +ranked[0][1].r.toFixed(4) } : {}) };
+  return { ...base, active: act, reason, why, live: L, combined: Object.fromEntries(Object.entries(comb).map(([m, x]) => [m, { r: +x.r.toFixed(4), w: +x.w.toFixed(2), n: x.n }])) };
 }
 /** Modellwahl allein aus der Selbstprüfung (Stufen: gepoolt/Profil, Wetter, lernend/Hybrid) */
 function chooseModelSelf(evals, { trainDays = 0, without = [] } = {}) {
@@ -907,7 +910,7 @@ export function runForecast({ docs, calendar = null, weather = [], incidents = [
   const out = { version: FORECAST_VERSION, generatedAt: new Date(now).toISOString(), status: trainDays < GATES.minTrainDays ? 'insufficient' : choice.status, active: trainDays < GATES.minTrainDays ? null : (choice.active === 'pooledWx' && !env.on ? 'pooled' : choice.active), reason: choice.reason, scores: choice.scores, evalDays: choice.evalDays, trainDays,
     excluded: exclude?.size || 0, gates: { ...GATES }, weather: { gate, used: useWx, source: weather.length ? weather[0].source ?? null : null },
     env: { keys: CTX_KEYS, ready: env.ctx.map(k => CTX_KEYS[k]), active: usesEnv ? env.ctx.map(k => CTX_KEYS[k]) : [], support, sources: incSum, ...(pending?.length && pendingFrom ? { pendingFrom } : {}) }, memory: null,
-    decision: { rule: { ...DECIDE }, live: choice.live || null, combined: choice.combined || null },
+    decision: { rule: { ...DECIDE }, live: choice.live || null, combined: choice.combined || null, why: choice.why || null },
     learn: fb.upto ? learnSummary(fb, fbw) : null,
     blend: { activeFrom: new Date(BLEND.activeFrom).toISOString(), chronos: ext ? { at: ext.at, model: ext.model, backDays: ext.backDays } : null, learn: fbC.upto ? learnSummary(fbC, feedbackWeights(fbC)) : null },
     horizon: null, totals: null, groups: {}, municipalities: {} };

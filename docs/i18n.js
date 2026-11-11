@@ -122,6 +122,16 @@ export function tx(text) {
 const NF = new Map(), DF = new Map();
 /** Intl.NumberFormat mit d festen Nachkommastellen in der aktuellen Sprache */
 export const numFmt = (d = 0, l = cur) => { const k = `${l}|${d}`; let f = NF.get(k); if (!f) NF.set(k, (f = new Intl.NumberFormat(fmtLocale(l), { maximumFractionDigits: d, minimumFractionDigits: d }))); return f; };
+/** Begründung der Modellwahl in der Oberflächensprache, Modellnamen ausgeschrieben (Audit 11.11.2026, MET-08/UXM-23): aus decision.why des
+ *  Prognose-Stands; ältere Stände nur mit deutschem Freitext → Kennungen wie pooledWx durch Namen ersetzt */
+export function fcReason(fc) {
+  const nm = (m) => (m === 'naive' ? t('fv.naive') : m === 'week' ? t('fv.week') : t(`fc.model.${m}`)), n2 = (x) => (x == null ? '–' : numFmt(2).format(x));
+  const w = fc?.decision?.why;
+  if (w?.model) return t('fc.why', { model: nm(w.model), r: n2(w.r), live: n2(w.live), n: w.n ?? 0, w: Math.round((w.w ?? 0) * 100), self: n2(w.self) }) + (w.kept ? ` ${t('fc.whyKept', { best: nm(w.best), bestR: n2(w.bestR) })}` : '');
+  let s = String(fc?.reason || '');
+  for (const m of ['pooledWx', 'pooled', 'profile', 'hybrid', 'adaptive', 'blend', 'chronos']) s = s.replace(new RegExp(`\\b${m}\\b`, 'g'), nm(m));
+  return s;
+}
 /** Intl.DateTimeFormat mit opts in der aktuellen Sprache (gecacht je Sprache und Optionen) */
 export const dateFmt = (opts = {}, l = cur) => { const k = `${l}|${JSON.stringify(opts)}`; let f = DF.get(k); if (!f) DF.set(k, (f = new Intl.DateTimeFormat(fmtLocale(l), opts))); return f; };
 /** Dezimalzeichen der Sprache (CSV, Eingaben) */
@@ -218,13 +228,15 @@ const DE = {
   "html.planNeedsMunicipality": "Die Disposition plant für eine Gemeinde. Oben ein Gebiet wählen oder eine der Städte antippen.",
   "ops.lowBatteryTile": "Akku niedrig",
   "ops.lowBatterySub": "unter {charge} % und {range} km, von {known} mit Ladestand",
+  "ops.lowRangeSub": "unter {range} km Reichweite, von {known} mit Reichweite (Feed ohne Ladestand)",
+  "ops.lockedLow": "davon {n} gesperrt mit leerem Akku (Akkutausch statt Werkstatt)",
   "ops.idleTile": "Über 24 h unbewegt",
   "ops.idleSub": "{share} der Flotte · Median {median}",
   // index.html
   "html.mainSections": "Hauptbereiche",
   "html.viewWithinSection": "Ansicht im Bereich",
   "html.copyLinkWithAreaOperator": "Link mit Gebiet, Anbieter, Fahrzeugart und Ansicht kopieren",
-  "html.clientViewOnlyMarketViewAnd": "Kundenansicht: nur Marktbild und Disposition, ohne Schätzungen und interne Bedienelemente",
+  "html.clientViewOnlyMarketViewAnd": "Kundenansicht: ohne Methodik, Datenqualität und interne Werkzeuge; Schätzungen und Prognosen bleiben sichtbar und sind als solche gekennzeichnet",
   "html.fetchAllSourcesOfChosenArea": "Alle Quellen des gewählten Gebiets jetzt direkt abrufen",
   "html.lightDark": "Hell/Dunkel",
   "html.switchBetweenLightAndDark": "Hell oder dunkel umschalten",
@@ -1108,6 +1120,9 @@ const DE = {
   "cal.tileCorr": "mit eigener Korrektur",
   "cal.tileNoK": "ohne Faktor{v0}",
   "cal.notKind": "nicht für {v0}",
+  "cal.notOp": "k gilt nur für {ops} (Herkunft der Berliner Messung), hier gemessen",
+  "econ.tariffUnclear": "Tarif unklar: {lo}–{hi} € je Referenzfahrt",
+  "econ.tariffUnclearTip": "Der Feed nennt mehrere Standardtarife ohne Stadtbezug; der Umsatz rechnet mit dem mittleren, die Spanne zeigt den möglichen Bereich.",
   "cal.skipped": "nicht kalibriert (andere Kennungsart): {v0}",
   "cal.breaksTitle": "Zählregel-Wechsel",
   "cal.breakTxt": "Zählregel geändert am {day} ({v1}), Tage davor nicht gezählt; am Wechseltag nur Stunden mit neuem Regelstand",
@@ -1600,6 +1615,9 @@ const DE = {
   "ops.avgMarket": "Ø {supplyAvg} Markt",
   "ops.ofVariants": "{v0} % der Varianten",
   "ops.noSpotsTooLittleDemand": "<b>Keine Spots: zu wenig Nachfrage gemessen.</b>Unter „Parameter“ einen längeren Zeitraum bei „Nachfrage aus“ wählen.",
+  "ops.noDemandModelForType": "kein Nachfragemodell für Carsharing und E-Roller: geplant werden nur Akku/Tank und Werkstatt",
+  "ops.noSpotsForType": "<b>Keine Spots für diese Fahrzeugart.</b>Carsharing und E-Roller haben kein Zellen-Nachfragemodell; Umsetzungen zu Spots werden dafür nicht geplant.",
+  "ops.noSpotsZones": "<b>Keine Spots: {excluded} von {candidates} Kandidatenzellen liegen in Zonen.</b>Pflicht-Abstellzonen ohne eigene Station in der Nähe oder Abstellverbote schließen sie aus; ein längerer Zeitraum ändert daran nichts.",
   "ops.openInOpenstreetmap": "Auf OpenStreetMap öffnen",
   "ops.operator": "Anbieter",
   "ops.pickups": "Einsammlungen",
@@ -1956,6 +1974,8 @@ const DE = {
   "fc.statusInsufficient": "Noch keine Prognose: {n} Tage Daten, mindestens {min} nötig.",
   "fc.statusLearning": "Lernt noch: vorläufig das gepoolte Modell, {n} von {min} Tagen rückwirkend geprüft.",
   "fc.statusActive": "Aktiv: Modell „{model}“. {reason}",
+  "fc.why": "Fehler des Modells „{model}“: {r} × „wie gestern“ (Mischung aus {n} Live-Prognosen mit {live} und der Selbstprüfung mit {self}, Gewicht live {w} %).",
+  "fc.whyKept": "Es bleibt aktiv, weil „{best}“ mit {bestR} nicht deutlich besser ist.",
   "fc.model.profile": "je Gruppe getrennt",
   "fc.model.pooled": "gepoolt über alle Anbieter",
   "fc.model.pooledWx": "gepoolt mit Wetter und Umgebung",
@@ -3689,13 +3709,15 @@ const EN = {
   "html.planNeedsMunicipality": "Operations plans for one municipality. Choose an area above or tap one of the cities.",
   "ops.lowBatteryTile": "Battery low",
   "ops.lowBatterySub": "below {charge} % and {range} km, of {known} with charge level",
+  "ops.lowRangeSub": "below {range} km range, of {known} with range (feed without charge level)",
+  "ops.lockedLow": "of which {n} disabled with an empty battery (battery swap, not workshop)",
   "ops.idleTile": "Not moved > 24 h",
   "ops.idleSub": "{share} of the fleet · median {median}",
   // index.html
   "html.mainSections": "Main sections",
   "html.viewWithinSection": "View within the section",
   "html.copyLinkWithAreaOperator": "Copy link with area, operator, vehicle type and view",
-  "html.clientViewOnlyMarketViewAnd": "Client view: only Market view and Operations, without estimates and internal controls",
+  "html.clientViewOnlyMarketViewAnd": "Client view: without methodology, data quality and internal tools; estimates and forecasts stay visible and are labelled as such",
   "html.fetchAllSourcesOfChosenArea": "Fetch all sources of the chosen area directly now",
   "html.lightDark": "Light/dark",
   "html.switchBetweenLightAndDark": "Switch between light and dark",
@@ -4579,6 +4601,9 @@ const EN = {
   "cal.tileCorr": "with own correction",
   "cal.tileNoK": "without factor{v0}",
   "cal.notKind": "not for {v0}",
+  "cal.notOp": "k applies only to {ops} (source of the Berlin measurement), measured here",
+  "econ.tariffUnclear": "Tariff unclear: {lo}–{hi} € per reference trip",
+  "econ.tariffUnclearTip": "The feed lists several standard tariffs without a city reference; revenue uses the middle one, the range shows the possible span.",
   "cal.skipped": "not calibrated (other ID type): {v0}",
   "cal.breaksTitle": "Counting rule change",
   "cal.breakTxt": "counting rule changed on {day} ({v1}), days before not counted; on that day only hours with the new rule version",
@@ -5070,6 +5095,9 @@ const EN = {
   "ops.avgMarket": "avg. {supplyAvg} market",
   "ops.ofVariants": "{v0} % of variants",
   "ops.noSpotsTooLittleDemand": "<b>No spots: too little demand measured.</b>Choose a longer period for “Demand from” under “Parameters”.",
+  "ops.noDemandModelForType": "no demand model for car sharing and mopeds: only battery/fuel and workshop are planned",
+  "ops.noSpotsForType": "<b>No spots for this vehicle type.</b>Car sharing and mopeds have no cell demand model; no rebalancing to spots is planned for them.",
+  "ops.noSpotsZones": "<b>No spots: {excluded} of {candidates} candidate cells lie in zones.</b>Mandatory parking zones without an own station nearby or no-parking zones exclude them; a longer period does not change that.",
   "ops.openInOpenstreetmap": "Open in OpenStreetMap",
   "ops.operator": "Operator",
   "ops.pickups": "Pickups",
@@ -5426,6 +5454,8 @@ const EN = {
   "fc.statusInsufficient": "No forecast yet: {n} days of data, at least {min} needed.",
   "fc.statusLearning": "Still learning: pooled model for now, {n} of {min} days checked retrospectively.",
   "fc.statusActive": "Active: model “{model}”. {reason}",
+  "fc.why": "Error of model “{model}”: {r} × “same as yesterday” (blend of {n} live forecasts at {live} and the self-check at {self}, live weight {w} %).",
+  "fc.whyKept": "It stays active because “{best}” at {bestR} is not clearly better.",
   "fc.model.profile": "separate per group",
   "fc.model.pooled": "pooled across operators",
   "fc.model.pooledWx": "pooled with weather and environment",

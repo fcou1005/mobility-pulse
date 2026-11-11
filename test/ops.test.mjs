@@ -655,3 +655,18 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
 assert(O.presetOf('car').van === 1 && O.presetOf('car').swapRangeKm === 50 && O.presetOf('moped').van === 8 && O.presetOf('scooter').van === O.DEFAULTS.vanCapacity && O.presetOf('all').swapRangeKm === O.DEFAULTS.swapRangeKm,
   'Disposition: Auto einzeln umgesetzt (1), Reichweite 50 km; E-Roller 8 je Transporter; übrige Standard');
 assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('car').swapRangeKm }) && !O.needsSwap({ battery: null, rangeKm: 30 }), 'needsSwap mit Auto-Schwelle: 30 km Reichweite → tanken/laden');
+
+// ---------- Gesperrt wegen leerem Akku → Akkutausch statt Werkstatt (Audit 11.11.2026, MET-10/UXP-02)
+{
+  // Voi-artig: verfügbare ab 14 km, gesperrte 2–8 km (nur Reichweite, kein Ladestand); ein gesperrter mit 40 km = Schaden → Werkstatt
+  const v = (i, km, dis) => ({ id: `v${i}`, lat: 48.52 + i * 1e-4, lon: 9.05, operator: 'Voi', type: 'scooter', rangeKm: km, battery: null, disabled: !!dis, reserved: false, idleMin: 60 });
+  const fleet = [...Array.from({ length: 40 }, (_, i) => v(i, 14 + i)), v(100, 3, true), v(101, 6, true), v(102, 8, true), v(103, 40, true)];
+  const floor = O.disableFloor(fleet), k = O.fleetKpis(fleet, { swapThreshold: 20, swapRangeKm: 5 });
+  const model = { cells: new Map() };
+  const sw = O.planSwaps({ vehicles: fleet, model, depot: { lat: 48.52, lon: 9.05 }, swapThreshold: 20, swapRangeKm: 5 });
+  const ws = O.planWorkshop({ vehicles: fleet, depot: { lat: 48.52, lon: 9.05 } });
+  assert(floor.rangeKm === 14 && floor.battery === null && k.low === 3 && k.lockedLow === 3 && sw.below === 3 && sw.locked === 3 && ws.disabled === 1 && ws.lockedLow === 3,
+    `gesperrt unter der Betriebsgrenze (${floor.rangeKm} km) = Akkutausch (${sw.below}), gesperrt mit 40 km = Werkstatt (${ws.disabled})`);
+  const few = O.disableFloor(fleet.slice(0, 10).concat(fleet.slice(40)));
+  assert(few.rangeKm === null && !O.lockedForEnergy(fleet[40], few), 'unter 20 verfügbaren mit Angabe keine Betriebsgrenze: gesperrte bleiben Werkstatt');
+}

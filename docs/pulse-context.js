@@ -12,7 +12,7 @@
 //            Zehntausenden Fans anders wirken als Hallenkonzerte (seit 08.11.2026; ab aktivAb in data/sport-spielorte.json)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mwcichl2';
+import { hourOf, dayOf } from './pulse-track.js?v=mwcktwks';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport']; // neue Merkmale nur hinten anfügen (Gedächtnis, lib/pulse-forecast.js memoryResize)
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -393,7 +393,9 @@ export function eventList({ sport = null, venues = null, curated = [], now = Dat
   }
   // gleiche Veranstaltung aus zwei Quellen (Liste und Programmseite): Liste gewinnt, wenn Gemeinde, Tag und Name übereinstimmen
   const key = (e) => `${e.ags[0] || ''}|${e.von.slice(0, 10)}|${norm(e.titel).replace(/[^a-z0-9]/g, '').slice(0, 12)}`, seen = new Set(out.filter(e => e.src === 'liste').map(key));
-  return out.filter(e => e.src === 'liste' || !seen.has(key(e))).sort((a, b) => a.beginn - b.beginn || a.titel.localeCompare(b.titel));
+  const res = out.filter(e => e.src === 'liste' || !seen.has(key(e))).sort((a, b) => a.beginn - b.beginn || a.titel.localeCompare(b.titel));
+  for (const e of res) e.endMs = localMs(e.bis); // einmal je Eintrag statt bei jedem Filter (Audit OPS-03)
+  return res;
 }
 /** Liegt die Veranstaltung im Gebiet ags (null/'DE' = überall)? */
 export const eventInScope = (e, ags) => !ags || ags === 'DE' || e.all || e.ags.includes(ags) || e.laender.includes(LAND_OF_AGS[String(ags).slice(0, 2)]);

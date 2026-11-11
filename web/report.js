@@ -6,7 +6,7 @@ import * as R from './pulse-report.js';
 import * as K from './pulse-calib.js';
 import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { decodeFleet } from './pulse-ops.js';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js';
+import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
 import { weatherFor, weatherSvg, WX_CSS } from './weather.js';
 import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js';
@@ -1673,7 +1673,7 @@ export async function renderForecast(el, ctx) {
     if (!fc || fc.version !== 1) { el.innerHTML = title + emptyBox(t('fc.none'), t('fc.noneHint')); return; }
     const G = fc.gates || {}, minTrain = G.minTrainDays ?? 2, minEval = G.minEvalDays ?? 3;
     const modelName = (m) => (m ? t(`fc.model.${m}`) : '–');
-    const status = fc.status === 'active' ? t('fc.statusActive', { model: modelName(fc.active), reason: esc(fc.reason || '') })
+    const status = fc.status === 'active' ? t('fc.statusActive', { model: modelName(fc.active), reason: esc(fcReason(fc)) })
       : fc.status === 'learning' ? t('fc.statusLearning', { n: fc.evalDays || 0, min: minEval }) : t('fc.statusInsufficient', { n: fc.trainDays || 0, min: minTrain });
     const badge = `<p class="note small" style="margin:0 0 var(--s3)"><span class="rp-status ${fc.status === 'active' ? 'ok' : 'near'}" style="white-space:normal;align-items:flex-start"><i aria-hidden="true" style="margin-top:2px">${fc.status === 'active' ? '✓' : '!'}</i>${esc(status)}</span></p>`;
     if (!fc.horizon || !fc.totals) { el.innerHTML = title + badge + emptyBox(t('fc.none'), t('fc.noneHint')); return; }

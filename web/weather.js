@@ -3,8 +3,9 @@
 import { t, numFmt } from './i18n.js';
 
 const TZ = 'Europe/Berlin';
-const hourOfB = (ms) => +new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }).format(new Date(ms)) % 24;
-const dayOfB = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+const HOUR_B = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }), DAY_B = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+const hourOfB = (ms) => +HOUR_B.format(new Date(ms)) % 24;
+const dayOfB = (ms) => DAY_B.format(new Date(ms));
 /** Ortstag + Ortsstunde (Europe/Berlin) → UTC (ms) */
 export function localUtc(day, h) {
   const [y, m, d] = String(day).split('-').map(Number); let x = Date.UTC(y, m - 1, d, h) - 3600e3;

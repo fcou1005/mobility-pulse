@@ -1,9 +1,9 @@
 // Mobility Pulse — Kommunal-Bericht, Obergrenzen-Wächter, Wochen-Heatmap, Preis-Log und Feed-Prüfung.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: events/<Tag>.json (Stundenwerte, Läufe),
 // history/<Tag>.json (Bestand je Lauf), cells/<Tag>/<Land>.json (Zellen), latest.json, reference.json.
-import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mwcichl2';
-import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mwcichl2';
-import { hourMinutes, TYPE_RANGE_LOW_KM } from './pulse-core.js?v=mwcichl2';
+import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mwcktwks';
+import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mwcktwks';
+import { hourMinutes, TYPE_RANGE_LOW_KM } from './pulse-core.js?v=mwcktwks';
 export { CELL_LAT, CELL_LON };
 
 export const TZ = 'Europe/Berlin';
@@ -26,9 +26,10 @@ export const weekdayOf = (day) => (new Date(`${day}T12:00:00Z`).getUTCDay() + 6)
 const HM = new Map();
 export const hourMinOf = (doc) => (Array.isArray(doc?.hourMin) && doc.hourMin.length === 24 ? doc.hourMin : doc?.day ? (HM.get(doc.day) || HM.set(doc.day, hourMinutes(doc.day, TZ)).get(doc.day)) : new Array(24).fill(60));
 /** Mitternacht eines Kalendertags 'YYYY-MM-DD' in Europe/Berlin als UTC-Millisekunden (Winter +01:00, Sommer +02:00) */
+const DAY_FMT_MID = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 export function berlinMidnight(day) {
   const g = Date.parse(`${day}T00:00:00Z`); if (!Number.isFinite(g)) return null;
-  for (const off of [1, 2, 0]) { const t = g - off * 3600e3; if (hourOfMs(t) === 0 && new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t)) === day) return t; }
+  for (const off of [1, 2, 0]) { const t = g - off * 3600e3; if (hourOfMs(t) === 0 && DAY_FMT_MID.format(new Date(t)) === day) return t; }
   return g - 3600e3;
 }
 export const dayLabel = (day) => (day ? `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)}` : '–');

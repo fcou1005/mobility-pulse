@@ -2,10 +2,10 @@
 // eines eigenen Anbieters: Übersicht mit Abgleich-Balken, Listen „Fehlt bei mir“, „Nur bei mir“, „Pflegebedarf“ mit Karte, Filter und Export.
 // Eigenständig: renderSpots(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, setScope, loadUsageIndex, loadCells, loadOnce };
 // Leaflet (L) global. Rechenlogik in lib/pulse-spots.js; Werte aus Daten gehen durch ctx.esc.
-import * as SP from './pulse-spots.js?v=mwcichl2';
-import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js?v=mwcichl2';
-import { t, dateFmt, fmtLocale } from './i18n.js?v=mwcichl2';
-import { mapKeys } from './mapkeys.js?v=mwcichl2';
+import * as SP from './pulse-spots.js?v=mwcktwks';
+import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js?v=mwcktwks';
+import { t, dateFmt, fmtLocale } from './i18n.js?v=mwcktwks';
+import { mapKeys } from './mapkeys.js?v=mwcktwks';
 
 const LISTS = ['missing', 'onlyMine', 'care'], ISSUES = ['zone', 'dup', 'empty'], DEMAND_DAYS = 7, LIMIT = 100, RANK_LABELS = 30;
 const CACHE = new Map();
@@ -435,7 +435,11 @@ export async function renderSpots(el, ctx) {
   if (!s.own) { // Standard: Anbieter mit den meisten Spots; ist oben ein Anbieter gewählt, der hier Spots hat, dieser
     const n = new Map(); for (const x of SP.spotsOf(fleet, { ags, quota, kind: s.kind })) n.set(x.operator, (n.get(x.operator) || 0) + 1);
     const pref = ctx.state.operator && ctx.state.operator !== 'all' && n.get(ctx.state.operator) ? ctx.state.operator : null;
-    s.own = pref || [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de'))[0]?.[0] || null;
+    // ohne Vorwahl: der Anbieter mit der größten Mikromobilitäts-Flotte, der hier Spots hat (Audit 11.11.2026, UXP-04: vorher stadtmobil
+    // mit 231 Autostationen gegen Scooter-Abstellflächen); erst wenn keiner da ist, der mit den meisten Spots
+    const micro = new Map(); for (const v of fleet.vehicles) if (v.ags === ags && n.has(v.operator) && v.type !== 'car' && v.type !== 'moped') micro.set(v.operator, (micro.get(v.operator) || 0) + 1);
+    const topMicro = [...micro.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de'))[0]?.[0];
+    s.own = pref || topMicro || [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de'))[0]?.[0] || null;
   }
   if (s.map && !el.querySelector('[data-sp-map]')) { s.map.remove(); s.map = null; }
   draw(el, ctx, s);

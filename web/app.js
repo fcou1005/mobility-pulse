@@ -651,9 +651,17 @@ function bindGlossTips() {
 function bindTableCsv() {
   const add = () => $$('.tbl:not([data-csv])').forEach(box => {
     const tb = box.querySelector('table'); if (!tb || tb.rows.length < 6 || box.closest('.rp-report')) return; box.dataset.csv = '1';
+    // Panel mit eigenem CSV-Export: kein zweiter Knopf (Audit 11.11.2026, DES-16)
+    const own = [...(box.closest('.panel')?.querySelectorAll('button, a[download]') || [])].some(x => !x.classList.contains('tbl-csv') && /csv/i.test(`${x.id} ${x.textContent}`));
+    if (own) return;
     const b = document.createElement('button'); b.type = 'button'; b.className = 'tbl-csv'; b.style.cssText = 'margin:var(--s2) 0'; b.textContent = t('app.tableCsv');
     b.addEventListener('click', () => {
-      const rows = [...tb.rows].map(r => [...r.cells].map(c => c.innerText.replace(/\s+/g, ' ').trim()));
+      // nur sichtbare Zellen (ausgeblendete Spalten wie „Δ Sammler“ oder interne Spalten der Kundenansicht fehlen sonst nur in einzelnen
+      // Zeilen und verschieben alles dahinter), ohne Unterzeilen; kürzere Zeilen werden auf die Breite des Kopfs aufgefüllt (Audit UXM-01)
+      const shown = (c) => !c.hidden && getComputedStyle(c).display !== 'none';
+      const text = (c) => { let s = c.innerText || ''; for (const x of c.querySelectorAll('.sub-line')) s = s.replace(x.innerText || '', ' '); return s.replace(/\s+/g, ' ').trim(); };
+      const rows = [...tb.rows].filter(shown).map(r => [...r.cells].filter(shown).map(text)), w = Math.max(0, ...rows.map(r => r.length));
+      for (const r of rows) while (r.length < w) r.push('');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + R.toCsv(rows, lang())], { type: 'text/csv;charset=utf-8' }));
       a.download = `${(box.closest('section,[role=tabpanel]')?.id || 'tabelle')}_${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     });
@@ -1729,7 +1737,7 @@ async function econGroups(day, keep) {
     // Messung über der Plausibilitätsgrenze (Überzählung): nicht kalibrieren, nicht in Summen
     const chk = K.checkMeasured(E.kpis({ g: maskG(g), obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, assume, realization: o.realization, net: o.net, hourMin: doc.hourMin || null }), ty, calib?.limits);
     const m = chk.kpi;
-    const fac = K.factorFor(ty, { manual: calibFor(op), k: calib?.k, mode: 'kal', suspended: chk.suspended, kind: calib?.kinds?.[k] ?? null }); // k nur für die Kennungsart der Berliner Referenz
+    const fac = K.factorFor(ty, { manual: calibFor(op), k: calib?.k, mode: 'kal', suspended: chk.suspended, kind: calib?.kinds?.[k] ?? null, op }); // k nur für die Kennungsart der Berliner Referenz
     // kalibrierte Fahrten je Fahrzeug und Tag höchstens bis zur Plausibilitätsgrenze der Art (lib/pulse-calib.js cappedFactor)
     const lim = { limit: calib?.limits?.[ty] ?? null };
     const cal = K.applyFactor(m, fac.f, lim);
@@ -1771,14 +1779,14 @@ async function renderEcon(day) {
   // je Anbieter × Art: Gemeinden mit unplausibler Messung (Überzählung, > 15) fallen aus der Zeile; sind alle unplausibel, ist die Zeile es
   const rows = [...byName].map(([name, list0]) => { const [op, ty] = name.split('|'); const okL = list0.filter(x => x.m.plausible); const list = okL.length ? okL : list0; const dropped = okL.length ? list0.filter(x => !x.m.plausible) : [];
     const c = E.combine(list); const plans = [...new Set(list.map(x => x.plan?.plan ? E.planLabel(x.plan.plan) : null).filter(Boolean))];
-    return { op, ty, c, cm: E.combine(list.map(x => x.m)), cc: E.combine(list.map(x => x.cal)), lo: E.combine(list.map(x => x.lo)), hi: E.combine(list.map(x => x.hi)), fac: list[0].fac, dur: [...new Set(list.map(x => x.m.durationSource))], list, dropped, plans, planScope: list.find(x => x.plan)?.plan?.scope }; })
+    return { op, ty, c, cm: E.combine(list.map(x => x.m)), cc: E.combine(list.map(x => x.cal)), lo: E.combine(list.map(x => x.lo)), hi: E.combine(list.map(x => x.hi)), fac: list[0].fac, dur: [...new Set(list.map(x => x.m.durationSource))], list, dropped, plans, planScope: list.find(x => x.plan)?.plan?.scope, planUnclear: list.find(x => x.plan?.unclear)?.plan || null }; })
     .filter(x => x.c && x.c.fleet > 0).sort((a, b) => (b.c.revDay || 0) - (a.c.revDay || 0) || b.c.rides - a.c.rides);
   const good = rows.filter(x => x.c.plausible);
   const T = { cm: E.combine(good.map(x => x.cm)), cc: E.combine(good.map(x => x.cc)), lo: E.combine(good.map(x => x.lo)), hi: E.combine(good.map(x => x.hi)) };
   const tot = kal ? T.cc : T.cm;
   // Wirksamer Faktor (B3): k angewandt und für eine Zeile passend (Kennungsart) bzw. eigene Korrektur; sonst gemessen mit Zustand von k
   const facs = rows.flatMap(x => x.list.map(y => y.fac)), anyK = facs.some(f => f.source === 'kalibriert'), anyCorr = facs.some(f => f.source === 'Korrektur');
-  const skipOps = [...new Set(rows.filter(x => x.list.some(y => y.fac.skip)).map(x => `${x.op} (${K.kindText(x.list.find(y => y.fac.skip).fac.kind, lang())})`))];
+  const skipOps = [...new Set(rows.filter(x => x.list.some(y => y.fac.skip === 'kind')).map(x => `${x.op} (${K.kindText(x.list.find(y => y.fac.skip === 'kind').fac.kind, lang())})`))];
   const kShort = !k ? t('cal.btnOff') : k.applied ? (anyK ? '' : t('cal.btnNoEffect')) : { locked: t('cal.btnLocked'), prelim: t('cal.btnPrelim') }[k.status] || t('cal.btnOff');
   const effective = kal && (anyK || anyCorr);
   syncCalibToggle({ effective: anyK || anyCorr, label: kShort });
@@ -1829,13 +1837,13 @@ async function renderEcon(day) {
   const nameCell = (x) => { const c = x.c; const dr = x.dropped || []; return `<td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${esc(TYPE[x.ty] || x.ty)}${state.scope === 'DE' ? ` · ${x.list.length} ${x.list.length === 1 ? t('app.municipality') : t('app.municipalities2')}` : ''}</div>${!c.plausible ? `<span class="pill excl-tag">${t('app.notInTotal')}</span>` : ''}${c.flags.length ? `<div class="sub-line warn-text flag-line">${esc(flagText(c.flags[0]))}</div>` : ''}${dr.length ? `<div class="sub-line warn-text flag-line">${t('app.without', { join: esc(dr.slice(0, 3).map(d => muniName(d.ags)).join(', ')), v1: dr.length > 3 ? ` +${dr.length - 3}` : '', v2: esc(flagText(dr[0].m.flags[0]) || t('app.implausible')) })}</div>` : ''}</td>`; };
   $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.cm;
     return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
-      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${kal && x.fac.source === 'ausgesetzt' ? t('app.notCalibrated') : kal && x.fac.skip ? esc(t('cal.notKind', { v0: K.kindText(x.fac.kind, lang()) })) : kal && facTxt(x) ? esc(facTxt(x)) : c.rot ? `${fmt(c.rot)} ${abbr(t('app.idRotation'), 'rot')}` : ''}</div></td>
+      <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${kal && x.fac.source === 'ausgesetzt' ? t('app.notCalibrated') : kal && x.fac.skip === 'op' ? esc(t('cal.notOp', { ops: (x.fac.ops || []).join(', ') })) : kal && x.fac.skip ? esc(t('cal.notKind', { v0: K.kindText(x.fac.kind, lang()) })) : kal && facTxt(x) ? esc(facTxt(x)) : c.rot ? `${fmt(c.rot)} ${abbr(t('app.idRotation'), 'rot')}` : ''}</div></td>
       <td class="n">${cell(pair(x, 'ridesDay'))}</td><td class="n">${cell(pair(x, 'rvd', { d: 2 }), true)}</td><td class="n">${cell(pair(x, 'revDay', { unit: ' €' }), true)}</td></tr>`; }).join('') || emptyRow(6, t('app.noTripsInFilter'), t('app.setOperatorOrVehicleTypeTo'));
   $('#tbl-econ-more tbody').innerHTML = rows.map(x => { const c = x.cm; const fac = calibFor(x.op);
     return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
       <td class="n"><input type="number" class="calib" data-op="${esc(x.op)}" value="${fac}" min="0.1" max="5" step="0.05" style="width:4.8em${fac !== 1 ? ';border-color:var(--accent)' : ''}" aria-label="${t('app.tripCorrectionFactor', { op: esc(x.op) })}" title="${esc(GLOSS.calib)}">${fac !== 1 ? `<div class="sub-line">${t('app.overridden')}</div>` : x.fac.source === 'kalibriert' ? `<div class="sub-line">${t('app.calibrated3', { f: fmt(x.fac.f, 2) })}</div>` : x.fac.source === 'ausgesetzt' ? `<div class="sub-line">${t('app.suspended')}</div>` : ''}</td>
       <td class="n">${cell(pair(x, 'utilization', { d: 1, unit: ' %', scale: 100 }))}</td><td class="n">${fmt(c.avgMin, 1)} min<div class="sub-line">${esc(x.dur.map(d => DUR[d] || d).join(', '))}</div></td>
-      <td class="small">${x.plans.slice(0, 2).map(esc).join('<br>') || `<span class="muted">${t('app.noTariffInFeed')}</span>`}${x.planScope === 'Anbieter' ? `<div class="sub-line">${t('app.tariffOfAnotherCity')}</div>` : ''}</td>
+      <td class="small">${x.plans.slice(0, 2).map(esc).join('<br>') || `<span class="muted">${t('app.noTariffInFeed')}</span>`}${x.planScope === 'Anbieter' ? `<div class="sub-line">${t('app.tariffOfAnotherCity')}</div>` : ''}${x.planUnclear ? `<div class="sub-line warn-text" title="${esc(t('econ.tariffUnclearTip'))}">${t('econ.tariffUnclear', { lo: fmt(x.planUnclear.fareMin, 2), hi: fmt(x.planUnclear.fareMax, 2) })}</div>` : ''}</td>
       <td class="n">${euro(c.perRide, 2)}</td><td class="n">${cell(pair(x, 'revPerVehicleDay', { d: 2, unit: ' €' }))}</td></tr>`; }).join('') || emptyRow(7, t('app.noTripsInFilter'), t('app.setOperatorOrVehicleTypeTo'));
   // Kalibrierung in zwei Zeilen; Einzelheiten im Panel „Kalibrierung“
   const calOps = Object.keys(cal);
@@ -1885,14 +1893,14 @@ async function renderCalibPanel() {
   for (const c of calib.coverage || []) {
     // k nur bei angewandtem k und Kennungsart der Stadt wie die Referenz, höchstens bis zur Grenze (K.calibratedRvd); sonst gemessen mit Hinweis
     const ob = calib.own?.byAgs?.[c.ags]; const cr = K.calibratedRvd(ob?.rvd, k, { kind: ob?.kind ?? null, limit: calib.limits?.scooter ?? null }); const rvdCal = cr.rvd;
-    const crNote = cr.skip === 'kind' ? `<div class="sub-line">${esc(t('cal.notKind', { v0: K.kindText(cr.kind, lang()) }))}</div>` : cr.skip === 'suspended' ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : cr.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '';
+    const crNote = cr.skip === 'op' ? `<div class="sub-line">${esc(t('cal.notOp', { ops: (cr.ops || []).join(', ') }))}</div>` : cr.skip === 'kind' ? `<div class="sub-line">${esc(t('cal.notKind', { v0: K.kindText(cr.kind, lang()) }))}</div>` : cr.skip === 'suspended' ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : cr.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '';
     rows.push([`${t('app.eScooters', { v0: esc(c.label[0].toUpperCase() + c.label.slice(1)) })}<div class="sub-line">${esc(c.ort)}, ${c.stand ? t('app.asOf3', { v0: dd(c.stand) }) : ''}</div>`, `<b>${c.art === 'aktiv' ? `${t('app.approx')} ` : ''}${fmt(c.official)}</b><div class="sub-line">${esc(c.label)}</div>`, src(c), `${fmt(c.ours)}<div class="sub-line">${t('app.inOpenFeeds', { v0: c.operators.length ? ` (${esc(c.operators.map(o => o.op).join(', '))})` : '' })}</div>`, `<b>${fmt(c.share * 100, 1)} %</b>`,
       `${esc(c.shareLabel)}${rvdCal != null ? `<div class="sub-line">${t('app.extrapolationOnlyHereTrips', { rvdCal: f2(rvdCal), official: fmt(c.official), sig2: fmt(sig2(rvdCal * c.official)), v3: c.art === 'genehmigt' ? ` ${t('app.ofLicensedFleetHenceUpper')}` : ` ${t('app.ofActiveFleet')}` })}</div>` : ''}${crNote}`]);
   }
   // 4. Prüfwerte ohne Faktor
   for (const x of checks) {
     const u = x.unit === '€' ? ' €' : '';
-    const mv = x.measured == null ? '—' : `${f2(x.measured)}${u}${x.calibrated != null ? `<div class="sub-line">${t('app.calibrated5', { v0: f2(x.calibrated), u })}</div>` : x.suspended ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : ''}<div class="sub-line">${esc(x.kind === 'Untergrenze' ? t('app.openFeeds', { ort: tx(x.ref.ort) }) : x.scope || '')}${x.unit === '€' && voi ? `, ${voi.days} ${voi.days === 1 ? t('app.day2') : t('app.days2')}` : ''}</div>`;
+    const mv = x.measured == null ? '—' : `${f2(x.measured)}${u}${x.calibrated != null ? `<div class="sub-line">${t('app.calibrated5', { v0: f2(x.calibrated), u })}</div>` : x.suspended ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : x.notOp?.length ? `<div class="sub-line">${esc(t('cal.notOp', { ops: x.notOp.join(', ') }))}</div>` : ''}<div class="sub-line">${esc(x.kind === 'Untergrenze' ? t('app.openFeeds', { ort: tx(x.ref.ort) }) : x.scope || '')}${x.unit === '€' && voi ? `, ${voi.days} ${voi.days === 1 ? t('app.day2') : t('app.days2')}` : ''}</div>`;
     const ratio = x.ratioCal ?? x.ratio;
     rows.push([`${esc(tx(x.label.replace(/: .*/, '')))}<div class="sub-line">${esc(x.label.replace(/^[^:]*: /, ''))} · ${esc(x.ref.zeitraum || '')}</div>`, `<b>${x.kind === 'Untergrenze' ? '≥ ' : ''}${f2(x.refValue)}${u}</b>${x.how ? `<div class="sub-line">${esc(t('app.mTripsFleetCap', { v0: fmt(x.trips / 1e6, 2), v1: x.year % 4 ? 365 : 366, limit: fmt(x.limit) }))}</div>` : x.ref.hinweis ? `<div class="sub-line"><span translate="no">${esc(x.ref.hinweis)}</span></div>` : ''}`, `${src(x.ref)}${x.cap && x.cap.url !== x.ref.url ? ` · ${src(x.cap)}` : ''}`, mv,
       ratio == null ? '—' : `${f2(ratio)}<div class="sub-line">${t('app.reference', { v0: x.ratioCal != null ? t('app.calibrated6') : t('app.measured3') })}</div>`, x.suspended ? t('app.measurementAbove15Largest', { v0: f2(calib.limits?.scooter) }) : x.kind === 'Untergrenze' ? t('app.checkNoFactorLowerBound') : t('app.comparisonNoFactor')]);

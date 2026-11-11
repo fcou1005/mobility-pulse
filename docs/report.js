@@ -2,14 +2,14 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mwcichl2';
-import * as K from './pulse-calib.js?v=mwcichl2';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwcichl2';
-import { decodeFleet } from './pulse-ops.js?v=mwcichl2';
-import { t, tx, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mwcichl2';
-import { mapKeys } from './mapkeys.js?v=mwcichl2';
-import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mwcichl2';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mwcichl2';
+import * as R from './pulse-report.js?v=mwcktwks';
+import * as K from './pulse-calib.js?v=mwcktwks';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwcktwks';
+import { decodeFleet } from './pulse-ops.js?v=mwcktwks';
+import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mwcktwks';
+import { mapKeys } from './mapkeys.js?v=mwcktwks';
+import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mwcktwks';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mwcktwks';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
@@ -1673,7 +1673,7 @@ export async function renderForecast(el, ctx) {
     if (!fc || fc.version !== 1) { el.innerHTML = title + emptyBox(t('fc.none'), t('fc.noneHint')); return; }
     const G = fc.gates || {}, minTrain = G.minTrainDays ?? 2, minEval = G.minEvalDays ?? 3;
     const modelName = (m) => (m ? t(`fc.model.${m}`) : '–');
-    const status = fc.status === 'active' ? t('fc.statusActive', { model: modelName(fc.active), reason: esc(fc.reason || '') })
+    const status = fc.status === 'active' ? t('fc.statusActive', { model: modelName(fc.active), reason: esc(fcReason(fc)) })
       : fc.status === 'learning' ? t('fc.statusLearning', { n: fc.evalDays || 0, min: minEval }) : t('fc.statusInsufficient', { n: fc.trainDays || 0, min: minTrain });
     const badge = `<p class="note small" style="margin:0 0 var(--s3)"><span class="rp-status ${fc.status === 'active' ? 'ok' : 'near'}" style="white-space:normal;align-items:flex-start"><i aria-hidden="true" style="margin-top:2px">${fc.status === 'active' ? '✓' : '!'}</i>${esc(status)}</span></p>`;
     if (!fc.horizon || !fc.totals) { el.innerHTML = title + badge + emptyBox(t('fc.none'), t('fc.noneHint')); return; }

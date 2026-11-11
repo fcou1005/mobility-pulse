@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mwcichl2';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mwcichl2';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mwcktwks';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mwcktwks';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -863,10 +863,26 @@ export function needsSwap(v, { swapThreshold = DEFAULTS.swapThreshold, swapRange
   return (bat ?? true) && (rng ?? true);
 }
 const energyGap = (v, o) => v.battery != null ? 1 - v.battery / o.swapThreshold : 1 - v.rangeKm / swapRangeOf(v, o.swapRangeKm);
+// Gesperrt wegen Akku (Audit 11.11.2026, MET-10/UXP-02): Voi und Bolt nehmen leere Fahrzeuge per is_disabled aus dem Verleih (Voi Stuttgart:
+// alle 56 gesperrten mit 2–8 km, verfügbare ab 5 km, 1-%-Quantil 14 km). Die Betriebsgrenze der Quelle = 1-%-Quantil der Energie der
+// verfügbaren Fahrzeuge (mind. 20 mit Angabe, gedeckelt auf 35 % bzw. 25 km); ein gesperrtes Fahrzeug darunter ist ein Tauschfall, kein Werkstattfall.
+export const DISABLE_FLOOR = { minAvail: 20, q: 0.01, maxBattery: 35, maxRangeKm: 25 };
+export function disableFloor(vehicles) {
+  const ok = vehicles.filter(v => !v.disabled && !v.reserved), bat = ok.map(v => v.battery).filter(x => x != null && Number.isFinite(x));
+  const rng = ok.filter(v => v.battery == null && rangeUsable(v)).map(v => v.rangeKm);
+  const q = (a, cap) => (a.length >= DISABLE_FLOOR.minAvail ? Math.min(cap, quantile(a, DISABLE_FLOOR.q)) : null);
+  return { battery: q(bat, DISABLE_FLOOR.maxBattery), rangeKm: q(rng, DISABLE_FLOOR.maxRangeKm) };
+}
+export function lockedForEnergy(v, floor) {
+  if (!v?.disabled || !floor) return false;
+  if (v.battery != null) return floor.battery != null && v.battery < floor.battery;
+  return rangeUsable(v) && floor.rangeKm != null && v.rangeKm < floor.rangeKm;
+}
 export function planSwaps({ vehicles, model, depot, ...opts }) {
   const o = { ...DEFAULTS, ...opts }; o.swapCapacity = Math.max(1, Math.min(MAX_SWAP, o.swapCapacity));
   const cost = makeCost(o);
-  const low = vehicles.filter(v => needsSwap(v, o)).map(v => ({ ...v }));
+  const floor = disableFloor(vehicles);
+  const low = vehicles.filter(v => needsSwap(v, o) || lockedForEnergy(v, floor)).map(v => ({ ...v, lockedLow: !!v.disabled }));
   const sphMax = Math.max(0.01, ...[...model.cells.values()].map(c => c.startsPerHour ?? 0));
   for (const v of low) {
     const d = (model.cells.get(cellOf(v.lat, v.lon))?.startsPerHour ?? 0) / sphMax;
@@ -883,14 +899,15 @@ export function planSwaps({ vehicles, model, depot, ...opts }) {
   };
   const cap = timeCap(build, o.maxRunMin), { runs: groups, unplanned } = clusterRuns(chosen, o.swapCapacity, depot, o.maxRuns, undefined, cap.fit);
   const runs = groups.map((g, i) => ({ id: `S${i + 1}`, ...cap.built(g) }));
-  return { below: low.length, chosen: chosen.length, unplanned: unplanned.length + (low.length - chosen.length), limitMin: o.maxRunMin, runs };
+  return { below: low.length, locked: low.filter(v => v.lockedLow).length, floor, chosen: chosen.length, unplanned: unplanned.length + (low.length - chosen.length), limitMin: o.maxRunMin, runs };
 }
 
 /** Werkstatt: gesperrte Fahrzeuge einsammeln und zum Depot bringen. */
 export function planWorkshop({ vehicles, depot, ...opts }) {
   const o = { ...DEFAULTS, ...opts };
   const cost = makeCost(o);
-  const dis = vehicles.filter(v => v.disabled).sort((a, b) => (b.idleMin ?? 0) - (a.idleMin ?? 0));
+  const floor = disableFloor(vehicles); // gesperrt wegen leerem Akku → Akkutausch (planSwaps), nicht Werkstatt
+  const dis = vehicles.filter(v => v.disabled && !lockedForEnergy(v, floor)).sort((a, b) => (b.idleMin ?? 0) - (a.idleMin ?? 0));
   // Priorität = Sperrdauer (Standzeit seit der letzten Bewegung), ab 24 h Zuschlag
   const build = (g, quick) => {
     const stops = groupStops(g, () => 'w', 25).map(s => ({ type: 'pickup_disabled', lat: s.lat, lon: s.lon, count: s.count, idleMaxH: Math.round(Math.max(...s.items.map(x => x.idleMin ?? 0)) / 60), ...maxPrio(s.items.map(x => vehiclePrio('pickup_disabled', x, o))) }));
@@ -901,7 +918,7 @@ export function planWorkshop({ vehicles, depot, ...opts }) {
   };
   const cap = timeCap(build, o.maxRunMin), { runs: groups, unplanned } = clusterRuns(dis, o.workshopCapacity, depot, o.maxRuns, undefined, cap.fit);
   const runs = groups.map((g, i) => ({ id: `W${i + 1}`, ...cap.built(g) }));
-  return { disabled: dis.length, unplanned: unplanned.length, limitMin: o.maxRunMin, runs };
+  return { disabled: dis.length, lockedLow: vehicles.filter(v => lockedForEnergy(v, floor)).length, unplanned: unplanned.length, limitMin: o.maxRunMin, runs };
 }
 
 /**
@@ -957,10 +974,12 @@ export function mapsLinks(points) {
 export function fleetKpis(vehicles, { swapThreshold = DEFAULTS.swapThreshold, swapRangeKm = DEFAULTS.swapRangeKm } = {}) {
   const avail = vehicles.filter(isAvailable);
   const withBat = vehicles.filter(v => (v.battery != null || rangeUsable(v)) && !v.disabled);
-  const idleKnown = avail.filter(v => v.idleMin != null);
+  const idleKnown = avail.filter(v => v.idleMin != null), floor = disableFloor(vehicles), locked = vehicles.filter(v => lockedForEnergy(v, floor)).length;
   return {
     total: vehicles.length, available: avail.length, disabled: vehicles.filter(v => v.disabled).length, reserved: vehicles.filter(v => v.reserved).length,
-    low: withBat.filter(v => needsSwap(v, { swapThreshold, swapRangeKm })).length, batteryKnown: withBat.length,
+    // low = Tauschfälle insgesamt: verfügbare unter der Schwelle + gesperrte unter der Betriebsgrenze der Quelle (lockedLow)
+    low: withBat.filter(v => needsSwap(v, { swapThreshold, swapRangeKm })).length + locked, lockedLow: locked, batteryKnown: withBat.length,
+    chargeKnown: withBat.filter(v => v.battery != null).length,
     idle24: idleKnown.filter(v => v.idleMin >= 1440).length, idle6: idleKnown.filter(v => v.idleMin >= 360).length, idleKnown: idleKnown.length,
     idleMedianH: idleKnown.length ? +(quantile(idleKnown.map(v => v.idleMin), 0.5) / 60).toFixed(1) : null,
   };

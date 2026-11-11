@@ -44,23 +44,34 @@ export function fare(plan, min, km = 0) {
 const TYPE_WORDS = { scooter: /scoot|roller|es\d|kick/i, ebike: /e[-_ ]?bike|pedelec|e_bike/i, bike: /(^|[^-_e])bike|rad|velo/i, cargo: /cargo|lasten/i };
 const excluded = (p) => /business|abo|subscription|pass|pauschal|test|hold|student|monat|month|jahres|annual|minutenpaket|bundle/i.test(`${p.name} ${p.desc}`) || ((p.perMin || []).every(s => +s.start >= 9999 || !(+s.rate > 0)) && !(+p.unlock > 0) && !parseDesc(p.desc).perMin);
 /**
- * Standardtarif für Anbieter × Gemeinde × Fahrzeugart: Pläne der Gemeinde, sonst des Anbieters bundesweit;
- * Abos/Pässe/Business raus; passend zur Fahrzeugart, wenn erkennbar; Median der Kosten einer Referenzfahrt.
+ * Standardtarif für Anbieter × Gemeinde × Fahrzeugart: zuerst die Quelle mit den wenigsten Gemeinden, die diese Gemeinde enthält
+ * (Stadtfeed vor Sammelfeed, Audit MET-11: Voi Köln bekam den Mönchengladbacher Plan), dann alle Quellen der Gemeinde, sonst des
+ * Anbieters bundesweit; Abos/Pässe/Business raus; passend zur Fahrzeugart, wenn erkennbar; Median der Kosten einer Referenzfahrt.
+ * Rückgabe { plan, scope, candidates, refFare, fareMin, fareMax, unclear, sourceId } – unclear: mehrere Pläne ohne Stadtbezug,
+ * Referenzfahrt streut um mehr als 20 % (Median nur Platzhalter, Spanne zeigen).
  */
+const pickPlans = (list, type, ref) => {
+  let plans = list.flatMap(x => (x.plans || []).map(p => ({ p, src: x.sourceId ?? null }))).filter(({ p }) => !excluded(p) && fare(p, ref.min, ref.km) != null);
+  const typed = plans.filter(({ p }) => TYPE_WORDS[type]?.test(`${p.id} ${p.name} ${p.desc}`));
+  if (typed.length) plans = typed;
+  else if (type in TYPE_WORDS) plans = plans.filter(({ p }) => !Object.entries(TYPE_WORDS).some(([t, re]) => t !== type && re.test(`${p.id} ${p.name}`) && !(type === 'ebike' && t === 'bike')));
+  const std = plans.filter(({ p }) => /standard|pay as you go|pay-as-you-go|basis|regul|default|normal/i.test(p.name || ''));
+  return std.length ? std : plans;
+};
 export function planFor(pricing, operator, ags, type, ref = DEFAULT_RIDE[type] || DEFAULT_RIDE.unknown) {
   const all = (pricing?.plans || []).filter(x => x.operator === operator);
   const local = all.filter(x => (x.municipalities || []).includes(ags));
-  for (const [scope, list] of [['Gemeinde', local], ['Anbieter', all]]) {
-    let plans = list.flatMap(x => x.plans || []).filter(p => !excluded(p) && fare(p, ref.min, ref.km) != null);
-    const typed = plans.filter(p => TYPE_WORDS[type]?.test(`${p.id} ${p.name} ${p.desc}`));
-    if (typed.length) plans = typed;
-    else if (type in TYPE_WORDS) plans = plans.filter(p => !Object.entries(TYPE_WORDS).some(([t, re]) => t !== type && re.test(`${p.id} ${p.name}`) && !(type === 'ebike' && t === 'bike')));
+  const nMin = local.length ? Math.min(...local.map(x => (x.municipalities || []).length)) : 0;
+  const own = local.filter(x => (x.municipalities || []).length === nMin);
+  const tiers = [['Quelle', own], ['Gemeinde', local], ['Anbieter', all]].filter(([sc, l]) => l.length && !(sc === 'Gemeinde' && l.length === own.length));
+  for (const [scope, list] of tiers) {
+    const plans = pickPlans(list, type, ref);
     if (!plans.length) continue;
-    const std = plans.filter(p => /standard|pay as you go|pay-as-you-go|basis|regul|default|normal/i.test(p.name || ''));
-    if (std.length) plans = std;
-    const priced = plans.map(p => ({ p, f: fare(p, ref.min, ref.km) })).sort((a, b) => a.f - b.f);
-    const pick = priced[Math.floor((priced.length - 1) / 2)];
-    return { plan: pick.p, scope, candidates: priced.length, refFare: pick.f };
+    const priced = plans.map(({ p, src }) => ({ p, src, f: fare(p, ref.min, ref.km) })).sort((a, b) => a.f - b.f);
+    const pick = priced[Math.floor((priced.length - 1) / 2)], fareMin = priced[0].f, fareMax = priced[priced.length - 1].f;
+    const multi = scope !== 'Quelle' || nMin > 1;
+    return { plan: pick.p, scope: scope === 'Quelle' ? 'Gemeinde' : scope, candidates: priced.length, refFare: pick.f, fareMin, fareMax, sourceId: pick.src,
+      unclear: multi && priced.length > 1 && pick.f > 0 && (fareMax - fareMin) / pick.f > 0.2 };
   }
   return null;
 }
@@ -75,7 +86,8 @@ export function planLabel(plan) {
 
 // ---------- Beobachtung ----------
 export const GAP_MS = 45 * 60e3; // Lauf nach größerem Abstand = Lücke (zählt nicht, siehe pulse-track)
-const hourFmt = (tz) => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz });
+const HOUR_FMT = new Map();
+const hourFmt = (tz) => { let f = HOUR_FMT.get(tz); if (!f) HOUR_FMT.set(tz, (f = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: tz }))); return f; };
 const isGapRun = (r) => r[2] === 0 || (r[1] != null && r[1] > GAP_MS);
 /** Gestörte Stunden (true): Stunde enthält einen Lauf nach Lücke (runs[k][2] === 0 bzw. dt > 45 Min.) – grau zeigen, nicht hochrechnen. */
 export function gapHours(runs, tz = 'Europe/Berlin') {
