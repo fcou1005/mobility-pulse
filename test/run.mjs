@@ -6,6 +6,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { startExtra } from './fixtures/extra-server.mjs';
 import * as T from '../lib/pulse-track.js';
 import * as CX from '../lib/pulse-context.js';
+import * as TR from '../lib/pulse-train.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
@@ -199,6 +200,13 @@ await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '200
 const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json` });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+// Trainingsarchiv (Audit DAT-01): der abgeschlossene Vortag landet als train/<JJJJ>/<Tag>.json.gz (erst 3 Stunden nach Tagesende)
+if (TR.trainReady(ydM, Date.now())) {
+  const tf = `test/out/${TR.trainPath(ydM)}`, td = JSON.parse(gunzipSync(await readFile(tf).catch(() => gzipSync('{}'))).toString()), ti = JSON.parse(await readFile('test/out/train/index.json', 'utf8').catch(() => '{}'));
+  assert(td.day === ydM && td.g?.['08111000|Lime|scooter']?.[0]?.[5] === 15 && 'fc' in td && td.obs?.length === 24 && ti.days?.includes(ydM) && td.dayType?.BW && ti.fields?.[0] === 'start',
+    `Trainingsarchiv: ${TR.trainPath(ydM)} mit Stundenwerten, beobachteten Minuten, Tagtyp (Plan nur, wenn eingefroren); Index nennt den Tag`);
+} else console.log('ok: Trainingsarchiv – Vortag noch nicht archivreif (vor 3 Uhr), Prüfung übersprungen');
+{ const ai = JSON.parse(await readFile('test/out/archive/index.json', 'utf8')); assert(ai.fields.slice(-2).join() === 'flotte_verf,stunden_voll', 'Archiv: verfügbare Flotte und volle Stunden hinten angefügt (DAT-05)'); }
 { const so = l4.sources.find(s => s.id === 'citybikes_cbsolo'), so3 = l3.sources.find(s => s.id === 'citybikes_cbsolo');
   assert(so3?.status === 'live' && !so3.cbCachedAt && ['live', 'delayed'].includes(so?.status) && so.cbCachedAt > 0 && so.counts?.stations === 2 && so.checks?.items?.some(i => /HTTP 429 – Stand des letzten guten Abrufs/.test(i.msg)) && l4.groups['08111000|CBSolo|unknown']?.stations === 2,
     `CityBikes HTTP 429: letzter guter Abruf (privat in TRACK_DIR) weiter verwendet, Status ${so?.status}, Hinweis in der Feed-Prüfung`); }

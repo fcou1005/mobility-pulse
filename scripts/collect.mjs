@@ -16,6 +16,7 @@ import * as CX from '../lib/pulse-context.js';
 import * as CH from '../lib/pulse-chronos.js';
 import * as ST from '../lib/pulse-strike.js';
 import * as TMN from '../lib/pulse-termine.js';
+import * as TR from '../lib/pulse-train.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -747,6 +748,9 @@ async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true
           const t = col('temperature', -45, 55), p = col('precipitation', 0, 250), w = col('wind_speed', 0, 250), s = col('sunshine', 0, 60, 0);
           if ([t, p].some(a => a.some(x => x != null))) out[k] = { lat: cells.get(k)[0], lon: cells.get(k)[1], t, p, w, s };
         }
+        // Audit DAT-08: die Vorhersage eines Tages (geschrieben vor seinem Beginn, MOSMIX) wird hier durch Beobachtungen ersetzt – vorher als
+        // weather-fc/<Tag>.json sichern (letzter Stand vor dem Tag, ohne Wirkung auf die Prognose; Langzeit in train/, siehe lib/pulse-train.js)
+        if (Object.keys(out).length && d <= utcDay(now) && existsSync(fileOf(d))) { try { const old = JSON.parse(await readFile(fileOf(d), 'utf8')), ff = path.join(DATA, 'weather-fc', `${d}.json`); if (TR.isForecastDoc(old) && !existsSync(ff)) { await mkdir(path.dirname(ff), { recursive: true }); await writeFile(ff, JSON.stringify(old)); } } catch {} }
         if (Object.keys(out).length) { await writeFile(fileOf(d), JSON.stringify({ version: 1, day: d, generatedAt: new Date(now).toISOString(), source: 'DWD Open Data via Bright Sky', units: { t: '°C', p: 'mm/h', w: 'km/h', s: 'min/h' }, hours, cells: out, ags: agsCell })); wrote++; }
       }
       log(`Wetter: ${keys.length} Rasterzellen, ${wrote} Tagesdatei(en)${back.length ? ` (nachgeholt: ${back.join(', ')})` : ''}${fails ? `, ${fails} Abrufe ohne Antwort` : ''}`);
@@ -975,7 +979,9 @@ try {
   // Ereignisse (M-11: laufender Tag nur abgeschlossene Stunden; abgeschlossener Vortag vollständig), sonst verrieten die Tageswerte je Lauf mehr.
   {
     const arDir = path.join(DATA, 'archive'); await mkdir(arDir, { recursive: true });
-    const AR_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
+    // seit 11.11.2026 (Audit DAT-05) hinten: flotte_verf = mittlere verfügbare Flotte (vmin, wie die Prognose; flotte_avg zählt Gesperrte mit),
+    // stunden_voll = Stunden mit ≥ 50 beobachteten Minuten (Gate der Prognose). Leser greifen per fields.indexOf; ältere Zeilen sind kürzer.
+    const AR_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min', 'flotte_verf', 'stunden_voll'];
     const arRows = (doc, h) => {
       // gestörte Stunden (Lauf nach Lücke, auch Altbestand) zählen weder mit Ereignissen noch mit Beobachtungszeit
       const obsH = E.observedMinutes(doc.runs);
@@ -988,7 +994,8 @@ try {
         const countedRuns = h ? ((h.f || h.t).filter(x => x !== 0).length || h.t.length) : 0;
         // Mittel über die Läufe mit Wert nur bei ausreichender Präsenz (≥ 50 % der zählenden Läufe), sonst keine Tagesflotte (lib/pulse-report.js MIN_PRESENCE)
         const fleet = vminOk && obsMin > 0 && s(g.vminTot) > 0 ? s(g.vminTot) / obsMin : hs.length && hs.length >= R.MIN_PRESENCE * countedRuns ? hs.reduce((a, b) => a + b, 0) / hs.length : null;
-        rows[k] = [fleet == null ? null : +fleet.toFixed(1), s(g.start), s(g.end), s(g.rot), s(g.reloc), s(g.swap), s(g.pickup), s(g.disOn), Math.round(obsMin)];
+        const avail = vminOk && obsMin > 0 && Array.isArray(g.vmin) ? +(s(g.vmin) / obsMin).toFixed(1) : null;
+        rows[k] = [fleet == null ? null : +fleet.toFixed(1), s(g.start), s(g.end), s(g.rot), s(g.reloc), s(g.swap), s(g.pickup), s(g.disOn), Math.round(obsMin), avail, obsH.filter(m => m >= 50).length];
       }
       return rows;
     };
@@ -1190,6 +1197,18 @@ try {
   // Umgebungsereignisse wie Ereignisse (+ 2 Tage Vorschau: heute, morgen); was die Prognose daraus gelernt hat, steht im Langzeitgedächtnis
   if (existsSync(incidentDir)) for (const f of (await readdir(incidentDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -(HISTORY_DAYS + 2))) await rm(path.join(incidentDir, f));
   const cellDays = (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}(\.json)?$/.test(f)).sort();
+  // vor dem Löschen: abgeschlossene ISO-Wochen als Summe der veröffentlichten Tagesdateien behalten (lib/pulse-train.js, Audit DAT-02)
+  if (process.env.TRAIN !== '0') {
+    try {
+      const wDir = path.join(DATA, TR.CELLS_WEEK.dir), haveW = new Set();
+      if (existsSync(wDir)) for (const y of (await readdir(wDir)).filter(f => /^\d{4}$/.test(f))) for (const f of await readdir(path.join(wDir, y))) { const m = f.match(/^(\d{4}-W\d{2})\.json\.gz$/); if (m) haveW.add(m[1]); }
+      for (const w of TR.cellsWeekTodo(cellDays.filter(f => !f.endsWith('.json')), haveW, now)) {
+        const docs = []; for (const d of w.days) for (const f of (await readdir(path.join(cellsDir, d))).filter(f => /^[A-Z]{2}\.json$/.test(f))) { try { docs.push(JSON.parse(await readFile(path.join(cellsDir, d, f), 'utf8'))); } catch {} }
+        const buf = gzipSync(JSON.stringify(TR.cellsWeekDoc(w, docs, now)), { level: 9 }), f = path.join(DATA, TR.cellsWeekPath(w.key));
+        await mkdir(path.dirname(f), { recursive: true }); await writeFile(f, buf); log(`Zellen-Wochensumme ${w.key}: ${w.days.length} Tage, ${(buf.length / 1e3).toFixed(0)} kB gz`);
+      }
+    } catch (e) { log(`Zellen-Wochensumme: ${e.message}`); }
+  }
   for (const f of cellDays.filter(f => !f.endsWith('.json')).slice(0, -14)) await rm(path.join(cellsDir, f), { recursive: true, force: true });
   for (const f of cellDays.filter(f => f.endsWith('.json')).slice(0, -3)) await rm(path.join(cellsDir, f));
   await writeFile(path.join(DATA, 'events', 'index.json'), JSON.stringify({ days: (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), cellDays: (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort(), updatedAt: now, first: tr.first }));
@@ -1338,6 +1357,7 @@ let strikeAuto = [];
 // und Live-Abgleich ausgegebener Prognosen mit der Realität → forecast/latest.json (nächste 24 Stunden) und forecast/log.json. Höchstens alle
 // FORECAST_EVERY_MIN Minuten (Standard 60); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
 // forecast/series.json: Stundenreihen fürs Dashboard (Plan heute eingefroren, Ist, Live-Prognose bis Ende morgen, je Anbieter, Art, Gemeinde und große Gruppe).
+let trainCtx = null; // Einträge, die in diesem Lauf in der Prognose wirken bzw. zurückgehalten sind (fürs Trainingsarchiv, unten)
 if (process.env.FORECAST !== '0') {
   try {
     const fLatest = path.join(DATA, 'forecast', 'latest.json');
@@ -1375,6 +1395,7 @@ if (process.env.FORECAST !== '0') {
       // je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR): micro wie bisher in forecast/ (Lernphase unverändert), E-Roller und Carsharing
       // getrennt in forecast/moped/ und forecast/car/; eine Familie ohne Fahrzeugminuten in den Tagesdateien wird übersprungen (keine Dateien)
       const curatedAll = [...curOk, ...strikeAuto, ...sportCurated, ...(evOn ? [...venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
+      trainCtx = { curated: curatedAll, pending };
       for (const fam of FC.FAMILIES) {
         try {
           const fdocs = FC.familyDocs(docs, fam); if (fam !== 'micro' && !FC.familyHasData(fdocs)) continue;
@@ -1398,6 +1419,39 @@ if (process.env.FORECAST !== '0') {
       }
     }
   } catch (e) { log(`Prognose: ${e.message} – alte Dateien bleiben`); }
+}
+
+// Langzeitarchiv der Trainingsdaten (lib/pulse-train.js, Audit DAT-01): je abgeschlossenem Ortstag train/<JJJJ>/<Tag>.json.gz, einmal geschrieben,
+// nie geändert; holt fehlende Tage nach (höchstens TRAIN.perRun je Lauf), solange events/ sie noch hat. Nur in Läufen mit Prognose (Kennzeichen
+// wie in der Prognose). weather-fc/ (gesicherte Vorhersagen) 40 Tage. TRAIN=0 = aus. Ohne Wirkung auf Prognose und Chronos.
+if (process.env.TRAIN !== '0') {
+  try {
+    const tDir = path.join(DATA, TR.TRAIN.dir), evDir = path.join(DATA, 'events'), have = new Set();
+    if (existsSync(tDir)) for (const y of (await readdir(tDir)).filter(f => /^\d{4}$/.test(f))) for (const f of await readdir(path.join(tDir, y))) { const m = f.match(/^(\d{4}-\d{2}-\d{2})\.json\.gz$/); if (m) have.add(m[1]); }
+    const evDays = existsSync(evDir) ? (await readdir(evDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)) : [];
+    const todo = trainCtx ? TR.trainTodo(evDays, have, now) : [];
+    if (todo.length) {
+      const rd = async (f) => { try { return existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch { return null; } };
+      const calendar = await rd(path.join(DATA, 'calendar.json')), series = await rd(path.join(DATA, 'forecast', 'series.json')), flog = await rd(path.join(DATA, 'forecast', 'log.json'));
+      const fam = {}; for (const f of FC.FAMILIES) if (f !== 'micro') fam[f] = { series: await rd(path.join(DATA, FC.FAMILY_DIR[f], 'series.json')), log: await rd(path.join(DATA, FC.FAMILY_DIR[f], 'log.json')) };
+      const prevUtc = (d) => new Date(Date.parse(`${d}T12:00:00Z`) - 86400e3).toISOString().slice(0, 10);
+      const wx = async (dir, d) => [await rd(path.join(DATA, dir, `${prevUtc(d)}.json`)), await rd(path.join(DATA, dir, `${d}.json`))].filter(Boolean);
+      let bytes = 0;
+      for (const day of todo) {
+        const events = await rd(path.join(evDir, `${day}.json`)); if (!events?.groups) continue;
+        const doc = TR.trainDoc({ events, history: await rd(path.join(DATA, 'history', `${day}.json`)), weather: await wx('weather', day), weatherFc: await wx('weather-fc', day),
+          incidents: await rd(path.join(DATA, 'incidents', `${day}.json`)), calendar, curated: trainCtx.curated, pending: trainCtx.pending, checks: latest.eventChecks, series, log: flog, families: fam, now });
+        const buf = gzipSync(JSON.stringify(doc), { level: 9 }), f = path.join(DATA, TR.trainPath(day));
+        await mkdir(path.dirname(f), { recursive: true }); await writeFile(f, buf); have.add(day); bytes += buf.length;
+      }
+      await writeFile(path.join(tDir, 'index.json'), JSON.stringify({ version: TR.TRAIN.version, updatedAt: new Date(now).toISOString(), days: [...have].sort(), path: 'train/<JJJJ>/<JJJJ-MM-TT>.json.gz',
+        fields: TR.TRAIN.fields, sums: TR.TRAIN.sums, stock: TR.TRAIN.stock, ctxKeys: CX.CTX_KEYS, minStarts: TR.TRAIN.minStarts,
+        note: 'Je Ortstag Stundenwerte je Gemeinde|Anbieter|Art (Ereignisse, verfügbare Fahrzeugminuten, Bestand), beobachtete Minuten, Wetter (Beobachtung und wie ausgegebene Vorhersage), Tagtyp je Land, Kennzeichen wie in der Prognose (ctx) und zurückgehaltene (ctxHeld), Ampel, eingefrorener Plan. Gruppen mit 1–2 Fahrtbeginnen am Tag: Fahrtbeginne/-enden nur als Tagessumme.' }));
+      log(`Trainingsarchiv: ${todo.join(', ')} (${(bytes / 1e3).toFixed(0)} kB gz), ${have.size} Tage gesamt`);
+    }
+    const fcDir = path.join(DATA, 'weather-fc');
+    if (existsSync(fcDir)) for (const f of (await readdir(fcDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -40)) await rm(path.join(fcDir, f));
+  } catch (e) { log(`Trainingsarchiv: ${e.message}`); }
 }
 
 // Aktive Gemeindegrenzen fürs Dashboard
@@ -1449,6 +1503,7 @@ if (boundaries) {
     '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine (Name, Beginn, Ort, Link) aus den öffentlichen Programmseiten und Kalendern der Orte (Quelle je Termin verlinkt; `data/veranstaltungskalender.json`), höchstens 60 Tage behalten.',
     '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
     '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`; E-Roller und Carsharing je mit eigenem Modell in `forecast/moped/` und `forecast/car/`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
+    '- Trainingsarchiv (`train/<Jahr>/<Tag>.json.gz`, `train-cells/<Jahr>/<Jahr>-W<KW>.json.gz`, `weather-fc/<Tag>.json`): dauerhafte Ablage der oben genannten Tagesdaten (Stundenwerte je Gemeinde, Anbieter und Fahrzeugart; Wochensummen der veröffentlichten Zellen; Wetter samt der ausgegebenen Vorhersage), abgeleitet aus denselben Quellen und unter denselben Bedingungen weiterzugeben (Namensnennung; bei CC-BY-SA-Quellen Weitergabe unter gleichen Bedingungen; Kalender ODbL). Keine Fahrzeugkennungen, keine Fahrzeugkoordinaten; Gruppen mit 1–2 Fahrtbeginnen am Tag nur als Tagessumme.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
     '## Quellen nach Lizenz', '',

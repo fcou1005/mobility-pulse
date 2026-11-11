@@ -1,9 +1,9 @@
 // Mobility Pulse — Kommunal-Bericht, Obergrenzen-Wächter, Wochen-Heatmap, Preis-Log und Feed-Prüfung.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: events/<Tag>.json (Stundenwerte, Läufe),
 // history/<Tag>.json (Bestand je Lauf), cells/<Tag>/<Land>.json (Zellen), latest.json, reference.json.
-import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mwcktwks';
-import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mwcktwks';
-import { hourMinutes, TYPE_RANGE_LOW_KM } from './pulse-core.js?v=mwcktwks';
+import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mwclbtab';
+import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mwclbtab';
+import { hourMinutes, TYPE_RANGE_LOW_KM } from './pulse-core.js?v=mwclbtab';
 export { CELL_LAT, CELL_LON };
 
 export const TZ = 'Europe/Berlin';
@@ -659,7 +659,7 @@ export function reportCsvRows(rep, { name = '', typeLabel = (t) => t, cal = null
 }
 
 // ---------- Zeiträume: Monat und Quartal (Tagesdateien 30 Tage, darüber das Langzeit-Archiv) ----------
-export const ARCHIVE_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min'];
+export const ARCHIVE_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min', 'flotte_verf', 'stunden_voll'];
 const MONTHS = { de: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
   en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] };
 const pad = (n) => String(n).padStart(2, '0');
