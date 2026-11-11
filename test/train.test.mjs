@@ -83,3 +83,11 @@ assert(cw.week === '2026-W44' && cw.days.join() === '2026-10-31,2026-11-01' && b
   const zh = (c, r) => TR.zoneHash({ geometry: { coordinates: c }, properties: { rules: r } }), a = zh([[1, 2]], [{ rideAllowed: false }]), b = zh([[1, 2]], [{ rideAllowed: true }]);
   assert(a !== b && TR.zoneDiff(new Set([a]), [a, b]).added === 1 && TR.zoneDiff(new Set([a, b]), [b]).removed === 1, 'Zonen-Fingerabdruck: Regeländerung zählt als geändert');
 }
+// anteilige Stundenwerte (MET-01b) im Archiv
+{
+  const z = () => new Array(24).fill(0), sp = z(); sp[9] = 6; sp[10] = 2; const vp = z(); vp[9] = 1500.4;
+  const ev = { day: '2026-11-10', runs: [], obsP: z().map((_, h) => (h === 9 ? 15 : 0)), pVersion: 1, groups: { 'A|Voi|scooter': { start: z(), startP: sp, vminP: vp }, 'B|X|bike': { start: [2, ...z().slice(1)], startP: [1.5, 0.5, ...z().slice(2)] } } };
+  const d = TR.trainDoc({ events: ev });
+  assert(d.pf.join() === 'startP,vminP' && d.gp['A|Voi|scooter'][0][9] === 6 && d.gp['A|Voi|scooter'][1][9] === 1500 && d.gp['B|X|bike'][0] === 2 && d.obsP[9] === 15 && !('gp' in TR.trainDoc({ events: { day: '2026-11-10', groups: {} } })),
+    'Archiv: startP/vminP je Gruppe (kleine Gruppe nur Tagessumme), obsP; ohne Zusatzfelder kein gp');
+}

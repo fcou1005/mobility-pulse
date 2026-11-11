@@ -790,3 +790,17 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const cells = r.cells.get('08111000'); const pres = [...cells.values()].reduce((a, c) => a + c[2], 0);
   assert(pres === 2, `Zellen ohne Autos (präsent ${pres} = 2 Scooter)`);
 }
+// Audit MET-01b: anteilige Verteilung auf Uhrstunden als Zusatzfelder (startP, vminP, obsP), bestehende Felder unverändert
+{
+  const day = '2026-11-10', at = Date.parse('2026-11-10T09:05:00Z'), dt = 20 * 60e3; // Lauf 09:45–10:05 Ortszeit (UTC+1)
+  const fr = T.hourShares(at, dt, day);
+  assert(Math.abs(fr[9] - 0.75) < 1e-9 && Math.abs(fr[10] - 0.25) < 1e-9 && fr.reduce((a, b) => a + b) === 1, 'hourShares: 15 von 20 Min. in Stunde 9, 5 in Stunde 10');
+  const mid = T.hourShares(Date.parse('2026-11-09T23:05:00Z'), dt, day); assert(Math.abs(mid[0] - 0.25) < 1e-9 && mid.reduce((a, b) => a + b) < 0.26, 'über Mitternacht: Anteil vor 0 Uhr fällt weg');
+  const h = T.emptyHourly(); h.start[10] = 8; h.vmin[10] = 2000; h.end[10] = 3;
+  const doc = T.mergeHourly(null, new Map([['A|Voi|scooter', h]]), { day, at, dt, srcModes: {} });
+  const g = doc.groups['A|Voi|scooter'];
+  assert(g.start[10] === 8 && g.start[9] === 0 && g.startP[9] === 6 && g.startP[10] === 2 && g.vminP[9] === 1500 && g.vminP[10] === 500 && !g.endP && doc.obsP[9] === 15 && doc.obsP[10] === 5 && doc.pVersion === 1,
+    'mergeHourly: start bleibt in der Endstunde, startP/vminP/obsP anteilig (6/2, 1500/500, 15/5 Min.)');
+  const gapDoc = T.mergeHourly(null, new Map([['A|Voi|scooter', T.emptyHourly()]]), { day, at, dt: 50 * 60e3, srcModes: {}, gap: true });
+  assert(!gapDoc.obsP && !gapDoc.pVersion, 'Lauf nach Lücke: keine anteiligen Werte');
+}
