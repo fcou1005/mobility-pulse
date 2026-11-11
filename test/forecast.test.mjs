@@ -715,3 +715,16 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   assert(a.wapeGH === 0.5 && b.wapeGH === 0.5 && !a.fair && b.fair.wapeGH === 0 && b.fair.n === 2 && b.fair.starts === 20 && b.fair.bias === 0,
     'scoreDay mask: „wie gestern“ ohne Vortagswert (0) zählt in der fairen Schattenwertung nicht, Hauptwertung bleibt');
 }
+// Vortrainiertes Modell zum Mitnehmen: die exportierten Parameter reproduzieren die Prognose des gepoolten Modells (Gruppenniveau a_g)
+{
+  const ds = F.assignEras(docs.map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds, F.wxLookup(WX)), all = Array.from({ length: R.n }, (_, i) => i);
+  const m = F.fitPooled(R, all, { weather: true }), P = F.portableModel(m, R, { family: 'micro', now: Date.parse('2026-11-11T21:00:00Z'), trainDays: 9 });
+  const CL = ['W', 'F', 'S', 'H'], mu = F.predictPooled(m, R, all); let maxRel = 0;
+  for (let i = 0; i < R.n; i += 97) { if (R.era[i] > 0 || !(R.e[i] > 0)) continue; const ty = String(R.keys[R.g[i]]).split('|')[2], T = P.types[ty] || Object.values(P.types).find(x => x.also.includes(ty));
+    const eta = m.a[R.g[i]] + P.hour[R.hr[i]] + P.dayType[CL[R.cl[i]]][R.hr[i]] + T.hour[R.hr[i]] + P.weather.cold * R.w[0][i] + P.weather.warm * R.w[1][i] + P.weather.rain * R.w[2][i];
+    maxRel = Math.max(maxRel, Math.abs(R.e[i] * Math.exp(eta) / mu[i] - 1)); }
+  const op = Object.keys(P.operators)[0];
+  assert(P.kind === 'mobility-pulse/portable-model' && maxRel < 0.002 && op && Number.isFinite(P.operators[op]) && Object.values(P.types).every(x => x.level.p25 <= x.level.p50 && x.level.p50 <= x.level.p75) && Object.keys(P.city).length > 0 && JSON.stringify(P).length < 60000,
+    `portableModel: Stunde, Tagtyp, Art und Wetter reproduzieren predictPooled (größte Abweichung ${(maxRel * 100).toFixed(3)} %), Anbieter- und Stadtniveau, Quantile geordnet, klein`);
+  assert(F.portableModel(null, R) === null, 'portableModel ohne Modell: null');
+}

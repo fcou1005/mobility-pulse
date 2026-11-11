@@ -1405,6 +1405,7 @@ if (process.env.FORECAST !== '0') {
           if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
           await mkdir(fdir, { recursive: true });
           await writeFile(fL, JSON.stringify(res.latest)); await writeFile(fG, JSON.stringify(res.log)); await writeFile(fS, JSON.stringify(res.series));
+          if (res.model) await writeFile(path.join(fdir, 'model.json'), JSON.stringify(res.model)); // vortrainiertes Modell zum Mitnehmen (tools/prognose-modell.mjs)
           const l = res.latest;
           log(`Prognose${fam === 'micro' ? '' : ` (${fam})`}: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
         } catch (e) { if (fam === 'micro') throw e; log(`Prognose (${fam}): ${e.message} – alte Dateien bleiben`); }

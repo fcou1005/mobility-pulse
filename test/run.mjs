@@ -246,6 +246,10 @@ if (TR.trainReady(ydM, Date.now())) {
   assert(road.length === 1 && inc.sources.road?.roads === 2 && inc.sources.road.fails === 2 && inc.sources.road.items === 2, `Autobahn: Sperrung + Stau → ${road.join(', ')} zur Stunde ${h}; Baustellenhinweis zählt nicht; Ausfall einer Autobahn bricht nicht ab`);
   const fl = await readFile('test/out/forecast/latest.json', 'utf8').then(JSON.parse).catch(() => null), fg = await readFile('test/out/forecast/log.json', 'utf8').then(JSON.parse).catch(() => null);
   assert(fl && fl.version === 1 && ['insufficient', 'learning', 'active'].includes(fl.status) && fg && fg.version === 1 && typeof fg.evals === 'object', `Prognose: forecast/latest.json und log.json vom Sammler geschrieben (Status ${fl?.status}, ${fl?.trainDays} Tage)`);
+  // vortrainiertes Modell zum Mitnehmen (forecast/model.json), nur wenn eine Prognose aktiv ist
+  if (fl?.active) { const pm = await readFile('test/out/forecast/model.json', 'utf8').then(JSON.parse).catch(() => null);
+    assert(pm?.kind === 'mobility-pulse/portable-model' && pm.hour?.length === 24 && pm.types?.scooter && pm.dayType?.W?.length === 24, `Sammler schreibt forecast/model.json (${Object.keys(pm?.types || {}).join(', ')})`); }
+  else console.log('ok: forecast/model.json – Prognose im Fixture nicht aktiv, Prüfung übersprungen');
   // je Fahrzeugfamilie ein eigenes Modell: forecast/car/ und forecast/moped/ (Vortag mit Fahrzeugminuten beider Familien); Mikro-Prognose ohne sie
   { const fc = await readFile('test/out/forecast/car/latest.json', 'utf8').then(JSON.parse).catch(() => null), fm = await readFile('test/out/forecast/moped/series.json', 'utf8').then(JSON.parse).catch(() => null);
     assert(fc?.family === 'car' && fc.version === 1 && fm?.family === 'moped' && fl?.family === undefined && !Object.keys(fl?.groups || {}).some(k => /\|(car|moped)$/.test(k)),

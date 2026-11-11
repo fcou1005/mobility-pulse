@@ -852,9 +852,53 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   const p9 = `<div class="panel" id="fv-env">${head(t('fv.envTitle'), t('fv.envSub'))}${envHtml(ctx, L, { title: false })}</div>`;
   const p10 = `<div class="panel" id="fv-events">${head(t('fv.evTitle'), t('fv.evSub'))}<div class="fv-ev-body"><p class="fv-sub">${t('fv.evLoading')}</p></div></div>`;
   const p8 = `<div class="panel" id="fv-dl">${head(t('fv.dlTitle'), t('fv.dlSub'))}${dlRow(false)}<p class="fv-sub">${t('fv.dlNote', { repo: esc(ctx.CFG?.REPO || '') })}</p></div>`;
-  el.innerHTML = topBar(ctx, sel) + `<div class="fv-grid">${p1}${p2}${p3}${p9}${p10}${p8}${p4}${p5}${p6}${p7}</div>`;
+  const p11 = `<div class="panel" id="fv-pm">${head(t('fv.pmTitle'), t('fv.pmSub'))}<div class="fv-pm-body"><p class="fv-sub">${t('fv.pmLoading')}</p></div></div>`;
+  el.innerHTML = topBar(ctx, sel) + `<div class="fv-grid">${p1}${p2}${p3}${p9}${p10}${p11}${p8}${p4}${p5}${p6}${p7}</div>`;
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
   fillEvents(el.querySelector('#fv-events .fv-ev-body'), ctx, sel, S0);
+  fillPortable(el.querySelector('#fv-pm .fv-pm-body'), ctx, sel);
+}
+
+// ---------- Vortrainiertes Modell zum Mitnehmen (forecast/model.json, tools/prognose-modell.mjs) ----------
+const PM_CLS = ['W', 'F', 'S', 'H'];
+/** Rate je verfügbarem Fahrzeug und Stunde (neutrales Wetter, ohne Ereignisse) */
+export const pmRate = (M, ty, T, level, h) => Math.exp(level + M.hour[h] + M.dayType[T][h] + (M.types[ty]?.hour?.[h] ?? 0));
+async function fillPortable(box, ctx, sel) {
+  if (!box) return;
+  const M = await fj(ctx, famFile(FAM, 'model')); if (!box.isConnected) return;
+  const esc = ctx.esc, repo = ctx.CFG?.REPO || 'fcou1005/mobility-pulse';
+  if (M?.kind !== 'mobility-pulse/portable-model') { box.innerHTML = `<p class="fv-sub">${t('fv.pmNone')}</p>`; return; }
+  const types = Object.entries(M.types).filter(([, x]) => x.vehicleHours >= 10000).map(([k]) => k), tl = tMap('type', VEHICLE_TYPE_LABEL);
+  const opSel = ctx.state.operator && ctx.state.operator !== 'all' ? ctx.state.operator : null, tySel = ctx.state.type && types.includes(ctx.state.type) ? ctx.state.type : types[0];
+  const days = Array.from({ length: 7 }, (_, k) => addDays(FC.dayOfLocal(Date.now()), k + 1)), city = sel.ags && sel.ags !== 'DE' ? sel.ags : null;
+  const land = city ? FC.LAND_OF_AGS[city.slice(0, 2)] ?? null : null;
+  const st = { ty: tySel, fleet: 100, day: days[0], q: 'p50' };
+  box.innerHTML = `<p class="fv-lead" style="margin-top:var(--s2)">${t('fv.pmLead', { at: esc(timeTxt(M.trainedAt)), n: M.trainDays ?? '–', types: types.map(x => esc(tl[x] || x)).join(', '), ops: Object.keys(M.operators || {}).length, cities: Object.keys(M.city || {}).length })}</p>`
+    + `<div class="fv-links" style="margin:var(--s2) 0 var(--s3)"><button type="button" class="chip" data-pm="json">${t('fv.pmJson')}</button><button type="button" class="chip" data-pm="csv">${t('fv.pmCsv')}</button>`
+    + `<a class="chip" href="https://raw.githubusercontent.com/${esc(repo)}/main/tools/prognose-modell.mjs" target="_blank" rel="noopener">${t('fv.pmScript')}</a><a class="chip" href="https://github.com/${esc(repo)}/blob/main/tools/MODELL.md" target="_blank" rel="noopener">${t('fv.pmGuide')}</a></div>`
+    + `<h3 class="rp-h3" style="margin:var(--s3) 0 var(--s2);font-size:14px">${t('fv.pmCalc')}</h3><div class="fv-ctl">`
+    + `<label>${t('fv.pmType')} <select data-pmi="ty">${types.map(x => `<option value="${esc(x)}"${x === tySel ? ' selected' : ''}>${esc(tl[x] || x)}</option>`).join('')}</select></label>`
+    + `<label>${t('fv.pmFleet')} <input data-pmi="fleet" type="number" min="1" max="100000" step="1" value="${st.fleet}" style="width:7em"></label>`
+    + `<label>${t('fv.pmDay')} <select data-pmi="day">${days.map((d, i) => `<option value="${d}">${esc(i === 0 ? `${t('fv.tomorrow')} · ${dayTxt(d)}` : dayTxt(d))}</option>`).join('')}</select></label>`
+    + `<label>${t('fv.pmLevel')} <select data-pmi="q">${opSel ? `<option value="op">${esc(t('fv.pmLevelOp', { op: opSel }))}</option>` : ''}<option value="p25">${t('fv.pmP25')}</option><option value="p50" selected>${t('fv.pmP50')}</option><option value="p75">${t('fv.pmP75')}</option></select></label></div>`
+    + `<div class="fv-pm-out"></div><p class="fv-sub">${t('fv.pmNote', { phi: n1v(M.phi) })}</p>`;
+  if (opSel) { const o = box.querySelector('[data-pmi="q"]'); o.value = 'op'; st.q = 'op'; }
+  const paint = () => {
+    const out = box.querySelector('.fv-pm-out'), T = PM_CLS.includes(dayType(st.day, land, ctx.state.calendar || null)) ? dayType(st.day, land, ctx.state.calendar || null) : 'W';
+    const opKey = st.q === 'op' && opSel ? `${opSel}|${st.ty}` : null, hasOp = opKey && M.operators?.[opKey] != null;
+    const level = hasOp ? M.operators[opKey] : (M.types[st.ty]?.level?.[st.q === 'op' ? 'p50' : st.q] ?? 0) + (city ? M.city?.[city] ?? 0 : 0);
+    const rows = Array.from({ length: 24 }, (_, h) => ({ day: st.day, h, p: null, a: null, l: st.fleet * pmRate(M, st.ty, T, level, h), c: null }));
+    const tot = sum(rows.map(r => r.l)), pk = rows.reduce((b, r) => (r.l > b.l ? r : b), rows[0]);
+    out.innerHTML = `<div class="tiles">${tile(t('fv.pmTotal'), n0(tot), t('fv.pmTotalSub', { per: n1v(tot / Math.max(1, st.fleet)), T: t(`fv.dt.${T}`) }))}${tile(t('fv.kPeakD', { d: dayTxt(st.day) }), t('fv.kPeakV', { h: String(pk.h).padStart(2, '0'), h2: String((pk.h + 1) % 24).padStart(2, '0') }), t('fv.kPeakSubF', { v: n0(pk.l), u: '' }))}`
+      + `${tile(t('fv.pmLevelTile'), hasOp ? esc(opSel) : st.q === 'op' ? t('fv.pmP50') : t(`fv.pm${st.q.toUpperCase()}`), `${hasOp ? t('fv.pmLevelOpSub') : t('fv.pmLevelTypSub')}${city && !hasOp && M.city?.[city] != null ? ` · ${t('fv.pmCity', { c: esc(ctx.muniName?.(city) || city), f: sg(Math.exp(M.city[city]) - 1, 0) })}` : ''}${st.q === 'op' && !hasOp ? ` · ${t('fv.pmOpMissing', { op: esc(opSel) })}` : ''}`)}</div>`
+      + timeline(ctx, rows, { width: box.clientWidth - 20, blocks: [{ from: 0, to: 24, label: dayTxt(st.day) }] });
+  };
+  box.querySelectorAll('[data-pmi]').forEach(inp => inp.addEventListener(inp.tagName === 'INPUT' ? 'input' : 'change', () => { const k = inp.dataset.pmi; st[k] = k === 'fleet' ? Math.max(1, Math.min(100000, +inp.value || 1)) : inp.value; paint(); }));
+  box.querySelector('[data-pm="json"]').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(M, null, 1)], { type: 'application/json' })); a.download = `mobility-pulse-modell_${FAM}_${(M.trainedAt || '').slice(0, 10)}.json`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); });
+  box.querySelector('[data-pm="csv"]').addEventListener('click', () => download(`mobility-pulse-raten_${FAM}_${(M.trainedAt || '').slice(0, 10)}.csv`,
+    [[t('fv.pmColType'), t('fv.pmColDayType'), t('fv.colHour'), t('fv.pmColP25'), t('fv.pmColP50'), t('fv.pmColP75')],
+      ...types.flatMap(ty => PM_CLS.flatMap(T => Array.from({ length: 24 }, (_, h) => [tl[ty] || ty, t(`fv.dt.${T}`), h, ...['p25', 'p50', 'p75'].map(q => [pmRate(M, ty, T, M.types[ty].level[q], h), 4])])))]));
+  paint();
 }
 // ---------- Veranstaltungen: eine Liste aus sport.json (Heimspiele, OpenLigaDB), veranstaltungen.json (Termine an Orten ab 5.000 Plätzen) und
 // ereignisse.json (gepflegte Liste data/ereignisse.json, vom Sammler geprüft) – Zeitfenster wie in der Prognose (lib/pulse-context.js eventList) ----------
