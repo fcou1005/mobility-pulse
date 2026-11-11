@@ -1,18 +1,18 @@
-import * as C from './pulse-core.js?v=mwclnq6m';
-import * as Ops from './ops.js?v=mwclnq6m';
-import * as E from './pulse-econ.js?v=mwclnq6m';
-import * as K from './pulse-calib.js?v=mwclnq6m';
-import * as Rp from './report.js?v=mwclnq6m';
-import * as R from './pulse-report.js?v=mwclnq6m';
-import * as Fl from './flows.js?v=mwclnq6m';
-import * as Cov from './coverage.js?v=mwclnq6m';
-import * as Cmp from './compare.js?v=mwclnq6m';
-import * as Sp from './spots.js?v=mwclnq6m';
-import * as Fv from './forecast.js?v=mwclnq6m';
-import { mapKeys } from './mapkeys.js?v=mwclnq6m';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwclnq6m';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwclnq6m';
-import { idleClassText } from './pulse-ops.js?v=mwclnq6m';
+import * as C from './pulse-core.js?v=mwcm379k';
+import * as Ops from './ops.js?v=mwcm379k';
+import * as E from './pulse-econ.js?v=mwcm379k';
+import * as K from './pulse-calib.js?v=mwcm379k';
+import * as Rp from './report.js?v=mwcm379k';
+import * as R from './pulse-report.js?v=mwcm379k';
+import * as Fl from './flows.js?v=mwcm379k';
+import * as Cov from './coverage.js?v=mwcm379k';
+import * as Cmp from './compare.js?v=mwcm379k';
+import * as Sp from './spots.js?v=mwcm379k';
+import * as Fv from './forecast.js?v=mwcm379k';
+import { mapKeys } from './mapkeys.js?v=mwcm379k';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwcm379k';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwcm379k';
+import { idleClassText } from './pulse-ops.js?v=mwcm379k';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -530,7 +530,7 @@ const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals', 'prognose-basis'])
 let currentView = 'live', urlReady = false;
 const resolveView = (h) => { try { h = decodeURIComponent(h); } catch { /* Hash nicht dekodierbar: roh verwenden */ } let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 // Welche Filter der Leiste in welcher Ansicht wirken; die übrigen werden ausgeblendet (Disposition und Vergleich haben eigene Auswahl im Panel)
-const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
+const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op type', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
 let viewShown = false;
 function setView(name) {
   name = resolveView(name);
@@ -775,7 +775,7 @@ function dataHealth() {
   const eff = recs.map(effStatus);
   const by = {}; for (const e of eff) by[e.status] = (by[e.status] || 0) + 1;
   const counted = eff.filter((e, i) => { const r = recs[i]; return !NOT_COUNTED.has(e.status) && !(r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(e.status)); });
-  const fresh = counted.filter(e => e.status === 'live').length;
+  const fresh = counted.filter(e => e.status === 'live').length, delayed = counted.filter(e => e.status === 'delayed').length, stale = counted.filter(e => e.status === 'stale').length;
   const usable = counted.filter(e => USABLE.has(e.status)).length;
   const staleRun = !DEMO && !!state.latest && !(state.mode === 'live' && state.live) && Date.now() - state.latest.at > 45 * 60e3;
   const ratio = counted.length ? usable / counted.length : 0;
@@ -783,7 +783,7 @@ function dataHealth() {
   if (staleRun && level === 'ok') level = 'warn';
   const label = { ok: t('app.dataCoverageGood'), warn: t('app.dataCoverageLimited'), bad: t('app.dataCoverageWeak'), none: state.latest ? cl(t('app.noSourcesInArea'), t('app.noDataInArea')) : cl(t('app.noCollectorSnapshotYet'), t('app.noDataYet')) }[level];
   const detail = t('app.sourcesInAreaCurrentDataAge', { length: recs.length, v1: Object.entries(by).map(([k, v]) => `${v} ${STATUS[k] || k}`).join(' · '), v2: state.live ? ` · ${t('app.liveDuplicatesRemoved', { duplicates: state.live.dedupe.duplicates })}` : '' });
-  return { level, label, fresh, usable, counted: counted.length, staleRun, detail };
+  return { level, label, fresh, delayed, stale, usable, counted: counted.length, staleRun, detail };
 }
 // Namensnennung: Anbieter/Attribution und Lizenzen der Quellen im Gebiet (Vertrag 2), Verzeichnisse und BKG – kompakt für Karte und Fußzeile
 const LIC_SHORT = (l) => { if (!l) return null; const s = String(l); const m = s.match(/creativecommons\.org\/licenses\/([a-z-]+)\/(\d\.\d)/i); if (m) return `CC ${m[1].toUpperCase()} ${m[2]}`; if (/publicdomain\/zero|CC0/i.test(s)) return 'CC0'; if (/dl-de\/by-2-0|DL-DE.?BY.?2/i.test(s)) return 'dl-de/by-2-0'; if (/odbl/i.test(s)) return 'ODbL'; if (/^https?:/.test(s)) { try { return new URL(s).hostname.replace(/^www\./, ''); } catch { return s; } } return s.length > 24 ? `${s.slice(0, 22)}…` : s; };
@@ -844,7 +844,9 @@ function renderLive() {
     tile(t('app.disabled2'), fmt(st.disabled), `${st.total ? t('app.ofFleet', { disabled: pctf(st.disabled, st.total) }) : t('app.noVehicleData')}${ghostsInScope() ? ` · ${t('app.orphaned', { ghostsInScope: fmt(ghostsInScope()) })}` : ''}`, st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
     tile(t('app.stationsWithVehicles'), `${fmt(st.stationsRenting - st.stationsEmpty)} <small>/ ${fmt(st.stations)}</small>`, st.stations ? t('app.emptyFull', { stationsEmpty: fmt(st.stationsEmpty), v1: dockKnown ? ` ${t('app.docksZonesParen', { docks: fmt(st.stationsEmptyDock), zones: fmt(st.stationsEmptyVirtual) })}` : '', stationsFull: fmt(st.stationsFull) }) : t('app.noStationsInArea'), '', st.stations ? emptyTip(st) : ''),
     tile(t('app.lowEnergy'), energyVal(en), energySub(en), lowE > 0.3 ? 'warn' : ''),
-    tile(cl(t('app.sources2'), t('app.dataFreshness')), `${fmt(usable.length)} <small>/ ${fmt(recs.length)}</small>`, t('app.currentDelayedStale', { length: eff.filter(e => e.status === 'live').length, length2: eff.filter(e => e.status === 'delayed').length, length3: eff.filter(e => e.status === 'stale').length, v3: gaps ? ` · ${gaps} ${cl(gaps > 1 ? t('app.dataGaps') : t('app.dataGap'), t('app.operatorsWithoutData'))}` : '' }), recs.length && usable.length / recs.length < 0.7 ? 'warn' : '', gl('fresh')),
+    // ein Nenner mit der Kopfzeile (dataHealth: ohne Dubletten, verschwundene, Ausland), Farbe aus derselben Ampel (Audit UXM-08/DES-11)
+    (() => { const hh = dataHealth(), notCounted = recs.length - hh.counted;
+      return tile(cl(t('app.sources2'), t('app.dataFreshness')), `${fmt(hh.usable)} <small>/ ${fmt(hh.counted)}</small>`, t('app.currentDelayedStale', { length: hh.fresh, length2: hh.delayed, length3: hh.stale, v3: (gaps ? ` · ${gaps} ${cl(gaps > 1 ? t('app.dataGaps') : t('app.dataGap'), t('app.operatorsWithoutData'))}` : '') + (notCounted > 0 && !isClient() ? ` · ${t('app.sourcesNotCounted', { all: fmt(recs.length), n: fmt(notCounted) })}` : '') }), hh.level === 'bad' ? 'bad' : hh.level === 'warn' ? 'warn' : '', gl('fresh')); })(),
   ].join('');
   // Tabelle: „Δ Sammler“ nur, wenn es etwas zeigt (Live-Abruf mit Abweichung); Lizenzen stehen unter Datenvertrauen › Quellen
   const showDelta = rows.some(r => r.delta && r.delta.diff !== 0);
@@ -1129,7 +1131,7 @@ function renderLab() {
   const qual = recs.filter((r, i) => USABLE.has(eff[i].status) && Number.isFinite(r.quality)).map(r => r.quality);
   $('#lab-tiles').innerHTML = [
     tile(t('app.rangeBelowKm', { range: fmt(lim.range) }), st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : t('common.na'), st.rangeKnown ? t('app.ofWithRangeRegardlessOf', { lowRange: fmt(st.lowRange), rangeKnown: fmt(st.rangeKnown) }) : t('app.noRangeData')),
-    tile(t('app.labFreeDocks'), st.stations ? fmt(st.stationDocks) : '—', st.stations ? t('app.labFreeDocksSub', { n: fmt(st.stations), full: fmt(st.stationsFull) }) : t('app.noStationsInFilter')),
+    tile(t('app.labFreeDocks'), st.stations ? fmt(st.stationDocks) : '—', st.stations ? t('app.labFreeDocksSub', { n: fmt(st.stations), full: fmt(st.stationsFull) }) + (st.stationDocksBad ? ` · ${t('app.docksBad', { n: fmt(st.stationDocksBad) })}` : '') : t('app.noStationsInFilter')),
     tile(abbr(t('app.labDataAge'), 'fresh'), use.length ? ageText(use[Math.floor(use.length / 2)]) : '—', use.length ? t('app.labDataAgeSub', { n: fmt(use.length) }) : t('app.noSourcesInArea')),
     tile(t('app.labQuality'), qual.length ? fmt(qual.reduce((a, b) => a + b, 0) / qual.length) : '—', qual.length ? t('app.labQualitySub', { n: fmt(qual.length) }) : t('app.noSourcesInArea')),
   ].join('');
@@ -1156,11 +1158,11 @@ function renderCities() {
   const munis = state.latest?.municipalities || {};
   const src = new Map(Object.entries(state.latest?.groups || {})); // Gebietsvergleich immer aus dem Sammler-Stand (vollständig)
   const per = new Map();
-  for (const [k, s] of src) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || ags === 'unbekannt') continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const m = per.get(ags) || { ags, available: 0, ops: new Set(), scooter: 0, bikes: 0 }; m.available += s.available; m.ops.add(op); if (ty === 'scooter') m.scooter += s.available; else m.bikes += s.available; per.set(ags, m); }
+  for (const [k, s] of src) { const [ags, op, ty] = k.split('|'); if (ags === 'DE' || ags === 'unbekannt') continue; if (state.operator !== 'all' && op !== state.operator) continue; if (state.type !== 'all' && ty !== state.type) continue; const m = per.get(ags) || { ags, available: 0, ops: new Set(), scooter: 0, bikes: 0, other: 0 }; m.available += s.available; m.ops.add(op); if (ty === 'scooter') m.scooter += s.available; else if (ty === 'bike' || ty === 'ebike' || ty === 'cargo') m.bikes += s.available; else m.other += s.available; per.set(ags, m); } // Audit UXM-03: Autos und Roller nicht als Räder
   const sorted = [...per.values()].sort((a, b) => b.available - a.available), list = sorted.slice(0, 25);
   if (state.scope !== 'DE' && per.has(state.scope) && !list.includes(per.get(state.scope))) list.push(per.get(state.scope));
   $('#cities-title').textContent = state.scope === 'DE' ? t('app.cityAndAreaComparison') : t('app.areaComparisonInContext', { v0: muniName(state.scope) });
-  $('#tbl-cities tbody').innerHTML = list.map(m => { const mi = munis[m.ags]; const pop = mi?.pop; return `<tr${m.ags === state.scope ? ' style="font-weight:600"' : ''}><td><a href="#live" class="pick-muni" data-ags="${esc(m.ags)}">${esc(mi?.name || m.ags)}</a> <span class="muted">${esc(mi?.state || '')}</span></td><td class="n">${fmt(m.available)}</td><td class="n">${pop ? fmt((m.available / pop) * 1e4, 1) : '—'}</td><td class="n">${m.ops.size}</td><td class="n">${fmt(m.scooter)}</td><td class="n">${fmt(m.bikes)}</td></tr>`; }).join('') || emptyRow(6, t('app.noMunicipalitiesInFilter'), state.latest ? t('app.setOperatorOrVehicleTypeTo') : failedText('latest.json'));
+  $('#tbl-cities tbody').innerHTML = list.map(m => { const mi = munis[m.ags]; const pop = mi?.pop; return `<tr${m.ags === state.scope ? ' style="font-weight:600"' : ''}><td><a href="#live" class="pick-muni" data-ags="${esc(m.ags)}">${esc(mi?.name || m.ags)}</a> <span class="muted">${esc(mi?.state || '')}</span></td><td class="n">${fmt(m.available)}</td><td class="n">${pop ? fmt((m.available / pop) * 1e4, 1) : '—'}</td><td class="n">${m.ops.size}</td><td class="n">${fmt(m.scooter)}</td><td class="n">${fmt(m.bikes)}</td><td class="n">${fmt(m.other)}</td></tr>`; }).join('') || emptyRow(7, t('app.noMunicipalitiesInFilter'), state.latest ? t('app.setOperatorOrVehicleTypeTo') : failedText('latest.json'));
 }
 async function renderHistory() {
   const idx = state.histIndex; const box = $('#chart-hist');
@@ -1311,6 +1313,9 @@ function computeSignalsNow() {
   const recs = sourcesForScope().map(r => liveRec(r.id) || r);
   for (const r of recs) {
     if (r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(r.status)) continue;
+    // Audit UXM-04: Anbieter- und Art-Filter gelten auch für Quellen-Signale (vorher meldete „Voi · E-Scooter“ RegioRad als kritisch)
+    if (state.operator !== 'all' && r.operator !== state.operator) continue;
+    if (state.type !== 'all' && Array.isArray(r.vehicleTypes) && r.vehicleTypes.length && !r.vehicleTypes.includes(state.type)) continue;
     // Zustand statt Zahl: die Karte zeigt ein Zeichen, der Titel nennt den Zustand („Quelle: Fehler“)
     if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, n: null, icon: true, title: t('app.source2', { operator: r.operator, v1: STATUS[r.status] || r.status }), text: `${r.name || r.id}${r.feedAgeMs != null ? ` · ${t('app.feedOld', { v0: ageText(r.feedAgeMs) })}` : ''}${r.errors?.length ? ` · ${esc(tx(r.errors[0]))}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}` });
     if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.sourceChangeDetected', { operator: r.operator }), text: t('app.endpointVersionFeedsOr', { v0: r.name || r.id }), foot: t('app.fingerprint') });
@@ -1802,19 +1807,19 @@ async function renderEcon(day) {
   const rng = (v, d = 0, unit = '') => { if (v == null || !Number.isFinite(v)) return '—'; if (!prelim || v === 0) return `${fmt(v, d)}${unit}`; const f = (x) => x >= 100 ? fmt(sig2(x)) : fmt(x, d); return `${f(v * 0.7)}–${f(v * 1.3)}${unit}`; };
   const fu = (v, d = 0, unit = '') => (v == null || !Number.isFinite(v) ? '—' : `${v >= 1000 && d === 0 ? fmt(sig2(v)) : fmt(v, d)}${unit}`);
   // gemessen und kalibriert nebeneinander: Hauptwert nach Modus, der andere darunter; ohne Faktor wie bisher
-  const pair = (x, key, { d = 0, unit = '', scale = 1 } = {}) => {
+  const pair = (x, key, { d = 0, unit = '', scale = 1, mKey = 'app.measured', m2Key = 'app.measured2' } = {}) => {
     const g = (o2) => (o2?.[key] == null ? null : o2[key] * scale);
     const m = g(x.cm), c = g(x.cc), lo = g(x.lo), hi = g(x.hi);
     if (m == null || c == null || Math.abs(c - m) <= 1e-9 * Math.max(1, Math.abs(m))) return { main: rng(m, d, unit), sub: '' };
     const span = lo != null && hi != null && Math.abs(hi - lo) > 1e-9 ? `${fu(lo, d)}–${fu(hi, d, unit)}` : null;
-    return kal ? { main: fu(c, d, unit), sub: t('app.measured', { v0: span ? `${t('app.range', { span })} · ` : '', v1: rng(m, d, unit) }), lines: [span ? t('app.range', { span }) : null, t('app.measured2', { v0: rng(m, d, unit) })].filter(Boolean) } : { main: rng(m, d, unit), sub: t('app.calibrated', { v0: fu(c, d, unit) }), lines: [t('app.calibrated', { v0: fu(c, d, unit) })] };
+    return kal ? { main: fu(c, d, unit), sub: t(mKey, { v0: span ? `${t('app.range', { span })} · ` : '', v1: rng(m, d, unit) }), lines: [span ? t('app.range', { span }) : null, t(m2Key, { v0: rng(m, d, unit) })].filter(Boolean) } : { main: rng(m, d, unit), sub: t('app.calibrated', { v0: fu(c, d, unit) }), lines: [t('app.calibrated', { v0: fu(c, d, unit) })] };
   };
   // Tabellenzelle: Hauptwert, darunter Spanne und Vergleichswert je eine Zeile (schmale Spalten)
   const cell = (p, bold = false) => `${bold ? '<b>' : ''}${p.main}${bold ? '</b>' : ''}${(p.lines || []).map(l => `<div class="sub-line">${l}</div>`).join('')}`;
   const tsub = (p, base) => [p.sub, base, facTag].filter(Boolean).join(' · '); // Fahrten-Kacheln nennen, ob ein Faktor drin ist (B3)
   $('#econ-tiles').classList.toggle('prelim', prelim);
   // Einheiten mit geschütztem Leerzeichen: Spanne „a–b €“ bricht nie zwischen Zahl und Einheit
-  const pR = pair(T, 'ridesDay'), pV = pair(T, 'rvd', { d: 2 }), pU = pair(T, 'utilization', { d: 1, unit: ' %', scale: 100 }), pD = pair(T, 'revDay', { unit: ' €' }), pF = pair(T, 'revPerVehicleDay', { d: 2, unit: ' €' });
+  const pR = pair(T, 'ridesDay', { mKey: 'app.measuredDayFill', m2Key: 'app.measuredDayFill2' }), pV = pair(T, 'rvd', { d: 2 }), pU = pair(T, 'utilization', { d: 1, unit: ' %', scale: 100 }), pD = pair(T, 'revDay', { unit: ' €' }), pF = pair(T, 'revPerVehicleDay', { d: 2, unit: ' €' });
   // „Fahrten je Tag“ mit Basis (gewählter Tag, mit Faktor oder gemessen); der Kommunal-Bericht nennt dort „Ø n Tage“
   const run = runningDay(idx.days || []), dayLbl = `${day.slice(8)}.${day.slice(5, 7)}.`;
   $('#econ-tiles').innerHTML = tot ? [

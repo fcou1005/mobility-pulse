@@ -352,3 +352,9 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   const car = await run('car'), bike = await run('bicycle');
   assert(car.vehicleListPresent === false && car.vehicleListEmpty === true && bike.vehicleListPresent === true && !bike.vehicleListEmpty, 'leere Fahrzeugliste mit Autos an Stationen → Stationen zählen (deer); Räder unverändert');
 }
+// Audit UXM-13: Platzhalter-Platzzahlen (999.999 = unbegrenzt) und Werte über der Kapazität nicht summieren, sondern zählen
+{
+  const st = C.emptyStats();
+  C.addStation(st, { docksAvailable: 12, capacity: 20 }); C.addStation(st, { docksAvailable: 999999, isVirtual: true }); C.addStation(st, { docksAvailable: 40, capacity: 10 }); C.addStation(st, { docksAvailable: 0, capacity: 10 }); C.addStation(st, { docksAvailable: null });
+  assert(st.stationDocks === 12 && st.stationDocksBad === 2 && st.stationsFull === 1 && C.sumStats([st, st]).stationDocksBad === 4, 'freie Plätze: 999.999 und 40 bei Kapazität 10 nicht gezählt, als unplausibel gezählt');
+}

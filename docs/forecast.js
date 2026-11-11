@@ -7,16 +7,16 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mwclnq6m';
-import * as CX from './pulse-context.js?v=mwclnq6m';
-import * as SP from './pulse-spots.js?v=mwclnq6m';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwclnq6m';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwclnq6m';
-import { toCsv } from './pulse-report.js?v=mwclnq6m';
-import { dayType } from './pulse-econ.js?v=mwclnq6m';
-import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwclnq6m';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwclnq6m';
-import { mapKeys } from './mapkeys.js?v=mwclnq6m';
+import * as FC from './pulse-forecast.js?v=mwcm379k';
+import * as CX from './pulse-context.js?v=mwcm379k';
+import * as SP from './pulse-spots.js?v=mwcm379k';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwcm379k';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwcm379k';
+import { toCsv } from './pulse-report.js?v=mwcm379k';
+import { dayType } from './pulse-econ.js?v=mwcm379k';
+import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwcm379k';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwcm379k';
+import { mapKeys } from './mapkeys.js?v=mwcm379k';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -362,8 +362,7 @@ export function gradeOf(S0, sel, G, L) {
   const days = Object.keys(ev).sort().filter(d => mature(G, d)).slice(-win).filter(d => ev[d]?.models?.[act] && ev[d]?.models?.naive);
   const gm = (k) => (days.length ? { a: mean(days.map(d => ev[d].models[act][k])), b: mean(days.map(d => ev[d].models.naive[k])), n: days.length } : null);
   // ausgegebene Prognosen (Live-Abgleich, letzte 7 Tage): je Anbieter und Stunde gegen „wie gestern“ über dieselben Stunden
-  const lvRec = (L?.live || []).filter(x => x.wapeOpHn != null && x.naiveOpH != null && (L?.generatedAt ? Date.parse(L.generatedAt) - x.at <= 7 * 86400e3 : true));
-  const liveLv = lvRec.length ? { a: mean(lvRec.map(x => x.wapeOpHn)), b: mean(lvRec.map(x => x.naiveOpH)), n: lvRec.length, h: mean(lvRec.map(x => x.hours ?? 24)) } : null;
+  const liveLv = FC.liveSummary(L?.live, { now: L?.generatedAt ? Date.parse(L.generatedAt) : null }); // eine Quelle mit dem Bericht (Audit MET-08)
   // Audit UXP-07: live, gh und gd gelten für Deutschland gesamt; bei einer Auswahl (Gemeinde, Anbieter, Art) urteilt nur deren eigene Ebene
   const local = !(sel?.ags === 'DE' || !sel?.ags) || (sel?.op && sel.op !== 'all') || (sel?.ty && sel.ty !== 'all');
   const lv = [['live', liveLv], ['scope', scope], ['gh', gm('wapeGH')], ['gd', gm('wapeGD')]].filter(([, x]) => x && x.a != null && x.b != null).map(([k, x]) => ({ k, ...x, j: judge(x.a, x.b), nat: local && k !== 'scope' }));

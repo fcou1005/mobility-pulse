@@ -4,6 +4,8 @@
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
 import * as R from './pulse-report.js';
 import * as K from './pulse-calib.js';
+import { liveSummary } from './pulse-forecast.js';
+const FCL = { liveSummary };
 import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { decodeFleet } from './pulse-ops.js';
 import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js';
@@ -1460,12 +1462,14 @@ function drawRanking(el) {
     const ck = `${s.rq.cur}|${s.type}|${s.op}`; if (s.qcmpKey !== ck) { s.qcmp = { cur: A(s.rq.curDays), prev: A(s.rq.prevDays) }; s.qcmpKey = ck; } qcmp = s.qcmp;
     for (const r of rows) { const a = qcmp.cur.get(r.key), b = qcmp.prev.get(r.key); r.delta = a?.rvd != null && b?.rvd != null ? a.rvd - b.rvd : null; }
   }
-  rows = R.sortRows(rows, s.sort.key, s.sort.dir); s.rows = rows; s.rk = rk;
+  // Audit UXM-07: Namen auch für Gemeinden, die im aktuellen Stand fehlen (Grenzen-Datei); Zeilen ohne Messung ans Ende
+  for (const r of rows) if (!r.name || r.name === r.ags) r.name = ctx.muniName?.(r.ags) || r.ags;
+  rows = R.sortRows(rows, s.sort.key, s.sort.dir); rows = [...rows.filter(r => r.ridesDay > 0), ...rows.filter(r => !(r.ridesDay > 0))]; s.rows = rows; s.rk = rk;
   const qLab = (q) => R.periodRange(`q:${q}`).label;
   const cols = qcmp ? [...RK_COLS_DEF(), ['delta', t('rep.toPreviousQuarter'), true, 'desc', t('rep.perVehAndDayAgainstArchive', { v0: qLab(s.rq.cur), v1: qLab(s.rq.prev) })]] : rk.prev ? [...RK_COLS_DEF(), ['delta', t('rep.toPreviousPeriod'), true, 'desc', t('rep.perVehAndDayAgainst', { v0: dd(rk.prev.curFrom), v1: dd(rk.prev.curTo), v2: dd(rk.prev.from), v3: dd(rk.prev.to) })]] : RK_COLS_DEF();
   const show = rows.slice(0, s.limit);
   const body = show.map((r, i) => `<tr${r.ags === scope ? ' class="rp-sel" aria-current="true"' : ''}><td>${cityCell(ctx, r.ags, r.name, r.state)}${r.excluded.length ? `<div class="sub-line">${t('rep.tripsWithoutImplausible', { join: esc(r.excluded.join(', ')) })}</div>` : ''}</td><td>${esc(typeName(r.ty))}</td>
-    <td class="n">${fmt(r.fleet)}</td><td class="n">${r.ridesDay == null ? '—' : fmt(r.ridesDay)}</td><td class="n"><b>${r.rvd == null ? '—' : fmt(r.rvd, 2)}</b></td><td class="n">${r.per1000Fleet == null ? '—' : fmt(r.per1000Fleet, 1)}</td><td class="n">${r.per1000Rides == null ? '—' : fmt(r.per1000Rides, 1)}</td><td class="n">${r.opCount}</td>
+    <td class="n">${r.fleetGood != null && Math.abs(r.fleetGood - r.fleet) >= 0.5 ? `${fmt(r.fleetGood)}<div class="sub-line">${t('rep.fleetAll', { v: fmt(r.fleet) })}</div>` : fmt(r.fleet)}</td><td class="n">${r.ridesDay > 0 ? fmt(r.ridesDay) : `<span class="muted">${r.ridesDay == null ? '—' : t('rep.noMeasure')}</span>`}</td><td class="n"><b>${r.rvd == null || !(r.ridesDay > 0) ? '—' : fmt(r.rvd, 2)}</b></td><td class="n">${r.per1000Fleet == null ? '—' : fmt(r.per1000Fleet, 1)}</td><td class="n">${r.per1000Rides == null ? '—' : fmt(r.per1000Rides, 1)}</td><td class="n">${r.opCount}</td>
     ${qcmp || rk.prev ? `<td class="n">${r.delta == null ? '—' : `${r.delta > 0 ? '+' : ''}${fmt(r.delta, 2)}`}</td>` : ''}</tr>`).join('');
   const note = `<div class="note small" style="margin-bottom:var(--s3)">${t('rep.typeOfRankingAsInFluctuo', { v0: rk.prelim ? `${t('rep.preliminaryOnlyFull', { fullDays: rk.fullDays, profileSource: esc(tx(rk.profileSource)) })} ` : '', v1: qcmp ? t('rep.previousPeriodAgainstFrom', { qLab: esc(qLab(s.rq.cur)), qLab2: esc(qLab(s.rq.prev)) }) : rk.reason ? t('rep.columnHiddenQuarter', { reason: esc(tx(rk.reason)) }) : t('rep.previousPeriodDaysEach', { n: rk.prev.n }) })}</div>`;
   el.innerHTML = title(`<div class="rp-ctl rp-noprint"><button type="button" data-rp="rkcsv">↓ CSV</button></div>`) + filterCtl(ctx, s, { minLabel: t('rep.minimumFleet2') }) + note
@@ -1681,7 +1685,8 @@ export async function renderForecast(el, ctx) {
     const series = ags ? fc.municipalities?.[ags] : fc.totals, local = fc.horizon.local;
     const pct = (v) => (v == null ? '–' : `${fmt(v * 100, 0)} %`);
     // Live-Abgleich: Mittel der letzten bewerteten Prognosen
-    const live = (fc.live || []).slice(-6), avg = (k) => { const v = live.map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    // gleiche Rechnung wie Prognose › Verlauf (lib/pulse-forecast.js liveSummary, Audit MET-08): Modell und „wie gestern“ über dieselben Stunden, 7 Tage
+    const ls = FCL.liveSummary(fc.live, { now: fc.generatedAt ? Date.parse(fc.generatedAt) : null });
     const ev = lg?.evals || {}, evDays = Object.keys(ev).sort().slice(-(G.evalWindow || 7));
     const evAvg = (m) => { const v = evDays.map(d => ev[d]?.models?.[m]?.wapeGD).filter(x => x != null); return v.length >= minEval ? v.reduce((a, b) => a + b, 0) / v.length : null; };
     const wg = fc.weather?.gate || {};
@@ -1689,7 +1694,7 @@ export async function renderForecast(el, ctx) {
     const scopeTxt = ags ? esc(ctx.muniName?.(ags) || state.latest?.municipalities?.[ags]?.name || ags) : t('fc.scopeDE');
     const tiles = `<div class="tiles">`
       + tile(t('fc.expected'), series ? fmt(series.reduce((a, b) => a + b, 0), 0) : '—', t('fc.expectedSub', { time, scope: scopeTxt }))
-      + tile(t('fc.liveError'), avg('wapeOpH') == null ? '—' : pct(avg('wapeOpH')), live.length ? t('fc.liveErrorSub', { n: live.length, naive: pct(avg('naiveOpH')), skill: avg('skill') == null ? '–' : pct(avg('skill')) }) : t('fc.liveNone'))
+      + tile(t('fc.liveError'), ls ? pct(ls.a) : '—', ls ? t('fc.liveErrorSub', { n: ls.n, naive: pct(ls.b), skill: ls.skill == null ? '–' : pct(ls.skill) }) : t('fc.liveNone'))
       + tile(t('fc.backtest'), evAvg(fc.active || 'pooled') == null ? '—' : pct(evAvg(fc.active || 'pooled')), evAvg('pooled') == null ? t('fc.backtestNone') : t('fc.backtestSub', { n: evDays.length, profile: pct(evAvg('profile')), pooled: pct(evAvg('pooled')) }))
       + tile(t('fc.weather'), fc.weather?.used ? t('fc.weatherOn') : t('fc.weatherOff'), t('fc.weatherSub', { k: fmt(wg.tempRangeK ?? 0, 1), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, kmin: G.wxTempRangeK ?? 5, dmin: G.wxRainDays ?? 2 }))
       + `</div>`;
@@ -1770,7 +1775,7 @@ export function mbChecksText(c) {
   if (!c) return '';
   const T0 = { pickup: () => t('mb.ck.pickup', { share: mbPct(c.pickupShare), r: mbNum(c.r, 2) }), se: () => t('mb.ck.se', { v: mbNum(c.se, 2) }), swap0: () => t('mb.ck.swap0', { rides: mbNum(c.rides) }),
     hide: () => t('mb.ck.hide', { share: mbPct(c.hideShare) }), idle: () => t('mb.ck.idle', { share: mbPct(c.idleUnusable) }), batteryFloor: () => t('mb.ck.floor', { v: mbNum(c.batteryFloor) }),
-    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
+    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }), relHigh: () => t('mb.ck.relHigh', { f: mbNum(c.relHigh, 1), m: mbNum(c.relMedian, 2) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
   return (c.flags || []).map(f => (T0[f] ? T0[f]() : f)).join(' · ');
 }
 export const mbLevel = (lv) => (lv === 'bad' ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${t('mb.red')}</span>` : lv === 'warn' ? `<span class="rp-status near"><i aria-hidden="true">!</i>${t('mb.yellow')}</span>` : `<span class="rp-status ok"><i aria-hidden="true">✓</i>${t('mb.green')}</span>`);

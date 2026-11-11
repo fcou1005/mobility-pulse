@@ -11,10 +11,10 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mwclnq6m';
-import { hourOf, dayOf } from './pulse-track.js?v=mwclnq6m';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwclnq6m';
-import { familyOf, FAMILIES } from './pulse-core.js?v=mwclnq6m';
+import * as E from './pulse-econ.js?v=mwcm379k';
+import { hourOf, dayOf } from './pulse-track.js?v=mwcm379k';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwcm379k';
+import { familyOf, FAMILIES } from './pulse-core.js?v=mwcm379k';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 // Je Fahrzeugfamilie ein eigenes Modell (seit 08.11.2026): micro (E-Scooter, Räder, Lastenräder, Sonstige) wie bisher in forecast/, E-Roller in
@@ -714,6 +714,17 @@ export function actualOfDay(d, { hourMin = GATES.hourMinObserved } = {}) {
  * Werte desselben Tagtyps (sonst 'mean'). Stunden, die nie beobachtet wurden: Mittel der beobachteten Stunden der Gruppe.
  */
 export const EXPOSURE = { mode: 'last', n: 3 };
+/**
+ * Abweichung ausgegebener Prognosen (Live-Abgleich) für Ansicht und Bericht aus einer Quelle (Audit MET-08): je Anbieter und Stunde
+ * wapeOpHn gegen naiveOpH über dieselben Stunden, Mittel der Prognosen der letzten `days` Tage (Bezug: now oder jüngste Prognose).
+ * Rückgabe { a, b, ratio, skill, n, h, targetDays } oder null.
+ */
+export function liveSummary(live = [], { days = 7, now = null } = {}) {
+  const list = (live || []).filter(x => x && x.wapeOpHn != null && x.naiveOpH != null), ref = now ?? Math.max(0, ...list.map(x => x.at || 0));
+  const rec = list.filter(x => !ref || !x.at || ref - x.at <= days * 86400e3); if (!rec.length) return null;
+  const mean = (f) => rec.reduce((s, x) => s + f(x), 0) / rec.length, a = mean(x => x.wapeOpHn), b = mean(x => x.naiveOpH);
+  return { a, b, ratio: b > 0 ? a / b : null, skill: b > 0 ? 1 - a / b : null, n: rec.length, h: mean(x => x.hours ?? 24), targetDays: new Set(rec.map(x => dayOf(x.from ?? x.at))).size };
+}
 export function lastExposure(days, beforeIdx = days.length, { target = null, mode = EXPOSURE.mode } = {}) {
   const hist = new Map(), byClass = target && (mode === 'class' || mode === 'classMean'), multi = mode === 'mean' || mode === 'classMean';
   for (let di = 0; di < Math.min(beforeIdx, days.length); di++) { const d = days[di];

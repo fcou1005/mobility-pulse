@@ -362,8 +362,7 @@ export function gradeOf(S0, sel, G, L) {
   const days = Object.keys(ev).sort().filter(d => mature(G, d)).slice(-win).filter(d => ev[d]?.models?.[act] && ev[d]?.models?.naive);
   const gm = (k) => (days.length ? { a: mean(days.map(d => ev[d].models[act][k])), b: mean(days.map(d => ev[d].models.naive[k])), n: days.length } : null);
   // ausgegebene Prognosen (Live-Abgleich, letzte 7 Tage): je Anbieter und Stunde gegen „wie gestern“ über dieselben Stunden
-  const lvRec = (L?.live || []).filter(x => x.wapeOpHn != null && x.naiveOpH != null && (L?.generatedAt ? Date.parse(L.generatedAt) - x.at <= 7 * 86400e3 : true));
-  const liveLv = lvRec.length ? { a: mean(lvRec.map(x => x.wapeOpHn)), b: mean(lvRec.map(x => x.naiveOpH)), n: lvRec.length, h: mean(lvRec.map(x => x.hours ?? 24)) } : null;
+  const liveLv = FC.liveSummary(L?.live, { now: L?.generatedAt ? Date.parse(L.generatedAt) : null }); // eine Quelle mit dem Bericht (Audit MET-08)
   // Audit UXP-07: live, gh und gd gelten für Deutschland gesamt; bei einer Auswahl (Gemeinde, Anbieter, Art) urteilt nur deren eigene Ebene
   const local = !(sel?.ags === 'DE' || !sel?.ags) || (sel?.op && sel.op !== 'all') || (sel?.ty && sel.ty !== 'all');
   const lv = [['live', liveLv], ['scope', scope], ['gh', gm('wapeGH')], ['gd', gm('wapeGD')]].filter(([, x]) => x && x.a != null && x.b != null).map(([k, x]) => ({ k, ...x, j: judge(x.a, x.b), nat: local && k !== 'scope' }));

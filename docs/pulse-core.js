@@ -844,7 +844,7 @@ export function emptyStats() {
   return { total: 0, available: 0, reserved: 0, disabled: 0, batteryKnown: 0, lowBattery: 0, rangeKnown: 0, lowRange: 0, stationVehicles: 0, geoStation: 0, posStale: 0,
     stations: 0, stationsInstalled: 0, stationsRenting: 0, stationsEmpty: 0, stationsFull: 0, stationPhysical: 0, stationBookable: 0, stationDocks: 0,
     stationsEmptyReported: 0, stationsEmptyNearby: 0, stationsEmptyOtherNearby: 0,
-    stationsVirtual: 0, stationsEmptyVirtual: 0, stationsEmptyDock: 0 }; // virtuelle Stationen (Abstellzonen) getrennt: leer ohne Fahrzeug ≠ leere Dockstation
+    stationsVirtual: 0, stationsEmptyVirtual: 0, stationsEmptyDock: 0, stationDocksBad: 0 }; // virtuelle Stationen (Abstellzonen) getrennt: leer ohne Fahrzeug ≠ leere Dockstation
 }
 export function addVehicle(st, v, { chargeThreshold = 20, rangeThreshold = 5 } = {}) {
   st.total++;
@@ -856,12 +856,15 @@ export function addVehicle(st, v, { chargeThreshold = 20, rangeThreshold = 5 } =
   if (v.geoOrigin === 'station') st.geoStation++;
   if (v.positionAgeMs != null && v.positionAgeMs > DELAYED_MS) st.posStale++;
 }
+export const DOCKS_MAX = 500; // mehr freie Plätze an einer Station gibt es nicht (größte Dockstationen ≈ 100)
 export function addStation(st, s, countVehicles) {
   st.stations++;
   if (s.installed !== false) st.stationsInstalled++;
   if (s.installed !== false && s.renting !== false) st.stationsRenting++;
   const phys = s.physicalAvailable ?? 0;
-  st.stationPhysical += phys; st.stationBookable += s.bookable ?? 0; st.stationDocks += s.docksAvailable ?? 0;
+  st.stationPhysical += phys; st.stationBookable += s.bookable ?? 0;
+  // Audit UXM-13: Platzhalter wie 999.999 freie Plätze (unbegrenzte Rückgabe) nicht summieren; über der Kapazität oder > DOCKS_MAX = unplausibel
+  const dk = s.docksAvailable; if (dk > 0 && (dk > DOCKS_MAX || (s.capacity > 0 && dk > s.capacity + 2))) st.stationDocksBad = (st.stationDocksBad || 0) + 1; else st.stationDocks += dk ?? 0;
   if (s.isVirtual === true) st.stationsVirtual++;
   if (s.installed !== false && s.renting !== false && (s.bookable ?? 0) === 0) {
     // als leer gemeldet – aber stehen frei abgestellte Fahrzeuge desselben Anbieters direkt daneben, ist die Station faktisch versorgt

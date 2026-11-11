@@ -367,6 +367,13 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
     && !G['A|Tiny|bike'] && !G['DE|Lime|scooter'] && ec.day === '2026-11-02' && ec.rules.pickupBad === 0.2,
     'eventChecks: Abholung im Takt der Fahrten rot, S/E 0,5 gelb, 0 Tausche bei ≥ 300 Fahrten, Quellenfelder (batteryFloor, idleUnusable) und hide tolerant gelesen, kleine Gruppen ausgelassen');
   assert([...E.ampelRed(ec)].join() === 'A|Lime|scooter' && E.ampelRed(null).size === 0 && E.eventChecks(null) === null, 'ampelRed: nur rote Gruppen');
+  { // Audit MET-12: relative Prüfung – Gruppe > 3 × Median desselben Anbieters und derselben Art wird gelb (nie rot), mit Faktor
+    const g = (st, fleet) => ({ start: H24(() => st), end: H24(() => st), vminTot: H24(() => fleet * 60), vmin: H24(() => fleet * 60) });
+    const er = E.eventChecks({ day: '2026-11-02', runs: day.runs, groups: { 'K|nb|bike': g(30, 100), 'B|nb|bike': g(6, 100), 'M|nb|bike': g(5, 120), 'L|nb|bike': g(4, 50), 'X|nb|bike': g(30, 10) } });
+    const k = er.groups['K|nb|bike'];
+    assert(k?.level === 'warn' && k.checks.flags.includes('relHigh') && k.checks.relHigh > 3 && !er.groups['B|nb|bike']?.checks?.flags?.includes('relHigh') && !er.groups['X|nb|bike']?.checks?.flags?.includes('relHigh') && !E.ampelRed(er).size,
+      `MET-12: nextbike-artige Überzählung (${k?.checks?.relHigh} × Median) gelb markiert; kleine Flotte (< 20) nicht bewertet; nichts rot`);
+  }
   // Regelstand des ausgewerteten Tags (Teil vor „@“): rot schließt nur aus, wenn er dem aktuellen entspricht; älterer oder gemischter Tag = gelb mit Hinweis
   const evR = (rules) => ({ ...ev, runs: ev.runs.map((r, i) => (rules[i % rules.length] ? [r[0], r[1], 1, rules[i % rules.length]] : [r[0], r[1], 1])) });
   const ecOld = E.eventChecks(evR(['2026-11-01b@x']), [], E.EVENT_CHECKS, { ruleNow: '2026-11-02a' }), ecMix = E.eventChecks(evR(['2026-11-02a@y', '']), [], E.EVENT_CHECKS, { ruleNow: '2026-11-02a' });

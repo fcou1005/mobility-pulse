@@ -699,3 +699,12 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
     && scopeGroups({ scope: '08416041', operator: 'all', type: 'bike' }, null, G, L).rows.length === 0,
   'Prognose je Stadt/Anbieter: Gruppen gefiltert (Stadt, Anbieter, Art), nach erwarteten Fahrten sortiert, Treffer und Lernanteil je Gruppe, bundesweit gekappt');
 }
+// Audit MET-08: eine Quelle für die Live-Abweichung (Ansicht und Bericht), Modell und „wie gestern“ über dieselben Stunden, 7 Tage
+{
+  const now = Date.parse('2026-11-11T20:00:00Z'), d = 86400e3;
+  const live = [{ at: now - 9 * d, from: now - 9 * d, wapeOpH: 0.1, wapeOpHn: 0.9, naiveOpH: 0.9 }, { at: now - d, from: now - d + 3600e3, wapeOpH: 0.15, wapeOpHn: 0.2, naiveOpH: 0.3, hours: 22 },
+    { at: now - 2 * 3600e3, from: now - 3600e3, wapeOpH: 0.1, wapeOpHn: 0.2, naiveOpH: 0.34 }, { at: now - 3600e3, wapeOpH: 0.1 }];
+  const ls = F.liveSummary(live, { now });
+  assert(ls.n === 2 && Math.abs(ls.a - 0.2) < 1e-9 && Math.abs(ls.b - 0.32) < 1e-9 && Math.abs(ls.ratio - 0.625) < 1e-9 && ls.h === 23 && ls.targetDays === 2 && F.liveSummary([], { now }) === null && F.liveSummary(live).n === 2,
+    'liveSummary: wapeOpHn gegen naiveOpH, nur letzte 7 Tage, Einträge ohne Vergleich übersprungen; ohne now Bezug = jüngste Prognose');
+}

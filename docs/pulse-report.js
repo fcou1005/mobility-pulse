@@ -1,9 +1,9 @@
 // Mobility Pulse — Kommunal-Bericht, Obergrenzen-Wächter, Wochen-Heatmap, Preis-Log und Feed-Prüfung.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: events/<Tag>.json (Stundenwerte, Läufe),
 // history/<Tag>.json (Bestand je Lauf), cells/<Tag>/<Land>.json (Zellen), latest.json, reference.json.
-import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mwclnq6m';
-import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mwclnq6m';
-import { hourMinutes, TYPE_RANGE_LOW_KM } from './pulse-core.js?v=mwclnq6m';
+import { GAP_MS, CELL_LAT, CELL_LON, CELL_MIN } from './pulse-track.js?v=mwcm379k';
+import { DEFAULT_PROFILE, DEFAULTS } from './pulse-econ.js?v=mwcm379k';
+import { hourMinutes, TYPE_RANGE_LOW_KM } from './pulse-core.js?v=mwcm379k';
 export { CELL_LAT, CELL_LON };
 
 export const TZ = 'Europe/Berlin';
@@ -746,7 +746,7 @@ export function cityRankingArchive(archive, latest, { fields = ARCHIVE_FIELDS, t
     const [ags, , ty] = k.split('|'); const fleet = a.fl.length ? sum(a.fl) / a.fl.length : 0; const rd = a.cov > 0 ? a.rides / a.cov : null; const ok = !(rd != null && fleet > 0 && (rd / fleet > DEFAULTS.maxRvd || overLimit(rd / fleet, ty, rvdLimit))) && !ampelRed.has(k);
     const r = by.get(`${ags}|${ty}`) || { ags, ty, fleet: 0, fleetGood: 0, ridesDay: 0, has: false }; r.fleet += fleet; if (ok) { r.fleetGood += fleet; if (rd != null) { r.ridesDay += rd; r.has = true; } } by.set(`${ags}|${ty}`, r);
   }
-  return { days: list, rows: [...by.values()].map(r => ({ key: `${r.ags}|${r.ty}`, ags: r.ags, ty: r.ty, name: latest?.municipalities?.[r.ags]?.name || r.ags, fleet: r.fleet, ridesDay: r.has ? r.ridesDay : null, rvd: r.has && r.fleetGood > 0 ? r.ridesDay / r.fleetGood : null })) };
+  return { days: list, rows: [...by.values()].map(r => ({ key: `${r.ags}|${r.ty}`, ags: r.ags, ty: r.ty, name: latest?.municipalities?.[r.ags]?.name || r.ags, fleet: r.fleet, fleetGood: r.fleetGood, ridesDay: r.has ? r.ridesDay : null, rvd: r.has && r.fleetGood > 0 ? r.ridesDay / r.fleetGood : null })) };
 }
 /** Vorquartal für die Rangliste: die zwei jüngsten vollständigen Quartale, wenn sie aufeinanderfolgen; sonst null */
 export function rankingQuarters(days) {
@@ -1047,7 +1047,7 @@ export function cityRanking(docs, hists, latest, { type = 'all', operator = 'all
   const rows = [...by.values()].filter(r => r.fleet >= minFleet).map(r => {
     const m = latest?.municipalities?.[r.ags] || {}; const pop = m.pop || null;
     const ridesDay = r.hasRides ? r.ridesDay : null;
-    return { key: `${r.ags}|${r.ty}`, ags: r.ags, name: m.name || r.ags, state: m.state || null, ty: r.ty, fleet: r.fleet, rides: r.rides, ridesDay,
+    return { key: `${r.ags}|${r.ty}`, ags: r.ags, name: m.name || r.ags, state: m.state || null, ty: r.ty, fleet: r.fleet, fleetGood: r.fleetGood, rides: r.rides, ridesDay,
       rvd: ridesDay != null && r.fleetGood > 0 ? ridesDay / r.fleetGood : null, per1000Fleet: pop ? (r.fleet / pop) * 1000 : null, per1000Rides: pop && ridesDay != null ? (ridesDay / pop) * 1000 : null,
       opCount: r.ops.size, excluded: r.excluded, pop, areaKm2: Number.isFinite(+m.areaKm2) && +m.areaKm2 > 0 ? +m.areaKm2 : null };
   });
