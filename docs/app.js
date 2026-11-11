@@ -1,18 +1,18 @@
-import * as C from './pulse-core.js?v=mwcn3q7d';
-import * as Ops from './ops.js?v=mwcn3q7d';
-import * as E from './pulse-econ.js?v=mwcn3q7d';
-import * as K from './pulse-calib.js?v=mwcn3q7d';
-import * as Rp from './report.js?v=mwcn3q7d';
-import * as R from './pulse-report.js?v=mwcn3q7d';
-import * as Fl from './flows.js?v=mwcn3q7d';
-import * as Cov from './coverage.js?v=mwcn3q7d';
-import * as Cmp from './compare.js?v=mwcn3q7d';
-import * as Sp from './spots.js?v=mwcn3q7d';
-import * as Fv from './forecast.js?v=mwcn3q7d';
-import { mapKeys } from './mapkeys.js?v=mwcn3q7d';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwcn3q7d';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwcn3q7d';
-import { idleClassText } from './pulse-ops.js?v=mwcn3q7d';
+import * as C from './pulse-core.js?v=mwcn9wk8';
+import * as Ops from './ops.js?v=mwcn9wk8';
+import * as E from './pulse-econ.js?v=mwcn9wk8';
+import * as K from './pulse-calib.js?v=mwcn9wk8';
+import * as Rp from './report.js?v=mwcn9wk8';
+import * as R from './pulse-report.js?v=mwcn9wk8';
+import * as Fl from './flows.js?v=mwcn9wk8';
+import * as Cov from './coverage.js?v=mwcn9wk8';
+import * as Cmp from './compare.js?v=mwcn9wk8';
+import * as Sp from './spots.js?v=mwcn9wk8';
+import * as Fv from './forecast.js?v=mwcn9wk8';
+import { mapKeys } from './mapkeys.js?v=mwcn9wk8';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwcn9wk8';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwcn9wk8';
+import { idleClassText } from './pulse-ops.js?v=mwcn9wk8';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -253,6 +253,7 @@ function loadBoundaries(land = state.scope !== 'DE' ? scopeState() : null) {
   return bLands.get(land);
 }
 const hasCenters = () => Object.values(state.latest?.municipalities || {}).some(m => Array.isArray(m.c));
+const FC_dayOfNow = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 async function loadHistory(day) {
   if (state.hist[day]) return state.hist[day];
   const r = await cached(`history/${day}.json`, 60000);
@@ -1724,7 +1725,9 @@ async function econProfile(day) {
 // Je Gruppe: m = gemessen (Ø Fahrt aus der Kalibrierung: E-Scooter Berliner Quartalswerte, sonst Annahme), cal = × Faktor (pulse-calib factorFor:
 // eigene Korrektur übersteuert, sonst k für E-Scooter), lo/hi = Spanne des Faktors; die Gruppe selbst trägt die Werte des gewählten Modus.
 async function econGroups(day, keep) {
-  const [doc, pricing, hist, prof, calib] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), loadHistory(day), econProfile(day), getCalib()]);
+  // Audit OPS-04: für abgeschlossene Tage reicht das Tagesmittel aus history/daily.json (Ø Bestand als Rückfall), statt je Tag history/<Tag>.json (3–5 MB)
+  const histDay = async (d) => { if (d < FC_dayOfNow()) { const dl = await loadDaily(); const h = dl ? R.histFromDaily(dl, d) : null; if (h) return h; } return loadHistory(d); };
+  const [doc, pricing, hist, prof, calib] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), histDay(day), econProfile(day), getCalib()]);
   if (!doc) return null;
   // Fahrzeugminuten nur nutzen, wenn alle Läufe des Tages sie gezählt haben (Umstellungstag: Ø Bestand aus dem Verlauf)
   // Stunden ohne Messung oder mit Lücken-Lauf (> 45 Min. Pause, Flag 0) fallen aus Beobachtungszeit, Fahrten und Fahrzeugminuten: keine Hochrechnung aus Lücken
