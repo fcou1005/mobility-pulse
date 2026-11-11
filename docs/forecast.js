@@ -7,15 +7,15 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mwchnuax';
-import * as CX from './pulse-context.js?v=mwchnuax';
-import * as SP from './pulse-spots.js?v=mwchnuax';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwchnuax';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwchnuax';
-import { toCsv } from './pulse-report.js?v=mwchnuax';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mwchnuax';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwchnuax';
-import { mapKeys } from './mapkeys.js?v=mwchnuax';
+import * as FC from './pulse-forecast.js?v=mwcichl2';
+import * as CX from './pulse-context.js?v=mwcichl2';
+import * as SP from './pulse-spots.js?v=mwcichl2';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwcichl2';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwcichl2';
+import { toCsv } from './pulse-report.js?v=mwcichl2';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mwcichl2';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwcichl2';
+import { mapKeys } from './mapkeys.js?v=mwcichl2';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -79,6 +79,8 @@ ${WX_CSS}
 .fv-st.ok i{background:var(--ok)}.fv-st.near i{background:var(--warn)}.fv-st.none i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
 .fv-bar{display:inline-block;height:9px;border-radius:3px;background:var(--accent);vertical-align:middle;min-width:2px}
 .fv-bar.n{background:var(--muted);opacity:.7}
+.fv-split{display:inline-block;width:72px;height:9px;border-radius:3px;background:color-mix(in srgb,var(--info) 35%,transparent);vertical-align:middle;overflow:hidden}
+.fv-split i{display:block;height:100%;background:var(--accent)}
 .fv-tbl td.bars{min-width:150px}.fv-tbl td.bars span.t{display:inline-block;min-width:3.6em;text-align:right;margin-right:6px;font-variant-numeric:tabular-nums}
 .fv-chip{display:inline-flex;align-items:center;gap:4px;padding:0 8px;border-radius:999px;border:1px solid var(--line-2);font-size:11.5px;line-height:19px;white-space:nowrap}
 .fv-chip.A{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,transparent);font-weight:600}
@@ -237,7 +239,7 @@ function learnPanel(ctx, L, G) {
     : L.status === 'learning' ? badge('near', '!', ctx.esc(t('fv.stLearning', { n: L.evalDays || 0, min: minE }))) : badge('none', '–', ctx.esc(t('fv.stInsufficient', { n: L.trainDays || 0, min: minT })));
   const need = Math.max(0, minE - (L.evalDays || 0)), until = L.status === 'learning' && need > 0 && L.generatedAt ? dayTxt(addDays(L.generatedAt.slice(0, 10), need), { day: 'numeric', month: 'long' }) : null;
   const wxOn = L.weather?.used;
-  return `<div class="panel">${head(t('fv.learnTitle'), t('fv.learnSub'))}<p style="margin:0">${status}</p>${until ? `<p class="fv-sub">${t('fv.activeFrom', { date: ctx.esc(until) })}</p>` : ''}`
+  return `<div class="panel">${head(t('fv.learnTitle'), t('fv.learnSub'), allTag(ctx))}<p style="margin:0">${status}</p>${until ? `<p class="fv-sub">${t('fv.activeFrom', { date: ctx.esc(until) })}</p>` : ''}`
     + `<ul class="fv-gates">${row(t('fv.gTrain'), L.trainDays || 0, minT, '', t('fv.gTrainSub'))}${row(t('fv.gEval'), L.evalDays || 0, minE, '', t('fv.gEvalSub'))}${row(t('fv.gTemp'), wg.tempRangeK || 0, wk, 'K', t('fv.gTempSub'))}${row(t('fv.gRain'), Math.min(wg.rainDays || 0, wg.dryDays || 0), wd, '', `${t('fv.gRainSub', { rain: wg.rainDays || 0, dry: wg.dryDays || 0 })}`)}</ul>`
     + `<p class="fv-sub">${wxOn ? t('fv.wxOn') : t('fv.wxOff')}</p></div>`;
 }
@@ -288,6 +290,61 @@ function accuracyPanel(ctx, S0, sel, G, L) {
   const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}${bandFreq(live)}</div>` : '';
   return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}${decisionHtml(ctx, L, G)}</div>`;
 }
+
+// ---------- Gewähltes Gebiet bzw. Anbieter (11.11.2026): je Gruppe Erwartung, Trefferbilanz und woraus die Prognose lernt ----------
+// Grundlage: latest.groups (nächste 24 h), log.feedback (Selbstprüfung je Gruppe, ältere Tage verblassen: Starts, |Fehler| eigenes Profil bzw.
+// gepooltes Modell), series.json (Plan gegen Ist nur für Gruppen mit eigener Stundenreihe). Modell und Lernstand gelten für alle Gruppen gemeinsam.
+const XP = { much: 300, enough: 30 }; // Fahrtbeginne in der Selbstprüfung: viel eigene Erfahrung / genug für ein eigenes Urteil
+const allTag = (ctx) => { const st = ctx.state || {}; return (st.scope && st.scope !== 'DE') || (st.operator && st.operator !== 'all') ? `<span class="fv-chip D" title="${ctx.esc(t('fv.scAllTagTip'))}">${t('fv.scAllTag')}</span>` : ''; };
+export function scopeGroups(st, S0, G, L, { maxDE = 25 } = {}) {
+  const ags = st?.scope || 'DE', op = st?.operator || 'all', ty = st?.type || 'all';
+  if (ags === 'DE' && op === 'all') return null;
+  const fb = G?.feedback?.groups || {}, keys = new Set([...Object.keys(L?.groups || {}), ...Object.keys(fb)]);
+  const fit = (k) => { const [a, o, y] = k.split('|'); return (ags === 'DE' || a === ags) && (op === 'all' || o === op) && (ty === 'all' || y === ty); };
+  const fbw = FC.feedbackWeights(G?.feedback), mean = (a) => (a.length ? sum(a) / a.length : null);
+  const rows = [...keys].filter(fit).map(k => {
+    const s = fb[k], g = L?.groups?.[k], y = s ? s[0] : 0;
+    const ser = S0 ? accRows(S0, { keys: [`g:${k}`] }, G).filter(r => r.naive != null) : [];
+    return { k, exp: g ? sum(g.start) : null, perVeh: g?.perVeh ?? null, y, eP: y > 0 ? s[3] / y : null, eQ: y > 0 ? s[4] / y : null, w: s ? fbw.of(k).w : null,
+      plan: ser.length ? { a: mean(ser.map(r => r.wape)), b: mean(ser.map(r => r.naive)), n: ser.length } : null };
+  }).sort((a, b) => (b.exp ?? -1) - (a.exp ?? -1) || b.y - a.y);
+  return { ags, op, ty, rows: ags === 'DE' ? rows.slice(0, maxDE) : rows, more: ags === 'DE' ? Math.max(0, rows.length - maxDE) : 0, w0: fbw.w0 };
+}
+const xpChip = (y) => (y >= XP.much ? `<span class="fv-chip A">${t('fv.scXpMuch')}</span>` : y >= XP.enough ? `<span class="fv-chip B">${t('fv.scXpOk')}</span>` : `<span class="fv-chip D">${t('fv.scXpLow')}</span>`);
+const splitBar = (w) => `<span class="fv-split" role="img" aria-label="${t('fv.scSplitAria', { own: pc(w), all: pc(1 - w) })}"><i style="width:${Math.round(w * 100)}%"></i></span>`;
+function activeHow(L) {
+  const m = L?.active, name = m ? modelName(m) : '–';
+  const k = m === 'hybrid' ? 'fv.scHowHybrid' : m === 'adaptive' ? 'fv.scHowAdaptive' : m === 'profile' ? 'fv.scHowProfile' : m === 'blend' ? 'fv.scHowBlend' : m ? 'fv.scHowPooled' : 'fv.scHowNone';
+  return t(k, { model: name, k: FC.HYBRID?.k ?? 20 });
+}
+function scopePanel(ctx, S0, sel, G, L) {
+  const R = scopeGroups(ctx.state, S0, G, L); if (!R) return '';
+  const esc = ctx.esc, tl = tMap('type', VEHICLE_TYPE_LABEL), city = R.ags !== 'DE' ? (ctx.muniName?.(R.ags) || R.ags) : null;
+  const title = city ? (R.op !== 'all' ? t('fv.scTitleCityOp', { city: esc(city), op: esc(R.op) }) : t('fv.scTitleCity', { city: esc(city) })) : t('fv.scTitleOp', { op: esc(R.op) });
+  if (!R.rows.length) return `<div class="panel" id="fv-scope">${head(title, t('fv.scSub'))}<div class="empty"><b>${t('fv.scNone')}</b>${t('fv.scNoneHint')}</div></div>`;
+  const judged = R.rows.filter(r => r.y >= XP.enough), own = judged.filter(r => r.w >= 0.6).length, pool = judged.filter(r => r.w <= 0.4).length;
+  // Plan gegen Ist für die Auswahl als Ganzes (Stundenreihe des Gebiets bzw. Anbieters, sofern gespeichert)
+  const sr = accRows(S0, sel, G).filter(r => r.naive != null), mean = (a) => (a.length ? sum(a) / a.length : null);
+  const area = sr.length ? { a: mean(sr.map(r => r.wape)), b: mean(sr.map(r => r.naive)), n: sr.length } : null;
+  const parts = [[own, 'fv.scPartOwn'], [pool, 'fv.scPartPool'], [judged.length - own - pool, 'fv.scPartMix']].filter(([c]) => c > 0).map(([c, k]) => t(k, { n: n0(c) }));
+  const lead = (R.rows.length === 1 ? t('fv.scLead1', { xp: t(judged.length ? 'fv.scLead1Ok' : 'fv.scLead1Low') }) : t('fv.scLead', { n: n0(R.rows.length), x: n0(judged.length) }))
+    + (parts.length ? ' ' + t('fv.scLearnLead', { parts: parts.join(', ') }) : '') + ' ' + (area ? t('fv.scArea', { s: esc(((x) => x.charAt(0).toUpperCase() + x.slice(1))(String(scopeLabel(ctx, sel)))), a: pc(area.a), b: pc(area.b), n: area.n, v: t(judge(area.a, area.b) === 'better' ? 'fv.gBetter' : judge(area.a, area.b) === 'worse' ? 'fv.gWorse' : 'fv.gEqual') }) : t('fv.scAreaNone'));
+  const label = (k) => { const [a, o, y] = k.split('|'); return city ? `${esc(o)} · ${esc(tl[y] || y)}` : `${esc(ctx.muniName?.(a) || a)} · ${esc(tl[y] || y)}`; };
+  // Gruppen ohne eigene Prognose und mit kaum gezählten Fahrten: eine Zeile statt Tabellenzeilen voller Striche
+  const quiet = R.rows.filter(r => r.exp == null && r.y < XP.enough), shown = R.rows.filter(r => !quiet.includes(r));
+  const better = (r) => (r.eP == null || r.eQ == null || r.y < XP.enough ? '' : ` ${jChipTxt(Math.abs(r.eP - r.eQ) <= 0.05 * r.eQ ? 'eq' : r.eP < r.eQ ? 'own' : 'all')}`);
+  const rows = shown.map(r => `<tr><td class="wrap">${label(r.k)}</td>`
+    + `<td class="n">${r.exp == null ? '–' : n0(r.exp)}${r.perVeh != null ? `<div class="sub-line">${t('fv.scPerVeh', { v: n1(r.perVeh) })}</div>` : ''}</td>`
+    + `<td class="n mh">${n0(r.y)}<div class="sub-line">${xpChip(r.y)}</div></td>`
+    + `<td class="n mh">${r.y >= XP.enough ? `${pc(r.eP)} · ${pc(r.eQ)}${better(r)}` : '–'}</td>`
+    + `<td>${r.w == null ? `<span class="muted">${t('fv.scLearnAll', { w: pc(R.w0) })}</span>` : `${splitBar(r.w)} <span class="fv-sub" style="display:inline">${t('fv.scOwnPct', { w: pc(r.w) })}</span>${r.y < XP.enough ? `<div class="sub-line">${t('fv.scLearnShrunk')}</div>` : ''}`}</td>`
+    + `<td class="n">${r.plan ? `${pc(r.plan.a)} · ${pc(r.plan.b)} ${jChip(judge(r.plan.a, r.plan.b))}` : '<span class="muted">–</span>'}</td></tr>`).join('');
+  const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>${city ? t('fv.scColGroup') : t('fv.scColGroupCity')}</th><th class="n">${t('fv.scColExp')}</th><th class="n mh">${t('fv.scColXp')}</th><th class="n mh">${t('fv.scColHit')}</th><th>${t('fv.scColLearn')}</th><th class="n">${t('fv.scColPlan')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const quietHtml = quiet.length ? `<div class="fv-sub">${t('fv.scQuiet', { n: n0(quiet.length), ok: XP.enough, list: quiet.map(r => label(r.k)).join(', ') })}</div>` : '';
+  return `<div class="panel" id="fv-scope">${head(title, t('fv.scSub'))}<p class="fv-lead" style="margin-top:var(--s2)">${lead}</p>${shown.length ? tbl : ''}${quietHtml}`
+    + `${R.more ? `<div class="fv-sub">${t('fv.scMore', { n: n0(R.more) })}</div>` : ''}<div class="fv-sub">${esc(activeHow(L))}</div><div class="fv-sub">${t('fv.scHowCols', { much: XP.much, ok: XP.enough })}</div></div>`;
+}
+const jChipTxt = (k) => `<span class="fv-chip${k === 'own' ? ' A' : k === 'all' ? ' B' : ' D'}">${t(`fv.scBetter.${k}`)}</span>`;
 
 // ---------- Zeugnis: wie gut ist die Prognose, besser als „wie gestern“? ----------
 const judge = (a, b) => (a == null || b == null ? null : Math.abs(a - b) <= 0.05 * b ? 'eq' : a < b ? 'better' : 'worse');
@@ -392,7 +449,7 @@ function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));
   const raceHtml = race.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.raceTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.raceTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.colScore')}</th><th class="n mh">${t('fv.colGD')}</th><th class="n mh">${t('fv.colGH')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n mh">${t('fv.colCover')}</th><th class="n mh">${t('fv.colDays')}</th></tr></thead><tbody>${race.map(r => `<tr><td>${ctx.esc(modelName(r.m))}${r.m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}${r.m !== 'naive' && r.sc.v === best ? ` <span class="fv-chip A">${t('fv.bestTag')}</span>` : ''}</td><td class="n bars"><span class="t">${pc(r.sc.v)}</span><span class="fv-bar${r.m === 'naive' ? ' n' : ''}" style="width:${Math.round(r.sc.v / maxS * 110)}px"></span></td><td class="n mh">${pc(r.gd?.v)}</td><td class="n mh">${pc(r.gh?.v)}</td><td class="n mh">${sg(r.bias?.v, 1)}</td><td class="n mh">${pc(r.cov?.v)}</td><td class="n mh">${r.sc.n}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.raceNote')}</div>` : '';
   const svg = curveSvg(ctx, G, L, width), trend = curveTrend(ctx, G, L);
-  return `<div class="panel" id="fv-curve">${head(t('fv.curveTitle'), t('fv.curveSub'))}${trend ? `<p class="fv-lead" style="margin-top:var(--s2)">${trend}</p>` : ''}${svg}${raceHtml}${partsHtml(ctx, G, L)}${learnedHtml(ctx, L)}${envHtml(ctx, L)}</div>`;
+  return `<div class="panel" id="fv-curve">${head(t('fv.curveTitle'), t('fv.curveSub'), allTag(ctx))}${trend ? `<p class="fv-lead" style="margin-top:var(--s2)">${trend}</p>` : ''}${svg}${raceHtml}${partsHtml(ctx, G, L)}${learnedHtml(ctx, L)}${envHtml(ctx, L)}</div>`;
 }
 
 // ---------- Algorithmus herunterladen: Steckbrief (Markdown, aus den aktuellen Daten) und Quellcode der Engine ----------
@@ -615,7 +672,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   const notes = [sel.partial ? t('fv.nPartial') : '', sel.ignored ? t('fv.nIgnored') : '', S0.generatedAt ? t('fv.asOf', { time: dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) }) : ''].filter(Boolean).join(' ');
   const accRowsNow = accRows(S0, sel, G);
   el.innerHTML = topBar(ctx, sel, noSeries ? '' : `${csvBtn('series', t('fv.csvSeries'))}${accRowsNow.length ? csvBtn('days', t('fv.csvDays')) : ''}`)
-    + `<div class="fv-grid">${gradePanel(ctx, S0, sel, G, L)}`
+    + `<div class="fv-grid">${gradePanel(ctx, S0, sel, G, L)}${scopePanel(ctx, S0, sel, G, L)}`
     + `<div class="panel">${head(title, t('fv.chartSub'), `<span class="fv-scope">${t('fv.scope')}: <b>${esc(scopeTxt)}</b></span>`)}${lead || ''}`
     + `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.dayAria'))}">${segs.map(([v, l]) => `<button data-v="${esc(v)}" aria-pressed="${v === view}">${esc(l)}</button>`).join('')}</div></div>`
     + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span>${rows.some(r => r.c != null) ? `<span title="${esc(t('fv.chronosTip'))}"><i class="k-c"></i>${t('fv.chronos')}</span>` : ''}</div>${timeline(ctx, rows, { nowIdx: view === 'ahead' ? nowIdx : null, width: el.clientWidth - 40, blocks })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${esc(notes)}</div>${dataTable}`) + '</div>'

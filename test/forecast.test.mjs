@@ -683,3 +683,19 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const day = tot[hourIx(13)], night = tot[hourIx(3)], rat = day / Math.max(night, 1e-6);
   assert(rC.latest.trainDays >= 2 && rat > 2.5 && rat < 10 && Object.keys(rA.latest.groups).some(k => k.endsWith('|car')), `Carsharing-Modell: eigener Tagesgang (13 Uhr ÷ 3 Uhr = ${rat.toFixed(1)}, wahr 5)`);
 }
+
+// ---------- Prognose-Ansicht: Gruppen der gewählten Stadt bzw. des Anbieters (11.11.2026)
+{
+  const { scopeGroups } = await import('../docs/forecast.js') /* gebaute Fassung: importiert lib/ als ./pulse-*.js */;
+  const fbRow = (y, eP, eQ) => [y, 0, 0, eP * y, eQ * y];
+  const G = { feedback: { groups: { '08416041|Voi|scooter': fbRow(3200, 0.37, 0.34), '08416041|Bolt|scooter': fbRow(2400, 0.34, 0.36), '08416041|Dott|scooter': fbRow(1, 0.5, 0.5), '08111000|Voi|scooter': fbRow(16000, 0.24, 0.24) } } };
+  const L = { groups: { '08416041|Voi|scooter': { start: [300, 288], perVeh: 2.9 }, '08416041|Bolt|scooter': { start: [200, 216], perVeh: 2.8 }, '08111000|Voi|scooter': { start: [3054], perVeh: 2.2 } } };
+  const tue = scopeGroups({ scope: '08416041', operator: 'all', type: 'all' }, null, G, L);
+  const voi = scopeGroups({ scope: 'DE', operator: 'Voi', type: 'all' }, null, G, L, { maxDE: 1 });
+  assert(scopeGroups({ scope: 'DE', operator: 'all' }, null, G, L) === null
+    && tue.rows.map(r => r.k.split('|')[1]).join() === 'Voi,Bolt,Dott' && tue.rows[0].exp === 588 && Math.abs(tue.rows[0].eP - 0.37) < 1e-9 && tue.rows[2].exp === null && tue.rows[2].y === 1
+    && tue.rows.every(r => r.w > 0 && r.w < 1)
+    && voi.rows.length === 1 && voi.rows[0].k === '08111000|Voi|scooter' && voi.more === 1
+    && scopeGroups({ scope: '08416041', operator: 'all', type: 'bike' }, null, G, L).rows.length === 0,
+  'Prognose je Stadt/Anbieter: Gruppen gefiltert (Stadt, Anbieter, Art), nach erwarteten Fahrten sortiert, Treffer und Lernanteil je Gruppe, bundesweit gekappt');
+}
