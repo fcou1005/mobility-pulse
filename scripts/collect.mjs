@@ -809,6 +809,23 @@ async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true
   }
 }
 
+// Baustellen und Sperrungen in Städten (lib/pulse-context.js WORKS_SOURCES: MobiData BW, Hamburg, München; dl-de/by-2.0): einmal je Ortsstunde,
+// frische Vollsperrungen je Gemeinde → incidents/<Tag>.json ags[].works. Nur gesammelt (nicht in CTX_KEYS), keine Wirkung auf die Prognose.
+// WORKS=0 = aus (Fixture-Test).
+if (process.env.WORKS !== '0' && index) {
+  try {
+    const docs = await incidentDocs([T.dayOf(now)]), doc = docs.get(T.dayOf(now)), last = Date.parse(doc.sources?.works?.at || 0);
+    if (!(Number.isFinite(last) && T.dayOf(last) === T.dayOf(now) && T.hourOf(last) === T.hourOf(now))) {
+      const stats = {}, items = [];
+      await Promise.all(CX.WORKS_SOURCES.map(async (src) => { const r = await fetchJson(src.url, { retry: 0 }); if (!r.ok) { stats[src.id] = { error: r.error || `HTTP ${r.status}` }; return; } const w = CX.worksItems(src, r.json, now); stats[src.id] = w.stat; items.push(...w.items); }));
+      const n = CX.addWorks(docs, items, (lat, lon) => C.assignMunicipality(index, lat, lon)?.ags ?? null, now);
+      doc.sources.works = { at: new Date(now).toISOString(), items: items.length, src: stats };
+      await writeIncidents(docs);
+      log(`Baustellen (Städte): ${Object.entries(stats).map(([k, v]) => `${k} ${v.error ? `Fehler (${v.error})` : `${v.fresh}/${v.closed} frische Vollsperrungen von ${v.features}`}`).join(', ')} · ${n} Gemeinden`);
+    }
+  } catch (e) { log(`Baustellen: ${e.message} – übersprungen`); }
+}
+
 // Momentaufnahmen (nur Zugangs-Quellen)
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
@@ -1552,6 +1569,7 @@ if (boundaries) {
     '- Veranstaltungsorte und Termine (`veranstaltungen.json`): Orte mit Kapazität aus Wikidata (CC0 1.0); Termine (Name, Beginn, Ort, Link) aus den öffentlichen Programmseiten und Kalendern der Orte (Quelle je Termin verlinkt; `data/veranstaltungskalender.json`), höchstens 60 Tage behalten.',
     '- Sport-Ereignisse (`sport.json`: Heimspiele 1.–3. Liga mit Anstoßzeit, daraus Veranstaltungen je Stadion-Gemeinde): Spielpläne aus OpenLigaDB (https://www.openligadb.de), Open Database License 1.0 (ODbL); `sport.json` steht unter der ODbL 1.0.',
     '- Prognose (`forecast/latest.json`, `forecast/log.json`, `forecast/series.json`; E-Roller und Carsharing je mit eigenem Modell in `forecast/moped/` und `forecast/car/`): abgeleitet aus den Ereignissen dieses Datenstands, dem Tagtyp-Kalender, dem Wetter-Cache und den Umgebungsereignissen; statistisches Modell des Projekts, keine Betreiberdaten.',
+    '- Baustellen in Städten (`incidents/<Tag>.json` → `works`, nur Zahl frischer Vollsperrungen je Gemeinde und Stunde): MobiData BW (Baustellen BEMaS), Freie und Hansestadt Hamburg (Behörde für Verkehr und Mobilitätswende), Landeshauptstadt München; jeweils Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2.0).',
     '- Trainingsarchiv (`train/<Jahr>/<Tag>.json.gz`, `train-cells/<Jahr>/<Jahr>-W<KW>.json.gz`, `weather-fc/<Tag>.json`): dauerhafte Ablage der oben genannten Tagesdaten (Stundenwerte je Gemeinde, Anbieter und Fahrzeugart; Wochensummen der veröffentlichten Zellen; Wetter samt der ausgegebenen Vorhersage), abgeleitet aus denselben Quellen und unter denselben Bedingungen weiterzugeben (Namensnennung; bei CC-BY-SA-Quellen Weitergabe unter gleichen Bedingungen; Kalender ODbL). Keine Fahrzeugkennungen, keine Fahrzeugkoordinaten; Gruppen mit 1–2 Fahrtbeginnen am Tag nur als Tagessumme.',
     '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
     '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',

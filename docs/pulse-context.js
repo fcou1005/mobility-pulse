@@ -12,7 +12,7 @@
 //            Zehntausenden Fans anders wirken als Hallenkonzerte (seit 08.11.2026; ab aktivAb in data/sport-spielorte.json)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mwcnkbxw';
+import { hourOf, dayOf } from './pulse-track.js?v=mwcnuuuq';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport']; // neue Merkmale nur hinten anfügen (Gedächtnis, lib/pulse-forecast.js memoryResize)
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -418,4 +418,65 @@ export function eventEffect(days, key, e) {
   if (!n || !(plan > 0)) return null;
   const rel = ist / plan - 1, rest = nR >= 4 && pR > 0 ? iR / pR - 1 : null;
   return { ist: Math.round(ist), plan: Math.round(plan), hours: n, rel, rest, uplift: rest == null ? rel : (1 + rel) / (1 + rest) - 1 };
+}
+
+// ---------- Baustellen und Sperrungen in Städten (Merkmal „works“, nur gesammelt) ----------
+// Offene Quellen ohne Konto (Recherche 11.11.2026): MobiData BW (Bundes-, Landes-, Kreisstraßen in BW, WGS84), Hamburg (WFS, EPSG:25832),
+// München (WFS, 4 Wochen, EPSG:25832), alle dl-de/by-2.0. Gezählt werden nur Vollsperrungen, die vor höchstens WORKS.freshDays Tagen begonnen
+// haben (Dauerbaustellen sind je Gemeinde konstant und für das Modell wertlos, vgl. ROAD_FRESH). Eintrag in incidents/<Tag>.json → ags[].works
+// (Zahl je Ortsstunde). Nicht in CTX_KEYS: wirkt nicht auf die Prognose, liegt im Trainingsarchiv (Lernphase bis 28.11.2026).
+export const WORKS = { freshDays: 7, maxPerAgs: 9 };
+export const WORKS_SOURCES = [
+  { id: 'mobidata_bw', name: 'MobiData BW (Baustellen BEMaS)', url: 'https://api.mobidata-bw.de/datasets/traffic/roadworks/roadworks_geojson.json', license: 'dl-de/by-2.0',
+    closed: (p) => p?.type === 'ROAD_CLOSED', start: (p) => p?.starttime, end: (p) => p?.endtime },
+  { id: 'hamburg', name: 'Freie und Hansestadt Hamburg, Behörde für Verkehr und Mobilitätswende (Baustellen)', url: 'https://geodienste.hamburg.de/hh_wfs_baustellen?service=WFS&version=2.0.0&request=GetFeature&typeNames=de.hh.up:baustelle&outputFormat=application/geo%2Bjson', license: 'dl-de/by-2.0',
+    closed: (p) => /vollsperr/i.test(Object.values(p || {}).filter(v => typeof v === 'string').join(' ')), start: (p) => p?.baubeginn, end: (p) => p?.bauende },
+  { id: 'muenchen', name: 'Landeshauptstadt München (Baustellen, 4 Wochen)', url: 'https://geoportal.muenchen.de/geoserver/mor_wfs/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=mor_wfs:baustellen_opendata&outputFormat=application/json', license: 'dl-de/by-2.0',
+    closed: (p) => /vollsperr/i.test(String(p?.beeintraechtigung ?? '')) || /vollsperr/i.test(String(p?.beeintraechtigung_text ?? '')), start: (p) => p?.beginn_datum_kombiniert ?? p?.beginn_datum, end: (p) => p?.ende_datum_kombiniert ?? p?.ende_datum },
+];
+/** Datum aus ISO, „TT.MM.JJJJ [hh:mm]“ oder Millisekunden → ms (ohne Uhrzeit: Ortsmitternacht) oder NaN */
+export function parseWhen(v) {
+  if (v == null || v === '') return NaN; if (typeof v === 'number') return v > 1e11 ? v : NaN;
+  const s = String(v).trim(), de = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2}))?/);
+  if (de) return berlinUtc(`${de[3]}-${de[2].padStart(2, '0')}-${de[1].padStart(2, '0')}`, +(de[4] || 0), +(de[5] || 0));
+  if (/^\d{4}-\d{2}-\d{2}Z?$/.test(s)) return berlinUtc(s.slice(0, 10), 0, 0);
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) return berlinUtc(s.slice(0, 10), +s.slice(11, 13), +s.slice(14, 16));
+  return Date.parse(s);
+}
+/** ETRS89/UTM Zone 32N (EPSG:25832) → [lon, lat] (WGS84, Abweichung < 1 m) */
+export function utm32ToLonLat(E, N) {
+  const a = 6378137, f = 1 / 298.257222101, k0 = 0.9996, e2 = f * (2 - f), ep2 = e2 / (1 - e2), lon0 = 9 * Math.PI / 180;
+  const x = E - 500000, M = N / k0, mu = M / (a * (1 - e2 / 4 - 3 * e2 ** 2 / 64 - 5 * e2 ** 3 / 256)), e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const p1 = mu + (3 * e1 / 2 - 27 * e1 ** 3 / 32) * Math.sin(2 * mu) + (21 * e1 ** 2 / 16 - 55 * e1 ** 4 / 32) * Math.sin(4 * mu) + (151 * e1 ** 3 / 96) * Math.sin(6 * mu) + (1097 * e1 ** 4 / 512) * Math.sin(8 * mu);
+  const C1 = ep2 * Math.cos(p1) ** 2, T1 = Math.tan(p1) ** 2, N1 = a / Math.sqrt(1 - e2 * Math.sin(p1) ** 2), R1 = a * (1 - e2) / (1 - e2 * Math.sin(p1) ** 2) ** 1.5, D = x / (N1 * k0);
+  const lat = p1 - (N1 * Math.tan(p1) / R1) * (D ** 2 / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 ** 2 - 9 * ep2) * D ** 4 / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 ** 2 - 252 * ep2 - 3 * C1 ** 2) * D ** 6 / 720);
+  const lon = lon0 + (D - (1 + 2 * T1 + C1) * D ** 3 / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 ** 2 + 8 * ep2 + 24 * T1 ** 2) * D ** 5 / 120) / Math.cos(p1);
+  return [lon * 180 / Math.PI, lat * 180 / Math.PI];
+}
+/** Bezugspunkt einer Geometrie (mittlerer Stützpunkt bzw. Mittel des Rings) als [lon, lat]; UTM-Koordinaten werden umgerechnet */
+export function geomPoint(g) {
+  if (!g?.coordinates) return null; let pts = [];
+  const flat = (c) => (typeof c[0] === 'number' ? [c] : c.flatMap(flat));
+  if (g.type === 'Point') pts = [g.coordinates]; else if (g.type === 'LineString' || g.type === 'MultiPoint') pts = [g.coordinates[Math.floor(g.coordinates.length / 2)]];
+  else if (g.type === 'Polygon' || g.type === 'MultiLineString') pts = flat(g.coordinates[0] || []); else if (g.type === 'MultiPolygon') pts = flat(g.coordinates[0]?.[0] || []);
+  pts = pts.filter(p => Number.isFinite(+p?.[0]) && Number.isFinite(+p?.[1])); if (!pts.length) return null;
+  const x = pts.reduce((s, p) => s + +p[0], 0) / pts.length, y = pts.reduce((s, p) => s + +p[1], 0) / pts.length;
+  return Math.abs(x) > 1000 ? utm32ToLonLat(x, y) : [x, y];
+}
+/** GeoJSON einer Quelle → frische, laufende Vollsperrungen [{ lon, lat }] und Zählung */
+export function worksItems(src, geojson, now, { freshDays = WORKS.freshDays } = {}) {
+  const out = [], stat = { features: 0, closed: 0, active: 0, fresh: 0 };
+  for (const f of Array.isArray(geojson?.features) ? geojson.features : []) {
+    stat.features++; const p = f?.properties || {}; if (!src.closed(p)) continue; stat.closed++;
+    const s = parseWhen(src.start(p)), e = parseWhen(src.end(p)); if (!Number.isFinite(s) || s > now || (Number.isFinite(e) && e < now)) continue; stat.active++;
+    if (now - s > freshDays * 86400e3) continue; const pt = geomPoint(f.geometry); if (!pt) continue; stat.fresh++; out.push({ lon: pt[0], lat: pt[1] });
+  }
+  return { items: out, stat };
+}
+/** Zur aktuellen Ortsstunde eintragen: Zahl frischer Vollsperrungen je Gemeinde (höchstens WORKS.maxPerAgs) */
+export function addWorks(docs, items, locate, now) {
+  const day = dayOf(now), h = hourOf(now); let doc = docs.get(day); if (!doc) docs.set(day, doc = emptyIncidentDoc(day));
+  const by = new Map(); for (const it of items || []) { const ags = locate(it.lat, it.lon); if (ags) by.set(ags, (by.get(ags) || 0) + 1); }
+  for (const [ags, n] of by) slot(doc, ags, 'works')[h] = Math.min(WORKS.maxPerAgs, n);
+  return by.size;
 }

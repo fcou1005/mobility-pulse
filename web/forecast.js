@@ -502,7 +502,7 @@ function paramRows(L) {
 }
 const NOT_KEYS = ['nTrain', 'nStrike', 'nEvents', 'nRoad', 'nOp', 'nZones'];
 // Stand je Einfluss (11.11.2026): erfasst = wird je Tag gesammelt (eingriffe.json, train/), wirkt aber noch nicht; teilweise = nur ein Teil abgedeckt; fehlt = keine offene Quelle
-const NOT_STATE = { nTrain: 'none', nStrike: 'part', nEvents: 'part', nRoad: 'none', nOp: 'done', nZones: 'done' };
+const NOT_STATE = { nTrain: 'none', nStrike: 'part', nEvents: 'part', nRoad: 'part', nOp: 'done', nZones: 'done' };
 export function steckbrief(ctx, S0, L, G, sel) {
   const g = gradeOf(S0, sel, G, L), scopeTxt = scopeLabel(ctx, sel), gates = { ...FC.GATES, ...(L?.gates || {}) }, now = dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: TZ }).format(new Date());
   const strip = (h) => String(h).replace(/<[^>]+>/g, '');

@@ -62,8 +62,9 @@ und Stunde je Fahrzeugart, Tagtyp und Stunde (zurückhaltend, typisch, stark). M
 
 - „Verfügbar“ heißt fahrbereit und nicht reserviert. Mit der Gesamtflotte (inklusive gesperrter Fahrzeuge) gerechnet, fällt die Prognose zu
   hoch aus.
-- Das Modell kennt nur, was in offenen Daten sichtbar ist. Preisaktionen, Zonenänderungen, ÖPNV-Störungen und Baustellen fehlen (siehe
-  *Nicht berücksichtigt* in der Ansicht).
+- Das Modell kennt nur, was in offenen Daten sichtbar ist. Preisaktionen, ÖPNV-Störungen und Baustellen in der Stadt wirken nicht.
+  Zonenänderungen und Eingriffe der Anbieter werden seit 11.11.2026 erkannt (`forecast/eingriffe.json`), Vollsperrungen in BW, Hamburg und
+  München gesammelt; beides fließt noch nicht ins Modell (siehe *Nicht berücksichtigt* in der Ansicht).
 - Bis zum 28.11.2026 läuft eine Lernphase: Veranstaltungen, Volksfeste und Heimspiele werden gesammelt, wirken aber noch nicht.
 - Fahrten werden aus wechselnden Fahrzeugstandorten abgeleitet. Bei Anbietern mit rotierenden Kennungen ist die Zählung unsicher; das
   Niveau eines solchen Anbieters ist mit Vorsicht zu lesen.

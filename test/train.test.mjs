@@ -91,3 +91,20 @@ assert(cw.week === '2026-W44' && cw.days.join() === '2026-10-31,2026-11-01' && b
   assert(d.pf.join() === 'startP,vminP' && d.gp['A|Voi|scooter'][0][9] === 6 && d.gp['A|Voi|scooter'][1][9] === 1500 && d.gp['B|X|bike'][0] === 2 && d.obsP[9] === 15 && !('gp' in TR.trainDoc({ events: { day: '2026-11-10', groups: {} } })),
     'Archiv: startP/vminP je Gruppe (kleine Gruppe nur Tagessumme), obsP; ohne Zusatzfelder kein gp');
 }
+// Baustellen in Städten (works): nur gesammelt, nicht in CTX_KEYS
+{
+  const CX = await import('../lib/pulse-context.js'), now = Date.parse('2026-11-11T10:00:00Z');
+  const [bw, hh, mu] = CX.WORKS_SOURCES;
+  const gBW = { features: [{ geometry: { type: 'LineString', coordinates: [[9.17, 48.77], [9.18, 48.78], [9.19, 48.79]] }, properties: { type: 'ROAD_CLOSED', starttime: '2026-11-09T06:00:00.000+01:00', endtime: '2026-11-20T18:00:00.000+01:00' } },
+    { geometry: { type: 'LineString', coordinates: [[9, 48], [9.1, 48.1]] }, properties: { type: 'ROAD_CLOSED', starttime: '2025-02-19T00:00:00.000+01:00', endtime: '2030-08-31T23:59:00.000+02:00' } },
+    { geometry: { type: 'LineString', coordinates: [[9, 48], [9.1, 48.1]] }, properties: { type: 'CONSTRUCTION', starttime: '2026-11-10T00:00:00.000+01:00', endtime: '2026-11-30T00:00:00.000+01:00' } }] };
+  const wb = CX.worksItems(bw, gBW, now);
+  assert(wb.items.length === 1 && Math.abs(wb.items[0].lat - 48.78) < 1e-9 && wb.stat.closed === 2 && wb.stat.active === 2 && wb.stat.fresh === 1, 'MobiData BW: nur frische Vollsperrung (Dauerbaustelle seit 2025 und Teilsperrung nicht)');
+  const wh = CX.worksItems(hh, { features: [{ geometry: { type: 'Point', coordinates: [566000, 5934000] }, properties: { umfang: 'Vollsperrung', baubeginn: '06.11.2026 07:00', bauende: '30.11.2026' } }] }, now);
+  const wm = CX.worksItems(mu, { features: [{ geometry: { type: 'Polygon', coordinates: [[[691600, 5334750], [691620, 5334770], [691600, 5334770], [691600, 5334750]]] }, properties: { beeintraechtigung: 'Vollsperre', beginn_datum_kombiniert: '2026-11-10', ende_datum_kombiniert: '2026-11-12' } }] }, now);
+  assert(Math.abs(wh.items[0].lat - 53.55) < 0.01 && Math.abs(wh.items[0].lon - 9.996) < 0.01 && Math.abs(wm.items[0].lat - 48.137) < 0.01 && Math.abs(wm.items[0].lon - 11.5755) < 0.01, 'Hamburg (Punkt) und München (Polygon) aus UTM 32 umgerechnet, deutsche und ISO-Daten');
+  const docs = new Map(), n = CX.addWorks(docs, [...wb.items, ...wh.items, ...wm.items, ...wm.items], (lat) => (lat > 53 ? '02000000' : lat > 48.5 ? '08111000' : '09162000'), now), d = docs.get('2026-11-11');
+  assert(n === 3 && d.ags['09162000'].works[11] === 2 && d.ags['02000000'].works[11] === 1 && !CX.CTX_KEYS.includes('works'), 'addWorks: Zahl je Gemeinde zur Ortsstunde; works ist kein Modellmerkmal');
+  const td = TR.trainDoc({ events: { day: '2026-11-11', groups: { '09162000|Voi|scooter': { start: new Array(24).fill(1) } } }, incidents: d });
+  assert(td.ctxExtra.works['09162000'][11] === 2 && !td.ctx.works, 'Archiv: works als ctxExtra, nicht in ctx');
+}
