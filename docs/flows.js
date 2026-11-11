@@ -3,9 +3,9 @@
 // Gemessen: nur Anbieter mit stabilen Kennungen (flows/). Geschätzt: Anbieter mit rotierenden Kennungen, erwartete Fahrten je ≈ 500-m-Zellenpaar
 // (flows-est/, lib/pulse-flowest.js, keine Einzelverknüpfung). Nur Zellenpaare mit ≥ 2 Fahrten am Tag; ein Tag erscheint erst nach Tagesende.
 // Eigenständig: renderFlows(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, loadUsageIndex }; Leaflet (L) global.
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mw9ocvfh';
-import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mw9ocvfh';
-import { mapKeys } from './mapkeys.js?v=mw9ocvfh';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwchnuax';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mwchnuax';
+import { mapKeys } from './mapkeys.js?v=mwchnuax';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -295,8 +295,9 @@ async function update(S) {
 }
 function fillSelects(S, rowsA) {
   const { q, sel } = S, esc = S.ctx.esc;
-  const ops = [...new Set(rowsA.map(r => r[3]).filter(x => x != null))].sort((a, b) => a.localeCompare(b, 'de'));
-  const types = [...new Set(rowsA.map(r => r[4]).filter(x => x != null))];
+  // verknüpft: Anbieter nur mit Strömen der gewählten Art, Arten nur des gewählten Anbieters (die aktuelle Wahl bleibt immer wählbar)
+  const ops = [...new Set(rowsA.filter(r => sel.type === 'all' || r[4] === sel.type).map(r => r[3]).filter(x => x != null))].sort((a, b) => a.localeCompare(b, 'de'));
+  const types = [...new Set(rowsA.filter(r => sel.op === 'all' || r[3] === sel.op).map(r => r[4]).filter(x => x != null))];
   if (sel.op !== 'all' && !ops.includes(sel.op)) ops.push(sel.op);
   if (sel.type !== 'all' && !types.includes(sel.type)) types.push(sel.type);
   const order = Object.keys(TYPE), rank = (tq) => (order.includes(tq) ? order.indexOf(tq) : 99);

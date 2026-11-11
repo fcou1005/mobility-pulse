@@ -1,18 +1,18 @@
-import * as C from './pulse-core.js?v=mw9ocvfh';
-import * as Ops from './ops.js?v=mw9ocvfh';
-import * as E from './pulse-econ.js?v=mw9ocvfh';
-import * as K from './pulse-calib.js?v=mw9ocvfh';
-import * as Rp from './report.js?v=mw9ocvfh';
-import * as R from './pulse-report.js?v=mw9ocvfh';
-import * as Fl from './flows.js?v=mw9ocvfh';
-import * as Cov from './coverage.js?v=mw9ocvfh';
-import * as Cmp from './compare.js?v=mw9ocvfh';
-import * as Sp from './spots.js?v=mw9ocvfh';
-import * as Fv from './forecast.js?v=mw9ocvfh';
-import { mapKeys } from './mapkeys.js?v=mw9ocvfh';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mw9ocvfh';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mw9ocvfh';
-import { idleClassText } from './pulse-ops.js?v=mw9ocvfh';
+import * as C from './pulse-core.js?v=mwchnuax';
+import * as Ops from './ops.js?v=mwchnuax';
+import * as E from './pulse-econ.js?v=mwchnuax';
+import * as K from './pulse-calib.js?v=mwchnuax';
+import * as Rp from './report.js?v=mwchnuax';
+import * as R from './pulse-report.js?v=mwchnuax';
+import * as Fl from './flows.js?v=mwchnuax';
+import * as Cov from './coverage.js?v=mwchnuax';
+import * as Cmp from './compare.js?v=mwchnuax';
+import * as Sp from './spots.js?v=mwchnuax';
+import * as Fv from './forecast.js?v=mwchnuax';
+import { mapKeys } from './mapkeys.js?v=mwchnuax';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwchnuax';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwchnuax';
+import { idleClassText } from './pulse-ops.js?v=mwchnuax';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -358,6 +358,7 @@ function operatorRows() {
     const ags = state.scope === 'DE' ? null : state.scope;
     if (ags && muniName(ags) !== g.city) continue;
     if (state.operator !== 'all' && g.operator !== state.operator) continue;
+    if (!gapFitsType(g)) continue; // gewählte Fahrzeugart: Lücke nur bei Anbietern dieser Art
     if (byOp.has(g.operator) && ags) continue;
     rows.push({ op: g.operator, st: C.emptyStats(), sources: [], status: 'gap', age: null, dirs: [], license: null, quality: null, gap: g, delta: null });
   }
@@ -479,6 +480,7 @@ async function liveFetch() {
   if (failed.length) notice(() => cl(t('app.ofSourcesDeliveredNoUsable', { length: failed.length, size: recsOut.size, join: esc([...new Set(failed.map(r => STATUS[r.status] || r.status))].join(', ')) }), t('app.someOperatorsNoCurrentData', { n: fmt(new Set(failed.map(r => r.operator)).size) })), 'warn', 'livefail'); else clearNotice('livefail');
   if (!state.bIndex) notice(() => t('app.withoutMunicipalBoundaries'), 'warn', 'nob');
   state.mode = 'live'; $('#sel-mode').value = 'live';
+  populateOperators(); // Live-Gruppen können Anbieter/Arten ergänzen
   renderAll();
 }
 function summarize(src, sys, now) {
@@ -618,7 +620,8 @@ function applyUrlParams(q = QS, back = false) {
   if (resolveView(location.hash.slice(1)) === 'ops') applyOpsParams({ op, type: ty });
   else {
     if (has('#sel-operator', op)) { state.operator = op; $('#sel-operator').value = op; }
-    if (has('#sel-type', ty)) { state.type = ty; $('#sel-type').value = ty; }
+    if (ty != null && (ty === 'all' || TYPE_FILTER.includes(ty))) state.type = ty;
+    populateOperators('op'); // Liste der Arten passend zum Anbieter; passt die Art aus dem Link nicht, gilt „alle Arten“
   }
   urlReady = true;
   return state.scope !== 'DE';
@@ -1305,7 +1308,7 @@ function computeSignalsNow() {
     if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.sourceChangeDetected', { operator: r.operator }), text: t('app.endpointVersionFeedsOr', { v0: r.name || r.id }), foot: t('app.fingerprint') });
   }
   for (const e of state.usage?.consistency?.systems || []) { if (e.verdict !== 'divergent') continue; const r = (state.latest?.sources || []).find(x => x.id === e.sourceId); if (!r || (state.scope !== 'DE' && !(r.municipalities || []).includes(state.scope)) || (state.operator !== 'all' && e.operator !== state.operator)) continue; out.push({ cat: 'data', sev: 'warn', w: Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0)), n: fmt(Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0))), short: t('app.sigShortDivergent', { op: e.operator }), title: t('app.stateAndOperatorFeedDiffer', { operator: e.operator }), text: t('app.vsVehiclesMedianDistance', { sourceId: e.sourceId, v1: fmt(e.primary?.vehicles), v2: fmt(e.alt?.vehicles), v3: e.idOverlap == null ? '' : pctf(e.idOverlap, 1) + ` ${t('app.sharedIds')} `, v4: e.medianDistM == null ? '—' : fmt(e.medianDistM) + ' m' }), foot: t('app.consistencyCheck') }); }
-  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.publicDataMissingSince', { operator: g.operator, city: g.city, v2: String(g.since || '').split('-').reverse().join('.') }), text: (lang() === 'en' && g.note_en) || g.note, foot: g.probeOk ? t('app.feedReachableAgain') : t('app.feedChecked', { v0: g.probeStatus ?? '–' }) });
+  for (const g of state.latest?.gaps || []) if ((state.scope === 'DE' || muniName(state.scope) === g.city) && (state.operator === 'all' || g.operator === state.operator) && gapFitsType(g)) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.publicDataMissingSince', { operator: g.operator, city: g.city, v2: String(g.since || '').split('-').reverse().join('.') }), text: (lang() === 'en' && g.note_en) || g.note, foot: g.probeOk ? t('app.feedReachableAgain') : t('app.feedChecked', { v0: g.probeStatus ?? '–' }) });
   // Bestandssprung gegen Verlauf
   const h = state.histDay ? state.hist[state.histDay] : state.hist[state.histIndex?.days?.slice(-1)[0]];
   if (h && h.t.length >= 3) {
@@ -1392,6 +1395,7 @@ function renderCoverage() {
     if (local && ags !== state.scope) continue;
     for (const [op, o] of Object.entries(m.operators || {})) {
       if (state.operator !== 'all' && op !== state.operator) continue;
+      if (state.type !== 'all' && !(o.types?.[state.type] > 0)) continue; // gewählte Fahrzeugart (verknüpfte Filter)
       const srcs = recs.filter(r => r.operator === op && (r.municipalities || []).includes(ags));
       const dirs = [...new Set(srcs.flatMap(r => r.directories || []))];
       if (dir !== 'all' && !dirs.includes(dir)) continue;
@@ -2152,7 +2156,8 @@ async function renderZonesLayer() {
 async function renderPricing() {
   const p = await loadOnce('pricing', 'pricing.json'); const tb = $('#tbl-pricing tbody');
   if (!p?.plans?.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">${t('app.noPricingFeedsReadYetPrices')}</td></tr>`; return; }
-  let list = p.plans.filter(x => (state.scope === 'DE' || (x.municipalities || []).includes(state.scope)) && (state.operator === 'all' || x.operator === state.operator));
+  const tyIdx = state.type === 'all' ? null : opTypeIndex().inScope; // gewählte Fahrzeugart: nur Tarife von Anbietern mit dieser Art
+  let list = p.plans.filter(x => (state.scope === 'DE' || (x.municipalities || []).includes(state.scope)) && (state.operator === 'all' || x.operator === state.operator) && (!tyIdx || tyIdx.get(x.operator)?.has(state.type)));
   const seen = new Set(); const rows = [];
   for (const src of list) for (const pl of src.plans) { const key = `${src.operator}|${pl.name}|${pl.unlock}|${pl.perMin[0]?.rate}`; if (seen.has(key)) continue; seen.add(key); rows.push({ op: src.operator, pl, src }); }
   rows.sort((a, b) => a.op.localeCompare(b.op) || (a.pl.unlock ?? 0) - (b.pl.unlock ?? 0));
@@ -2346,16 +2351,55 @@ function populateScope() {
   sel.title = state.latest?.presence ? t('app.presenceTitle') : '';
   sel.value = state.scope;
 }
-function populateOperators() {
-  const sel = $('#sel-operator'); const prev = state.operator;
+// Verknüpfte Filter (11.11.2026): Anbieter- und Fahrzeugart-Auswahl zeigen nur, was im gewählten Gebiet zusammenpasst – mit „E-Scooter“
+// nur Anbieter mit E-Scootern, mit einem Anbieter nur dessen Arten. Grundlage: Gruppen Gemeinde|Anbieter|Art mit Fahrzeugen oder Stationen im
+// Sammler-Stand, im Live-Modus zusätzlich der Live-Abruf; Datenlücken (latest.gaps) mit den Arten des Anbieters anderswo.
+// prefer: 'type' (Art eben gewählt, Standard) → passt der Anbieter nicht, gilt „alle Anbieter“; 'op' (Anbieter eben gewählt) → passt die Art nicht, gilt „alle Arten“.
+const TYPE_FILTER = ['scooter', 'ebike', 'bike', 'cargo', 'moped', 'car', 'unknown'];
+let TYPE_LABELS = null; // Beschriftung der Arten aus dem HTML (data-i18n bzw. fester Text), einmal gelesen
+function opTypeIndex() {
+  const inScope = new Map(), anywhere = new Map();
+  const add = (m, op, ty) => { if (!m.has(op)) m.set(op, new Set()); m.get(op).add(ty || 'unknown'); };
+  const take = (k, g) => { const [ags, op, ty] = k.split('|'); if (!op || ags === 'DE' || !((g?.total || 0) + (g?.stations || 0) > 0)) return; add(anywhere, op, ty); if (state.scope === 'DE' || ags === state.scope) add(inScope, op, ty); };
+  for (const [k, g] of Object.entries(state.latest?.groups || {})) take(k, g);
+  if (state.live) for (const [k, g] of state.live.groups) take(k, g);
+  return { inScope, anywhere };
+}
+// Datenlücke (latest.gaps) passt zur gewählten Art: Arten laut Liste (known_gaps.types), sonst die des Anbieters anderswo
+function gapFitsType(g, idx = null) {
+  if (state.type === 'all') return true;
+  const ty = g.types?.length ? g.types : [...((idx || opTypeIndex()).anywhere.get(g.operator) || [])];
+  return ty.includes(state.type);
+}
+function populateOperators(prefer = 'type') {
+  const sel = $('#sel-operator'), tsel = $('#sel-type');
   let ops;
   if (state.scope === 'DE') ops = [...new Set((state.latest?.sources || []).filter(r => ['live', 'delayed'].includes(r.status)).map(r => r.operator))];
   else ops = Object.keys(muniInfo(state.scope)?.operators || {});
   if (state.live) for (const [k] of state.live.groups) { const [ags, op] = k.split('|'); if (state.scope === 'DE' || ags === state.scope) ops.push(op); }
-  for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) ops.push(g.operator);
+  const gapOps = new Set(); for (const g of state.latest?.gaps || []) if (state.scope === 'DE' || muniName(state.scope) === g.city) { ops.push(g.operator); gapOps.add(g.operator); }
   ops = [...new Set(ops)].sort((a, b) => a.localeCompare(b, 'de'));
-  sel.innerHTML = `<option value="all">${t('app.allOperatorsOnSite')}</option>` + ops.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
-  state.operator = ops.includes(prev) ? prev : 'all'; sel.value = state.operator;
+  const { inScope, anywhere } = opTypeIndex(), hasData = inScope.size > 0;
+  // Arten je Anbieter im Gebiet; Datenlücke ohne Fahrzeuge im Gebiet: Arten des Anbieters anderswo (Dott Tübingen → E-Scooter, E-Bikes)
+  const gapTypes = new Map(); for (const g of state.latest?.gaps || []) if (gapOps.has(g.operator) && g.types?.length) for (const ty of g.types) { if (!gapTypes.has(g.operator)) gapTypes.set(g.operator, new Set()); gapTypes.get(g.operator).add(ty); }
+  const typesOf = (op) => inScope.get(op) || (gapOps.has(op) ? gapTypes.get(op) || anywhere.get(op) : null) || null;
+  const opFits = (op, ty) => ty === 'all' || !hasData || !!typesOf(op)?.has(ty);
+  const typesFor = (op) => { const out = new Set(); for (const o of op === 'all' ? ops : [op]) for (const ty of typesOf(o) || []) out.add(ty); return out; };
+  if (!TYPE_LABELS && tsel) TYPE_LABELS = Object.fromEntries([...tsel.options].map(o => [o.value, { key: o.dataset.i18n || null, text: o.textContent }]));
+  const typeOpts = (op) => { const have = typesFor(op); return TYPE_FILTER.filter(ty => !hasData || have.has(ty)); };
+  // Vorrang: zuletzt geänderter Filter bleibt, der andere weicht auf „alle“ aus
+  if (prefer === 'op') { if (state.operator !== 'all' && !ops.includes(state.operator)) state.operator = 'all'; if (state.type !== 'all' && !typeOpts(state.operator).includes(state.type)) state.type = 'all'; }
+  else if (state.operator !== 'all' && !(ops.includes(state.operator) && opFits(state.operator, state.type))) state.operator = 'all';
+  if (state.type !== 'all' && hasData && !typeOpts(state.operator).includes(state.type)) state.type = 'all';
+  const shownOps = ops.filter(o => opFits(o, state.type));
+  sel.innerHTML = `<option value="all">${t('app.allOperatorsOnSite')}</option>` + shownOps.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  sel.value = state.operator;
+  if (tsel && TYPE_LABELS) {
+    const opt = (v) => { const l = TYPE_LABELS[v] || { key: null, text: v }; return `<option value="${esc(v)}"${l.key ? ` data-i18n="${esc(l.key)}"` : ''}>${esc(l.key ? t(l.key) : l.text)}</option>`; };
+    const list = typeOpts(state.operator); if (state.type !== 'all' && !list.includes(state.type)) list.push(state.type);
+    tsel.innerHTML = opt('all') + list.map(opt).join('');
+    tsel.value = state.type;
+  }
 }
 function bind() {
   // Gebietswahl: Grenzen lädt erst der Live-Abruf (Ortszuordnung) bzw. die Grenz-Ebene; die Karte zeigt bis dahin die Sammler-Positionen
@@ -2366,8 +2410,9 @@ function bind() {
   let scopeT = null, scopeByKey = false;
   $('#sel-scope').addEventListener('keydown', (e) => { if (e.key === 'Enter' && scopeT) { clearTimeout(scopeT); scopeT = null; applyScope(e.target.value); return; } if (/^(Arrow|Page)|^(Home|End)$/.test(e.key) || e.key.length === 1) scopeByKey = true; });
   $('#sel-scope').addEventListener('change', (e) => { clearTimeout(scopeT); scopeT = null; const v = e.target.value; if (scopeByKey) { scopeByKey = false; scopeT = setTimeout(() => { scopeT = null; applyScope(v); }, 400); } else applyScope(v); });
-  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; syncUrl(true); renderAll(); });
-  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; syncUrl(true); renderAll(); });
+  // verknüpfte Filter: nach jeder Wahl die andere Liste neu (Anbieter nur mit der gewählten Art, Arten nur des gewählten Anbieters)
+  $('#sel-operator').addEventListener('change', (e) => { state.operator = e.target.value; populateOperators('op'); syncUrl(true); renderAll(); });
+  $('#sel-type').addEventListener('change', (e) => { state.type = e.target.value; populateOperators('type'); syncUrl(true); renderAll(); });
   // Zurück/Vorwärts: Gebiet, Anbieter, Art, Kundenansicht, Sprache und Ansicht aus der Adresszeile übernehmen, ohne automatischen Live-Abruf
   // (sonst startet jeder Schritt durch den Verlauf einen Abruf aller Feeds). Erst den Zustand setzen, dann zeichnen: setClient/setLang
   // schreiben die URL des gerade betretenen Eintrags (replaceState) und dürfen dabei keinen alten Stand hineinschreiben.

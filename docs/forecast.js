@@ -7,15 +7,15 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mw9ocvfh';
-import * as CX from './pulse-context.js?v=mw9ocvfh';
-import * as SP from './pulse-spots.js?v=mw9ocvfh';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mw9ocvfh';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mw9ocvfh';
-import { toCsv } from './pulse-report.js?v=mw9ocvfh';
-import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mw9ocvfh';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mw9ocvfh';
-import { mapKeys } from './mapkeys.js?v=mw9ocvfh';
+import * as FC from './pulse-forecast.js?v=mwchnuax';
+import * as CX from './pulse-context.js?v=mwchnuax';
+import * as SP from './pulse-spots.js?v=mwchnuax';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwchnuax';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwchnuax';
+import { toCsv } from './pulse-report.js?v=mwchnuax';
+import { t, tMap, lang, dateFmt, numFmt } from './i18n.js?v=mwchnuax';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwchnuax';
+import { mapKeys } from './mapkeys.js?v=mwchnuax';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();

@@ -295,8 +295,9 @@ async function update(S) {
 }
 function fillSelects(S, rowsA) {
   const { q, sel } = S, esc = S.ctx.esc;
-  const ops = [...new Set(rowsA.map(r => r[3]).filter(x => x != null))].sort((a, b) => a.localeCompare(b, 'de'));
-  const types = [...new Set(rowsA.map(r => r[4]).filter(x => x != null))];
+  // verknüpft: Anbieter nur mit Strömen der gewählten Art, Arten nur des gewählten Anbieters (die aktuelle Wahl bleibt immer wählbar)
+  const ops = [...new Set(rowsA.filter(r => sel.type === 'all' || r[4] === sel.type).map(r => r[3]).filter(x => x != null))].sort((a, b) => a.localeCompare(b, 'de'));
+  const types = [...new Set(rowsA.filter(r => sel.op === 'all' || r[3] === sel.op).map(r => r[4]).filter(x => x != null))];
   if (sel.op !== 'all' && !ops.includes(sel.op)) ops.push(sel.op);
   if (sel.type !== 'all' && !types.includes(sel.type)) types.push(sel.type);
   const order = Object.keys(TYPE), rank = (tq) => (order.includes(tq) ? order.indexOf(tq) : 99);

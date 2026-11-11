@@ -1120,13 +1120,19 @@ export function renderFeedChecks(el, ctx) {
 // Gemeinsame Bausteine für Tabellen mit Auswahlfeldern, Sortierung und „mehr zeigen“
 // ======================================================================
 const TYPE_ORDER = ['scooter', 'ebike', 'bike', 'cargo', 'moped', 'car', 'other', 'unknown'];
-function groupOptions(latest) {
+// verknüpft (11.11.2026): Anbieter nur mit Fahrzeugen der gewählten Art, Arten nur des gewählten Anbieters; die aktuelle Wahl bleibt wählbar
+function groupOptions(latest, s = null) {
   const ops = new Set(), types = new Set();
-  for (const k of Object.keys(latest?.groups || {})) { const [a, op, ty] = k.split('|'); if (!a || a === 'DE') continue; ops.add(op); types.add(ty); }
+  for (const [k, g] of Object.entries(latest?.groups || {})) {
+    const [a, op, ty] = k.split('|'); if (!a || a === 'DE' || !((g?.total || 0) + (g?.stations || 0) > 0)) continue;
+    if (!s?.type || s.type === 'all' || ty === s.type) ops.add(op);
+    if (!s?.op || s.op === 'all' || op === s.op) types.add(ty);
+  }
+  if (s?.op && s.op !== 'all') ops.add(s.op); if (s?.type && s.type !== 'all') types.add(s.type);
   return { ops: [...ops].sort((a, b) => a.localeCompare(b, 'de')), types: [...types].sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b)) };
 }
 function filterCtl(ctx, s, { op = true, min = true, typeAll = true, minLabel = t('rep.minimumFleet') } = {}) {
-  const { ops, types } = groupOptions(ctx.state.latest); const esc = ctx.esc;
+  const { ops, types } = groupOptions(ctx.state.latest, op ? s : { type: s.type }); const esc = ctx.esc;
   const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`;
   return `<div class="rp-ctl rp-noprint">${op ? `<label>${t('rep.operator2')} <select data-f="op">${opt('all', t('rep.allOperators2'), s.op)}${ops.map(o => opt(o, o, s.op)).join('')}</select></label>` : ''}
     <label>${t('rep.vehicleType')} <select data-f="type">${typeAll ? opt('all', t('rep.allTypes'), s.type) : ''}${types.map(tq => opt(tq, typeName(tq), s.type)).join('')}</select></label>
