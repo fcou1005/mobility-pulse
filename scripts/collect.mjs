@@ -17,6 +17,7 @@ import * as CH from '../lib/pulse-chronos.js';
 import * as ST from '../lib/pulse-strike.js';
 import * as TMN from '../lib/pulse-termine.js';
 import * as TR from '../lib/pulse-train.js';
+import * as K from '../lib/pulse-calib.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -1480,6 +1481,26 @@ if (process.env.TRAIN !== '0') {
     const fcDir = path.join(DATA, 'weather-fc');
     if (existsSync(fcDir)) for (const f of (await readdir(fcDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -40)) await rm(path.join(fcDir, f));
   } catch (e) { log(`Trainingsarchiv: ${e.message}`); }
+}
+
+// Kalibrierung vorrechnen (Audit OPS-04): calib.json mit Faktor k, Prüfwerten und Abdeckung, wie web/report.js loadCalibration – das Dashboard
+// lädt dann eine kleine Datei statt 14 Ereignis- und Verlaufsdateien und rechnet nicht dreimal die Städte-Rangliste. Höchstens stündlich
+// (mit der Prognose) oder wenn die Datei fehlt bzw. älter als 2 Stunden ist; sonst bleibt der alte Stand. CALIB=0 = aus.
+if (process.env.CALIB !== '0') {
+  try {
+    const cf = path.join(DATA, 'calib.json'), old = existsSync(cf) ? JSON.parse(await readFile(cf, 'utf8')) : null;
+    if (trainCtx || !old || now - (old.at || 0) > 2 * 3600e3) {
+      const t0 = Date.now(), rdj = async (f) => { try { return existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch { return null; } };
+      const ref = await rdj(process.env.REFERENCE_FILE || path.join(ROOT, 'data', 'reference.json')), daily = await rdj(path.join(DATA, 'history', 'daily.json'));
+      const days = (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort().slice(-14);
+      const D = [], H = {}; for (const d of days) { const doc = await rdj(path.join(DATA, 'events', `${d}.json`)); if (!doc) continue; D.push(doc); H[d] = R.histFromDaily(daily, d) || await rdj(path.join(DATA, 'history', `${d}.json`)); if (!H[d]) delete H[d]; }
+      const breaks = daily?.breaks || null, res = K.calibrationFromDocs({ ref, docs: D, hists: H, latest, breaks, langs: ['de', 'en'] }), langs = res.langs, kinds = res.kinds, own = res.own;
+      for (const c of Object.values(langs)) delete c.kinds;
+      // Umsatz-Prüfwert Voi (€ je Fahrzeug und Tag) bleibt in der Ansicht (braucht Tarife und Annahmen der Seite)
+      await writeFile(cf, JSON.stringify({ version: 1, at: now, latestAt: latest.at, days: D.map(d => d.day), breaks, kinds, own, langs }));
+      log(`Kalibrierung vorgerechnet: ${D.length} Tage, k ${langs.de?.k?.applied ? langs.de.k.k.toFixed(2) : 'nicht angewandt'} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+    }
+  } catch (e) { log(`Kalibrierung: ${e.message}`); }
 }
 
 // Aktive Gemeindegrenzen fürs Dashboard

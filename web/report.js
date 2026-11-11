@@ -83,35 +83,16 @@ export function loadCalibration(ctx) {
   const key = `${ctx.state?.latest?.at || ''}|${lang()}`; // Texte der Kalibrierung je Sprache
   if (!CALIB_CACHE.has(key)) CALIB_CACHE.set(key, (async () => {
     const ref = await reference(ctx);
+    // Audit OPS-04: vom Sammler vorgerechnet (calib.json, höchstens 2 Std. älter als der Datenstand) – sonst wie bisher im Browser
+    const pre = await fetchJson(ctx, 'calib.json', true).catch(() => null), at = ctx.state?.latest?.at || 0;
+    if (pre?.version === 1 && pre.langs?.[lang()] && (!at || Math.abs(at - pre.at) <= 2 * 3600e3)) return { ...pre.langs[lang()], kinds: pre.kinds || {}, ref, own: pre.own, days: pre.days || [], berlinReport: null, breaks: pre.breaks || null, precomputed: true };
     const idx = await usageIndex(ctx); const days = (idx.days || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(-CALIB_DAYS);
     const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
     const [docs, hs] = await Promise.all([Promise.all(days.map(d => eventsDoc(ctx, idx, d))), Promise.all(days.map(d => histFor(ctx, hidx, daily, d)))]);
     const ok = docs.map((d, i) => [d, days[i], hs[i]]).filter(([d]) => d);
     const D = ok.map(x => x[0]), H = Object.fromEntries(ok.filter(x => x[2]).map(x => [x[1], x[2]]));
-    const latest = ctx.state?.latest || null; const limits = K.rvdLimits(ref);
-    // k nur aus plausiblen Berliner Anbietern; Vergleichswerte Deutschland/Voi ohne Überzählungen; Gemeinden (Frankfurt) roh, damit die Prüfung sie zeigt
-    // Bruchmarken (daily.json → breaks) und Kennungsart je Gruppe (Z3c); ab 7 vollen Regelstand-Tagen misst k nur Tage mit diesem Regelstand
-    const breaks = daily?.breaks || null, kinds = K.groupKinds(D, latest?.sources || []);
-    const bRep = (docs) => (docs.length ? R.municipalReport({ docs, hists: H, ags: K.BERLIN, type: 'scooter', latestGroups: null, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : null); // Ampel rot: nicht in k
-    let berlinReport = bRep(D); const bq = berlinReport?.quality;
-    if (bq?.rule && bq.ruleFullDays >= K.CALIB.minDays) { const same = D.filter(d => R.docRule(d) === bq.rule); if (same.length && same.length < D.length) berlinReport = bRep(same); }
-    // Bruchmarken auch in der Rohzeile (raw): Tage vor dem Regelwechsel sind falsch gezählt, keine Plausibilitätsprüfung
-    const all = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : { rows: [] };
-    const raw = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', minFleet: 0, breaks }) : { rows: [] };
-    const voi = D.length ? R.cityRanking(D, H, latest, { type: 'scooter', operator: 'Voi', minFleet: 0, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : { rows: [] };
-    // Kennungsart der E-Scooter je Gemeinde, bundesweit und Voi: k nur bei derselben Art wie die Berliner Referenz
-    const kindsOf = (pred) => K.commonKind(Object.entries(kinds).filter(([key]) => { const [a, op, ty] = key.split('|'); return ty === 'scooter' && pred(a, op); }).map(([, v]) => v));
-    const byAgs = Object.fromEntries(raw.rows.map(r => [r.ags, { rvd: r.rvd, fleet: r.fleet, ridesDay: r.ridesDay, kind: kindsOf((a) => a === r.ags) }]));
-    const own = { national: { ...natRvd(all.rows), kind: kindsOf(() => true) }, voi: { ...natRvd(voi.rows), kind: kindsOf((a, op) => op === 'Voi') }, byAgs };
-    const c = K.calibration(ref, { berlinReport: berlinReport && berlinReport.groups.length ? berlinReport : null, groups: latest?.groups, own, lang: lang(), kinds });
-    // Plausibilitätsprobe je Stadt (reference.rvd mit ags, alle Arten, z. B. Düsseldorf): Kommunal-Bericht mit Bruchmarken, kalibriert wie der Bericht
-    own.byAgsAll = {};
-    for (const e of (ref?.rvd || []).filter(x => x.ags && x.ags !== K.BERLIN && x.type === 'all')) {
-      const rp = D.length ? R.municipalReport({ docs: D, hists: H, ags: e.ags, pop: latest?.municipalities?.[e.ags]?.pop || null, rvdLimit: limits, eventChecks: latest?.eventChecks, breaks }) : null; if (!rp) continue;
-      const cr = K.calibrateReport(rp, c.k, { limits, kinds }), ct = cr.applied ? cr.totals : null;
-      own.byAgsAll[e.ags] = { rvd: rp.totals.rvd, per1000Fleet: rp.totals.per1000Fleet, per1000Rides: rp.totals.per1000Rides, rvdCal: ct?.rvd ?? null, per1000RidesCal: ct?.per1000Rides ?? null, breaks: rp.quality.breaks };
-    }
-    c.checks = K.plausibilityChecks(ref, own, c.k, lang());
+    const latest = ctx.state?.latest || null, breaks = daily?.breaks || null;
+    const res = K.calibrationFromDocs({ ref, docs: D, hists: H, latest, breaks, langs: [lang()] }), c = res.langs[lang()], own = res.own, berlinReport = res.berlinReport;
     return { ...c, ref, own, days: ok.map(x => x[1]), berlinReport, breaks };
   })().catch(e => { console.error('Kalibrierung', e); return { assume: K.rideAssumptions(null, lang()), limits: {}, k: { applied: false, status: 'off', statusText: t('rep.calibrationCannotBeComputed'), reason: t('rep.calibrationCannotBeComputed') }, kinds: {}, coverage: [], checks: [], ref: null, own: {}, days: [], hasReference: false }; }));
   return CALIB_CACHE.get(key);

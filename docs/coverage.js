@@ -1,8 +1,8 @@
 // Mobility Pulse — Abdeckung: Städte laut Anbieter-Website gegen Feeds mit Fahrzeugen, stille Feeds, nicht offene Feeds und fehlende Feeds.
 // Eigenständiges Modul; app.js übergibt ctx = { state, CFG, esc, getJson, setScope }. Daten: coverage.json (Sammler, lib/pulse-coverage.js).
 // Alle Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel cov.*), Zahlen und Daten über i18n.js.
-import { t, has, lang, numFmt, dateFmt } from './i18n.js?v=mwcnh5v3';
-import { csvCell } from './pulse-ops.js?v=mwcnh5v3';
+import { t, has, lang, numFmt, dateFmt } from './i18n.js?v=mwcnkbxw';
+import { csvCell } from './pulse-ops.js?v=mwcnkbxw';
 
 const CAT = (c) => (has(`cov.cat.${c}`) ? t(`cov.cat.${c}`) : c);
 const SHORT = (c) => t(`cov.short.${c}`);
