@@ -348,6 +348,9 @@ if (!refreshStatic) {
   log(`Preise/Zonen: Stand von ${new Date(prevZonesIdx.at).toISOString()} behalten (Aktualisierung täglich)`);
   for (const z of prevZonesIdx.zones || []) { const rec = sourceOut.find(x => x.id === z.sourceId); if (rec) rec.zones = { count: z.count, ...z.kinds }; }
 } else {
+// Zonenänderungen (zones-log.json): Fingerabdrücke des alten Stands je Quelle, bevor die Dateien neu geschrieben werden (lib/pulse-train.js zoneHash)
+const prevZoneFp = new Map(), zoneChanges = [];
+for (const f of await readdir(path.join(DATA, 'zones')).catch(() => [])) if (f.endsWith('.json') && f !== 'index.json') { try { const d = JSON.parse(await readFile(path.join(DATA, 'zones', f), 'utf8')); if (d?.sourceId && Array.isArray(d.features)) prevZoneFp.set(d.sourceId, new Set(d.features.map(TR.zoneHash))); } catch {} }
 for (const f of await readdir(path.join(DATA, 'zones')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'zones', f));
 const firstLang = (o) => o == null ? null : Array.isArray(o) ? (o.find(x => x?.language === 'de') || o[0])?.text ?? null : typeof o === 'object' ? (o.de ?? o.en ?? Object.values(o)[0] ?? null) : o;
 await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].includes(sourceOut.find(x => x.id === r.src.id)?.status)), async ({ src, sys }) => { try {
@@ -381,12 +384,17 @@ await pool(results.filter(r => r.sys && r.sys.feeds && ['live', 'delayed'].inclu
         await writeFile(path.join(DATA, 'zones', file), doc);
         const kinds = { noRide: feats.filter(f => f.properties.rules.some(ru => ru.rideAllowed === false)).length, noThrough: feats.filter(f => f.properties.rules.some(ru => ru.rideThrough === false)).length, slow: feats.filter(f => f.properties.rules.some(ru => ru.maxSpeed != null)).length, noEnd: feats.filter(f => f.properties.rules.some(ru => ru.endAllowed === false)).length };
         zonesIndex.push({ sourceId: src.id, operator: src.operator, municipalities: rec.municipalities, file, count: feats.length, bytes: doc.length, kinds, at: now });
+        if (prevZoneFp.has(src.id)) { const dz = TR.zoneDiff(prevZoneFp.get(src.id), feats.map(TR.zoneHash)); if (dz.added || dz.removed) zoneChanges.push([now, src.id, src.operator, dz.added, dz.removed, feats.length]); }
         rec.zones = { count: feats.length, ...kinds };
       } else rec.zones = { count: feats.length, tooLarge: true };
     }
   }
   } catch (e) { log(`Preise/Zonen ${src.id}: ${e.message}`); }
 }, 6);
+// Zonenänderungen protokollieren (180 Tage), Format wie pricing-log: [Zeitpunkt, Quelle, Anbieter, neu, entfallen, Zonen gesamt]
+if (refreshStatic) { const zf = path.join(DATA, 'zones-log.json'), zl = existsSync(zf) ? JSON.parse(await readFile(zf, 'utf8')) : { fields: ['at', 'sourceId', 'operator', 'added', 'removed', 'count'], changes: [] };
+  zl.changes = [...(zl.changes || []), ...zoneChanges].filter(c => now - c[0] <= 180 * 86400e3); zl.updatedAt = now; zl.days = 180; await writeFile(zf, JSON.stringify(zl));
+  if (zoneChanges.length) log(`Zonen geändert: ${zoneChanges.map(c => `${c[2]} ${c[1]} +${c[3]}/−${c[4]}`).slice(0, 8).join(', ')}`); }
 const prevPricing = existsSync(path.join(DATA, 'pricing.json')) ? JSON.parse(await readFile(path.join(DATA, 'pricing.json'), 'utf8')) : null;
 for (const p of prevPricing?.plans || []) for (const x of p.plans || []) if (!/^[A-Z]{3}$/.test(String(x.currency ?? ''))) delete x.currency; // Altbestand ohne Prüfung
 await writeFile(path.join(DATA, 'pricing.json'), JSON.stringify({ at: now, plans: pricing }));
@@ -1425,6 +1433,24 @@ if (process.env.FORECAST !== '0') {
 // Langzeitarchiv der Trainingsdaten (lib/pulse-train.js, Audit DAT-01): je abgeschlossenem Ortstag train/<JJJJ>/<Tag>.json.gz, einmal geschrieben,
 // nie geändert; holt fehlende Tage nach (höchstens TRAIN.perRun je Lauf), solange events/ sie noch hat. Nur in Läufen mit Prognose (Kennzeichen
 // wie in der Prognose). weather-fc/ (gesicherte Vorhersagen) 40 Tage. TRAIN=0 = aus. Ohne Wirkung auf Prognose und Chronos.
+// Eingriffe der Anbieter und Ausfälle je abgeschlossenem Ortstag (lib/pulse-train.js opsSignals) → eingriffe.json (120 Tage) und train/ (ops)
+const opsByDay = new Map();
+if (process.env.TRAIN !== '0') {
+  try {
+    const rdj = async (f) => { try { return existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch { return null; } };
+    const of = path.join(DATA, 'eingriffe.json'), prevOps = await rdj(of), done = new Set(prevOps?.done || []);
+    const evDays = existsSync(path.join(DATA, 'events')) ? (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort() : [];
+    const todoOps = evDays.filter(d => !done.has(d) && TR.trainReady(d, now)).slice(0, 8);
+    if (todoOps.length) {
+      const pl = await rdj(path.join(DATA, 'pricing-log.json')), zl = await rdj(path.join(DATA, 'zones-log.json')), pj = await rdj(path.join(DATA, 'pricing.json')), zi = await rdj(path.join(DATA, 'zones', 'index.json'));
+      const srcMunis = new Map([...(pj?.plans || []).map(p => [p.sourceId, p.municipalities || []]), ...(zi?.zones || []).map(z => [z.sourceId, z.municipalities || []])]);
+      const arch = { fields: null, days: {} }; for (const m of [...new Set(todoOps.flatMap(d => [d.slice(0, 7), new Date(Date.parse(`${d.slice(0, 7)}-01T12:00:00Z`) - 86400e3).toISOString().slice(0, 7)]))]) { const a = await rdj(path.join(DATA, 'archive', `${m}.json`)); if (a?.days) { arch.fields = a.fields; Object.assign(arch.days, a.days); } }
+      let all = []; for (const d of todoOps) { const ev = await rdj(path.join(DATA, 'events', `${d}.json`)); const sig = TR.opsSignals({ day: d, events: ev, archive: arch, price: pl?.changes || [], zones: zl?.changes || [], srcMunis }); opsByDay.set(d, sig); all = all.concat(sig); done.add(d); }
+      const doc = TR.mergeOps(prevOps, all, now); doc.done = [...done].filter(d => d >= evDays[0]).sort(); await writeFile(of, JSON.stringify(doc));
+      log(`Eingriffe/Ausfälle: ${todoOps.join(', ')} → ${all.length} Einträge (${['price', 'zone', 'fleet', 'outage'].map(k => `${k} ${all.filter(e => e.kind === k).length}`).join(', ')})`);
+    }
+  } catch (e) { log(`Eingriffe: ${e.message}`); }
+}
 if (process.env.TRAIN !== '0') {
   try {
     const tDir = path.join(DATA, TR.TRAIN.dir), evDir = path.join(DATA, 'events'), have = new Set();
@@ -1436,12 +1462,13 @@ if (process.env.TRAIN !== '0') {
       const calendar = await rd(path.join(DATA, 'calendar.json')), series = await rd(path.join(DATA, 'forecast', 'series.json')), flog = await rd(path.join(DATA, 'forecast', 'log.json'));
       const fam = {}; for (const f of FC.FAMILIES) if (f !== 'micro') fam[f] = { series: await rd(path.join(DATA, FC.FAMILY_DIR[f], 'series.json')), log: await rd(path.join(DATA, FC.FAMILY_DIR[f], 'log.json')) };
       const prevUtc = (d) => new Date(Date.parse(`${d}T12:00:00Z`) - 86400e3).toISOString().slice(0, 10);
+      const opsDoc = await rd(path.join(DATA, 'eingriffe.json'));
       const wx = async (dir, d) => [await rd(path.join(DATA, dir, `${prevUtc(d)}.json`)), await rd(path.join(DATA, dir, `${d}.json`))].filter(Boolean);
       let bytes = 0;
       for (const day of todo) {
         const events = await rd(path.join(evDir, `${day}.json`)); if (!events?.groups) continue;
         const doc = TR.trainDoc({ events, history: await rd(path.join(DATA, 'history', `${day}.json`)), weather: await wx('weather', day), weatherFc: await wx('weather-fc', day),
-          incidents: await rd(path.join(DATA, 'incidents', `${day}.json`)), calendar, curated: trainCtx.curated, pending: trainCtx.pending, checks: latest.eventChecks, series, log: flog, families: fam, now });
+          incidents: await rd(path.join(DATA, 'incidents', `${day}.json`)), calendar, curated: trainCtx.curated, pending: trainCtx.pending, checks: latest.eventChecks, series, log: flog, families: fam, now, ops: opsByDay.get(day) ?? (opsDoc?.done?.includes(day) ? (opsDoc.entries || []).filter(e => e.day === day) : null) });
         const buf = gzipSync(JSON.stringify(doc), { level: 9 }), f = path.join(DATA, TR.trainPath(day));
         await mkdir(path.dirname(f), { recursive: true }); await writeFile(f, buf); have.add(day); bytes += buf.length;
       }

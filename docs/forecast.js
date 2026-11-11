@@ -7,16 +7,16 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mwcmxwbv';
-import * as CX from './pulse-context.js?v=mwcmxwbv';
-import * as SP from './pulse-spots.js?v=mwcmxwbv';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwcmxwbv';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwcmxwbv';
-import { toCsv } from './pulse-report.js?v=mwcmxwbv';
-import { dayType } from './pulse-econ.js?v=mwcmxwbv';
-import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwcmxwbv';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwcmxwbv';
-import { mapKeys } from './mapkeys.js?v=mwcmxwbv';
+import * as FC from './pulse-forecast.js?v=mwcn3q7d';
+import * as CX from './pulse-context.js?v=mwcn3q7d';
+import * as SP from './pulse-spots.js?v=mwcn3q7d';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwcn3q7d';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwcn3q7d';
+import { toCsv } from './pulse-report.js?v=mwcn3q7d';
+import { dayType } from './pulse-econ.js?v=mwcn3q7d';
+import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwcn3q7d';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwcn3q7d';
+import { mapKeys } from './mapkeys.js?v=mwcn3q7d';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -501,6 +501,8 @@ function paramRows(L) {
   ];
 }
 const NOT_KEYS = ['nTrain', 'nStrike', 'nEvents', 'nRoad', 'nOp', 'nZones'];
+// Stand je Einfluss (11.11.2026): erfasst = wird je Tag gesammelt (eingriffe.json, train/), wirkt aber noch nicht; teilweise = nur ein Teil abgedeckt; fehlt = keine offene Quelle
+const NOT_STATE = { nTrain: 'none', nStrike: 'part', nEvents: 'part', nRoad: 'none', nOp: 'done', nZones: 'done' };
 export function steckbrief(ctx, S0, L, G, sel) {
   const g = gradeOf(S0, sel, G, L), scopeTxt = scopeLabel(ctx, sel), gates = { ...FC.GATES, ...(L?.gates || {}) }, now = dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: TZ }).format(new Date());
   const strip = (h) => String(h).replace(/<[^>]+>/g, '');
@@ -846,7 +848,9 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   const p5 = `<div class="panel">${head(t('fv.paramTitle'), t('fv.paramSub'))}<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.paramTitle'))}"><table><thead><tr><th>${t('fv.colParam')}</th><th class="n">${t('fv.colValue')}</th><th>${t('fv.colEffect')}</th></tr></thead><tbody>${P.map(([k, v, d]) => `<tr><td><code>${esc(k)}</code></td><td class="n">${esc(String(v))}</td><td class="wrap">${esc(d)}</td></tr>`).join('')}</tbody></table></div></div>`;
   // Panel 6: nicht berücksichtigt
   const NO = NOT_KEYS;
-  const p6 = `<div class="panel">${head(t('fv.notTitle'), t('fv.notSub'))}<ul class="fv-list">${NO.map(k => `<li>${esc(t(`fv.${k}`))}</li>`).join('')}</ul><p class="fv-sub">${t('fv.notNote')}</p></div>`;
+  const chipOf = (st) => `<span class="fv-chip ${st === 'done' ? 'A' : st === 'part' ? 'B' : 'D'}">${t(`fv.nState.${st}`)}</span>`;
+  const p6 = `<div class="panel" id="fv-not">${head(t('fv.notTitle'), t('fv.notSub'))}<ul class="fv-list fv-not">${NO.map(k => `<li>${chipOf(NOT_STATE[k])} <b>${esc(t(`fv.${k}`))}</b><div class="fv-sub" style="margin:2px 0 0">${t(`fv.${k}How`)}</div></li>`).join('')}</ul>`
+    + `<div class="fv-ops-body"></div><p class="fv-sub">${t('fv.notNote')}</p></div>`;
   // Panel 7: Rohdaten
   const p7 = `<div class="panel">${head(t('fv.rawTitle'), t('fv.rawSub'))}<div class="fv-links">${files}</div><p class="fv-sub">${t('fv.rawNote')}</p></div>`;
   const p9 = `<div class="panel" id="fv-env">${head(t('fv.envTitle'), t('fv.envSub'))}${envHtml(ctx, L, { title: false })}</div>`;
@@ -857,6 +861,22 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
   fillEvents(el.querySelector('#fv-events .fv-ev-body'), ctx, sel, S0);
   fillPortable(el.querySelector('#fv-pm .fv-pm-body'), ctx, sel);
+  fillOps(el.querySelector('#fv-not .fv-ops-body'), ctx, sel);
+}
+// Erfasste Eingriffe der Anbieter und Ausfälle (eingriffe.json, Sammler: lib/pulse-train.js opsSignals) für die Auswahl, letzte 14 Tage
+async function fillOps(box, ctx, sel) {
+  if (!box) return;
+  const doc = await fj(ctx, 'eingriffe.json'); if (!box.isConnected) return;
+  const esc = ctx.esc, op = ctx.state.operator && ctx.state.operator !== 'all' ? ctx.state.operator : null, ty = ctx.state.type && ctx.state.type !== 'all' ? ctx.state.type : null, ags = sel.ags && sel.ags !== 'DE' ? sel.ags : null;
+  if (!Array.isArray(doc?.entries)) { box.innerHTML = `<p class="fv-sub">${t('fv.opsNone')}</p>`; return; }
+  const cut = addDays(FC.dayOfLocal(Date.now()), -14), tl = tMap('type', VEHICLE_TYPE_LABEL);
+  const fit = (e) => { if (e.day < cut) return false; if (e.key) { const [a, o, y] = e.key.split('|'); return (!ags || a === ags) && (!op || o === op) && (!ty || y === ty); } return (!ags || (e.munis || []).includes(ags)) && (!op || e.op === op); };
+  const list = doc.entries.filter(fit), counts = ['price', 'zone', 'fleet', 'outage'].map(k => [k, list.filter(e => e.kind === k).length]);
+  const where = (e) => { if (e.key) { const [a, o, y] = e.key.split('|'); return `${esc(o)} · ${esc(tl[y] || y)} · ${esc(ctx.muniName?.(a) || a)}`; } const m = e.munis || []; return `${esc(e.op)} · ${m.length === 1 ? esc(ctx.muniName?.(m[0]) || m[0]) : t('fv.opsMunis', { n: m.length })}`; };
+  const what = (e) => e.kind === 'price' ? t('fv.opsPrice', { n: e.n }) : e.kind === 'zone' ? t('fv.opsZone', { a: e.added, r: e.removed }) : e.kind === 'fleet' ? t('fv.opsFleet', { from: n0(e.from), to: n0(e.to), d: sg(e.ratio - 1, 0) }) : t('fv.opsOutage', { h: e.hours, fleet: n0(e.fleet) });
+  box.innerHTML = `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.opsTitle')}</h3><p class="fv-sub">${t('fv.opsLead', { list: counts.map(([k, n]) => `${t(`fv.opsKind.${k}`)} ${n}`).join(' · ') })}</p>`
+    + (list.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.opsTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th>${t('fv.opsColKind')}</th><th>${t('fv.opsColWho')}</th><th>${t('fv.opsColWhat')}</th></tr></thead><tbody>`
+      + list.slice(0, 40).map(e => `<tr><td>${esc(dayTxt(e.day))}</td><td>${t(`fv.opsKind.${e.kind}`)}</td><td class="wrap">${where(e)}</td><td class="wrap">${what(e)}</td></tr>`).join('') + `</tbody></table></div>${list.length > 40 ? `<p class="fv-sub">${t('fv.opsMore', { n: list.length - 40 })}</p>` : ''}` : `<p class="fv-sub">${t('fv.opsEmpty')}</p>`);
 }
 
 // ---------- Vortrainiertes Modell zum Mitnehmen (forecast/model.json, tools/prognose-modell.mjs) ----------

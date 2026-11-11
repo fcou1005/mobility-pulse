@@ -62,3 +62,24 @@ const cw = TR.cellsWeekDoc(TR.isoWeek('2026-11-01'), [
 const bw = cw.states.BW;
 assert(cw.week === '2026-W44' && cw.days.join() === '2026-10-31,2026-11-01' && bw.munis['08416041']['a:b'][0] === 3 && bw.munis['08416041']['a:b'][21] === 2 && bw.munis['08416041']['c:d'][5] === 1 && bw.bandMin[0] === 120 && bw.bandRuns.join() === '6,3' && bw.below['08416041'].join() === '1,1,2' && cw.states.BY.munis['09162000']['x:y'][0] === 5 && TR.cellsWeekPath(cw.week) === 'train-cells/2026/2026-W44.json.gz',
   'Wochensumme je Land: Zellen elementweise (kurze Altzeilen aufgefüllt), Reste, Bandminuten und -läufe');
+
+// Eingriffe der Anbieter und Ausfälle (Preis, Zone, Flottensprung, Ausfall)
+{
+  const day = '2026-11-10', at = Date.parse('2026-11-10T09:00:00Z'), z24 = () => new Array(24).fill(0);
+  const runs = Array.from({ length: 72 }, (_, i) => [Date.parse('2026-11-09T23:00:00Z') + (i + 1) * 20 * 60e3, 20 * 60e3, 1, 'x']);
+  const vt = new Array(24).fill(100 * 60); vt[14] = 0; vt[15] = 3 * 60;
+  const events = { day, runs, groups: { 'A|Voi|scooter': { start: z24(), vminTot: vt }, 'A|Tiny|bike': { start: z24(), vminTot: new Array(24).fill(5 * 60).map((v, h) => (h === 3 ? 0 : v)) } } };
+  const archive = { fields: ['flotte_avg', 'fahrten'], days: { '2026-11-06': { 'A|Voi|scooter': [100, 0], 'A|Lime|scooter': [200, 0] }, '2026-11-07': { 'A|Voi|scooter': [102, 0], 'A|Lime|scooter': [205, 0] }, '2026-11-08': { 'A|Voi|scooter': [98, 0], 'A|Lime|scooter': [198, 0] }, '2026-11-09': { 'A|Voi|scooter': [101, 0], 'A|Lime|scooter': [200, 0] }, [day]: { 'A|Voi|scooter': [104, 0], 'A|Lime|scooter': [300, 0] } } };
+  const price = [[at, 'voi_a', 'Voi', 'p1', '~unlock', 0.5, 1], [at, 'voi_a', 'Voi', 'p2', '+plan', null, 'x'], [Date.parse('2026-11-08T09:00:00Z'), 'voi_a', 'Voi', 'p1', '~rate', 1, 2]];
+  const zones = [[at, 'lime_a', 'Lime', 3, 1, 40]];
+  const sig = TR.opsSignals({ day, events, archive, price, zones, srcMunis: new Map([['voi_a', ['A']], ['lime_a', ['A', 'B']]]) });
+  const k = (kind) => sig.filter(e => e.kind === kind);
+  assert(k('price').length === 1 && k('price')[0].n === 2 && k('price')[0].munis.join() === 'A' && k('price')[0].plans.join() === 'p1,p2', 'Preisänderung: je Quelle und Tag eine Zeile mit Gemeinden und Plänen; Vortag nicht');
+  assert(k('zone')[0].added === 3 && k('zone')[0].removed === 1 && k('zone')[0].munis.join() === 'A,B', 'Zonenänderung aus zones-log');
+  assert(k('fleet').length === 1 && k('fleet')[0].key === 'A|Lime|scooter' && k('fleet')[0].ratio === 1.5, 'Flottensprung: Lime 200 → 300 (+50 %), Voi +3 % nicht');
+  const o = k('outage'); assert(o.length === 1 && o[0].key === 'A|Voi|scooter' && o[0].hours === 2 && o[0].mask === ((1 << 14) | (1 << 15)), 'Ausfall: Voi 14–16 Uhr ohne Fahrzeuge; kleine Gruppe (< 20) nicht');
+  const m1 = TR.mergeOps(null, sig, Date.parse('2026-11-11T12:00:00Z')), m2 = TR.mergeOps(m1, sig, Date.parse('2026-11-11T12:00:00Z')), m3 = TR.mergeOps(m2, [], Date.parse('2027-04-01T12:00:00Z'));
+  assert(m1.entries.length === sig.length && m2.entries.length === sig.length && m3.entries.length === 0, 'eingriffe.json: doppelt eingetragen bleibt einmal, nach keepDays gelöscht');
+  const zh = (c, r) => TR.zoneHash({ geometry: { coordinates: c }, properties: { rules: r } }), a = zh([[1, 2]], [{ rideAllowed: false }]), b = zh([[1, 2]], [{ rideAllowed: true }]);
+  assert(a !== b && TR.zoneDiff(new Set([a]), [a, b]).added === 1 && TR.zoneDiff(new Set([a, b]), [b]).removed === 1, 'Zonen-Fingerabdruck: Regeländerung zählt als geändert');
+}
