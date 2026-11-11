@@ -13,6 +13,7 @@ import * as SP from './pulse-spots.js';
 import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js';
 import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js';
 import { toCsv } from './pulse-report.js';
+import { dayType } from './pulse-econ.js';
 import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js';
 import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js';
 import { mapKeys } from './mapkeys.js';
@@ -46,6 +47,7 @@ const CSS = `
 .fv-legend .k-a{width:12px;height:12px;border-radius:2px;background:var(--accent)}
 .fv-legend .k-l{width:12px;height:12px;border-radius:2px;background:color-mix(in srgb,var(--accent) 28%,transparent);border:1px dashed var(--accent)}
 .fv-legend .k-p{width:18px;height:0;border-top:2.5px solid var(--info);margin-bottom:3px;vertical-align:middle}
+.fv-legend .k-u{width:10px;height:10px;border:1px dashed color-mix(in srgb,var(--fg) 45%,transparent);box-sizing:border-box}.fv-gline{margin:var(--s2) 0 0;font-size:13px}.fv-gline a{font-weight:600;margin-left:4px}.fv-stale{margin:var(--s2) 0 0;font-size:12.5px}
 .fv-legend .k-c{width:18px;height:0;border-top:2px dashed #14b8a6;margin-bottom:3px;vertical-align:middle}
 .fv-legend .k-ev{width:12px;height:12px;border-radius:2px;background:color-mix(in srgb,var(--fg) 9%,transparent);border-top:3px solid var(--fg-2)}
 .fv-chart .ev-band{fill:color-mix(in srgb,var(--fg) 7%,transparent)}.fv-chart .ev-bar{fill:var(--fg-2)}
@@ -58,7 +60,7 @@ const CSS = `
 .fv-chart svg{display:block;width:100%;height:auto;max-width:1100px}
 .fv-chart text{fill:var(--fg-2);font-size:11px;font-family:var(--sans)}
 .fv-chart .gl{stroke:var(--line);stroke-width:1}
-.fv-chart .bar-a{fill:var(--accent)}
+.fv-chart .bar-a{fill:var(--accent)}.fv-chart .usual{fill:none;stroke:color-mix(in srgb,var(--fg) 45%,transparent);stroke-width:1;stroke-dasharray:2 2}.fv-chart text.pk{fill:var(--fg);font-size:10.5px;font-weight:600;paint-order:stroke;stroke:var(--panel);stroke-width:3px}
 .fv-chart .bar-l{fill:color-mix(in srgb,var(--accent) 26%,transparent);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2}
 .fv-chart .ln-p{fill:none;stroke:var(--info);stroke-width:2.2;stroke-linejoin:round}
 .fv-chart .ln-c{fill:none;stroke:#14b8a6;stroke-width:2;stroke-dasharray:5 3;stroke-linejoin:round}
@@ -150,7 +152,7 @@ const n0 = (x) => (x == null || !Number.isFinite(x) ? '–' : numFmt(0).format(x
 const n1 = (x) => (x == null || !Number.isFinite(x) ? '–' : numFmt(1).format(x));
 const pc = (x, d = 0) => (x == null || !Number.isFinite(x) ? '–' : `${numFmt(d).format(x * 100)} %`);
 const sg = (x, d = 0) => (x == null || !Number.isFinite(x) ? '–' : `${x > 0 ? '+' : x < 0 ? '−' : '±'}${numFmt(d).format(Math.abs(x) * 100)} %`);
-const fK = (v) => (v >= 10000 ? `${n0(v / 1000)}k` : v >= 1000 ? `${numFmt(1).format(v / 1000)}k` : n0(v));
+const fK = (v) => (v >= 10000 ? `${n0(v / 1000)}k` : v >= 1000 ? `${numFmt(v % 1000 === 0 ? 0 : 1).format(v / 1000)}k` : n0(v));
 const sum = (a) => a.reduce((x, y) => x + (y || 0), 0);
 const dayTxt = (d, o = { weekday: 'short', day: 'numeric', month: 'short' }) => dateFmt({ ...o, timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
 const addDays = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400e3).toISOString().slice(0, 10);
@@ -191,27 +193,31 @@ export function dayStats(e, prevA = null) {
 }
 
 // ---------- Diagramm ----------
-const niceMax = (v) => { const e = 10 ** Math.floor(Math.log10(Math.max(v, 1))), m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e; };
-function timeline(ctx, rows, { nowIdx = null, width = 720, blocks = [] } = {}) {
+// Obergrenze mit glatten Viertel-Marken (0/50/100/150/200 statt 63/125/188/250, Audit UXP-08)
+const niceMax = (v) => { const e = 10 ** Math.floor(Math.log10(Math.max(v, 1))), m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 4 ? 4 : m <= 6 ? 6 : m <= 8 ? 8 : 10) * e; };
+function timeline(ctx, rows, { nowIdx = null, width = 720, blocks = [], peaks = [] } = {}) {
   const W = Math.max(320, Math.min(1100, Math.round(width))), H = 260, pl = 40, pr = 8, pt = 18, pb = 38, N = rows.length, bw = (W - pl - pr) / N, gap = bw > 9 ? 1.5 : 0.7;
-  const vals = rows.flatMap(r => [r.p, r.a, r.l, r.c]).filter(Number.isFinite), top = niceMax(Math.max(1, ...vals) * 1.05), y = (v) => pt + (H - pt - pb) * (1 - v / top), x = (i) => pl + i * bw, every = W < 520 ? 6 : 3;
+  const vals = rows.flatMap(r => [r.p, r.a, r.l, r.c, r.u?.[1]]).filter(Number.isFinite), top = niceMax(Math.max(1, ...vals) * 1.05), y = (v) => pt + (H - pt - pb) * (1 - v / top), x = (i) => pl + i * bw, every = W < 520 ? 6 : 3;
   const grid = [0, 0.25, 0.5, 0.75, 1].map(f => `<line class="gl" x1="${pl}" x2="${W - pr}" y1="${y(top * f).toFixed(1)}" y2="${y(top * f).toFixed(1)}"/><text x="${pl - 5}" y="${(y(top * f) + 4).toFixed(1)}" text-anchor="end">${fK(top * f)}</text>`).join('');
   const bars = rows.map((r, i) => {
     const v = r.a ?? r.l; if (v == null) return '';
     const cls = r.a != null ? 'bar-a' : 'bar-l', h = Math.max(1, y(0) - y(v));
     return `<rect class="${cls}" x="${(x(i) + gap).toFixed(1)}" y="${(y(0) - h).toFixed(1)}" width="${Math.max(1.5, bw - 2 * gap).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5"/>`;
   }).join('');
+  // üblicher Bereich: Min–Max der gezählten Werte derselben Stunde an den letzten gleichen Tagen (hinter den Balken)
+  const usual = rows.map((r, i) => (r.u ? `<rect class="usual" x="${x(i).toFixed(1)}" y="${y(r.u[1]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, y(r.u[0]) - y(r.u[1])).toFixed(1)}"/>` : '')).join('');
+  const peakTxt = peaks.map(i => { const r = rows[i], v = r?.a ?? r?.l ?? r?.p; return v == null ? '' : `<text class="pk" x="${(x(i) + bw / 2).toFixed(1)}" y="${(y(v) - 4).toFixed(1)}" text-anchor="middle">${fK(v)}</text>`; }).join('');
   let d = '', open = false;
   rows.forEach((r, i) => { if (r.p == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(r.p).toFixed(1)}L${x(i + 1).toFixed(1)} ${y(r.p).toFixed(1)}`; open = true; });
   // Chronos-2 (KI, nur Vergleich): gestrichelte Linie durch die Stundenmitten
   let dc = '', openC = false;
   rows.forEach((r, i) => { if (r.c == null) { openC = false; return; } dc += `${openC ? 'L' : 'M'}${(x(i) + bw / 2).toFixed(1)} ${y(r.c).toFixed(1)}`; openC = true; });
   const labels = rows.map((r, i) => (r.h % every === 0 ? `<text x="${(x(i) + bw / 2).toFixed(1)}" y="${H - pb + 14}" text-anchor="middle">${r.h}</text>` : '')).join('');
-  const hit = rows.map((r, i) => `<rect class="hit" x="${x(i).toFixed(1)}" y="${pt}" width="${bw.toFixed(1)}" height="${H - pt - pb}"><title>${ctx.esc(`${String(r.h).padStart(2, '0')}:00 · ${r.a != null ? `${t('fv.ist')} ${n0(r.a)}` : r.l != null ? `${t('fv.live')} ${n0(r.l)}` : t('fv.notObserved')}${r.p != null ? ` · ${t('fv.plan')} ${n0(r.p)}` : ''}${r.c != null ? ` · ${t('fv.chronos')} ${n0(r.c)}` : ''}`)}</title></rect>`).join('');
+  const hit = rows.map((r, i) => `<rect class="hit" x="${x(i).toFixed(1)}" y="${pt}" width="${bw.toFixed(1)}" height="${H - pt - pb}"><title>${ctx.esc(`${String(r.h).padStart(2, '0')}:00 · ${r.a != null ? `${t('fv.ist')} ${n0(r.a)}` : r.l != null ? `${t('fv.live')} ${n0(r.l)}` : t('fv.notObserved')}${r.p != null ? ` · ${t('fv.plan')} ${n0(r.p)}` : ''}${r.c != null ? ` · ${t('fv.chronos')} ${n0(r.c)}` : ''}${r.u ? ` · ${t('fv.usual')} ${n0(r.u[0])}–${n0(r.u[1])}` : ''}`)}</title></rect>`).join('');
   const sepAndDays = blocks.map((b, k) => `${k ? `<line class="mid" x1="${x(b.from).toFixed(1)}" x2="${x(b.from).toFixed(1)}" y1="${pt}" y2="${H - pb}"/>` : ''}<text class="dayl" x="${(x(b.from) + (b.to - b.from) * bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${ctx.esc(b.label)}</text>`).join('');
   const now = nowIdx != null ? `<line class="now" x1="${x(nowIdx).toFixed(1)}" x2="${x(nowIdx).toFixed(1)}" y1="${pt - 6}" y2="${H - pb}"/><text x="${(x(nowIdx) + 4).toFixed(1)}" y="${pt - 6}">${ctx.esc(t('fv.now'))}</text>` : '';
   const total = sum(rows.map(r => r.a ?? r.l ?? 0));
-  return `<div class="fv-chart"><svg viewBox="0 0 ${W} ${H}" data-pl="${pl}" data-bw="${bw}" data-pt="${pt}" data-ph="${H - pt - pb}" role="img" aria-label="${ctx.esc(t('fv.chartAria', { total: n0(total) }))}">${grid}${bars}<path class="ln-p" d="${d}"/>${dc ? `<path class="ln-c" d="${dc}"/>` : ''}${now}${sepAndDays}${labels}${hit}</svg></div>`;
+  return `<div class="fv-chart"><svg viewBox="0 0 ${W} ${H}" data-pl="${pl}" data-bw="${bw}" data-pt="${pt}" data-ph="${H - pt - pb}" role="img" aria-label="${ctx.esc(t('fv.chartAria', { total: n0(total) }))}">${grid}${usual}${bars}${peakTxt}<path class="ln-p" d="${d}"/>${dc ? `<path class="ln-c" d="${dc}"/>` : ''}${now}${sepAndDays}${labels}${hit}</svg></div>`;
 }
 
 // ---------- Daten für die Spots ----------
@@ -358,24 +364,39 @@ export function gradeOf(S0, sel, G, L) {
   // ausgegebene Prognosen (Live-Abgleich, letzte 7 Tage): je Anbieter und Stunde gegen „wie gestern“ über dieselben Stunden
   const lvRec = (L?.live || []).filter(x => x.wapeOpHn != null && x.naiveOpH != null && (L?.generatedAt ? Date.parse(L.generatedAt) - x.at <= 7 * 86400e3 : true));
   const liveLv = lvRec.length ? { a: mean(lvRec.map(x => x.wapeOpHn)), b: mean(lvRec.map(x => x.naiveOpH)), n: lvRec.length, h: mean(lvRec.map(x => x.hours ?? 24)) } : null;
-  const lv = [['live', liveLv], ['scope', scope], ['gh', gm('wapeGH')], ['gd', gm('wapeGD')]].filter(([, x]) => x && x.a != null && x.b != null).map(([k, x]) => ({ k, ...x, j: judge(x.a, x.b) }));
-  const nb = lv.filter(x => x.j === 'better').length, nw = lv.filter(x => x.j === 'worse').length;
-  const lvl = !lv.length ? 'none' : nw === 0 ? 'ok' : nb === 0 ? 'bad' : 'near';
+  // Audit UXP-07: live, gh und gd gelten für Deutschland gesamt; bei einer Auswahl (Gemeinde, Anbieter, Art) urteilt nur deren eigene Ebene
+  const local = !(sel?.ags === 'DE' || !sel?.ags) || (sel?.op && sel.op !== 'all') || (sel?.ty && sel.ty !== 'all');
+  const lv = [['live', liveLv], ['scope', scope], ['gh', gm('wapeGH')], ['gd', gm('wapeGD')]].filter(([, x]) => x && x.a != null && x.b != null).map(([k, x]) => ({ k, ...x, j: judge(x.a, x.b), nat: local && k !== 'scope' }));
+  const vl = local && lv.some(x => x.k === 'scope') ? lv.filter(x => x.k === 'scope') : lv, main = vl[0] || null;
+  const nb = vl.filter(x => x.j === 'better').length, nw = vl.filter(x => x.j === 'worse').length;
+  // Audit UXP-06: Haken nur, wenn mindestens eine Ebene besser ist und die Hauptebene unter GRADE_USABLE Abweichung liegt
+  const unusable = main != null && main.a >= GRADE_USABLE;
+  const lvl = !vl.length ? 'none' : nw === 0 && nb >= 1 && !unusable ? 'ok' : nb === 0 && nw > 0 ? 'bad' : 'near';
   const biasG = days.length ? mean(days.map(d => ev[d].models[act].bias).filter(x => x != null)) : null;
-  return { lv, nb, nw, lvl, act, evalDays: days.length, win, bias: scope?.bias ?? biasG };
+  return { lv, vl, main, local, natOnly: local && !lv.some(x => x.k === 'scope'), unusable, nb, nw, lvl, act, evalDays: days.length, win, bias: scope?.bias ?? biasG };
 }
+const GRADE_USABLE = 0.5; // Abweichung je Stunde ab 50 %: „nur als Größenordnung lesen“, kein grüner Haken
 function verdictText(ctx, g) {
-  if (!g.lv.length) return t('fv.vNone');
-  const n = g.lv.length, main = g.nw === 0 ? (g.nb === n ? t('fv.vAll', { n }) : t('fv.vNoWorse', { b: g.nb, n })) : g.nb === 0 ? t('fv.vNotYet', { w: g.nw, n }) : t('fv.vMixed', { b: g.nb, w: g.nw, n });
+  if (!g.vl?.length) return t('fv.vNone');
+  const n = g.vl.length, x = g.main;
+  const main = g.unusable ? t('fv.vUnusable', { a: pc(x.a), b: pc(x.b) })
+    : n === 1 ? t(x.j === 'better' ? 'fv.vOne' : x.j === 'worse' ? 'fv.vOneWorse' : 'fv.vOneEq', { a: pc(x.a), b: pc(x.b) })
+    : g.nw === 0 ? (g.nb === n ? t('fv.vAll', { n }) : t('fv.vNoWorse', { b: g.nb, n })) : g.nb === 0 ? t('fv.vNotYet', { w: g.nw, n }) : t('fv.vMixed', { b: g.nb, w: g.nw, n });
+  const nat = g.natOnly ? ` ${t('fv.vNational')}` : '';
   const basis = g.evalDays < g.win ? t('fv.vBasisEarly', { n: g.evalDays, win: g.win }) : t('fv.vBasis', { n: g.evalDays });
   const bias = g.bias == null ? '' : Math.abs(g.bias) < 0.05 ? t('fv.vBiasNone', { d: sg(g.bias, 0) }) : t(g.bias < 0 ? 'fv.vBiasLow' : 'fv.vBiasHigh', { d: pc(Math.abs(g.bias)) });
-  return `<b>${ctx.esc(main)}</b> ${ctx.esc(bias)} ${ctx.esc(basis)}`;
+  return `<b>${ctx.esc(main)}</b> ${ctx.esc(bias)} ${ctx.esc(basis)}${ctx.esc(nat)}`;
+}
+/** Zeugnis in einer Zeile über dem Diagramm (Audit UXP-05), Details im Panel darunter */
+function gradeLine(ctx, S0, sel, G, L) {
+  const g = gradeOf(S0, sel, G, L), ico = g.lvl === 'ok' ? '✓' : g.lvl === 'near' ? '!' : g.lvl === 'bad' ? '✗' : '–';
+  return `<p class="fv-verdict fv-gline ${g.lvl}"><i aria-hidden="true">${ico}</i><span>${verdictText(ctx, g)} <a href="#fv-grade">${t('fv.gDetails')}</a></span></p>`;
 }
 const jChip = (j) => (j ? `<span class="fv-j ${j}">${t(j === 'better' ? 'fv.gBetter' : j === 'worse' ? 'fv.gWorse' : 'fv.gEqual')}</span>` : '–');
 function gradePanel(ctx, S0, sel, G, L) {
   const g = gradeOf(S0, sel, G, L), scopeTxt = scopeLabel(ctx, sel);
   const label = (x) => (x.k === 'live' ? [t('fv.gRowLive'), t('fv.gRowLiveSub', { n: x.n, h: n0(x.h) })] : x.k === 'scope' ? [t('fv.gRowScope', { s: scopeTxt }), t('fv.gRowScopeSub', { n: x.n })] : x.k === 'gh' ? [t('fv.gRowGH'), t('fv.gRowGroupSub', { n: x.n, model: modelName(g.act) })] : [t('fv.gRowGD'), t('fv.gRowGroupSub', { n: x.n, model: modelName(g.act) })]);
-  const tbl = g.lv.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.gradeTitle'))}"><table><thead><tr><th>${t('fv.gLevel')}</th><th class="n">${t('fv.gModel')}</th><th class="n">${t('fv.gNaive')}</th><th class="mh">${t('fv.gVerdict')}</th></tr></thead><tbody>${g.lv.map(x => { const [l, s] = label(x); return `<tr><td class="wrap"><span class="lv">${ctx.esc(l)}</span><span class="lvs">${ctx.esc(s)}</span><span class="m-only">${jChip(x.j)}</span></td><td class="n">${pc(x.a)}</td><td class="n">${pc(x.b)}</td><td class="mh">${jChip(x.j)}</td></tr>`; }).join('')}</tbody></table></div>` : '';
+  const tbl = g.lv.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.gradeTitle'))}"><table><thead><tr><th>${t('fv.gLevel')}</th><th class="n">${t('fv.gModel')}</th><th class="n">${t('fv.gNaive')}</th><th class="mh">${t('fv.gVerdict')}</th></tr></thead><tbody>${g.lv.map(x => { const [l, s] = label(x); return `<tr><td class="wrap"><span class="lv">${ctx.esc(l)}</span>${x.nat ? ` <span class="fv-chip D">${t('fv.gNat')}</span>` : ''}<span class="lvs">${ctx.esc(s)}</span><span class="m-only">${jChip(x.j)}</span></td><td class="n">${pc(x.a)}</td><td class="n">${pc(x.b)}</td><td class="mh">${jChip(x.j)}</td></tr>`; }).join('')}</tbody></table></div>` : '';
   const ico = g.lvl === 'ok' ? '✓' : g.lvl === 'near' ? '!' : g.lvl === 'bad' ? '✗' : '–';
   return `<div class="panel" id="fv-grade">${head(t('fv.gradeTitle'), t('fv.gradeSub'))}<p class="fv-verdict ${g.lvl}"><i aria-hidden="true">${ico}</i><span>${verdictText(ctx, g)}</span></p>${tbl}<div class="fv-sub">${t('fv.gHow')}</div>${dlRow(true)}</div>`;
 }
@@ -644,19 +665,35 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   const { esc } = ctx;
   const sel = pickScope(S0, ctx.state), today = S0.today, bn = berlinNow();
   // heutige Ist-Werte frisch aus der Tagesdatei (der Sammler schreibt die Reihen höchstens stündlich)
-  const live = await freshActual(ctx, S0, sel, today); if (tok !== s.tok) return;
+  const fresh = await freshActual(ctx, S0, sel, today); if (tok !== s.tok) return;
+  if (s.norm == null) { try { s.norm = localStorage.getItem('fv-norm') !== '0'; } catch { s.norm = true; } }
+  const live = fresh?.a || null, norm = s.norm !== false, stale = bn.day !== today;
   const dayList = Object.keys(S0.days).filter(d => d <= today).sort().reverse(); // heute, gestern, …
   const view = s.day && (s.day === 'ahead' || dayList.includes(s.day)) ? s.day : 'ahead';
   s.day = view;
   const nowH = bn.day === today ? bn.h : bn.day > today ? 24 : 0, T = today, TM = addDays(today, 1);
   const eT = seriesOf(S0, T, sel), eM = seriesOf(S0, TM, sel);
   if (live) eT.a = live;
-  // Zeilen des Diagramms
-  const mk = (day, e, withLive) => Array.from({ length: 24 }, (_, h) => ({ day, h, p: e.p?.[h] ?? null, a: e.a?.[h] ?? null, l: withLive ? (e.l?.[h] ?? null) : null, c: e.c?.[h] ?? null }));
+  // Zeilen des Diagramms; norm: je volle Stunde (Audit MET-01: der Sammler läuft alle ~18 Min., eine Stunde zählt 3 oder 4 Läufe und damit
+  // 50–76 Minuten. Ist × 60 ÷ beobachtete Minuten des Tages; Plan und Live-Prognose × 60 ÷ beobachtete Minuten des Tages, dessen Fahrzeugstunden
+  // sie verwenden (zuletzt beobachteter Tag davor, wie lib/pulse-forecast.js lastExposure). Nur Anzeige; Summen und Kacheln bleiben gezählt.
+  const obsOf = (d) => (d === today && fresh?.obs ? fresh.obs : ctx.state.latest?.measure?.days?.[d]?.obs) || null;
+  const mDays = [...new Set([...Object.keys(ctx.state.latest?.measure?.days || {}), today])].sort();
+  const fA = (d, h) => { const o = obsOf(d)?.[h]; return norm && o >= 30 ? 60 / o : 1; };
+  const fP = (d, h) => { if (!norm) return 1; for (let i = mDays.length - 1; i >= 0; i--) { const e = mDays[i]; if (e >= d) continue; const o = obsOf(e)?.[h]; if (o >= FC.GATES.hourMinObserved) return 60 / o; } return 1; };
+  const nz = (v, f) => (v == null ? null : v * f);
+  // üblicher Bereich (Audit UXP-09): gezählte Werte derselben Stunde an den letzten 3 Tagen gleicher Art (Werktag / Samstag / Sonn- und Feiertag) vor dem Tag
+  const land = sel.ags && sel.ags !== 'DE' ? FC.LAND_OF_AGS[String(sel.ags).slice(0, 2)] ?? null : null, clsOf = (d) => FC.classOf(dayType(d, land, ctx.state.calendar || null));
+  const pastDays = Object.keys(S0.days).filter(d => d <= today).sort();
+  const usualOf = (day, h) => { const c = clsOf(day), v = [];
+    for (let i = pastDays.length - 1; i >= 0 && v.length < 3; i--) { const d = pastDays[i]; if (d >= day || clsOf(d) !== c) continue; const a = (d === today && live ? live : seriesOf(S0, d, sel).a)?.[h]; if (a != null) v.push(a * fA(d, h)); }
+    return v.length >= 2 ? [Math.min(...v), Math.max(...v)] : null; };
+  const mk = (day, e, withLive) => Array.from({ length: 24 }, (_, h) => ({ day, h, p: nz(e.p?.[h], fP(day, h)), a: nz(e.a?.[h], fA(day, h)), l: withLive ? nz(e.l?.[h], fP(day, h)) : null, c: e.c?.[h] ?? null, u: usualOf(day, h) }));
   let rows, blocks, nowIdx = null, title;
   if (view === 'ahead') {
     rows = [...mk(T, eT, true), ...mk(TM, eM, true)];
-    blocks = [{ from: 0, to: 24, label: `${t('fv.today')} · ${dayTxt(T)}` }, { from: 24, to: 48, label: `${t('fv.tomorrow')} · ${dayTxt(TM)}` }];
+    // Audit UXP-10: nach Mitternacht, bevor der erste Lauf des neuen Tags die Reihen fortschreibt, stimmt „Heute“ nicht – dann nur Datum
+    blocks = stale ? [{ from: 0, to: 24, label: dayTxt(T) }, { from: 24, to: 48, label: dayTxt(TM) }] : [{ from: 0, to: 24, label: `${t('fv.today')} · ${dayTxt(T)}` }, { from: 24, to: 48, label: `${t('fv.tomorrow')} · ${dayTxt(TM)}` }];
     nowIdx = nowH < 24 ? nowH : null; title = t('fv.chartAhead');
   } else {
     const e = seriesOf(S0, view, sel); rows = mk(view, e, false); blocks = [{ from: 0, to: 24, label: dayTxt(view, { weekday: 'long', day: 'numeric', month: 'long' }) }]; title = t('fv.chartDay', { d: dayTxt(view) });
@@ -669,27 +706,35 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   // Erwartung bis Tagesende: gezählte Stunden + für alle übrigen Stunden die Live-Prognose, wo es keine gibt der Plan
   const doneIst = eT.a ? sum(eT.a.filter(x => x != null)) : 0, planDay = eT.p ? sum(eT.p) : null, totalM = eM.l ? sum(eM.l) : eM.p ? sum(eM.p) : null;
   const expectDay = Array.from({ length: 24 }, (_, h) => eT.a?.[h] ?? eT.l?.[h] ?? eT.p?.[h] ?? 0).reduce((x, y) => x + y, 0);
+  // Spitze je Tag (Audit UXP-08) aus den angezeigten Stundenwerten: gezählt, sonst Live-Prognose, sonst Plan
+  const peakOf = (from, to) => { let bi = -1, bv = -1; for (let i = from; i < to; i++) { const r = rows[i], v = r?.a ?? r?.l ?? r?.p; if (v != null && v > bv) { bv = v; bi = i; } } return bi < 0 ? null : { i: bi, h: rows[bi].h, v: bv, src: rows[bi].a != null ? 'a' : rows[bi].l != null ? 'l' : 'p' }; };
+  const peaks = view === 'ahead' ? [peakOf(0, 24), peakOf(24, 48)] : [peakOf(0, 24)];
+  const pkTile = (pk, lbl) => tile(lbl, pk ? t('fv.kPeakV', { h: String(pk.h).padStart(2, '0'), h2: String((pk.h + 1) % 24).padStart(2, '0') }) : '–', pk ? t(pk.src === 'a' ? 'fv.kPeakSubA' : 'fv.kPeakSubF', { v: n0(pk.v), u: norm ? t('fv.perFullHour') : '' }) : t('fv.kNoPlan'));
   const tiles = noSeries ? '' : `<div class="tiles">${tile(t('fv.kSoFar'), n0(doneIst), stT ? t('fv.kSoFarSub', { plan: n0(stT.plan), d: sg(stT.bias, 1) }) : t('fv.kNoPlan'))}`
     + `${tile(t('fv.kErr'), stT ? pc(stT.wape) : '–', stT ? (stT.naive != null ? t('fv.kErrSub', { naive: pc(stT.naive), verdict: t(judge(stT.wape, stT.naive) === 'better' ? 'fv.gBetter' : judge(stT.wape, stT.naive) === 'worse' ? 'fv.gWorse' : 'fv.gEqual') }) : t('fv.kErrSub1', { n: stT.n })) : t('fv.kNoPlan'))}`
     + `${tile(t('fv.kDay'), n0(expectDay), planDay != null ? t('fv.kDaySub', { plan: n0(planDay), d: sg(planDay > 0 ? expectDay / planDay - 1 : null, 1) }) : t('fv.kNoPlan'))}`
-    + `${tile(t('fv.kTomorrow'), totalM == null ? '–' : n0(totalM), totalM != null && expectDay > 0 ? t('fv.kTomorrowSub', { d: sg(totalM / expectDay - 1, 0) }) : t('fv.kNoPlan'))}</div>`;
+    + `${tile(t('fv.kTomorrow'), totalM == null ? '–' : n0(totalM), totalM != null && expectDay > 0 ? t('fv.kTomorrowSub', { d: sg(totalM / expectDay - 1, 0) }) : t('fv.kNoPlan'))}`
+    + (view === 'ahead' ? `${pkTile(peaks[0], stale ? t('fv.kPeakD', { d: dayTxt(T) }) : t('fv.kPeakToday'))}${pkTile(peaks[1], stale ? t('fv.kPeakD', { d: dayTxt(TM) }) : t('fv.kPeakTomorrow'))}` : pkTile(peaks[0], t('fv.kPeakD', { d: dayTxt(view) }))) + '</div>';
   const lead = noSeries ? `<div class="empty"><b>${t('fv.noScope')}</b>${esc(t('fv.noScopeHint'))}</div>` : '';
   const dataTable = noSeries ? '' : `<details class="fv-data"><summary>${t('fv.tableToggle')}</summary><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fv.tableToggle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th class="n">${t('fv.colHour')}</th><th class="n">${t('fv.colIst')}</th><th class="n">${t('fv.colPlan')}</th><th class="n">${t('fv.colLive')}</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(dayTxt(r.day))}</td><td class="n">${String(r.h).padStart(2, '0')}:00</td><td class="n">${n0(r.a)}</td><td class="n">${n0(r.p)}</td><td class="n">${n0(r.l)}</td></tr>`).join('')}</tbody></table></div></details>`;
   const notes = [sel.partial ? t('fv.nPartial') : '', sel.ignored ? t('fv.nIgnored') : '', S0.generatedAt ? t('fv.asOf', { time: dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) }) : ''].filter(Boolean).join(' ');
   const accRowsNow = accRows(S0, sel, G);
   el.innerHTML = topBar(ctx, sel, noSeries ? '' : `${csvBtn('series', t('fv.csvSeries'))}${accRowsNow.length ? csvBtn('days', t('fv.csvDays')) : ''}`)
-    + `<div class="fv-grid">${gradePanel(ctx, S0, sel, G, L)}${scopePanel(ctx, S0, sel, G, L)}`
-    + `<div class="panel">${head(title, t('fv.chartSub'), `<span class="fv-scope">${t('fv.scope')}: <b>${esc(scopeTxt)}</b></span>`)}${lead || ''}`
-    + `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.dayAria'))}">${segs.map(([v, l]) => `<button data-v="${esc(v)}" aria-pressed="${v === view}">${esc(l)}</button>`).join('')}</div></div>`
-    + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span>${rows.some(r => r.c != null) ? `<span title="${esc(t('fv.chronosTip'))}"><i class="k-c"></i>${t('fv.chronos')}</span>` : ''}</div>${timeline(ctx, rows, { nowIdx: view === 'ahead' ? nowIdx : null, width: el.clientWidth - 40, blocks })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${esc(notes)}</div>${dataTable}`) + '</div>'
+    + `<div class="fv-grid"><div class="panel">${head(title, t('fv.chartSub'), `<span class="fv-scope">${t('fv.scope')}: <b>${esc(scopeTxt)}</b></span>`)}${gradeLine(ctx, S0, sel, G, L)}${stale ? `<p class="fv-stale warn-text">${esc(t('fv.staleDay', { time: S0.generatedAt ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) : '–' }))}</p>` : ''}${lead || ''}`
+    + `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.dayAria'))}">${segs.map(([v, l]) => `<button data-v="${esc(v)}" aria-pressed="${v === view}">${esc(l)}</button>`).join('')}</div>`
+    + `<div class="fv-tog fv-norm" role="group" aria-label="${esc(t('fv.normAria'))}"><button data-n="1" aria-pressed="${norm}" title="${esc(t('fv.normTip'))}">${t('fv.normOn')}</button><button data-n="0" aria-pressed="${!norm}">${t('fv.normOff')}</button></div></div>`
+    + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span>${rows.some(r => r.u) ? `<span title="${esc(t('fv.usualTip'))}"><i class="k-u"></i>${t('fv.usual')}</span>` : ''}${rows.some(r => r.c != null) ? `<span title="${esc(t('fv.chronosTip'))}"><i class="k-c"></i>${t('fv.chronos')}</span>` : ''}</div>${timeline(ctx, rows, { nowIdx: view === 'ahead' && !stale ? nowIdx : null, width: el.clientWidth - 40, blocks, peaks: peaks.filter(Boolean).map(p => p.i) })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${norm ? t('fv.normNote') : ''} ${esc(notes)}</div>${dataTable}`) + '</div>'
+    + `${gradePanel(ctx, S0, sel, G, L)}${scopePanel(ctx, S0, sel, G, L)}`
     + `${eventsMainShell(ctx, sel)}${accuracyPanel(ctx, S0, sel, G, L)}${curvePanel(ctx, G, L, el.clientWidth - 40)}${learnPanel(ctx, L, G)}<p class="fv-sub">${t('fv.moreBasis')} <a href="#prognose-basis">${t('fv.segBasis')}</a>.</p></div>`;
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
-  el.querySelectorAll('.fv-tog button').forEach(b => b.addEventListener('click', () => { s.day = b.dataset.v; renderForecastView(el, ctx, { part: 'verlauf' }); }));
+  el.querySelectorAll('.fv-tog button[data-v]').forEach(b => b.addEventListener('click', () => { s.day = b.dataset.v; renderForecastView(el, ctx, { part: 'verlauf' }); }));
+  el.querySelectorAll('.fv-norm button').forEach(b => b.addEventListener('click', () => { s.norm = b.dataset.n === '1'; try { localStorage.setItem('fv-norm', s.norm ? '1' : '0'); } catch {} renderForecastView(el, ctx, { part: 'verlauf' }); }));
+  el.querySelector('.fv-gline a')?.addEventListener('click', (e) => { e.preventDefault(); el.querySelector('#fv-grade')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   if (!noSeries) fillWx(el.querySelector('.fv-wx'), ctx, rows, sel, el.clientWidth - 40);
   if (!noSeries) markEvents(el, ctx, rows, sel);
   fillEventsMain(el.querySelector('#fv-ev-main .fv-ev-body'), ctx, sel, S0);
   el.querySelector('[data-fv-csv="series"]')?.addEventListener('click', () => download(`prognose_stundenreihe_${fileTag(ctx, sel)}_${view === 'ahead' ? today : view}.csv`,
-    [[t('fv.colScope'), t('fv.colDay'), t('fv.colHour'), t('fv.colIst'), t('fv.colPlan'), t('fv.colLive'), t('fv.chronos')], ...rows.map(r => [scopeTxt, r.day, r.h, r.a == null ? null : [r.a, 1], r.p == null ? null : [r.p, 1], r.l == null ? null : [r.l, 1], r.c == null ? null : [r.c, 0]])]));
+    [[t('fv.colScope'), t('fv.colDay'), t('fv.colHour'), t('fv.colIst'), t('fv.colPlan'), t('fv.colLive'), t('fv.chronos'), t('fv.colUsualLo'), t('fv.colUsualHi'), t('fv.colUnit')], ...rows.map(r => [scopeTxt, r.day, r.h, r.a == null ? null : [r.a, 1], r.p == null ? null : [r.p, 1], r.l == null ? null : [r.l, 1], r.c == null ? null : [r.c, 0], r.u ? [r.u[0], 1] : null, r.u ? [r.u[1], 1] : null, norm ? t('fv.normOn') : t('fv.normOff')])]));
   el.querySelector('[data-fv-csv="days"]')?.addEventListener('click', () => download(`prognose_tage_${fileTag(ctx, sel)}.csv`,
     [[t('fv.colScope'), t('fv.colDay'), t('fv.colIst'), t('fv.colPlan'), t('fv.colBias'), t('fv.colErr'), t('fv.colNaive'), t('fv.colSkill'), t('fv.colTrain')], ...accRowsNow.map(r => [scopeTxt, r.d, [r.ist, 0], [r.plan, 0], r.bias == null ? null : [r.bias, 4], r.wape == null ? null : [r.wape, 4], r.naive == null ? null : [r.naive, 4], r.skill == null ? null : [r.skill, 4], r.train])]));
 }
@@ -941,8 +986,8 @@ async function freshActual(ctx, S0, sel, today) {
     const doc = await ctx.loadEvents(today); if (!doc?.groups) return null;
     const bad = new Set(Object.entries(ctx.state.latest?.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k));
     const groups = Object.fromEntries(Object.entries(doc.groups).filter(([k]) => !bad.has(k)));
-    const A = FC.actualOfDay(FC.dayFromDoc({ ...doc, groups }, ctx.state.calendar || null)), out = new Array(24).fill(null);
+    const D = FC.dayFromDoc({ ...doc, groups }, ctx.state.calendar || null), A = FC.actualOfDay(D), out = new Array(24).fill(null);
     for (const k of sel.keys) { const a = A.get(k); if (!a) continue; a.forEach((v, h) => { if (v != null) out[h] = (out[h] || 0) + v; }); }
-    return out.some(x => x != null) ? out : null;
+    return out.some(x => x != null) ? { a: out, obs: D.hourMin } : null;
   } catch { return null; }
 }

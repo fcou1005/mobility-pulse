@@ -2,11 +2,11 @@
 // einzigartig gegen geteilt, Überschneidung der Zellen, Karte mit Filter, Stationsliste mit CSV.
 // Eigenständig: renderCompare(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, setScope }; Leaflet (L) global.
 // Daten: ops/<Land>.json (letzter Sammler-Lauf), Rechenlogik in lib/pulse-compare.js. Werte aus Daten gehen durch ctx.esc.
-import * as P from './pulse-compare.js?v=mwclbtab';
-import { decodeFleet, idleClassText } from './pulse-ops.js?v=mwclbtab';
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwclbtab';
-import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mwclbtab';
-import { mapKeys } from './mapkeys.js?v=mwclbtab';
+import * as P from './pulse-compare.js?v=mwclnq6m';
+import { decodeFleet, idleClassText } from './pulse-ops.js?v=mwclnq6m';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwclnq6m';
+import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js?v=mwclnq6m';
+import { mapKeys } from './mapkeys.js?v=mwclnq6m';
 
 const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
 const CACHE = new Map();
