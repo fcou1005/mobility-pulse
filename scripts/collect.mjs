@@ -28,7 +28,7 @@ const CONCURRENCY = +process.env.CONCURRENCY || 8;
 const TIMEOUT = +process.env.FETCH_TIMEOUT || 20000;
 const MAX_BYTES = +process.env.MAX_BYTES || 40e6; // Obergrenze je Antwort
 const HISTORY_DAYS = +process.env.HISTORY_DAYS || 30;
-const HEALTH = { minShare: 0.9 }; // Ausfall-Wächter: „fail“ unter 90 % der üblichen Zahl liefernder Quellen (HEALTH_FILE)
+const HEALTH = { minShare: 0.9, minVehShare: 0.85 }; // Ausfall-Wächter: „fail“ unter 90 % der üblichen Zahl liefernder Quellen oder unter 85 % der üblichen Fahrzeugzahl (HEALTH_FILE)
 const UA = 'mobility-pulse/1.0 (+https://github.com/fcou1005/mobility-pulse)';
 
 // Verfolgungszustand: mit TRACK_DIR (privater Cache des Workflows) gesalzene HMAC-Schlüssel und kein out/track mehr;
@@ -608,7 +608,7 @@ const failing = FAILING.reduce((a, k) => a + (statusCounts[k] || 0), 0);
 const errorCauses = {};
 for (const r of sourceOut) { if (!FAILING.includes(r.status)) continue; r.errorCause = C.errorCause(r.errors, r.httpStatus); errorCauses[r.errorCause] = (errorCauses[r.errorCause] || 0) + 1; }
 const latest = {
-  at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt,
+  at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt, catalogFallback: catalog.catalogFallback || null,
   boundaries: boundaries ? { count: boundaries.features.length, attribution: boundaries.attribution, source: boundaries.source } : null,
   counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, municipalitiesShown: presence ? Object.values(muniOut).filter(V.muniShown).length : munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
   dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size, mirrorSources: mirrorInfo.size },
@@ -1533,8 +1533,10 @@ if (boundaries) {
   if (process.env.HEALTH_FILE) {
     const okOf = (r) => (r[3] || 0) + (r[4] || 0), prev = doc.runs.slice(0, -1).map(okOf).sort((a, b) => a - b);
     const med = prev.length >= 12 ? prev[Math.floor(prev.length / 2)] : null, cur = okOf(doc.runs[doc.runs.length - 1]);
-    const fail = med != null && cur < HEALTH.minShare * med;
-    await writeFile(process.env.HEALTH_FILE, `${fail ? 'fail' : 'ok'}\n${cur} Quellen aktuell/verzögert${med != null ? ` (Median 7 Tage ${med}, Schwelle ${Math.ceil(HEALTH.minShare * med)})` : ''} · ${dv.vehicles.length} Fahrzeuge · ${((Date.now() - now) / 1000).toFixed(0)} s\n`);
+    // Audit OPS-01: auch die Fahrzeugzahl (8.11.: −29 % Fahrzeuge bei „grünem“ Lauf, weil ein ganzes Verzeichnis fehlte)
+    const vPrev = doc.runs.slice(0, -1).map(r => r[7] || 0).filter(v => v > 0).sort((a, b) => a - b), vMed = vPrev.length >= 12 ? vPrev[Math.floor(vPrev.length / 2)] : null, vCur = doc.runs[doc.runs.length - 1][7] || 0;
+    const failSrc = med != null && cur < HEALTH.minShare * med, failVeh = vMed != null && vCur < HEALTH.minVehShare * vMed, fail = failSrc || failVeh;
+    await writeFile(process.env.HEALTH_FILE, `${fail ? 'fail' : 'ok'}\n${cur} Quellen aktuell/verzögert${med != null ? ` (Median 7 Tage ${med}, Schwelle ${Math.ceil(HEALTH.minShare * med)})` : ''} · ${dv.vehicles.length} Fahrzeuge${vMed != null ? ` (Median ${vMed}, Schwelle ${Math.ceil(HEALTH.minVehShare * vMed)})` : ''}${catalog.catalogFallback?.length ? ` · Verzeichnis nicht erreichbar: ${catalog.catalogFallback.map(x => x.dir).join(', ')}` : ''} · ${((Date.now() - now) / 1000).toFixed(0)} s\n`);
   }
 }
 log(`fertig in ${((Date.now() - now) / 1000).toFixed(1)} s · Status:`, JSON.stringify(statusCounts));

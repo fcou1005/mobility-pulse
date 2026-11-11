@@ -12,6 +12,12 @@ const OUT = process.env.CATALOG_OUT || path.join(ROOT, 'data', 'sources.json'); 
 const manual = JSON.parse(await readFile(path.join(ROOT, 'data', 'sources-manual.json'), 'utf8'));
 
 const log = (...a) => console.error('[catalog]', ...a);
+// Audit OPS-02: fällt ein Verzeichnis aus (Fehler oder 0 Einträge), bleiben seine Quellen aus dem vorigen Katalog stehen, statt zu verschwinden
+// (8.11.2026: MOBIDROM NRW weg → 132 Quellen, −36.000 Fahrzeuge für 80 Min.). Vorlauf: CATALOG_PREV, sonst out/sources.json (Datenstand
+// des letzten Laufs, im Workflow vor diesem Schritt geholt), sonst die bisherige Ausgabedatei.
+const PREV_FILE = [process.env.CATALOG_PREV, path.join(ROOT, 'out', 'sources.json'), OUT].find(f => f && existsSync(f));
+let prevCatalog = null; try { prevCatalog = PREV_FILE ? JSON.parse(await readFile(PREV_FILE, 'utf8')) : null; } catch { prevCatalog = null; }
+const dirCount = {}; // Einträge je Verzeichnis in diesem Lauf
 
 // Timeout gilt bis zum Ende des Lesens, Antwort höchstens MAX_BYTES (Standard 50 MB)
 const MAX_BYTES = +process.env.MAX_BYTES || 50e6;
@@ -70,6 +76,7 @@ const sources = new Map(); // key: System-ID (Verzeichnisse teilen sich IDs) ode
 const normUrl = (u) => (u || '').replace(/\/$/, '').replace(/\/gbfs\.json$/, '/gbfs');
 const add = (s) => {
   s.priority ??= 2;
+  for (const d of s.directories || []) dirCount[d] = (dirCount[d] || 0) + 1;
   if (bySystem[s.id]) s.operator = bySystem[s.id];
   const byId = sources.get(s.id);
   const byUrl = [...sources.values()].find(x => normUrl(x.url) === normUrl(s.url));
@@ -91,7 +98,8 @@ const add = (s) => {
 
 // 1) MobilityData systems.csv — alle DE-Systeme
 {
-  const { text, fromCache } = await fetchText('https://raw.githubusercontent.com/MobilityData/gbfs/master/systems.csv', 'systems.csv');
+  let text = '', fromCache = false;
+  try { ({ text, fromCache } = await fetchText('https://raw.githubusercontent.com/MobilityData/gbfs/master/systems.csv', 'systems.csv')); } catch (e) { log('MobilityData nicht erreichbar:', e.message); }
   const rows = parseCsv(text).filter(r => r['Country Code'] === 'DE');
   log(`MobilityData: ${rows.length} DE-Systeme${fromCache ? ' (Cache)' : ''}`);
   for (const r of rows) {
@@ -201,10 +209,22 @@ for (const [key, cfg] of Object.entries(manual.auth_sources || {})) {
   }
 }
 
+// Rückfall je Verzeichnis (OPS-02): ausgefallenes Verzeichnis → Einträge aus dem Vorlauf übernehmen und vermerken
+const catalogFallback = [];
+for (const dir of ['mobilitydata', 'mobidata_bw', 'mobidrom_nrw', 'citybikes']) {
+  if (dirCount[dir] > 0 || !prevCatalog?.sources) continue;
+  const old = prevCatalog.sources.filter(x => (x.directories || []).includes(dir));
+  if (!old.length) continue;
+  for (const x of old) add({ ...x, directories: [...x.directories] });
+  const since = prevCatalog.catalogFallback?.find(f => f.dir === dir)?.since || prevCatalog.generatedAt || null;
+  catalogFallback.push({ dir, n: old.length, since });
+  log(`${dir}: nicht erreichbar oder leer – ${old.length} Quellen aus dem Vorlauf (${since || 'ohne Datum'}) übernommen`);
+}
 const list = [...new Set(sources.values())].sort((a, b) => a.operator.localeCompare(b.operator) || a.id.localeCompare(b.id));
 const out = {
   generatedAt: new Date().toISOString(),
   count: list.length,
+  ...(catalogFallback.length ? { catalogFallback } : {}),
   directories: { mobilitydata: 'https://github.com/MobilityData/gbfs/blob/master/systems.csv', mobidata_bw: 'https://api.mobidata-bw.de/sharing/gbfs', mobidrom_nrw: 'https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet', citybikes: 'https://api.citybik.es/v2/networks', dott_direct: 'https://gbfs.api.ridedott.com/public/v2/', lime_direct: 'https://data.lime.bike/api/partners/v2/gbfs/', zeus_direct: 'https://zeus.city/api/v1/mds/gbfs/', bird_direct: 'https://mds.bird.co/gbfs/v2/public/', db_api: 'https://developers.deutschebahn.com/db-api-marketplace/apis/product/shared-mobility-gbfs' },
   auth_sources: Object.fromEntries(Object.entries(manual.auth_sources || {}).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, { host: v.host, headers: v.headers, env: v.env }])),
   parking_reference: manual.parking_reference,

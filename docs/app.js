@@ -1,18 +1,18 @@
-import * as C from './pulse-core.js?v=mwcm379k';
-import * as Ops from './ops.js?v=mwcm379k';
-import * as E from './pulse-econ.js?v=mwcm379k';
-import * as K from './pulse-calib.js?v=mwcm379k';
-import * as Rp from './report.js?v=mwcm379k';
-import * as R from './pulse-report.js?v=mwcm379k';
-import * as Fl from './flows.js?v=mwcm379k';
-import * as Cov from './coverage.js?v=mwcm379k';
-import * as Cmp from './compare.js?v=mwcm379k';
-import * as Sp from './spots.js?v=mwcm379k';
-import * as Fv from './forecast.js?v=mwcm379k';
-import { mapKeys } from './mapkeys.js?v=mwcm379k';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwcm379k';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwcm379k';
-import { idleClassText } from './pulse-ops.js?v=mwcm379k';
+import * as C from './pulse-core.js?v=mwcmhf48';
+import * as Ops from './ops.js?v=mwcmhf48';
+import * as E from './pulse-econ.js?v=mwcmhf48';
+import * as K from './pulse-calib.js?v=mwcmhf48';
+import * as Rp from './report.js?v=mwcmhf48';
+import * as R from './pulse-report.js?v=mwcmhf48';
+import * as Fl from './flows.js?v=mwcmhf48';
+import * as Cov from './coverage.js?v=mwcmhf48';
+import * as Cmp from './compare.js?v=mwcmhf48';
+import * as Sp from './spots.js?v=mwcmhf48';
+import * as Fv from './forecast.js?v=mwcmhf48';
+import { mapKeys } from './mapkeys.js?v=mwcmhf48';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwcmhf48';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwcmhf48';
+import { idleClassText } from './pulse-ops.js?v=mwcmhf48';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -204,6 +204,9 @@ async function loadBase() {
   state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
   const standTxt = state.status?.at ? new Date(state.status.at).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }) : '';
   if (!DEMO && state.status?.at && Date.now() - state.status.at > 45 * 60e3) notice(() => cl(t('app.lastCollectorRunIsOld', { v0: ageText(Date.now() - state.status.at), standTxt, REPO: CFG.REPO }), t('app.figuresAreOldAsOfNextUpdate', { v0: ageText(Date.now() - state.status.at), standTxt })), 'warn', 'stale');
+  // Audit OPS-02: Verzeichnis ausgefallen, Quellen aus dem vorigen Katalog übernommen (Sammler: catalogFallback)
+  { const cf = (state.catalog?.catalogFallback || state.latest?.catalogFallback || []).filter(x => x?.dir);
+    if (cf.length && !isClient()) notice(() => t('app.catalogFallback', { dirs: esc(cf.map(x => ({ mobidrom_nrw: 'MOBIDROM NRW', mobidata_bw: 'MobiData BW', citybikes: 'CityBikes', mobilitydata: 'MobilityData' }[x.dir] || x.dir)).join(', ')), n: fmt(cf.reduce((a, x) => a + (x.n || 0), 0)), since: cf[0].since ? new Date(cf[0].since).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }) : '–' }), 'warn', 'catfb'); }
   if (DEMO) {
     const at = state.status?.at || state.latest?.at;
     const b = $('#demo-badge'); b.hidden = false; b.textContent = at ? t('app.demoSnapshotOf', { v0: new Date(at).toLocaleString(fmtLocale(), { dateStyle: 'medium', timeStyle: 'short' }) }) : t('app.demoSnapshot');

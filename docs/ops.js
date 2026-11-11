@@ -1,8 +1,8 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mwcm379k';
-import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mwcm379k';
-import { mapKeys } from './mapkeys.js?v=mwcm379k';
-import { mbBadge, mbBase } from './report.js?v=mwcm379k';
+import * as O from './pulse-ops.js?v=mwcmhf48';
+import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mwcmhf48';
+import { mapKeys } from './mapkeys.js?v=mwcmhf48';
+import { mbBadge, mbBase } from './report.js?v=mwcmhf48';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);

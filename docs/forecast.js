@@ -7,16 +7,16 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mwcm379k';
-import * as CX from './pulse-context.js?v=mwcm379k';
-import * as SP from './pulse-spots.js?v=mwcm379k';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwcm379k';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwcm379k';
-import { toCsv } from './pulse-report.js?v=mwcm379k';
-import { dayType } from './pulse-econ.js?v=mwcm379k';
-import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwcm379k';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwcm379k';
-import { mapKeys } from './mapkeys.js?v=mwcm379k';
+import * as FC from './pulse-forecast.js?v=mwcmhf48';
+import * as CX from './pulse-context.js?v=mwcmhf48';
+import * as SP from './pulse-spots.js?v=mwcmhf48';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwcmhf48';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwcmhf48';
+import { toCsv } from './pulse-report.js?v=mwcmhf48';
+import { dayType } from './pulse-econ.js?v=mwcmhf48';
+import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwcmhf48';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwcmhf48';
+import { mapKeys } from './mapkeys.js?v=mwcmhf48';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -812,6 +812,12 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
     [t('fv.kvExcl'), n0(L.excluded || 0), ck?.ruleNow ? t('fv.kvExclSub', { rule: esc(ck.ruleNow) }) : t('fv.kvExclSub0')],
     [t('fv.kvPhi'), n1v(L.phi), t('fv.kvPhiSub')],
     (() => { const d = evKeys.filter(x => G?.evals?.[x]?.expoErr != null).at(-1); const alt = d ? G.evals[d].expoErrAlt : null; return [t('fv.kvExpo'), d ? pc(G.evals[d].expoErr) : '–', d ? t('fv.kvExpoSub', { d: esc(dayTxt(d)) }) + (alt?.mean != null ? ` ${t('fv.kvExpoAlt', { c: pc(alt.class), m: pc(alt.mean) })}` : '') : t('fv.kvExpoNone')]; })(),
+    // Audit MET-03: faire Selbstprüfung als Schatten (nur Stunden mit Vortagswert), ab 28.11. Grundlage der Modellwahl
+    (() => { const act = L.active || 'pooled', ds = evKeys.filter(d => G.evals[d]?.models?.[act]?.fair && G.evals[d]?.models?.naive?.fair).slice(-7);
+      if (!ds.length) return [t('fv.kvFair'), '–', t('fv.kvFairNone')];
+      const m = (k) => ds.reduce((x, d) => x + (G.evals[d].models[k].fair.wapeGH || 0), 0) / ds.length, a = m(act), b = m('naive');
+      const raw = ds.reduce((x, d) => x + (G.evals[d].models[act].wapeGH || 0), 0) / ds.length, rb = ds.reduce((x, d) => x + (G.evals[d].models.naive.wapeGH || 0), 0) / ds.length;
+      return [t('fv.kvFair'), b > 0 ? `${numFmt(2).format(a / b)} ×` : '–', t('fv.kvFairSub', { model: esc(modelName(act)), a: pc(a), b: pc(b), n: ds.length, raw: rb > 0 ? numFmt(2).format(raw / rb) : '–' })]; })(),
     [t('fv.kvWx'), esc(L.weather?.source || '–'), L.weather?.used ? t('fv.kvWxOn') : t('fv.kvWxOff', { range: n1v(wg.tempRangeK), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, miss: pc(wg.missingShare) })],
     [t('fv.kvCal'), cal?.source ? esc(cal.source) : t('fv.kvCalNone'), cal?.from ? `${esc(cal.from)} – ${esc(cal.to)}` : t('fv.kvCalFallback')],
     [t('fv.kvHorizon'), t('fv.kvHorizonV', { h: L.horizon?.hours ?? 24 }), L.horizon?.from ? t('fv.kvHorizonSub', { time: timeTxt(new Date(L.horizon.from).toISOString()), d: esc(L.horizon.tomorrow || '') }) : ''],

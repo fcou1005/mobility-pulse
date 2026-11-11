@@ -708,3 +708,10 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   assert(ls.n === 2 && Math.abs(ls.a - 0.2) < 1e-9 && Math.abs(ls.b - 0.32) < 1e-9 && Math.abs(ls.ratio - 0.625) < 1e-9 && ls.h === 23 && ls.targetDays === 2 && F.liveSummary([], { now }) === null && F.liveSummary(live).n === 2,
     'liveSummary: wapeOpHn gegen naiveOpH, nur letzte 7 Tage, Einträge ohne Vergleich übersprungen; ohne now Bezug = jüngste Prognose');
 }
+// Audit MET-03 (Schatten): faire Teilwertung nur über Zeilen mit Vortagswert; Hauptwertung unverändert
+{
+  const R = { y: [10, 10, 10, 10], g: [0, 0, 1, 1] }, sel = [0, 1, 2, 3], mu = [10, 10, 0, 0], mask = Uint8Array.from([1, 1, 0, 0]);
+  const a = F.scoreDay(R, sel, mu, 1), b = F.scoreDay(R, sel, mu, 1, { mask });
+  assert(a.wapeGH === 0.5 && b.wapeGH === 0.5 && !a.fair && b.fair.wapeGH === 0 && b.fair.n === 2 && b.fair.starts === 20 && b.fair.bias === 0,
+    'scoreDay mask: „wie gestern“ ohne Vortagswert (0) zählt in der fairen Schattenwertung nicht, Hauptwertung bleibt');
+}

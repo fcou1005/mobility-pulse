@@ -1,0 +1,189 @@
+name: Sammler
+# VORLAGE (scripts/collect-workflow.yml) – nur über die GitHub-Weboberfläche unter fcou1005 nach .github/workflows/collect.yml übernehmen.
+# Neu gegenüber dem Stand vom 11.11.2026 (Audit OPS-01 und Ausfall 11.11. 21:22 Uhr):
+#  - HEALTH_FILE: der Ausfall-Wächter im Sammler läuft (Quellen < 90 % oder Fahrzeuge < 85 % des 7-Tage-Medians = „fail“)
+#  - Schritt „Ausfall melden“: Teilausfall → Lauf rot + Issue mit Label „ausfall“ (GitHub benachrichtigt den Repo-Inhaber, anders als bei
+#    Läufen, die github-actions[bot] auslöst); wieder normal → Issue wird geschlossen. Optional Healthchecks.io (Secret HEALTHCHECK_URL):
+#    meldet per Mail, wenn gar kein Lauf mehr pingt – das einzige, was auch einen ganz abgerissenen Ketten-Neustart bemerkt.
+#  - Anstoßen prüft nach 60 s, ob der neue Lauf wirklich startet; bei „Startup failure“ (11.11.2026 21:22–22:00 Uhr: GitHub-Fehler, beide
+#    Ketten abgerissen) neuer Versuch, bis zu 10-mal.
+
+on:
+  schedule:
+    - cron: '8,28,49 * * * *'   # nicht zur vollen Stunde (Lastspitze bei GitHub)
+  workflow_dispatch:
+    inputs:
+      rebuild_boundaries:
+        description: 'Gemeindegrenzen neu aufbereiten'
+        type: boolean
+        default: false
+      takt:
+        description: 'Takt der Kette in Minuten (Standard 20; 5 für eine Stichprobe)'
+        type: string
+        default: '20'
+      takt_bis:
+        description: 'Takt gilt bis einschließlich (JJJJ-MM-TT), danach wieder 20 Min.'
+        type: string
+        default: ''
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+  issues: write   # Ausfall-Issue anlegen/schließen
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04   # fest, damit der Wechsel auf Ubuntu 26 nichts kaputt macht
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false   # Token nicht im Checkout ablegen; Push nutzt eigenen Token
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Bisherigen Datenstand (Branch data) holen
+        run: |
+          mkdir -p out
+          if git fetch --depth 1 origin data:refs/remotes/origin/data 2>/dev/null; then
+            git archive refs/remotes/origin/data | tar -x -C out
+            echo "Datenstand übernommen: $(ls out | tr '\n' ' ')"
+          else
+            echo "Noch kein Datenstand"
+          fi
+
+      - name: Monat für Grenzen-Cache
+        id: month
+        run: echo "m=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Gemeindegrenzen aus Cache
+        id: bcache
+        if: ${{ !inputs.rebuild_boundaries }}
+        uses: actions/cache@v5
+        with:
+          path: cache/boundaries.json
+          key: vg250-${{ steps.month.outputs.m }}-v2
+          restore-keys: |
+            vg250-
+
+      - name: Gemeindegrenzen aufbereiten (BKG VG250)
+        if: ${{ steps.bcache.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin unzip >/dev/null
+          mkdir -p cache
+          # Neuer Monat: frische Grenzen laden; ist BKG nicht erreichbar, bleiben die Grenzen aus dem Vormonat
+          if BOUNDARIES_OUT=cache/boundaries.new.json node scripts/prepare-boundaries.mjs; then mv cache/boundaries.new.json cache/boundaries.json
+          elif [ -s cache/boundaries.json ]; then echo "BKG nicht erreichbar, nutze Grenzen aus dem Cache"
+          else exit 2; fi
+
+      - name: Quellenkatalog aktualisieren
+        env:
+          DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
+          DB_API_KEY: ${{ secrets.DB_API_KEY }}
+        run: node scripts/build-catalog.mjs
+
+      - name: Verfolgungszustand aus dem privaten Cache
+        uses: actions/cache/restore@v5
+        with:
+          path: track-state
+          key: track-${{ github.run_id }}
+          restore-keys: |
+            track-
+
+      - name: Sammeln
+        env:
+          TRACK_DIR: track-state
+          DATA_DIR: out
+          BOUNDARIES: cache/boundaries.json
+          SOURCES_FILE: data/sources.json
+          HISTORY_DAYS: '30'
+          HEALTH_FILE: health.txt
+          DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
+          DB_API_KEY: ${{ secrets.DB_API_KEY }}
+        run: |
+          cp data/sources.json out/sources.json
+          node scripts/collect.mjs
+          ls -la out out/history | head -40
+
+      - name: Veröffentlichen (Branch data, ein Commit)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out
+          rm -rf .git
+          git init -q
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          # alten Stand holen: der Push überträgt dann nur geänderte Dateien (der Commit bleibt ohne Vorgänger)
+          git fetch -q --depth 1 origin data || echo "kein alter Datenstand"
+          git checkout -q --orphan data
+          git add -A
+          git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Daten $(date -u +%FT%TZ)"
+          git push -f -q origin data:data
+          echo "veröffentlicht: https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/latest.json"
+
+      - name: Ausfall melden (Issue an den Repo-Inhaber, optional Healthchecks.io)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HC_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: |
+          if [ -s health.txt ]; then st=$(head -1 health.txt); grund=$(tail -1 health.txt); else st=fail; grund="Sammler ohne Ergebnis (Lauf abgebrochen, siehe Protokoll)"; fi
+          echo "Zustand: $st – $grund"
+          if [ -n "$HC_URL" ]; then if [ "$st" = fail ]; then curl -fsS -m 10 --retry 2 --data-raw "$grund" "$HC_URL/fail" >/dev/null || true; else curl -fsS -m 10 --retry 2 --data-raw "$grund" "$HC_URL" >/dev/null || true; fi; fi
+          offen=$(gh issue list -R "$GITHUB_REPOSITORY" -l ausfall -s open --json number -q '.[0].number' 2>/dev/null || true)
+          if [ "$st" = fail ]; then
+            if [ -z "$offen" ]; then
+              gh label create ausfall -R "$GITHUB_REPOSITORY" -c B60205 -d "Sammler-Teilausfall (automatisch)" 2>/dev/null || true
+              gh issue create -R "$GITHUB_REPOSITORY" -l ausfall -t "Sammler: Teilausfall $(TZ=Europe/Berlin date '+%d.%m. %H:%M')" \
+                -b "$grund"$'\n\n'"Lauf: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} · schließt sich, sobald ein Lauf wieder normal ist." || true
+            else gh issue comment "$offen" -R "$GITHUB_REPOSITORY" -b "weiter: $grund ($(TZ=Europe/Berlin date '+%H:%M'))" >/dev/null 2>&1 || true; fi
+            echo "::error::Teilausfall: $grund"; exit 1
+          elif [ -n "$offen" ]; then gh issue close "$offen" -R "$GITHUB_REPOSITORY" -c "Wieder normal: $grund" || true; fi
+      - name: Verfolgungszustand im privaten Cache sichern
+        if: ${{ always() && hashFiles('track-state/**') != '' }}
+        uses: actions/cache/save@v5
+        with:
+          path: track-state
+          key: track-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Nächsten Lauf anstoßen (hält genau eine Kette am Leben, egal ob der Zeitplan anspringt)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAKT_IN: ${{ inputs.takt }}
+          BIS_IN: ${{ inputs.takt_bis }}
+        run: |
+          # nur Läufe, die NACH diesem erstellt wurden (größere Run-ID): der Lauf, der diesen angestoßen hat, steht bei GitHub oft noch Minuten auf
+          # „läuft“ – bis 6.11.2026 hielt ihn der neue Lauf für eine zweite Kette und hörte auf (Lücke 4.11. 16:53–18:58 Uhr)
+          andere() { gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId > $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
+          if [ "$(andere)" -gt 0 ]; then echo "Ein anderer Lauf ist aktiv oder wartet, keine zweite Kette"; exit 0; fi
+          TAKT="$TAKT_IN"; BIS="$BIS_IN"
+          case "$TAKT" in ''|*[!0-9]*) TAKT=20 ;; esac
+          if ! [[ "$BIS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then BIS=''; fi
+          if [ -n "$BIS" ] && [[ "$(TZ=Europe/Berlin date +%F)" > "$BIS" ]]; then TAKT=20; BIS=''; fi
+          if [ -z "$BIS" ]; then TAKT=20; fi
+          if [ "$TAKT" -lt 5 ]; then TAKT=5; fi
+          WARTEN=$(( TAKT * 60 - 300 )); if [ "$WARTEN" -lt 30 ]; then WARTEN=30; fi
+          echo "Takt ${TAKT} Min. (bis ${BIS:-unbegrenzt}), warte ${WARTEN} s"
+          sleep "$WARTEN"
+          if [ "$(andere)" -gt 0 ]; then echo "Inzwischen läuft ein anderer Lauf, keine zweite Kette"; exit 0; fi
+          anstossen() { if [ "$TAKT" != 20 ]; then gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main -f takt="$TAKT" -f takt_bis="$BIS"; else gh workflow run collect.yml -R "$GITHUB_REPOSITORY" --ref main; fi; }
+          # Angestoßen heißt nicht gestartet: am 11.11.2026 21:22–22:00 Uhr endeten angestoßene Läufe sofort mit „Startup failure“ (GitHub-Fehler),
+          # beide Ketten rissen ab. Daher nach 60 s prüfen, ob der neue Lauf läuft oder wartet; sonst erneut anstoßen (bis zu 10-mal).
+          neu() { gh run list -R "$GITHUB_REPOSITORY" -w collect.yml -L 5 --json databaseId,status,conclusion -q "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | sort_by(.databaseId) | last | if . == null then \"keiner\" elif .conclusion == \"startup_failure\" then \"fehlstart\" else \"ok\" end" || echo ok; }
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if anstossen; then
+              sleep 60; z=$(neu); echo "Neuer Lauf: $z"
+              if [ "$z" = ok ]; then echo "Nächster Lauf angestoßen"; exit 0; fi
+              echo "::warning::Angestoßener Lauf startet nicht ($z), neuer Versuch"
+            else echo "Anstoßen fehlgeschlagen (Versuch $i)"; fi
+            sleep 30
+            if [ "$(andere)" -gt 0 ]; then echo "Inzwischen wartet ein neuerer Lauf, keine zweite Kette"; exit 0; fi
+          done
+          exit 1

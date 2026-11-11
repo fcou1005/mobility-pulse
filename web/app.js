@@ -204,6 +204,9 @@ async function loadBase() {
   state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
   const standTxt = state.status?.at ? new Date(state.status.at).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }) : '';
   if (!DEMO && state.status?.at && Date.now() - state.status.at > 45 * 60e3) notice(() => cl(t('app.lastCollectorRunIsOld', { v0: ageText(Date.now() - state.status.at), standTxt, REPO: CFG.REPO }), t('app.figuresAreOldAsOfNextUpdate', { v0: ageText(Date.now() - state.status.at), standTxt })), 'warn', 'stale');
+  // Audit OPS-02: Verzeichnis ausgefallen, Quellen aus dem vorigen Katalog übernommen (Sammler: catalogFallback)
+  { const cf = (state.catalog?.catalogFallback || state.latest?.catalogFallback || []).filter(x => x?.dir);
+    if (cf.length && !isClient()) notice(() => t('app.catalogFallback', { dirs: esc(cf.map(x => ({ mobidrom_nrw: 'MOBIDROM NRW', mobidata_bw: 'MobiData BW', citybikes: 'CityBikes', mobilitydata: 'MobilityData' }[x.dir] || x.dir)).join(', ')), n: fmt(cf.reduce((a, x) => a + (x.n || 0), 0)), since: cf[0].since ? new Date(cf[0].since).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }) : '–' }), 'warn', 'catfb'); }
   if (DEMO) {
     const at = state.status?.at || state.latest?.at;
     const b = $('#demo-badge'); b.hidden = false; b.textContent = at ? t('app.demoSnapshotOf', { v0: new Date(at).toLocaleString(fmtLocale(), { dateStyle: 'medium', timeStyle: 'short' }) }) : t('app.demoSnapshot');
