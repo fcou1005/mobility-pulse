@@ -76,6 +76,10 @@ assert(cw.week === '2026-W44' && cw.days.join() === '2026-10-31,2026-11-01' && b
   const k = (kind) => sig.filter(e => e.kind === kind);
   assert(k('price').length === 1 && k('price')[0].n === 2 && k('price')[0].munis.join() === 'A' && k('price')[0].plans.join() === 'p1,p2', 'Preisänderung: je Quelle und Tag eine Zeile mit Gemeinden und Plänen; Vortag nicht');
   assert(k('zone')[0].added === 3 && k('zone')[0].removed === 1 && k('zone')[0].munis.join() === 'A,B', 'Zonenänderung aus zones-log');
+  const dup = TR.opsSignals({ day, zones: [[at, 'koeln', 'Voi', 38, 5, 764], [at, 'nrw', 'Voi', 38, 5, 764], [at, 'bonn', 'Voi', 1, 0, 90]], price: [[at, 'koeln', 'Voi', 'p1', '~rate', 1, 2], [at, 'nrw', 'Voi', 'p1', '~rate', 1, 2]], srcMunis: new Map([['koeln', ['K']], ['nrw', ['K', 'D']], ['bonn', ['B']]]) });
+  const dz = dup.filter(e => e.kind === 'zone'), dp = dup.filter(e => e.kind === 'price');
+  assert(dz.length === 2 && dz[0].munis.join() === 'K,D' && dz[0].sources.join() === 'koeln,nrw' && !dz[1].sources && dp.length === 1 && dp[0].sources.join() === 'koeln,nrw',
+    'gleiche Zonen-/Tarifänderung über mehrere Quellen (MOBIDROM) = ein Eintrag mit vereinigten Gemeinden; andere Änderung bleibt eigener Eintrag');
   assert(k('fleet').length === 1 && k('fleet')[0].key === 'A|Lime|scooter' && k('fleet')[0].ratio === 1.5, 'Flottensprung: Lime 200 → 300 (+50 %), Voi +3 % nicht');
   const o = k('outage'); assert(o.length === 1 && o[0].key === 'A|Voi|scooter' && o[0].hours === 2 && o[0].mask === ((1 << 14) | (1 << 15)), 'Ausfall: Voi 14–16 Uhr ohne Fahrzeuge; kleine Gruppe (< 20) nicht');
   const m1 = TR.mergeOps(null, sig, Date.parse('2026-11-11T12:00:00Z')), m2 = TR.mergeOps(m1, sig, Date.parse('2026-11-11T12:00:00Z')), m3 = TR.mergeOps(m2, [], Date.parse('2027-04-01T12:00:00Z'));
