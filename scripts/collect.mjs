@@ -863,12 +863,13 @@ if (process.env.OEPNV !== '0' && index) {
     if (!rr.ok) throw new Error(`Echtzeit: HTTP ${rr.status}`);
     if (buf.length > OE.OEPNV.maxBytes) throw new Error(`Echtzeit: ${(buf.length / 1e6).toFixed(0)} MB, zu groß`);
     let keep = null; try { keep = new Set(JSON.parse(await readFile(path.join(DATA, 'boundaries-active.json'), 'utf8')).features.map(f => f.properties?.ags).filter(Boolean)); } catch { /* ohne Liste: alle Gemeinden */ }
-    const { by, stats } = OE.ptCounts(buf, OE.stopLookup(ix), now, { keep });
-    const docs = await incidentDocs([T.dayOf(now - OE.OEPNV.backH * 3600e3), T.dayOf(now - 12 * 3600e3), T.dayOf(now)]), w = OE.addPt(docs, by);
-    const src = { at: new Date(now).toISOString(), feedAt: stats.ts ? new Date(stats.ts).toISOString() : null, bytes: buf.length, ms: Date.now() - t1, trips: stats.trips, stops: stats.stops, matched: stats.matched, unmatched: stats.unmatched, noTime: stats.noTime, inWindow: stats.inWindow, ags: stats.ags, flagged: w.flagged, stopsFeed: ix.lastModified || null };
+    const { by, cancel, stats } = OE.ptCounts(buf, OE.stopLookup(ix), now, { keep });
+    // alle Tage laden, die addPt berührt (Fenster der Halte, ganz ausgefallene Fahrten gestern bis morgen), sonst überschriebe ein leeres Dokument die Datei
+    const docs = await incidentDocs([T.dayOf(now - OE.OEPNV.backH * 3600e3), T.dayOf(now - 86400e3), T.dayOf(now - 12 * 3600e3), T.dayOf(now), T.dayOf(now + 86400e3)]), w = OE.addPt(docs, by, cancel);
+    const src = { at: new Date(now).toISOString(), feedAt: stats.ts ? new Date(stats.ts).toISOString() : null, bytes: buf.length, ms: Date.now() - t1, trips: stats.trips, stops: stats.stops, matched: stats.matched, unmatched: stats.unmatched, noTime: stats.noTime, inWindow: stats.inWindow, ags: stats.ags, flagged: w.flagged, cancelTrips: stats.cancelTrips, cancelAgs: stats.cancelAgs, stopsFeed: ix.lastModified || null };
     docs.get(T.dayOf(now)).sources.pt = src;
     await writeIncidents(docs);
-    log(`ÖPNV (gtfs.de): ${stats.trips} Fahrten, ${stats.stops} Halte, ${stats.matched} zugeordnet (${stats.unmatched} ohne Haltestelle), ${stats.inWindow} in den letzten ${OE.OEPNV.backH} h in ${stats.ags} Gemeinden mit Flotte, ${w.flagged} Gemeinde-Stunden gestört, ${(buf.length / 1e6).toFixed(1)} MB in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+    log(`ÖPNV (gtfs.de): ${stats.trips} Fahrten, ${stats.stops} Halte, ${stats.matched} zugeordnet (${stats.unmatched} ohne Haltestelle), ${stats.inWindow} in den letzten ${OE.OEPNV.backH} h in ${stats.ags} Gemeinden mit Flotte, ${w.flagged} Gemeinde-Stunden gestört, ${stats.cancelTrips} ganz ausgefallene Fahrten in ${stats.cancelAgs} Gemeinden (ohne Uhrzeit, je Tag), ${(buf.length / 1e6).toFixed(1)} MB in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
   } catch (e) { log(`ÖPNV: ${e.message} – übersprungen`); }
 }
 

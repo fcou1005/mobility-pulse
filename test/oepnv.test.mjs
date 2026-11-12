@@ -62,6 +62,14 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(d.ags['08111000'].ptN[h] === 40 && d.ags['08111000'].pt[h] === 0, 'mehr Halte: neue Zahlen, Kennzeichen neu berechnet');
   assert(OE.ptFlag(20, 0, 6) === 1 && OE.ptFlag(19, 19, 19) === 0 && OE.ptFlag(100, 14, 29) === 0, 'Kennzeichen: Schwellen 15 % ausgefallen oder 30 % verspätet ab 20 Halten');
   assert(OE.OEPNV.keys.every(k => !CX.CTX_KEYS.includes(k)), 'ÖPNV-Felder sind keine Modellmerkmale (Lernphase)');
+  // ganz ausgefallene Fahrten ohne Zeit (nur trip_id und start_date): je Betriebstag und Gemeinde, Fahrten einmal je Gemeinde
+  const cbuf = encodeFeed([{ id: 'k1', startDate: '20261112', stops: [{ stop: 1, t: null, skipped: true }, { stop: 1, t: null, skipped: true }, { stop: 2, t: null, skipped: true }] },
+    { id: 'k2', startDate: '20261112', stops: [{ stop: 1, t: null, skipped: true }] }, { id: 'k3', startDate: '20260101', stops: [{ stop: 1, t: null, skipped: true }] }, { id: 'k4', stops: [{ stop: 1, t: null, skipped: true }] }]);
+  const r = OE.ptCounts(cbuf, lookup, now, { keep: new Set(['08111000', '08416041']) });
+  assert(r.cancel.get('08111000')?.get('2026-11-12')?.join() === '2,3' && r.cancel.get('08416041')?.get('2026-11-12')?.join() === '1,1' && r.stats.cancelTrips === 3 && r.stats.noTime === 6 && r.by.size === 0,
+    'ausgefallene Fahrten ohne Zeit: Stuttgart 2 Fahrten/3 Halte, Tübingen 1/1; alter Tag und Fahrt ohne Datum fallen weg');
+  const cd = new Map([['2026-11-12', CX.emptyIncidentDoc('2026-11-12')]]); OE.addPt(cd, r.by, r.cancel); OE.addPt(cd, new Map(), new Map([['08111000', new Map([['2026-11-12', [1, 1]]])]]));
+  assert(cd.get('2026-11-12').ptDay['08111000'].join() === '2,3' && cd.size === 1, 'ptDay: Maximum über die Läufe, kein neuer Tag ohne Grund');
 }
 
 console.log(`${oks} ok, ${fails} Fehler`);

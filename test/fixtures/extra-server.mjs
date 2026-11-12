@@ -149,7 +149,8 @@ export async function startExtra() {
       }
       if (file === 'rt.pb') {
         const t = Date.now() - 5 * 60e3, stops = [...Array(25)].map((_, i) => ({ stop: 101, t: i >= 20 ? null : t, skipped: i >= 20, delay: i < 2 ? 600 : 0 }));
-        const body = gzipSync(encodeFeed([{ id: 's1', stops }, { id: 's2', stops: [{ stop: 102, t }, { stop: 103, t }, { stop: 999, t }] }], { alerts: 1 }));
+        const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date()).replace(/-/g, '');
+        const body = gzipSync(encodeFeed([{ id: 's1', stops }, { id: 's2', stops: [{ stop: 102, t }, { stop: 103, t }, { stop: 999, t }] }, { id: 's3', startDate: today, stops: [{ stop: 101, t: null, skipped: true }, { stop: 101, t: null, skipped: true }] }], { alerts: 1 }));
         res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-encoding': 'gzip', 'content-length': body.length }); return res.end(body);
       }
     }

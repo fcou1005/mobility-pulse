@@ -207,7 +207,7 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   const st = docs.map(d => d.ags?.['08111000']).filter(Boolean), sum = (k) => st.reduce((a, x) => a + (x[k] || []).reduce((s, v) => s + v, 0), 0);
   const src = docs.map(d => d.sources?.pt).find(Boolean);
   assert(ix.mapped === 2 && ix.stops === 3 && ix.ags?.length === 2 && ix.etag === '"t1"', 'ÖPNV-Haltestellen: 2 von 3 Halten zugeordnet (Berlin liegt außerhalb), Stand aus dem Feed');
-  assert(sum('ptN') === 25 && sum('ptSkip') === 5 && sum('ptLate') === 2 && sum('pt') === 1 && src?.trips === 2 && src.unmatched === 2, `ÖPNV-Echtzeit: Stuttgart 25 Halte, 5 ausgefallen, 2 verspätet, Kennzeichen gesetzt (${sum('ptN')}/${sum('ptSkip')}/${sum('ptLate')}/${sum('pt')})`);
+  assert(sum('ptN') === 25 && sum('ptSkip') === 5 && sum('ptLate') === 2 && sum('pt') === 1 && src?.trips === 3 && src.unmatched === 2 && src.cancelTrips === 1 && docs.some(d => d.ptDay?.['08111000']?.join() === '1,2'), `ÖPNV-Echtzeit: Stuttgart 25 Halte, 5 ausgefallen, 2 verspätet, Kennzeichen gesetzt, 1 ganz ausgefallene Fahrt als Tageswert (${sum('ptN')}/${sum('ptSkip')}/${sum('ptLate')}/${sum('pt')})`);
 }
 // Trainingsarchiv (Audit DAT-01): der abgeschlossene Vortag landet als train/<JJJJ>/<Tag>.json.gz (erst 3 Stunden nach Tagesende)
 if (TR.trainReady(ydM, Date.now())) {

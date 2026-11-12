@@ -107,4 +107,6 @@ assert(cw.week === '2026-W44' && cw.days.join() === '2026-10-31,2026-11-01' && b
   assert(n === 3 && d.ags['09162000'].works[11] === 2 && d.ags['02000000'].works[11] === 1 && !CX.CTX_KEYS.includes('works'), 'addWorks: Zahl je Gemeinde zur Ortsstunde; works ist kein Modellmerkmal');
   const td = TR.trainDoc({ events: { day: '2026-11-11', groups: { '09162000|Voi|scooter': { start: new Array(24).fill(1) } } }, incidents: d });
   assert(td.ctxExtra.works['09162000'][11] === 2 && !td.ctx.works, 'Archiv: works als ctxExtra, nicht in ctx');
+  const td2 = TR.trainDoc({ events: { day: '2026-11-11', groups: { '09162000|Voi|scooter': { start: new Array(24).fill(1) } } }, incidents: { ...d, ptDay: { '09162000': [4, 31] } } });
+  assert(td2.ptDay['09162000'].join() === '4,31' && !('ptDay' in td), 'Archiv: ganz ausgefallene ÖPNV-Fahrten je Tag (ptDay), nur wenn vorhanden');
 }
