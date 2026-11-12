@@ -16,11 +16,12 @@ concurrency:
 
 permissions:
   actions: write
+  issues: write   # Hinweis-Issue, wenn der Sammler länger als 60 Min. keinen erfolgreichen Lauf hatte
 
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Sammler-Kette prüfen, bei Bedarf anstoßen, nächste Prüfung anstoßen
         env:
@@ -28,6 +29,16 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           sammler() { gh run list -R "$REPO" -w collect.yml -L 10 --json status -q '[.[] | select(.status != "completed")] | length' || echo 1; }
+          # Angestoßen heißt nicht gestartet (11.11.2026: „Startup failure“ bei GitHub, beide Ketten abgerissen): nach 60 s prüfen, sonst erneut
+          gestartet() { gh run list -R "$REPO" -w "$1" -L 5 --json databaseId,conclusion,createdAt -q "[.[] | select(.createdAt >= \"$2\")] | sort_by(.databaseId) | last | if . == null then \"keiner\" elif .conclusion == \"startup_failure\" then \"fehlstart\" else \"ok\" end" || echo ok; }
+          anstossen() { for i in 1 2 3 4 5 6 7 8; do t0=$(date -u +%FT%TZ); if gh workflow run "$1" -R "$REPO" --ref main; then sleep 60; z=$(gestartet "$1" "$t0"); echo "$1: $z"; [ "$z" = ok ] && return 0; echo "::warning::$1 startet nicht ($z), neuer Versuch"; else echo "Anstoßen von $1 fehlgeschlagen (Versuch $i)"; fi; sleep 30; done; return 1; }
+          # Sammler länger als 60 Min. ohne erfolgreichen Lauf → ein offenes Issue (Label „ausfall“), damit der Repo-Inhaber benachrichtigt wird
+          letzter=$(gh run list -R "$REPO" -w collect.yml -L 20 --json conclusion,updatedAt -q '[.[] | select(.conclusion == "success")] | .[0].updatedAt' || true)
+          if [ -n "$letzter" ] && [ $(( $(date +%s) - $(date -d "$letzter" +%s) )) -gt 3600 ]; then
+            offen=$(gh issue list -R "$REPO" -l ausfall -s open --json number -q '.[0].number' 2>/dev/null || true)
+            if [ -z "$offen" ]; then gh label create ausfall -R "$REPO" -c B60205 -d "Sammler-Teilausfall (automatisch)" 2>/dev/null || true
+              gh issue create -R "$REPO" -l ausfall -t "Sammler: kein erfolgreicher Lauf seit $(TZ=Europe/Berlin date -d "$letzter" '+%d.%m. %H:%M')" -b "Der Wächter stößt neu an. Lauf: ${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}" || true; fi
+          fi
           neuer() { gh run list -R "$REPO" -w waechter.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId > $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
           if [ "$(neuer)" -gt 0 ]; then echo "Neuerer Wächter-Lauf wartet – keine zweite Kette"; exit 0; fi
           n=$(sammler); echo "Aktive Sammler-Läufe: $n"
@@ -35,10 +46,10 @@ jobs:
             sleep 60; n=$(sammler)
             if [ "$n" -eq 0 ]; then
               echo "Kein Sammler-Lauf aktiv – Kette abgerissen, stoße neu an"
-              for i in 1 2 3 4 5 6; do if gh workflow run collect.yml -R "$REPO" --ref main; then echo "Sammler angestoßen"; break; fi; sleep 30; done
+              anstossen collect.yml && echo "Sammler angestoßen"
             fi
           else echo "Kette intakt"; fi
           sleep 840
           if [ "$(neuer)" -gt 0 ]; then echo "Inzwischen wartet ein neuerer Wächter-Lauf – Ende"; exit 0; fi
-          for i in 1 2 3 4 5 6; do if gh workflow run waechter.yml -R "$REPO" --ref main; then echo "Nächste Prüfung angestoßen"; exit 0; fi; echo "Anstoßen fehlgeschlagen (Versuch $i)"; sleep 30; done
+          if anstossen waechter.yml; then echo "Nächste Prüfung angestoßen"; exit 0; fi
           exit 1
