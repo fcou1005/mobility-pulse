@@ -133,10 +133,15 @@ assert(wc.length === 2 && wc.some(e => e.von.startsWith('2027-09-26')) && wc.som
   const o2 = JSON.parse(await readFile(path.join(dir, 'out2.json'), 'utf8')), S2 = Object.fromEntries(o2.quellen.map(x => [x.name, x]));
   assert(S2['Großes Stadtfest']?.via === 'textregel' && o2.termine.filter(e => e.titel === 'Großes Stadtfest').length === 3 && o2.termine.some(e => e.titel === 'Rhein in Lichtern') && o2.modell.startsWith('ohne'),
     'ohne Modell: Textregel findet das Stadtfest (3 Tage); Termine des Modells aus dem Vorlauf bleiben');
-  // Termine erst per JavaScript: ohne Datum im abgerufenen Text → mit Chromium dargestellt (RENDER=1), dann Textregel
+  // Termine erst per JavaScript: ohne Datum im abgerufenen Text → mit Chromium dargestellt (RENDER=1), dann Textregel.
+  // Nur mit Playwright (lokal, Workflow „Termine“); der Test-Workflow installiert es im Unit-Lauf nicht → dort übersprungen.
+  let pw = true; try { await import('playwright'); } catch { try { (await import('node:module')).createRequire(import.meta.url)('playwright'); } catch { pw = false; } }
+  if (!pw) console.log('ok: Darstellung per Chromium übersprungen (Playwright nicht installiert)');
+  else {
   await writeFile(path.join(dir, 'q3.json'), JSON.stringify({ quellen: [{ name: 'Großer Stadtlauf', url: `${base}/js`, ags: '08416041', art: 'lauf', stichwort: 'Stadtlauf' }] }));
   await new Promise(r => spawn('node', ['scripts/termine.mjs', path.join(dir, 'q3.json'), '-', path.join(dir, 'out3.json')], { stdio: 'inherit', env: { ...process.env, TERMINE_FAKE: '1', RENDER: '1' } }).on('exit', r));
   const o3 = JSON.parse(await readFile(path.join(dir, 'out3.json'), 'utf8'));
   assert(o3.quellen[0]?.dargestellt === true && o3.termine.length === 1 && o3.termine[0].von === `${y}-04-18T10:00`, 'Seite lädt Termin per JavaScript: ohne Datum im Abruf → Chromium, Termin gefunden');
+  }
   srv.close(); void nextYear;
 }
