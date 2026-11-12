@@ -1,0 +1,49 @@
+name: Tests
+# VORLAGE (scripts/test-workflow.yml) – nur über die GitHub-Weboberfläche unter fcou1005 als .github/workflows/test.yml anlegen (Audit OPS-13).
+# Läuft bei jedem Push auf main (außer reinen Daten-/Doku-Änderungen) und von Hand: alle Testdateien wie in CLAUDE.md, danach ein
+# Browser-Rauchtest aller Ansichten gegen die eigene Seite (docs/, Datenstand aus dem Branch data) – rot, wenn eine Ansicht einen Skriptfehler wirft.
+# Liest nur (contents: read); stößt nichts an und schreibt nichts.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['data/**', '**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Testdateien (ohne Netz; Fixture-Test auf Port 8765)
+        run: npm run test:all
+
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: unit
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Playwright und Chromium
+        run: |
+          npm i --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Rauchtest aller Ansichten
+        run: node scripts/smoke.mjs
