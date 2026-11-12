@@ -2,16 +2,16 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mwcnuuuq';
-import * as K from './pulse-calib.js?v=mwcnuuuq';
-import { liveSummary } from './pulse-forecast.js?v=mwcnuuuq';
+import * as R from './pulse-report.js?v=mwd9n4gj';
+import * as K from './pulse-calib.js?v=mwd9n4gj';
+import { liveSummary } from './pulse-forecast.js?v=mwd9n4gj';
 const FCL = { liveSummary };
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwcnuuuq';
-import { decodeFleet } from './pulse-ops.js?v=mwcnuuuq';
-import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mwcnuuuq';
-import { mapKeys } from './mapkeys.js?v=mwcnuuuq';
-import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mwcnuuuq';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mwcnuuuq';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwd9n4gj';
+import { decodeFleet } from './pulse-ops.js?v=mwd9n4gj';
+import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mwd9n4gj';
+import { mapKeys } from './mapkeys.js?v=mwd9n4gj';
+import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mwd9n4gj';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mwd9n4gj';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)

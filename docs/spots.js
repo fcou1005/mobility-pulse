@@ -2,10 +2,10 @@
 // eines eigenen Anbieters: Übersicht mit Abgleich-Balken, Listen „Fehlt bei mir“, „Nur bei mir“, „Pflegebedarf“ mit Karte, Filter und Export.
 // Eigenständig: renderSpots(el, ctx), ctx = { state, CFG, esc, fmt, getJson, opColor, muniName, setScope, loadUsageIndex, loadCells, loadOnce };
 // Leaflet (L) global. Rechenlogik in lib/pulse-spots.js; Werte aus Daten gehen durch ctx.esc.
-import * as SP from './pulse-spots.js?v=mwcnuuuq';
-import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js?v=mwcnuuuq';
-import { t, dateFmt, fmtLocale } from './i18n.js?v=mwcnuuuq';
-import { mapKeys } from './mapkeys.js?v=mwcnuuuq';
+import * as SP from './pulse-spots.js?v=mwd9n4gj';
+import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js?v=mwd9n4gj';
+import { t, dateFmt, fmtLocale } from './i18n.js?v=mwd9n4gj';
+import { mapKeys } from './mapkeys.js?v=mwd9n4gj';
 
 const LISTS = ['missing', 'onlyMine', 'care'], ISSUES = ['zone', 'dup', 'empty'], DEMAND_DAYS = 7, LIMIT = 100, RANK_LABELS = 30;
 const CACHE = new Map();

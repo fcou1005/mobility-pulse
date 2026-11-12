@@ -10,7 +10,7 @@ import * as TR from '../lib/pulse-train.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', TERMINE_URL: '', WORKS: '0', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', TERMINE_URL: '', WORKS: '0', OEPNV: '0', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -198,8 +198,17 @@ await writeFile('test/out/calendar.json', calOld);
 await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }, { name: 'Hallen', url: `${ex.base}/kal/hallen`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
 const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json` });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json`, OEPNV: '', OEPNV_URL: `${ex.base}/oepnv/rt.pb`, OEPNV_STATIC_URL: `${ex.base}/oepnv/feed.zip` });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+// ÖPNV (gtfs.de): Haltestellen nur per Range aus dem ZIP, Echtzeit je Gemeinde und Stunde; 25 Halte in Stuttgart, davon 5 ausgefallen → pt = 1
+{
+  const ix = JSON.parse(gunzipSync(await readFile('test/out/oepnv/haltestellen.json.gz').catch(() => gzipSync('{}'))).toString());
+  const docs = []; for (const d of new Set([T.dayOf(Date.now() - 3600e3), T.dayOf(Date.now())])) { try { docs.push(JSON.parse(await readFile(`test/out/incidents/${d}.json`, 'utf8'))); } catch { /* fehlt */ } }
+  const st = docs.map(d => d.ags?.['08111000']).filter(Boolean), sum = (k) => st.reduce((a, x) => a + (x[k] || []).reduce((s, v) => s + v, 0), 0);
+  const src = docs.map(d => d.sources?.pt).find(Boolean);
+  assert(ix.mapped === 2 && ix.stops === 3 && ix.ags?.length === 2 && ix.etag === '"t1"', 'ÖPNV-Haltestellen: 2 von 3 Halten zugeordnet (Berlin liegt außerhalb), Stand aus dem Feed');
+  assert(sum('ptN') === 25 && sum('ptSkip') === 5 && sum('ptLate') === 2 && sum('pt') === 1 && src?.trips === 2 && src.unmatched === 2, `ÖPNV-Echtzeit: Stuttgart 25 Halte, 5 ausgefallen, 2 verspätet, Kennzeichen gesetzt (${sum('ptN')}/${sum('ptSkip')}/${sum('ptLate')}/${sum('pt')})`);
+}
 // Trainingsarchiv (Audit DAT-01): der abgeschlossene Vortag landet als train/<JJJJ>/<Tag>.json.gz (erst 3 Stunden nach Tagesende)
 if (TR.trainReady(ydM, Date.now())) {
   const tf = `test/out/${TR.trainPath(ydM)}`, td = JSON.parse(gunzipSync(await readFile(tf).catch(() => gzipSync('{}'))).toString()), ti = JSON.parse(await readFile('test/out/train/index.json', 'utf8').catch(() => '{}'));

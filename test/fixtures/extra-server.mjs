@@ -2,6 +2,8 @@
 // virtuelle Stationen, CityBikes-Kopie unter anderem Anbieternamen, Zugangsdaten (nur exakter Host, keine fremden Weiterleitungen),
 // langsame und zu große Antworten.
 import http from 'node:http';
+import { gzipSync } from 'node:zlib';
+import { encodeFeed, makeZip } from './gtfs.mjs';
 
 export async function startExtra() {
   const log = []; // { path, host, key }
@@ -137,6 +139,20 @@ export async function startExtra() {
     if (kind === 'leak') return json(head(file.startsWith('free_bike') ? { bikes: [{ bike_id: 'x1', lat: 48.79, lon: 9.19, is_reserved: false, is_disabled: false }] } : { vehicle_types: [] }));
     if (kind === 'slow') { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"data":'); const t = setTimeout(() => { try { res.end('{}}'); } catch {} }, 6000); res.on('close', () => clearTimeout(t)); return; }
     if (kind === 'big') { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"data":"'); for (let i = 0; i < 30; i++) res.write('x'.repeat(10000)); return res.end('"}'); }
+    if (kind === 'oepnv') { // gtfs.de: statischer Feed nur per Range (ganzer Abruf wird gezählt), Echtzeit gzip; Halte in Stuttgart, Tübingen, Berlin
+      if (file === 'feed.zip') {
+        const z = (st.gtfsZip ||= makeZip({ 'agency.txt': 'agency_id\n1\n', 'stops.txt': 'stop_name,parent_station,stop_id,stop_lat,stop_lon,location_type,platform_code\n"Stuttgart, Mitte",,101,48.772,9.172,,\nStuttgart,,100,48.772,9.172,1,\nTübingen,,102,48.525,9.05,,\nBerlin,,103,52.52,13.40,,\n', 'stop_times.txt': 'x\n'.repeat(500) }));
+        if (req.method === 'HEAD') { res.writeHead(200, { 'content-length': z.length, 'last-modified': 'Sat, 07 Nov 2026 09:31:53 GMT', etag: '"t1"', 'accept-ranges': 'bytes' }); return res.end(); }
+        const m = /bytes=(\d+)-(\d+)/.exec(req.headers.range || '');
+        if (!m) { st.gtfsFull = (st.gtfsFull || 0) + 1; res.writeHead(200, { 'content-length': z.length }); return res.end(z); }
+        const a = +m[1], b = Math.min(+m[2], z.length - 1); res.writeHead(206, { 'content-range': `bytes ${a}-${b}/${z.length}`, 'content-length': b - a + 1 }); return res.end(z.subarray(a, b + 1));
+      }
+      if (file === 'rt.pb') {
+        const t = Date.now() - 5 * 60e3, stops = [...Array(25)].map((_, i) => ({ stop: 101, t: i >= 20 ? null : t, skipped: i >= 20, delay: i < 2 ? 600 : 0 }));
+        const body = gzipSync(encodeFeed([{ id: 's1', stops }, { id: 's2', stops: [{ stop: 102, t }, { stop: 103, t }, { stop: 999, t }] }], { alerts: 1 }));
+        res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-encoding': 'gzip', 'content-length': body.length }); return res.end(body);
+      }
+    }
     res.writeHead(404); res.end('nf');
   });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
