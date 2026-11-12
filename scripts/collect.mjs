@@ -1492,7 +1492,7 @@ if (process.env.TRAIN !== '0') {
       }
       await writeFile(path.join(tDir, 'index.json'), JSON.stringify({ version: TR.TRAIN.version, updatedAt: new Date(now).toISOString(), days: [...have].sort(), path: 'train/<JJJJ>/<JJJJ-MM-TT>.json.gz',
         fields: TR.TRAIN.fields, sums: TR.TRAIN.sums, stock: TR.TRAIN.stock, ctxKeys: CX.CTX_KEYS, minStarts: TR.TRAIN.minStarts,
-        note: 'Je Ortstag Stundenwerte je Gemeinde|Anbieter|Art (Ereignisse, verfügbare Fahrzeugminuten, Bestand), beobachtete Minuten, Wetter (Beobachtung und wie ausgegebene Vorhersage), Tagtyp je Land, Kennzeichen wie in der Prognose (ctx) und zurückgehaltene (ctxHeld), Ampel, eingefrorener Plan. Gruppen mit 1–2 Fahrtbeginnen am Tag: Fahrtbeginne/-enden nur als Tagessumme.' }));
+        note: 'Je Ortstag Stundenwerte je Gemeinde|Anbieter|Art (Ereignisse, verfügbare Fahrzeugminuten, Bestand), beobachtete Minuten, Wetter (Beobachtung und wie ausgegebene Vorhersage), Tagtyp je Land, Kennzeichen wie in der Prognose (ctx), zurückgehaltene (ctxHeld) und nur gesammelte wie Baustellen in Städten (ctxExtra), Ampel, eingefrorener Plan, Eingriffe der Anbieter (ops), anteilige Stundenwerte (pf, gp, obsP). Gruppen mit 1–2 Fahrtbeginnen am Tag: Fahrtbeginne/-enden nur als Tagessumme.' }));
       log(`Trainingsarchiv: ${todo.join(', ')} (${(bytes / 1e3).toFixed(0)} kB gz), ${have.size} Tage gesamt`);
     }
     const fcDir = path.join(DATA, 'weather-fc');
