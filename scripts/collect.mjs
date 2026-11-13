@@ -1514,7 +1514,7 @@ if (process.env.FORECAST !== '0') {
       if (curOk.length < cur.ok.length) log(`Ereignisliste: ${cur.ok.length - curOk.length} Veranstaltungen vorgemerkt, in der Prognose ab ${curDoc.veranstaltungenAb}`);
       if (termineAuto.length) log(`Termine (Workflow): ${termineAuto.length} Einträge${evOn ? '' : `, in der Prognose ab ${curDoc?.veranstaltungenAb}`}`);
       // Chronos-2 (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py) – Vergleich „chronos“ und
-      // Mischung „blend“ (lernt mit, wählbar ab BLEND.activeFrom); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
+      // Mischung „blend“ (lernt mit, wählbar nach geprüftem Vorsprung, FC.DM); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
       let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
       if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
       const ext = chronos ? CH.chronosLookup(chronos) : null;

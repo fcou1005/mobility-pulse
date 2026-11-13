@@ -626,12 +626,14 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const better = evs.filter(([, e]) => sc(e, 'chronos') < sc(e, 'hybrid')).length, blendBetter = evs.filter(([, e]) => e.models.blend && sc(e, 'blend') < sc(e, 'hybrid')).length;
   assert(evs.length >= 4 && better === evs.length && blendBetter >= evs.length - 1 && rb.latest.blend?.learn?.ownShare > 0.5 && rb.log.feedbackC?.upto && !['blend', 'chronos'].includes(rb.latest.active),
     `Selbstprüfung: Chronos an ${better} von ${evs.length} Tagen besser als Hybrid, blend an ${blendBetter}; Chronos-Anteil gelernt ${rb.latest.blend?.learn?.ownShare}; vor ${new Date(F.BLEND.activeFrom).toISOString().slice(0, 10)} veröffentlicht ${rb.latest.active}`);
-  // nach der Lernphase wählbar: dieselben Daten, Stichtag vorgezogen
-  const keep = F.BLEND.activeFrom; F.BLEND.activeFrom = 0;
+  // S2.3: wählbar erst mit geprüftem Vorsprung (DM-Test über ≥ 14 Tage); hier liegen weniger Tage vor → gesperrt, mit gesenkter Tagesgrenze wählbar
+  assert(rb.latest.decision?.dm?.blend && rb.latest.decision.dm.blend.ok === false && rb.latest.decision.dm.blend.n < F.DM.minDays, `S2.3: blend mit ${rb.latest.decision?.dm?.blend?.n} Prüftagen (< ${F.DM.minDays}) nicht wählbar`);
+  const keep = F.DM.minDays; F.DM.minDays = 5;
   const ra = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: null, now: NOWB, ext: extB });
   const iA = Object.values(ra.log.issued)[0], plan = ra.series.plans[ra.series.today];
-  F.BLEND.activeFrom = keep;
-  assert(ra.latest.active === 'blend' && /Chronos/.test(ra.latest.reason) && iA.model === 'blend' && plan?.model === 'blend', `nach der Lernphase: blend gewählt (${ra.latest.reason}), Plan heute mit ${plan?.model}`);
+  F.DM.minDays = keep;
+  assert(['blend', 'chronos'].includes(ra.latest.active) && /Chronos/.test(ra.latest.reason) && iA.model === ra.latest.active && ['blend', 'chronos'].includes(plan?.model) && ra.latest.decision.dm[ra.latest.active].p < F.DM.p,
+    `S2.3: mit geprüftem Vorsprung (DM p ${ra.latest.decision?.dm?.[ra.latest.active]?.p}) gewählt: ${ra.latest.active} (${ra.latest.reason}), Plan heute mit ${plan?.model}`);
   // scripts/chronos.py im Testmodus (ohne Modell): Eingabe → Ausgabe mit Stunden je Gruppe
   const { spawnSync } = await import('node:child_process'), { writeFileSync, readFileSync, mkdtempSync } = await import('node:fs'), { tmpdir } = await import('node:os'), { join } = await import('node:path');
   const py = spawnSync('python3', ['-c', 'import pandas, numpy'], { encoding: 'utf8' });
@@ -727,4 +729,24 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   assert(P.kind === 'mobility-pulse/portable-model' && maxRel < 0.002 && op && Number.isFinite(P.operators[op]) && Object.values(P.types).every(x => x.level.p25 <= x.level.p50 && x.level.p50 <= x.level.p75) && Object.keys(P.city).length > 0 && JSON.stringify(P).length < 60000,
     `portableModel: Stunde, Tagtyp, Art und Wetter reproduzieren predictPooled (größte Abweichung ${(maxRel * 100).toFixed(3)} %), Anbieter- und Stadtniveau, Quantile geordnet, klein`);
   assert(F.portableModel(null, R) === null, 'portableModel ohne Modell: null');
+}
+{ // S2.2/S2.3: bessere Basis, Summenverhältnis, DM-Test, Wechselsperre
+  assert(Math.abs(F.tCdf(0, 5) - 0.5) < 1e-9 && Math.abs(F.tCdf(-2.015, 5) - 0.05) < 0.001 && Math.abs(F.tCdf(1.761, 14) - 0.95) < 0.001, 't-Verteilung: Quantile 0,05 (ν 5) und 0,95 (ν 14)');
+  const a = Array.from({ length: 14 }, (_, i) => 0.20 + 0.01 * Math.sin(i)), b = a.map((x, i) => x + 0.02 + 0.005 * Math.cos(i * 3));
+  const t1 = F.dmTest(a, b), t2 = F.dmTest(b, a), t3 = F.dmTest(a.slice(0, 2), b.slice(0, 2));
+  assert(t1.p < 0.01 && t2.p > 0.99 && t3 === null && t1.n === 14, `DM-HLN: a durchgehend 2 Punkte besser → p ${t1.p}; umgekehrt ${t2.p}; unter 3 Tagen kein Test`);
+  const day = (i) => `2026-11-${String(i + 1).padStart(2, '0')}`, E = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { wapeGD: v, wapeGH: v }]));
+  const ev = Object.fromEntries(Array.from({ length: 16 }, (_, i) => [day(i), { trainDays: 8, models: E({ profile: 0.2, pooled: 0.21, hybrid: 0.18, naive: 0.25, week: 0.2 + (i % 2) * 0.02, blend: 0.15 + 0.004 * Math.sin(i), chronos: 0.179 + 0.004 * Math.cos(i) }) }]));
+  const sr = F.selfRelative(ev, 'hybrid', Object.keys(ev).slice(-7));
+  assert(sr.base === 'week' && Math.abs(sr.r - (7 * 0.18) / (0.2 * 7 + 0.02 * 3)) < 0.02, `S2.2: Maßstab gegen die bessere Basis (Vorwoche), Summenverhältnis ${sr.r.toFixed(3)}`);
+  const g = F.dmGate(ev, 'hybrid');
+  assert(g.tests.blend.ok && !g.without.includes('blend') && !g.tests.chronos.ok && g.without.includes('chronos'), `S2.3: blend mit DM p ${g.tests.blend.p} freigegeben, chronos (kaum besser, p ${g.tests.chronos.p}) gesperrt`);
+  const c = F.chooseModel(ev, { trainDays: 16 }), few = F.chooseModel(Object.fromEntries(Object.entries(ev).slice(-10)), { trainDays: 10 });
+  assert(c.active === 'blend' && few.active === 'hybrid' && few.dm.blend.ok === false, `S2.3: über 16 Tage blend gewählt, über 10 Tage gesperrt (${few.active})`);
+  const now = Date.parse('2026-11-16T12:00:00Z'), held = F.chooseModel(ev, { trainDays: 16, prevActive: 'hybrid', switchedAt: now - 2 * 86400e3, nowMs: now }), free = F.chooseModel(ev, { trainDays: 16, prevActive: 'hybrid', switchedAt: now - 8 * 86400e3, nowMs: now });
+  assert(free.active === 'blend' && (held.active === 'blend' ? held.scores.blend / held.scores.hybrid <= 0.9 : held.active === 'hybrid' && held.why.held === 'blend'),
+    `S2.3: Wechselsperre 7 Tage (2 Tage nach dem Wechsel: ${held.active}${held.why?.held ? `, gehalten statt ${held.why.held}` : ''}; nach 8 Tagen: ${free.active})`);
+  const lv = { 1: { v: 2, from: now - 2 * 86400e3, models: { naive: { w: 0.3 }, week: { w: 0.2 }, hybrid: { w: 0.18 } } }, 2: { v: 2, from: now - 86400e3, models: { naive: { w: 0.3 }, week: { w: 0.25 }, hybrid: { w: 0.2 } } } };
+  const L = F.liveRelative(lv, { nowMs: now });
+  assert(L.hybrid.base === 'week' && L.hybrid.r > 0.8 && L.hybrid.r < 0.9 && L.naive.r > 1, `S2.2: live gegen die bessere Basis (Vorwoche) als Summenverhältnis: hybrid ${L.hybrid.r}, „wie gestern“ ${L.naive.r}`);
 }
