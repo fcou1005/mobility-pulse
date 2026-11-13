@@ -147,6 +147,14 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
   const kf = K.methodFactor(ref, meas);
   assert(near(kf.k, 1.72 / 1.075, 1e-9) && kf.quarter === 'Q4/2025' && near(kf.kLow, 1.42 / 1.075, 1e-9) && near(kf.kHigh, 2.31 / 1.075, 1e-9), 'k = 1,72 (Q4/2025) ÷ 1,075 gemessen = 1,60; Spanne aus 1,42 und 2,31');
   assert(kf.prelim && kf.prelimWhy.length === 2 && !K.methodFactor(ref, { ...meas, days: 7, fullDays: 7, ruleFullDays: 7, obsMin: 1500 }).prelim && K.methodFactor(ref, { ...meas, days: 7, fullDays: 7, obsMin: 1500 }).prelim, 'vorläufig unter 7 vollen Messtagen mit Regelstand oder unter 50 % beobachteter Stunden (7 volle Tage ohne Regelstand-Tage bleiben vorläufig)');
+  { // A6/A8: Band aus Bootstrap über Tage × Streuung der Quartale; k je Tagtyp
+    const dayVals = ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'].map((day, i) => ({ day, ridesDay: [5200, 5000, 5100, 4900, 5300, 3900, 3500][i], fleet: 4600 }));
+    const kb = K.methodFactor(ref, { ...meas, dayVals }), kb2 = K.methodFactor(ref, { ...meas, dayVals });
+    assert(kb.kBand === 'bootstrap' && kb.kLow < kb.k && kb.k < kb.kHigh && kb.kLow === kb2.kLow && kb.kByType.W > 0 && kb.kByType.H > kb.kByType.W && kb.kByType.S > kb.kByType.W,
+      `A6/A8: k ${kb.k.toFixed(2)} mit 90-%-Band ${kb.kLow.toFixed(2)}–${kb.kHigh.toFixed(2)} (fest gesät), Werktag ${kb.kByType.W.toFixed(2)}, Samstag ${kb.kByType.S.toFixed(2)}, Sonntag ${kb.kByType.H.toFixed(2)}`);
+    const bd = E.bootstrapDays([1, 2, 3, 4, 5].map(x => ({ x })), (s) => s.reduce((a, d) => a + d.x, 0) / s.length, { key: 't' });
+    assert(bd[0] < 3 && bd[1] > 3 && bd[0] >= 1 && bd[1] <= 5 && E.bootstrapDays([{ x: 1 }], () => 1) === null, `bootstrapDays: Band um das Mittel (${bd.map(x => x.toFixed(2)).join('–')}), unter 3 Tagen null`);
+  }
   // M-5: vorläufig = nicht angewandt (k nur angezeigt), erst mit 7 vollen Regelstand-Tagen und ≥ 50 % der Stunden
   const kfA = K.methodFactor(ref, { ...meas, days: 7, fullDays: 7, ruleFullDays: 7, obsMin: 1500 });
   const kfAll = { ...kfA, measured: { ...kfA.measured, operators: [] } }; // älteres k ohne Anbieterliste: wirkt wie bisher anbieterübergreifend (Grenz- und Kennungsart-Tests)
@@ -269,6 +277,12 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
       ko = K.methodFactor(real, { ...meas, rule: '2026-11-01b', ruleFullDays: 7, obsMin: 2880 });
     assert(real.kalibrierung?.freigabe?.regelstand === '2026-11-02a' && kz.applied && kz.release?.regelstand === '2026-11-02a' && !k3.applied && k3.status !== 'applied' && !ko.applied && ko.status !== 'applied',
       'reference.json: Freigabe 2026-11-02a → k erst mit 7 vollen Tagen dieses Regelstands; 3 Tage bzw. anderer Regelstand → nicht angewandt'); }
+  // Räder: Berliner Quartale (ohne nextbike/Call a Bike) und KVB-Rad nur als Einordnung, keine Grenze, keine Prüfzeile gegen E-Scooter-Messung
+  { const bq = real.rvd.filter(e => e.ags === '11000000' && e.type === 'bike'), kvb = real.rvd.find(e => e.ags === '05315000' && e.type === 'bike');
+    const pk = K.plausibilityChecks(real, { byAgs: { '05315000': { rvd: 1.1, kind: 'perTrip' } }, national: {}, voi: {} }, null);
+    assert(bq.length === 5 && Math.max(...bq.map(e => e.wert)) === 1.62 && /ohne nextbike/.test(bq[0].hinweis) && kvb?.wert === 7 && kvb.op === 'nextbike'
+      && Object.keys(K.rvdLimits(real)).join() === 'scooter' && !pk.some(x => x.ref?.type === 'bike') && K.rvdLimits(real).scooter === 2.31 * 1.5,
+      'reference.json: Räder Berlin 0,78–1,62 und KVB-Rad 7 je Rad und Tag als Einordnung; Grenze weiter nur für E-Scooter, keine Rad-Prüfzeile gegen E-Scooter-Messung'); }
   // Düsseldorf (SMM-CPI 2025) und Voi FY2025 je Fahrt als Plausibilitätsprobe, nicht als Schätzer
   {
     const du = real.rvd.find(e => e.ags === '05111000'), vr = real.umsatz.find(e => e.einheit === '€ je Fahrt');
@@ -395,6 +409,10 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
     const er = E.eventChecks({ day: '2026-11-02', runs: day.runs, groups: { 'K|nb|bike': g(30, 100), 'B|nb|bike': g(2, 30), 'M|nb|bike': g(2, 30), 'L|nb|bike': g(2, 30) } });
     const k = er.groups['K|nb|bike'];
     assert(k?.checks?.flags?.includes('relHigh') && near(k.checks.relMedian, 1.6, 0.01) && k.level === 'warn', `S1.6: große Flotte gegen den Median der übrigen (${k?.checks?.relHigh} × ${k?.checks?.relMedian}) gelb`);
+    // A6: Abweichung vom Median der übrigen Anbieter derselben Art in derselben Stadt
+    const ec6 = E.eventChecks({ day: '2026-11-02', runs: day.runs, groups: { 'K|Dott|scooter': g(4, 100), 'K|Voi|scooter': g(10, 100), 'K|Bolt|scooter': g(11, 100), 'K|Lime|scooter': g(9, 100) } }).groups;
+    assert(ec6['K|Dott|scooter'].checks.flags.includes('cityDev') && near(ec6['K|Dott|scooter'].checks.cityDev, 0.4, 0.001) && !ec6['K|Voi|scooter']?.checks?.flags?.includes('cityDev'),
+      `A6: Dott mit ${ec6['K|Dott|scooter'].checks.cityDev} × dem Median der übrigen Anbieter der Stadt gelb, Voi nicht`);
     // „Umsetzung im Fahrtentakt“ und „Moduswechsel heute“
     const ev2 = { day: '2026-11-02', runs: day.runs, modeChanges: [[1, 'src-voi', 'stable', 'rotating']], groups: {
       'A|Dott|scooter': { start: H24(h => 10 + h), end: H24(h => 10 + h), reloc: H24(h => 3 + h), swap: H24(() => 1) },

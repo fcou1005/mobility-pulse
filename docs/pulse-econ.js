@@ -84,6 +84,37 @@ export function planLabel(plan) {
   return [unlock ? `${unlock.toFixed(2)} € Start` : '0 € Start', perMin].filter(Boolean).join(' + ');
 }
 
+// ---------- Bootstrap über Tage (Sprint 1, A6/A8) ----------
+// Festes Zufallsmuster (Seed aus dem Schlüssel), damit veröffentlichte Bänder von Lauf zu Lauf nicht zittern.
+export const seededRng = (key) => { let h = 2166136261; for (const c of String(key)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } let a = h || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+export const quantile = (sorted, p) => { if (!sorted.length) return null; const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo); };
+/**
+ * 90-%-Band einer Kennzahl über ganze Tage: days = [{ …Tageswerte }], stat(stichprobe) → Zahl oder null; B Ziehungen mit Zurücklegen.
+ * Rückgabe [q05, q95] oder null (unter minDays Tagen oder ohne Werte). Tage statt Stunden: Stunden eines Tags sind nicht unabhängig.
+ */
+export function bootstrapDays(days, stat, { B = 400, minDays = 3, key = 'x', lo = 0.05, hi = 0.95 } = {}) {
+  if (!Array.isArray(days) || days.length < minDays) return null;
+  const r = seededRng(key), n = days.length, out = [];
+  for (let b = 0; b < B; b++) { const s = new Array(n); for (let i = 0; i < n; i++) s[i] = days[Math.floor(r() * n)]; const v = stat(s, r); if (Number.isFinite(v)) out.push(v); }
+  if (out.length < B / 2) return null;
+  out.sort((x, y) => x - y); return [quantile(out, lo), quantile(out, hi)];
+}
+
+// ---------- Fahrtdauer als Intervallschätzung (Sprint 1, A3) ----------
+// spans: { 'a|b': n } – je stabiler Fahrt das Intervall [a, b) in Minuten, in dem die Dauer liegt (Versatz zwischen zwei Läufen: [0, Laufabstand);
+// Rückkehr nach m Läufen: (Fehlzeit − Laufabstand, Fehlzeit + Laufabstand)). Lognormal per Maximum-Likelihood über ein Gitter (μ, σ), weil 57 %
+// der Fahrten in einem einzigen Laufintervall liegen (Turnbull scheidet aus). Rückgabe { mean, median, mu, sigma, n } oder null (unter minN).
+const normCdf = (z) => { const t = 1 / (1 + 0.2316419 * Math.abs(z)), d = 0.3989422804014327 * Math.exp(-z * z / 2), p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))); return z > 0 ? 1 - p : p; };
+export function durationFromSpans(spans, { minN = 50 } = {}) {
+  const obs = Object.entries(spans || {}).map(([k, n]) => { const [a, b] = k.split('|').map(Number); return [a, b, n]; }).filter(([a, b, n]) => b > a && n > 0);
+  const n = obs.reduce((s, o) => s + o[2], 0); if (n < minN) return null;
+  const ll = (mu, sg) => { let s = 0; for (const [a, b, c] of obs) { const fa = a > 0 ? normCdf((Math.log(a) - mu) / sg) : 0, fb = normCdf((Math.log(b) - mu) / sg); s += c * Math.log(Math.max(fb - fa, 1e-12)); } return s; };
+  let best = null; const grid = (m0, m1, dm, s0, s1, ds) => { for (let mu = m0; mu <= m1; mu += dm) for (let sg = Math.max(0.1, s0); sg <= s1; sg += ds) { const v = ll(mu, sg); if (!best || v > best.v) best = { v, mu, sg }; } };
+  grid(Math.log(1.5), Math.log(90), 0.1, 0.15, 1.6, 0.1); // grob, dann fein um das Optimum
+  grid(best.mu - 0.12, best.mu + 0.12, 0.01, best.sg - 0.12, best.sg + 0.12, 0.01);
+  return { mean: Math.exp(best.mu + best.sg ** 2 / 2), median: Math.exp(best.mu), mu: best.mu, sigma: best.sg, n };
+}
+
 // ---------- Beobachtung ----------
 export const GAP_MS = 45 * 60e3; // Lauf nach größerem Abstand = Lücke (zählt nicht, siehe pulse-track)
 const HOUR_FMT = new Map();
@@ -273,7 +304,7 @@ export function maturity(base, need = 'full3', { dayType: ty = null } = {}) {
 // Schwellen sind heuristisch (vor dem Einstellen ≥ 7 Tage beobachten). Ein Befund setzt 'warn' (gelb) oder 'bad' (rot); rote Gruppen gelten
 // im Kommunal-Bericht als nicht plausibel (lib/pulse-report.js AMPEL_RED) und fallen aus Ranglisten und Kalibrierbasis.
 export const EVENT_CHECKS = {
-  version: 2, // 2 (13.11.2026, S1.6): Median ohne geprüfte Gruppe, relocTrips, modeFlip
+  version: 3, // 2 (13.11.2026, S1.6): Median ohne geprüfte Gruppe, relocTrips, modeFlip; 3: cityDev (A6)
   minRides: 50,                                  // Anteile und Verhältnis erst ab 50 Fahrtbeginnen am Tag
   minHours: 6,                                   // Korrelation erst ab 6 gemessenen Stunden
   pickupWarn: 0.10, pickupBad: 0.20, pickupR: 0.5, // Abholungsanteil pickup ÷ (pickup + start) bei r(pickup, start) je Stunde > 0,5: Abholungen sind vermutlich Fahrten
@@ -287,6 +318,7 @@ export const EVENT_CHECKS = {
   relocWarn: 0.10, relocR: 0.4,                  // S1.6 „Umsetzung im Fahrtentakt“: Umsetzungen ÷ (Umsetzungen + Fahrtbeginne) > 10 % und r(Umsetzungen, Fahrtbeginne) je Stunde > 0,4
                                                  // → Fahrten zählen vermutlich als Umsetzung (stabile Kennungen im Modus „unbekannt“ oder „rotierend“)
   modeFlip: true,                                // S1.6 „Moduswechsel heute“: Kennungsmodus einer Quelle der Gruppe hat am Tag gewechselt (events → modeChanges)
+  cityDev: [0.5, 2], cityMinOps: 3,              // A6: Fahrten je Fahrzeug unter 0,5 × bzw. über 2 × Median der übrigen Anbieter derselben Art in der Stadt (≥ 3 Anbieter mit ≥ 20 Fzg.) → gelb
 };
 const LEVEL = { ok: 0, warn: 1, bad: 2 };
 const numOf = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : v && typeof v === 'object' ? [v.p005, v.pct, v.share, v.value, v.floor].find(x => typeof x === 'number' && Number.isFinite(x)) ?? null : null);
@@ -358,6 +390,21 @@ export function eventChecks(doc, sources = [], rules = EVENT_CHECKS, { ruleNow =
         const p = pending.get(x.k); if (!p || p.rides < rules.minRides) continue;
         const gr = groups[x.k] || (groups[x.k] = { level: 'ok', checks: p.c });
         gr.checks.relHigh = r3(x.rvd / med); gr.checks.relMedian = r3(med); if (!gr.checks.flags.includes('relHigh')) gr.checks.flags.push('relHigh');
+        if (gr.level === 'ok') gr.level = 'warn';
+      }
+    }
+  }
+  // A6: zweite Prüfgröße – Abweichung vom Median der übrigen Anbieter derselben Art in derselben Stadt (Dott in Köln/Stuttgart/Essen bei 39–62 % von Voi und Bolt)
+  if (rules.cityDev) {
+    const by = new Map(); for (const x of rel) if (x.fleet >= (rules.relMinFleet ?? 20)) { const [ags, , ty] = x.k.split('|'); const kk = `${ags}|${ty}`; (by.get(kk) || by.set(kk, []).get(kk)).push(x); }
+    for (const list of by.values()) {
+      if (list.length < (rules.cityMinOps ?? 3)) continue;
+      for (const x of list) {
+        const o = list.filter(y => y !== x).map(y => y.rvd).sort((a, b) => a - b), med = o.length % 2 ? o[o.length >> 1] : (o[o.length / 2 - 1] + o[o.length / 2]) / 2;
+        if (!(med > 0)) continue; const f = x.rvd / med; if (f >= rules.cityDev[0] && f <= rules.cityDev[1]) continue;
+        const p = pending.get(x.k); if (!p || p.rides < rules.minRides) continue;
+        const gr = groups[x.k] || (groups[x.k] = { level: 'ok', checks: p.c });
+        gr.checks.cityDev = r3(f); gr.checks.cityMedian = r3(med); if (!gr.checks.flags.includes('cityDev')) gr.checks.flags.push('cityDev');
         if (gr.level === 'ok') gr.level = 'warn';
       }
     }

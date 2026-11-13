@@ -813,11 +813,39 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const full = { day, runs: [], groups: { 'A|Voi|scooter': g(5), 'A|Bolt|scooter': g(1) } };
   const mid = T.publicEventsDoc(full, false), fin = T.publicEventsDoc(full, true);
   assert(!mid.groups['A|Bolt|scooter'] && mid.groups['A|Voi|scooter'].start[9] === 5 && T.PUB_WITHHELD.every(f => !(f in mid.groups['A|Voi|scooter'])) && mid.withheld.groups === 1
-    && fin === full && fin.groups['A|Bolt|scooter'].tripDurN === 1 && full.groups['A|Voi|scooter'].tripDurN === 5,
+    && fin.groups['A|Bolt|scooter'].tripDurN === 1 && fin.groups['A|Bolt|scooter'].rest?.start === 1 && fin.groups['A|Bolt|scooter'].start[9] === 0 && full.groups['A|Bolt|scooter'].start[9] === 1 && full.groups['A|Voi|scooter'].tripDurN === 5,
     'S1.7: Zwischenstand ohne Dauer-/Distanzsummen und ohne Gruppen unter 3 Fahrtbeginnen; Tagesend-Stand vollständig, Arbeitsstand unverändert');
   // Differenz zweier Stundenstände: kein Feld, aus dem Dauer oder Distanz einer Einzelfahrt folgt
   const later = T.publicEventsDoc({ ...full, groups: { ...full.groups, 'A|Voi|scooter': g(6) } }, false);
   assert(Object.keys(later.groups['A|Voi|scooter']).every(f => !/^trip(Dur|Dist)/.test(f)), 'S1.7: Differenz zweier Zwischenstände verrät keine Dauer oder Distanz einer Fahrt');
+}
+{ // A20: veröffentlichte Gruppe-Stunden nur 0 oder ≥ 3, Tagessumme bleibt (Abschnitt, Lückenart, Rest)
+  const A = (o) => Object.assign(new Array(24).fill(0), o), sum = (a) => a.reduce((x, y) => x + y, 0);
+  const p1 = T.poolSmall(A({ 6: 1, 7: 0, 8: 5 }));
+  assert(p1.out[6] === 0 && p1.out[8] === 6 && p1.rest === 0, 'A20: 1 Fahrt wandert im Abschnitt Morgen in die nächste Stunde ≥ 3');
+  const p2 = T.poolSmall(A({ 9: 2, 10: 2 }));
+  assert(p2.out[9] === 0 && p2.out[10] === 4 && sum(p2.out) === 4, 'A20: 2 + 2 werden zu 4 in der späteren Stunde');
+  const p3 = T.poolSmall(A({ 13: 4, 14: 1 }));
+  assert(p3.out[13] === 5 && p3.out[14] === 0, 'A20: Rest am Abschnittsende geht in die letzte Stunde ≥ 3 des Abschnitts');
+  const p4 = T.poolSmall(A({ 20: 1, 17: 7 }));
+  assert(p4.out[20] === 0 && p4.out[17] === 8 && p4.rest === 0, 'A20: Abschnitt ohne Stunde ≥ 3 → zeitlich nächste Stunde ≥ 3 des Tages');
+  const gap = A({ 10: true }), p5 = T.poolSmall(A({ 10: 1, 11: 5 }), gap);
+  assert(p5.out[10] === 0 && p5.out[11] === 5 && p5.rest === 0 && p5.restGap === 1, 'A20: Lückenstunde mischt sich nicht in gezählte Stunden (Rest als Tageswert der Lücke)');
+  const p6 = T.poolSmall(A({ 3: 0.4, 4: 1.2, 5: 2.1 }));
+  assert(Math.abs(sum(p6.out) - 3.7) < 1e-9 && p6.out.every(v => v === 0 || v >= 3), 'A20: Anteilswerte (startP) ebenso');
+  // ganzer Tag: keine Gruppe-Stunde mit 1 oder 2, Summen je Feld unverändert (inkl. rest), Zwischen- und Tagesend-Stand
+  const rnd = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const r = rnd(7), grp = () => Object.fromEntries(T.POOL_FIELDS.map(f => [f, Array.from({ length: 24 }, () => (r() < 0.5 ? 0 : Math.floor(r() * 6)) + (f === 'startP' ? 0.25 : 0))]));
+  const docA = { day: '2026-11-11', runs: [], gapHours: [22], groups: Object.fromEntries([...Array(40).keys()].map(i => [`A|op${i}|scooter`, grp()])) };
+  for (const complete of [true, false]) {
+    const pub = T.publicEventsDoc(docA, complete);
+    let bad = 0, diff = 0;
+    for (const [k, g] of Object.entries(pub.groups)) for (const f of T.POOL_FIELDS) { for (const v of g[f]) if (v > 0 && v < 3) bad++; diff += Math.abs(sum(g[f]) + (g.rest?.[f] || 0) + (g.restGap?.[f] || 0) - sum(docA.groups[k][f])); }
+    assert(bad === 0 && diff < 1e-6 && pub.groups && Object.keys(pub.groups).length >= 30, `A20: ${complete ? 'Tagesend' : 'Zwischen'}stand ohne 1/2 je Gruppe-Stunde, Summen gleich (bad ${bad}, diff ${diff})`);
+  }
+  // Nachlauf auf veröffentlichtem Stand (Cache verloren): rest wird fortgeschrieben, nicht verdoppelt
+  const once = T.publicEventsDoc({ day: 'x', runs: [], groups: { k: { start: A({ 3: 1 }) } } }, true), twice = T.publicEventsDoc(once, true);
+  assert(once.groups.k.rest.start === 1 && twice.groups.k.rest.start === 1, 'A20: rest bleibt bei erneuter Veröffentlichung gleich');
 }
 { // S1.9 (Kandidat): gemessene Dauer nur aus stabilen Kennungen – bei rotierender Quelle zählt die Rückkehr derselben Kennung keine Dauer
   const N = await import('../lib/pulse-track-next.js'), recs = [{ id: 'rot', status: 'live', latencyMs: 0 }], t0 = Date.parse('2026-11-10T09:00:00Z');

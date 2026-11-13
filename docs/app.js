@@ -1,19 +1,19 @@
-import * as C from './pulse-core.js?v=mwexbqd2';
-import * as Ops from './ops.js?v=mwexbqd2';
-import * as E from './pulse-econ.js?v=mwexbqd2';
-import * as K from './pulse-calib.js?v=mwexbqd2';
-import * as Rp from './report.js?v=mwexbqd2';
-import * as R from './pulse-report.js?v=mwexbqd2';
-import * as Fl from './flows.js?v=mwexbqd2';
-import * as Cov from './coverage.js?v=mwexbqd2';
-import * as Cmp from './compare.js?v=mwexbqd2';
-import * as Sp from './spots.js?v=mwexbqd2';
-import * as Fv from './forecast.js?v=mwexbqd2';
-import { mapKeys } from './mapkeys.js?v=mwexbqd2';
-import { weatherFor } from './weather.js?v=mwexbqd2';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwexbqd2';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwexbqd2';
-import { idleClassText } from './pulse-ops.js?v=mwexbqd2';
+import * as C from './pulse-core.js?v=mwexvlu5';
+import * as Ops from './ops.js?v=mwexvlu5';
+import * as E from './pulse-econ.js?v=mwexvlu5';
+import * as K from './pulse-calib.js?v=mwexvlu5';
+import * as Rp from './report.js?v=mwexvlu5';
+import * as R from './pulse-report.js?v=mwexvlu5';
+import * as Fl from './flows.js?v=mwexvlu5';
+import * as Cov from './coverage.js?v=mwexvlu5';
+import * as Cmp from './compare.js?v=mwexvlu5';
+import * as Sp from './spots.js?v=mwexvlu5';
+import * as Fv from './forecast.js?v=mwexvlu5';
+import { mapKeys } from './mapkeys.js?v=mwexvlu5';
+import { weatherFor } from './weather.js?v=mwexvlu5';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwexvlu5';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwexvlu5';
+import { idleClassText } from './pulse-ops.js?v=mwexvlu5';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -1898,7 +1898,7 @@ async function renderCalibPanel() {
     `${t('app.notMeasurable')}<div class="sub-line">${t('app.idsChangeWithEveryTripStable')}</div>`, `${f2(a.min / a.previous.min)}<div class="sub-line">${t('app.versusPreviouslyMin', { min: fmt(a.previous.min) })}</div>`, t('app.assumptionMinUtilisation', { min: fmt(a.previous.min), min2: fmt(a.min, 1), v2: f2(a.min / a.previous.min) })]);
   for (const e of (ref.fahrt || []).filter(x => x.ags !== K.BERLIN && x.type === 'scooter')) rows.push([`${t('app.eScooterTrip')}<div class="sub-line">${esc(tx(e.ort))}, ${esc(e.zeitraum)}</div>`, [e.minMedian != null ? t('app.medianMin', { minMedian: fmt(e.minMedian, 1) }) : '', e.minMittel != null ? t('app.avgMin', { minMittel: fmt(e.minMittel, 1) }) : '', e.kmMedian != null ? t('app.medianKm', { v0: f2(e.kmMedian) }) : '', e.kmMittel != null ? `Ø ${f2(e.kmMittel)} km` : ''].filter(Boolean).join(' · '), src(e), '—', a?.calibrated && e.minMittel ? `${f2(a.min / e.minMittel)}<div class="sub-line">${t('app.berlinAvgAvgHere')}</div>` : '—', t('app.crossCheckNotPartOfRuleOne')]);
   // 2. Methodenfaktor
-  const kr = k?.ref || (ref.rvd || []).filter(e => e.ags === K.BERLIN).slice(-1)[0];
+  const kr = k?.ref || (ref.rvd || []).filter(e => e.ags === K.BERLIN && e.type === 'scooter').slice(-1)[0];
   if (kr) rows.push([`${t('app.tripsPerVehAndDayEScooter')}<div class="sub-line">${t('app.berlin', { v0: esc(k?.applied ? `${k.quarter} (${k.rule})` : kr.zeitraum) })}</div>`, `<b>${f2(kr.wert)}</b>${k?.refMin != null ? `<div class="sub-line">${t('app.quarters', { v0: f2(k.refMin), v1: f2(k.refMax) })}</div>` : ''}`, src(kr),
     k?.measured?.rvd ? `${f2(k.measured.rvd)}<div class="sub-line">${t('app.ofHoursObserved', { v0: esc(k.source || ''), v1: dd(k.measured.from), v2: dd(k.measured.to), days: k.measured.days, v4: k.measured.days === 1 ? t('app.day2') : t('app.days2'), v5: fmt(k.obsShare * 100) })}</div>${(k.measured.excluded || []).length ? `<div class="sub-line">${t('app.excludedOvercount', { join: esc(k.measured.excluded.map(x => `${x.op} ${f2(x.rvd)}`).join(', ')) })}</div>` : ''}` : '—',
     k?.applied ? `k = <b>${f2(k.k)}</b><div class="sub-line">${f2(k.kLow)}–${f2(k.kHigh)}</div>` : '—',

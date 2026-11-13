@@ -2,16 +2,16 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mwexbqd2';
-import * as K from './pulse-calib.js?v=mwexbqd2';
-import { liveSummary } from './pulse-forecast.js?v=mwexbqd2';
+import * as R from './pulse-report.js?v=mwexvlu5';
+import * as K from './pulse-calib.js?v=mwexvlu5';
+import { liveSummary } from './pulse-forecast.js?v=mwexvlu5';
 const FCL = { liveSummary };
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwexbqd2';
-import { decodeFleet } from './pulse-ops.js?v=mwexbqd2';
-import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mwexbqd2';
-import { mapKeys } from './mapkeys.js?v=mwexbqd2';
-import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mwexbqd2';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mwexbqd2';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mwexvlu5';
+import { decodeFleet } from './pulse-ops.js?v=mwexvlu5';
+import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mwexvlu5';
+import { mapKeys } from './mapkeys.js?v=mwexvlu5';
+import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mwexvlu5';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mwexvlu5';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
@@ -328,10 +328,12 @@ function referenceRows(ctx, ref, rep, cal = null) {
   // Stadtwerte über alle Arten (Düsseldorf, SMM-CPI): eigene Summen nur ohne Anbieter-/Artfilter vergleichbar; Hinweis „Jahresmittel, alle Arten, MDS“
   const allOk = ctx.state.operator === 'all' && ctx.state.type === 'all', tq = rep.totals, ct = cal?.applied ? cal.totals : null;
   const ownAll = (v, vc, d) => (!allOk || v == null ? '—' : client ? num(ctx, vc ?? v, d) : `${num(ctx, v, d)}${vc != null ? `<div class="sub-line">${t('rep.calibrated', { ctx: num(ctx, vc, d) })}</div>` : ''}`);
+  // Räder mit Anbieter (KVB-Rad = nextbike in Köln): Messung genau dieser Gruppe, ungefiltert durch k
+  const ownOp = (r) => { const g = rep.groups.find(x => x.ty === r.type && x.op === r.op); return g?.rvd != null ? `${num(ctx, g.rvd, 2)}<div class="sub-line"><span translate="no">${ctx.esc(r.op)}</span></div>` : '—'; };
   const tyName = (r) => (r.type === 'all' ? t('rep.allVehicleTypes') : typeName(r.type));
   for (const r of (ref.rvd || []).filter(x => x.ags === rep.ags)) {
-    const hint = r.type === 'all' && r.hinweis ? `<div class="sub-line"><span translate="no">${ctx.esc(r.hinweis)}</span></div>` : '';
-    rows.push([t('rep.tripsPerVehiclePerDay', { typeName: ctx.esc(tyName(r)) }) + hint, num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), r.type === 'all' ? ownAll(tq.rvd, ct?.rvd, 2) : ownRvd(r)]);
+    const hint = r.hinweis ? `<div class="sub-line"><span translate="no">${ctx.esc(r.hinweis)}</span></div>` : '';
+    rows.push([t('rep.tripsPerVehiclePerDay', { typeName: ctx.esc(tyName(r)) }) + hint, num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), r.type === 'all' ? ownAll(tq.rvd, ct?.rvd, 2) : r.op ? ownOp(r) : ownRvd(r)]);
     if (r.type === 'all' && r.flotteJe1000 != null) rows.push([`${t('rep.vehiclesPer1000Residents')} · ${ctx.esc(tyName(r))}`, num(ctx, r.flotteJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Fleet, null, 1)]);
     if (r.type === 'all' && r.fahrtenJe1000 != null) rows.push([`${t('rep.tripsPer1000ResidentsAndDay')} · ${ctx.esc(tyName(r))}`, num(ctx, r.fahrtenJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Rides, ct?.per1000Rides, 1)]);
   }
@@ -379,8 +381,9 @@ function groupTable(ctx, rep, cal = null) {
   const notMeasurable = `<span class="muted" title="${t('rep.idsChangeWithEveryTripOr')}">${t('rep.notMeasurable')}</span>`;
   const cOf = (g) => { const c = C?.groups.get(g.key); return c?.calibrated ? c : null; };
   // Kundenansicht: E-Scooter nur kalibriert (mit Spanne); intern: gemessen + Spalte „kalibriert“
-  const rdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.ridesDay, c.lo, c.hi) : num(ctx, g.ridesDay); };
-  const rvdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : `<b>${num(ctx, g.rvd, 2)}</b>`; };
+  // A8: gemessene Werte mit 90-%-Band über die Messtage (Bootstrap), kalibrierte mit der Spanne von k
+  const rdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.ridesDay, c.lo, c.hi) : withSpan(ctx, g.ridesDay, g.ridesDayBand?.[0], g.ridesDayBand?.[1]); };
+  const rvdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : withSpan(ctx, g.rvd, g.rvdBand?.[0], g.rvdBand?.[1], 2, true); };
   const calCol = C && !client;
   const calCell = (g) => { const c = cOf(g); const sk = C?.groups.get(g.key)?.skipKind; if (sk) return `<span class="muted">${t('cal.notKind', { v0: esc(K.kindText(sk, lang())) })}</span>`; return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) + (c.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '') : `<span class="muted" title="${t('rep.onlyEScootersAreCalibrated')}">—</span>`; };
   const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? ` · ${t('rep.currentFleetOnly')}` : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(mbFlagText(g.flags))}</div>` : ''}</td>
@@ -1757,7 +1760,8 @@ export function mbChecksText(c) {
   const T0 = { pickup: () => t('mb.ck.pickup', { share: mbPct(c.pickupShare), r: mbNum(c.r, 2) }), se: () => t('mb.ck.se', { v: mbNum(c.se, 2) }), swap0: () => t('mb.ck.swap0', { rides: mbNum(c.rides) }),
     hide: () => t('mb.ck.hide', { share: mbPct(c.hideShare) }), idle: () => t('mb.ck.idle', { share: mbPct(c.idleUnusable) }), batteryFloor: () => t('mb.ck.floor', { v: mbNum(c.batteryFloor) }),
     oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }), relHigh: () => t('mb.ck.relHigh', { f: mbNum(c.relHigh, 1), m: mbNum(c.relMedian, 2) }),
-    relocTrips: () => t('mb.ck.relocTrips', { share: mbPct(c.relocShare), r: mbNum(c.relocR, 2) }), modeFlip: () => t('mb.ck.modeFlip', { n: mbNum(c.modeChanges) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
+    relocTrips: () => t('mb.ck.relocTrips', { share: mbPct(c.relocShare), r: mbNum(c.relocR, 2) }), modeFlip: () => t('mb.ck.modeFlip', { n: mbNum(c.modeChanges) }),
+    cityDev: () => t('mb.ck.cityDev', { f: mbNum(c.cityDev, 2), m: mbNum(c.cityMedian, 2) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
   return (c.flags || []).map(f => (T0[f] ? T0[f]() : f)).join(' · ');
 }
 export const mbLevel = (lv) => (lv === 'bad' ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${t('mb.red')}</span>` : lv === 'warn' ? `<span class="rp-status near"><i aria-hidden="true">!</i>${t('mb.yellow')}</span>` : `<span class="rp-status ok"><i aria-hidden="true">✓</i>${t('mb.green')}</span>`);

@@ -28,4 +28,4 @@ if (process.argv.includes('--write-baseline')) {
 }
 if (process.argv.includes('--table')) console.log(table(rows));
 const s = (Date.now() - t0) / 1000;
-assert(s < 60 * SLOW, `Prüfstand-Laufzeit ${s.toFixed(1)} s < ${(60 * SLOW).toFixed(0)} s`);
+assert(s < 90 * SLOW, `Prüfstand-Laufzeit ${s.toFixed(1)} s < ${(90 * SLOW).toFixed(0)} s (19 Szenarien × 3 Kennungsarten; P1 sah 60 s für 9 vor)`);

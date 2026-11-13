@@ -44,6 +44,14 @@ for (const m of ['stable', 'trip', 'run']) { const o = out[`umsetzung/${m}`];
 // A22: Lücken von 65 und 90 Min. kosten höchstens noch so viel wie der Grundfall (bisher −20 %)
 for (const m of ['stable', 'trip', 'run']) { const o = out[`luecken/${m}`], b = out[`basis/${m}`];
   assert(Math.abs(o.countErr) <= Math.abs(b.countErr) + 0.01 && o.precision >= 0.99, `A22: luecken/${m} Fahrten ${P(o.countErr)} % (geltend ${P(base[`luecken/${m}`].countErr)} %)`); }
+// A3: Fahrtdauer als Intervallschätzung (Lognormal-ML) statt Laufabstand – geltend misst +119 % (19 statt 8,7 Min.)
+{ const SIM = await import('./bench/sim.mjs'), E = await import('../lib/pulse-econ.js'), TN = await import('../lib/pulse-track-next.js');
+  for (const sc of ['basis', 'alles']) {
+    const w = SIM.simulate({ ...SIM.SCENARIOS[sc], seed: 1 }); let st = null; const spans = {};
+    for (let k = 0; k < w.runs.length; k++) { const at = w.runs[k].at, r = TN.trackRun(st, { vehicles: await SIM.vehiclesOf(SIM.freeBikeStatus(w, 'stable', k), at), stations: [], sourceRecs: SIM.sourceRecsOf(w, k), now: at }); st = r.state; if (r.day === w.cfg.day) for (const [kk, n] of Object.entries(r.durSpans?.scooter || {})) spans[kk] = (spans[kk] || 0) + n; }
+    const est = E.durationFromSpans(spans), tr = w.truth.trips.filter(t => t.te >= w.dayStart && t.te < w.dayEnd), tm = tr.reduce((a, t) => a + t.durMin, 0) / tr.length;
+    assert(est && est.mean >= 6 && est.mean <= 10 && Math.abs(est.mean - tm) <= 1.5, `A3: ${sc}/stable Ø Dauer geschätzt ${est?.mean.toFixed(1)} Min. (Wahrheit ${tm.toFixed(1)}, geltend ${(tm * (1 + base[`${sc}/stable`].durErr)).toFixed(1)})`);
+  } }
 if (process.argv.includes('--table')) {
   const ids = Object.keys(out), f = (x) => x == null ? '–' : `${x >= 0 ? '+' : '−'}${Math.abs(100 * x).toFixed(1)}`;
   console.log(['| Fall | Präz. geltend → Kandidat | Δ Fahrten geltend → Kandidat | Beginne/Enden | Wechsel |', '|---|---|---|---|---|',
@@ -51,4 +59,4 @@ if (process.argv.includes('--table')) {
 }
 console.log(`Kandidat ${T.METHOD_VERSION}`);
 const s = (Date.now() - t0) / 1000;
-assert(s < 60 * SLOW, `Prüfstand-Laufzeit ${s.toFixed(1)} s < ${(60 * SLOW).toFixed(0)} s`);
+assert(s < 90 * SLOW, `Prüfstand-Laufzeit ${s.toFixed(1)} s < ${(90 * SLOW).toFixed(0)} s (19 Szenarien × 3 Kennungsarten; P1 sah 60 s für 9 vor)`);

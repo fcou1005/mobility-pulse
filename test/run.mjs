@@ -432,6 +432,12 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
   assert(['ok', 'fail'].includes(hl[0]) && /Quellen aktuell\/verzögert/.test(hl[1]), `Ausfall-Wächter: HEALTH_FILE mit Status und Grund (${hl.join(' | ').trim()})`);
   assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
 }
+// Goldene Tage (P3): Rohstände nur privat im Cache, je Lauf eine Zeile, gesalzene Kennungen
+{
+  const gd = path.join(TRACK_DIR, 'golden'), gfs = (await readdir(gd).catch(() => [])).filter(n => n.endsWith('.jsonl.gz'));
+  const lines = gfs.length ? gunzipSync(await readFile(path.join(gd, gfs.at(-1)))).toString('utf8').trim().split('\n').map(l => JSON.parse(l)) : [];
+  assert(lines.length >= 1 && lines.every(l => l.at && l.fields?.[0] === 'key' && l.groups) && !existsSync('test/out/golden'), `P3: goldene Tage privat (${lines.length} Läufe in ${gfs.at(-1)}), nicht im Datenverzeichnis`);
+}
 // Schattenbetrieb (Sprint 1, P4): Kandidat mit eigenem privaten Zustand, veröffentlicht nur Tagessummen geltend/Kandidat
 {
   const sd = (await readdir('test/out/shadow').catch(() => [])).filter(n => /^diff-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort();

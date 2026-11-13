@@ -73,7 +73,7 @@ code{font:13px 'IBM Plex Mono',ui-monospace,monospace}
 
 <h2>Welche Fahrzeugdaten ausgewertet werden</h2>
 <p>Ausgewertet werden die offenen Fahrzeugdaten der Sharing-Anbieter (GBFS): Standort, Ladestand und Verfügbarkeit von Fahrzeugen. Angaben zu Fahrgästen enthalten sie nicht. Fahrzeugkennungen verarbeitet der Sammler nur intern, als Hash mit privatem Schlüssel (HMAC). Er löscht sie spätestens 24 Stunden, nachdem ein Fahrzeug verschwunden ist; veröffentlicht werden sie nicht.</p>
-<p>Veröffentlicht werden Summen je Gemeinde, Stunde und Zelle. Eine Zelle je Tageszeit erscheint erst ab 3 Ereignissen, ein Start-Ziel-Paar erst ab 5 Fahrten am Tag. Dazu kommt der letzte Bestand ohne Kennung; die Standzeit steht dort nur in Klassen.</p>
+<p>Veröffentlicht werden Summen je Gemeinde, Anbieter und Stunde sowie je Zelle. Eine Stunde je Anbieter enthält 0 oder mindestens 3 Ereignisse (kleinere Mengen stehen in einer Stunde desselben Tagesabschnitts oder als Tageswert), eine Zelle je Tageszeit erscheint erst ab 3 Ereignissen, ein Start-Ziel-Paar erst ab 5 Fahrten am Tag. Dazu kommt der letzte Bestand ohne Kennung; die Standzeit steht dort nur in Klassen.</p>
 <p>Rechtsgrundlage, soweit die abgeleiteten Daten Personen betreffen könnten, ist Art. 6 Abs. 1 lit. f DSGVO. Das berechtigte Interesse ist die Analyse des Sharing-Angebots (Bestand, Nutzung, Prognose).</p>
 <p>Speicherdauer:</p>
 <ul>
@@ -109,7 +109,7 @@ code{font:13px 'IBM Plex Mono',ui-monospace,monospace}
 <p><b>Vehicle data:</b> open GBFS data of the operators (location, battery, availability; no rider data).</p>
 <ul>
 <li>Vehicle IDs are only hashed internally (HMAC) and deleted at the latest 24 hours after a vehicle disappears.</li>
-<li>Only totals are published: cells by time band from 3 events, origin-destination pairs from 5 trips a day, idle time in classes only.</li>
+<li>Only totals are published: per operator and hour 0 or at least 3 events, cells by time band from 3 events, origin-destination pairs from 5 trips a day, idle time in classes only.</li>
 <li>Retention: events and flows 30 days, cells 14 days, daily totals without limit, live fleet only in the latest run.</li>
 <li>Legal basis: Art. 6(1)(f) GDPR.</li>
 </ul>

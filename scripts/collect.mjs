@@ -895,6 +895,21 @@ if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwin
 // Umzugslauf zählt nichts: verworfene alte Einträge (ohne aktuelle Kennung nicht umschlüsselbar) würden sonst Fahrtenden ohne Beginn erzeugen
 const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs, batteryFloor: r.batteryFloor?.hides ? r.batteryFloor.p005 : null })), now, hmac, noEvents: migrated });
 if (keyId) tr.state.keyId = keyId;
+// Goldene Tage (Sprint 1, P3): Rohstände je Lauf für wenige Gruppen privat im Cache (TRACK_DIR/golden/<Tag>.jsonl.gz), Kennungen gesalzen
+// (HMAC, gekürzt), GOLDEN_DAYS Tage (Vorgabe 14 – der Cache wird je Lauf gesichert; 30 Tage wären ~100 MB). Grundlage, um Regeländerungen
+// an echten Läufen exakt nachzurechnen (Erwartungswert: Ausgabe des geltenden Regelstands). GOLDEN='' = aus; nie veröffentlicht.
+if (TRACK_DIR && hmac && (process.env.GOLDEN ?? 'Dott|08111000,Lime|08111000,nextbike|05315000') !== '') {
+  try {
+    const want = new Set((process.env.GOLDEN ?? 'Dott|08111000,Lime|08111000,nextbike|05315000').split(',').map(x => x.trim()).filter(Boolean));
+    const rows = {}; for (const v of dv.vehicles) { const g = `${v.operator}|${v.ags}`; if (!want.has(g) || !C.validLatLon(v.lat, v.lon)) continue;
+      (rows[g] ??= []).push([vkey(v.operator, v.rawId).slice(0, 12), +v.lat.toFixed(5), +v.lon.toFixed(5), Number.isFinite(v.batteryPct) ? Math.round(v.batteryPct) : null, (v.disabled ? 1 : 0) | (v.reserved ? 2 : 0), v.type, v.sourceId, v.stationId ?? null]); }
+    const gd = path.join(TRACK_DIR, 'golden'), gf = path.join(gd, `${T.dayOf(now)}.jsonl.gz`); await mkdir(gd, { recursive: true });
+    const old = existsSync(gf) ? gunzipSync(await readFile(gf)).toString('utf8') : '';
+    await writeFile(gf, gzipSync(old + JSON.stringify({ at: now, fields: ['key', 'lat', 'lon', 'bat', 'flags', 'type', 'source', 'station'], status: Object.fromEntries(sourceOut.filter(r => [...want].some(g => g.startsWith(`${r.operator}|`))).map(r => [r.id, r.status])), groups: rows }) + '\n'));
+    const keepDays = Math.max(1, +(process.env.GOLDEN_DAYS || 14)), keep = new Set([...Array(keepDays).keys()].map(i => `${T.dayOf(now - i * 86400e3)}.jsonl.gz`));
+    for (const x of await readdir(gd)) if (!keep.has(x)) await rm(path.join(gd, x), { force: true });
+  } catch (e) { log('Goldene Tage nicht geschrieben:', e.message); }
+}
 // Schattenbetrieb (Sprint 1, P4): Kandidat lib/pulse-track-next.js rechnet denselben Lauf mit eigenem Zustand (privat im Cache). Veröffentlicht
 // wird nur shadow/diff-<Tag>.json: Tagessummen je Gemeinde|Anbieter|Art geltend gegen Kandidat, Moduswechsel je Quelle. SHADOW=0 = aus.
 // Abgelöst wird erst nach 7 vollen Tagen im Schatten mit bestandenem Prüfstand (test/algo-next.test.mjs), dann neue METHOD_VERSION.
@@ -917,6 +932,10 @@ if (TRACK_DIR && process.env.SHADOW !== '0') {
       add(tr.hourly, 0); add(trN.hourly, 1);
     }
     for (const [src, o, n, r] of trN.modeChanges || []) doc.modeChanges.push([now, src, o, n, r]);
+    // A3: Dauer-Intervalle stabiler Fahrten je Art und Lognormal-Schätzung; A7: Umrechnungsfaktor je Reihe (Kandidat ÷ geltend)
+    for (const [ty, o] of Object.entries(trN.durSpans || {})) { const d = ((doc.durSpans ??= {})[ty] ??= {}); for (const [k, n] of Object.entries(o)) d[k] = (d[k] || 0) + n; }
+    doc.durEst = Object.fromEntries(Object.entries(doc.durSpans || {}).map(([ty, o]) => [ty, E.durationFromSpans(o)]).filter(([, v]) => v).map(([ty, v]) => [ty, { mean: +v.mean.toFixed(2), median: +v.median.toFixed(2), n: v.n }]));
+    doc.factors = R.shadowFactors(doc);
     const diffModes = Object.entries(trN.srcModes || {}).filter(([src, m]) => tr.srcModes?.[src] !== m).map(([src, m]) => [src, tr.srcModes?.[src] ?? null, m]);
     doc.modes = diffModes; doc.updatedAt = new Date(now).toISOString();
     await writeFile(f, JSON.stringify(doc));
