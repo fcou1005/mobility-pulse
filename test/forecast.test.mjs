@@ -51,11 +51,18 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
 
 // ---------- Pooling schlägt je Gruppe getrennte Profile bei dünnen Gruppen
 {
-  const ds = F.assignEras(docs.slice(0, 7).map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds);
+  // Prüftag Montag 02.11. (Training Di–So): seit S2.5 teilen Samstag und Sonntag den Wochenend-Tagesgang – ein Sonntag als Prüftag maß hier vor allem
+  // das Wetter zwischen Samstag und Sonntag (das Modell ohne Wetter kann es nicht kennen)
+  const ds = F.assignEras(docs.slice(1, 8).map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds);
   const train = [], test = []; for (let i = 0; i < R.n; i++) (R.day[i] < 6 ? train : test).push(i);
   const m = F.fitPooled(R, train, { weather: false }), a = F.scoreDay(R, test, F.predictPooled(m, R, test), m.phi), b = F.scoreDay(R, test, F.predictProfile(R, train, test));
   assert(a.wapeGH < b.wapeGH, `Pooling: Fehler je Gruppe-Stunde ${(a.wapeGH * 100).toFixed(0)} % < ${(b.wapeGH * 100).toFixed(0)} % je Gruppe getrennt (nur ${6} Trainingstage, viele kleine Gruppen)`);
-  assert(Math.abs(a.bias) < 0.08, `Pooling: Verzerrung der Summe klein (${(a.bias * 100).toFixed(1)} %)`);
+  // Verzerrung über mehrere Prüftage (das Modell ohne Wetter sieht die Tag-zu-Tag-Schwankung des Wetters der synthetischen Welt nicht; ein einzelner
+  // Prüftag lag je nach Wetter bei −14 bis +14 %), jeweils mit allen Tagen davor trainiert
+  { const dz = F.assignEras(docs.slice(0, 11).map(d => F.dayFromDoc(d, null))), RZ = F.buildRows(dz); let sb = 0, nb = 0;
+    for (const td of [6, 7, 8, 9, 10]) { const tr = [], te = []; for (let i = 0; i < RZ.n; i++) { if (RZ.day[i] < td) tr.push(i); else if (RZ.day[i] === td) te.push(i); }
+      const mm = F.fitPooled(RZ, tr, { weather: false }); sb += F.scoreDay(RZ, te, F.predictPooled(mm, RZ, te), mm.phi).bias; nb++; }
+    assert(Math.abs(sb / nb) < 0.08, `Pooling: Verzerrung der Summe über 5 Prüftage klein (${(sb / nb * 100).toFixed(1)} %; Tag 02.11.: ${(a.bias * 100).toFixed(1)} %)`); }
   assert(a.cover80 > 0.65, `80-%-Band deckt ${(a.cover80 * 100).toFixed(0)} % der Gruppe-Stunden`);
 }
 
@@ -225,7 +232,7 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const o2 = F.evaluateDays(R2, [5], {})[5];
   assert(o2.models.pooled.wapeGH !== e2.models.pooled.wapeGH && e2.expoErr > 0.5 && e1.expoErr < 0.05, `Ohne Vortags-Exposition (alte Prüfung) hinge die Wertung vom Prüftag ab; Fehler der Flottenprognose ${e1.expoErr} bzw. ${e2.expoErr}`);
   const t = e1.models.pooled, ty = Object.values(t.byType), sz = Object.values(t.bySize);
-  assert(ty.reduce((a, x) => a + x[2], 0) === t.starts && sz.reduce((a, x) => a + x[2], 0) === t.starts && Object.keys(t.byType).every(k => ['scooter', 'bike'].includes(k)), `Aufteilung je Art (${Object.keys(t.byType).join(', ')}) und Größe (${Object.keys(t.bySize).join(', ')}) summiert sich zu allen Fahrtbeginnen`);
+  assert(Math.abs(ty.reduce((a, x) => a + x[2], 0) - t.starts) <= ty.length && Math.abs(sz.reduce((a, x) => a + x[2], 0) - t.starts) <= sz.length /* je volle Stunde (S2.1): Rundung je Teil */ && Object.keys(t.byType).every(k => ['scooter', 'bike'].includes(k)), `Aufteilung je Art (${Object.keys(t.byType).join(', ')}) und Größe (${Object.keys(t.bySize).join(', ')}) summiert sich zu allen Fahrtbeginnen`);
 }
 // ---------- Modellwahl nur mit reifen Tagen; Wetter-Gate je Gemeinde-Tag
 {
@@ -749,4 +756,25 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const lv = { 1: { v: 2, from: now - 2 * 86400e3, models: { naive: { w: 0.3 }, week: { w: 0.2 }, hybrid: { w: 0.18 } } }, 2: { v: 2, from: now - 86400e3, models: { naive: { w: 0.3 }, week: { w: 0.25 }, hybrid: { w: 0.2 } } } };
   const L = F.liveRelative(lv, { nowMs: now });
   assert(L.hybrid.base === 'week' && L.hybrid.r > 0.8 && L.hybrid.r < 0.9 && L.naive.r > 1, `S2.2: live gegen die bessere Basis (Vorwoche) als Summenverhältnis: hybrid ${L.hybrid.r}, „wie gestern“ ${L.naive.r}`);
+}
+{ // S2.1: je volle Stunde – Takt von 3 bzw. 4 Läufen je Stunde (18 Minuten) springt im Rohwert, nicht mehr im Modellwert
+  const day = '2026-11-10', t0 = F.localToUtcMs(day, 0), runs = [], start = new Array(24).fill(0), vmin = new Array(24).fill(0);
+  for (let t = t0 + 18 * 60e3; t < t0 + 24 * 3600e3; t += 18 * 60e3) { runs.push([t, 18 * 60e3, 1, 'M1@x']); const h = new Date(t).getUTCHours() + 1 > 23 ? 0 : (new Date(t).getUTCHours() + 1) % 24; start[h] += 9; vmin[h] += 18 * 50; } // je Lauf 9 Starts, 50 Fahrzeuge
+  const doc = { day, runs, groups: { '08416041|Voi|scooter': { start, vmin } }, gapHours: [] }, d = F.dayFromDoc(doc, null), g = d.groups['08416041|Voi|scooter'];
+  const raw = start.slice(2, 22), n = g.start.slice(2, 22), v = g.vmin.slice(2, 22);
+  assert(Math.max(...raw) / Math.min(...raw) >= 1.3 && n.every(x => Math.abs(x - 30) < 0.01) && v.every(x => Math.abs(x - 3000) < 0.01) && d.groupsRaw['08416041|Voi|scooter'].start === start,
+    `S2.1: Rohwert springt (${Math.min(...raw)}/${Math.max(...raw)} je Stunde), je volle Stunde konstant ${n[0].toFixed(1)} Starts und ${v[0] / 60} Fahrzeuge; Ist im Verlauf bleibt gezählt`);
+  const dp = F.dayFromDoc({ ...doc, pVersion: 1, obsP: new Array(24).fill(30), groups: { k: { start, vmin, startP: new Array(24).fill(12), vminP: new Array(24).fill(1500) } } }, null).groups.k;
+  assert(dp.start[5] === 24 && dp.vmin[5] === 3000, 'S2.1: mit anteiligen Feldern (S1.1) startP/vminP × 60 ÷ obsP');
+  assert(F.countedFactor([{ day: '2026-11-09', obsEnd: Object.assign(new Array(24).fill(54), { 7: 72 }) }], day, 7) === 1.2 && F.countedFactor([], day, 7) === 1, 'S2.1: Plan/Live im Verlauf gezählt: × Minuten der Stunde am letzten beobachteten Tag ÷ 60');
+}
+{ // S2.5: Sonntag ohne Morgenstunden im Training erbt den Wochenend-Tagesgang (Samstag), nicht den Werktag
+  const G = '08416041|Voi|scooter', mk = (day, rate, hours) => { const runs = [], start = new Array(24).fill(0), vmin = new Array(24).fill(0);
+    for (const h of hours) { const t = F.localToUtcMs(day, h); for (let k = 1; k <= 4; k++) runs.push([t + k * 900e3 - (h === 23 && k === 4 ? 1 : 0), 900e3, 1, 'M1@x']); start[h] = Math.round(rate(h) * 100); vmin[h] = 100 * 60; }
+    return F.dayFromDoc({ day, runs, groups: { [G]: { start, vmin } }, gapHours: [] }, null); };
+  const all = [...Array(24).keys()], wk = (h) => (h === 8 ? 1.0 : 0.3), we = (h) => (h === 8 ? 0.1 : 0.3);
+  const days = F.assignEras([mk('2026-11-02', wk, all), mk('2026-11-03', wk, all), mk('2026-11-04', wk, all), mk('2026-11-07', we, all), mk('2026-11-08', we, all.filter(h => h >= 10))]);
+  const R = F.buildRows(days), sel = Array.from({ length: R.n }, (_, i) => i), m = F.fitPooled(R, sel, {});
+  const fut = [{ day: '2026-11-15', h: 8, cls: days[4].cls }], Fu = F.buildFuture(R, fut, () => 100, () => null, null), mu = F.predictPooled(m, Fu, [0])[0], pr = F.predictProfile(R, sel, [0], Fu, NaN)[0];
+  assert(mu < 25 && pr < 15, `S2.5: Sonntag 8 Uhr ohne Sonntagsdaten wie Samstag (Modell ${mu.toFixed(1)}, Profil ${pr.toFixed(1)} Starts je 100 Fahrzeuge; Werktag 100, Samstag 10)`);
 }

@@ -5,7 +5,7 @@
 // dieselbe Aktion aus wie ein Klick, Esc schließt. Die Objektliste kommt aus den Layern der Karte (auch Canvas-Marker), nie aus dem DOM;
 // Karten ohne anklickbare Layer (Zellraster) geben eine eigene Liste über opts.items. Unter der Karte steht ein kurzer Hinweis (DE/EN),
 // verknüpft per aria-describedby.
-import { t, onLang } from './i18n.js?v=mwezzyep';
+import { t, onLang } from './i18n.js?v=mwf111h1';
 
 export const MAX_ITEMS = 500;
 const STYLE = `
