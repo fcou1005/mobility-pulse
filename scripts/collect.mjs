@@ -1313,8 +1313,22 @@ PH.phase('ereignisse');
       o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0, s.isVirtual === true ? 1 : s.isVirtual === false ? 0 : null]);
     }
     let bytes = 0;
-    for (const [st, o] of byState) { const doc = JSON.stringify({ schemaVersion: SV.SCHEMA.ops, at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitKlasseMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): standzeitKlasseMin = Untergrenze der Standzeit-Klasse in Minuten (0 = unter 6 h, 360 = 6–24 h, ab 1440 ganze Tage; minutengenau wird nicht veröffentlicht, weil sie zeigt, wann an einer Adresse die letzte Fahrt endete), reichweiteKm ganze km (Quellen mit eigener Reichweiten-Skala, Feld reichweiteSchwelleKm gesetzt: 0,1 km), reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, die Klasse ist ein Mindestwert; standzeitKlasseMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    const stateDocs = new Map(); // Land → veröffentlichter Text (für ops-input/fleet)
+    for (const [st, o] of byState) { const doc = JSON.stringify({ schemaVersion: SV.SCHEMA.ops, at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitKlasseMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): standzeitKlasseMin = Untergrenze der Standzeit-Klasse in Minuten (0 = unter 6 h, 360 = 6–24 h, ab 1440 ganze Tage; minutengenau wird nicht veröffentlicht, weil sie zeigt, wann an einer Adresse die letzte Fahrt endete), reichweiteKm ganze km (Quellen mit eigener Reichweiten-Skala, Feld reichweiteSchwelleKm gesetzt: 0,1 km), reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, die Klasse ist ein Mindestwert; standzeitKlasseMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; stateDocs.set(st, doc); await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
+    // S3.8: Bestand je Gemeinde für die Disposition (ops-input/fleet/<AGS>.json, Format wie ops/<Land>.json, lib/pulse-split.js opsSlice)
+    try {
+      const fdir = path.join(DATA, 'ops-input', 'fleet'), bb = new Map(); await mkdir(fdir, { recursive: true });
+      for (const ft of boundaries?.features || []) if (ft.properties?.ags) bb.set(ft.properties.ags, C.geomBounds(ft.geometry));
+      const list = []; let fbytes = 0;
+      for (const [st, o] of byState) {
+        const head = JSON.parse(stateDocs.get(st));
+        for (const ags of o.munis) { const sl = SP.opsSlice(head, ags, { bbox: bb.get(ags) || null }); if (!sl) continue; const str = JSON.stringify(sl); fbytes += str.length; list.push(ags); await writeFile(path.join(fdir, `${ags}.json`), str); }
+      }
+      const keep = new Set(list); for (const f of (await readdir(fdir)).filter(f => /^\d{8}\.json$/.test(f) && !keep.has(f.slice(0, 8)))) await rm(path.join(fdir, f));
+      await writeFile(path.join(fdir, 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.ops, version: SP.SPLIT_VERSION, at: now, ags: list.sort() }));
+      log(`Ops-Flotte je Gemeinde: ${list.length} Dateien, ${(fbytes / 1e6).toFixed(1)} MB`);
+    } catch (e) { log(`Ops-Flotte je Gemeinde: ${e.message}`); }
   }
   // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
   // Wenige Gemeinden je Lauf (größte Flotten zuerst), gültig 7 Tage – der Browser muss Overpass dann nicht selbst fragen.

@@ -448,9 +448,12 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
     const oi = existsSync('test/out/ops-input/index.json') ? JSON.parse(await readFile('test/out/ops-input/index.json', 'utf8')) : null;
     const one = oi?.ags?.length ? JSON.parse(await readFile(`test/out/ops-input/${oi.ags[0]}.json`, 'utf8')) : null;
     const lat = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+    const fi = existsSync('test/out/ops-input/fleet/index.json') ? JSON.parse(await readFile('test/out/ops-input/fleet/index.json', 'utf8')) : null;
+    const fl = fi?.ags?.length ? JSON.parse(await readFile(`test/out/ops-input/fleet/${fi.ags[0]}.json`, 'utf8')) : null;
     assert(lat.schemaVersion === '1.0' && full.schemaVersion === '1.1' && parts.length >= 1 && nG === Object.keys(full.groups).length && ht.days[d0]?.startsH?.length === 24 && ds.days.includes(d0)
-      && oi && one?.schemaVersion === '1.1' && one.cells.every(c => Object.keys(c.munis).length === 1 && c.munis[one.ags]),
-      `S3.7/S3.8: schemaVersion vorn, events/${d0}/ je Land (${parts.join(', ')}, ${nG} Gruppen), hour-totals, daily-summary, ops-input für ${oi?.ags?.length ?? 0} Gemeinde(n)`);
+      && oi && one?.schemaVersion === '1.2' && one.cells.every(c => Object.keys(c.munis).length <= 1)
+      && fl?.ags === fi.ags[0] && fl.vehicles.every(r => fl.munis[r[8]] === fl.ags) && fl.ops.length >= 1,
+      `S3.7/S3.8: schemaVersion vorn, events/${d0}/ je Land (${parts.join(', ')}, ${nG} Gruppen), hour-totals, daily-summary, ops-input für ${oi?.ags?.length ?? 0} Gemeinde(n), Bestand je Gemeinde für ${fi?.ags?.length ?? 0}`);
   }
   assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
 }

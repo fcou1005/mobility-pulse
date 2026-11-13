@@ -94,6 +94,8 @@ if (has('events/daily-summary.json')) { const ds = await rd('events/daily-summar
   await put('events/daily-summary.json', { ...ds, days: ix.map(i => ds.days[i]), groups: Object.fromEntries(Object.entries(ds.groups || {}).filter(([k]) => KEEP.has(k.slice(0, 8))).map(([k, row]) => [k, ix.map(i => row[i])])) }); }
 if (has('ops-input/index.json')) { const oi = await rd('ops-input/index.json'); await put('ops-input/index.json', { ...oi, cellDays: oi.cellDays.filter(d => DSET.has(d)), ags: oi.ags.filter(a => KEEP.has(a)) });
   for (const a of KEEP) if (has(`ops-input/${a}.json`)) { const o = await rd(`ops-input/${a}.json`); await put(`ops-input/${a}.json`, { ...o, cellDays: o.cellDays.filter(d => DSET.has(d)), cells: o.cells.filter(c => DSET.has(c.day)) }); } }
+if (has('ops-input/fleet/index.json')) { const fi = await rd('ops-input/fleet/index.json'); await put('ops-input/fleet/index.json', { ...fi, ags: fi.ags.filter(x => KEEP.has(x)) });
+  for (const a of KEEP) if (has(`ops-input/fleet/${a}.json`)) await put(`ops-input/fleet/${a}.json`, await rd(`ops-input/fleet/${a}.json`)); }
 for (const st of states) {
   if (has(`ops/${st}.json`)) { const o = await rd(`ops/${st}.json`); const ok = (i) => KEEP.has(o.munis[i]);
     await put(`ops/${st}.json`, { ...o, vehicles: o.vehicles.filter(r => ok(r[8])), stations: o.stations.filter(r => ok(r[7])) }); }

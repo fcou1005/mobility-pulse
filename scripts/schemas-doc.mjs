@@ -12,7 +12,7 @@ const FILES = {
   status: ['status.json'], latest: ['latest.json'], sources: ['sources.json'],
   history: ['history/index.json', 'history/<Tag>.json'],
   events: ['events/index.json', 'events/<Tag>.json', 'events/<Tag>/<Land>.json', 'events/hour-totals.json', 'events/daily-summary.json'],
-  cells: ['cells/<Tag>/<Land>.json'], ops: ['ops/<Land>.json', 'ops-input/<AGS>.json', 'ops-input/index.json'],
+  cells: ['cells/<Tag>/<Land>.json'], ops: ['ops/<Land>.json', 'ops-input/<AGS>.json', 'ops-input/index.json', 'ops-input/fleet/<AGS>.json', 'ops-input/fleet/index.json'],
   boundaries: ['boundaries/index.json', 'boundaries/<Land>.json'], calib: ['calib.json'],
   forecast: ['forecast/latest.json', 'forecast/log.json', 'forecast/series.json', 'forecast/moped/…', 'forecast/car/…'],
 };

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { eventsByState, hourTotals, totalsDoc, groupDaySums, dailySummary, opsSlice, cellsSlice, SUMMARY_FIELDS } from '../lib/pulse-split.js';
 import { hourProfile, DAY_TYPES } from '../lib/pulse-econ.js';
 import { decodeFleet, buildDemandModel, BANDS } from '../lib/pulse-ops.js';
+import { haversineM } from '../lib/pulse-core.js';
 
 let ok = 0, bad = 0;
 const check = (c, m) => { if (c) { ok++; console.log(`ok: ${m}`); } else { bad++; console.log(`FEHLER ${m}`); } };
@@ -56,6 +57,15 @@ for (const DIR of DIRS) {
   check(same(part.vehicles, full.vehicles.filter(v => v.ags === ags)) && part.vehicles.length === counts[ags], `${tag}: Bestand ${ags} (${counts[ags]} Fahrzeuge) gleich`);
   check(same(part.stations, full.stations.filter(s => s.ags === ags)), `${tag}: Stationen ${ags} gleich (${part.stations.length})`);
   check(opsSlice(ops, '99999999') === null, `${tag}: unbekannte Gemeinde → null`);
+  // mit Rahmen: alle Stationen bis 1 km um ein Fahrzeug der Gemeinde sind dabei (Einsammelliste sucht so weit, COLLECT.stationSearchM)
+  {
+    const lat = full.vehicles.filter(v => v.ags === ags).map(v => v.lat), lon = full.vehicles.filter(v => v.ags === ags).map(v => v.lon);
+    const bbox = [Math.min(...lon), Math.min(...lat), Math.max(...lon), Math.max(...lat)];
+    const raw = JSON.parse(JSON.stringify(opsSlice(ops, ags, { bbox }))), wide = decodeFleet(raw);
+    const key = (s) => `${s.lat},${s.lon},${s.operator},${s.name}`, have = new Set(wide.stations.map(key));
+    const inMuni = full.vehicles.filter(v => v.ags === ags), near = full.stations.filter(s => inMuni.some(v => Math.abs(v.lat - s.lat) < 0.009 && Math.abs(v.lon - s.lon) < 0.0135 && haversineM(v.lat, v.lon, s.lat, s.lon) <= 1000));
+    check(near.every(s => have.has(key(s))) && same(wide.vehicles, part.vehicles) && raw.ops.length <= ops.ops.length && raw.munis.length <= ops.munis.length, `${tag}: mit Rahmen ${wide.stations.length} Stationen, alle ${near.length} Stationen bis 1 km um Fahrzeuge dabei, Listen gekürzt (${raw.ops.length}/${ops.ops.length} Anbieter, ${raw.munis.length}/${ops.munis.length} Gemeinden)`);
+  }
   const st = ops.state, cdays = (await readdir(path.join(DIR, 'cells'))).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-14);
   const cdocs = (await Promise.all(cdays.map(d => rd(path.join(DIR, 'cells', d, `${st}.json`)).catch(() => null)))).filter(Boolean);
   const cs = JSON.parse(JSON.stringify(cellsSlice(cdocs, ags)));

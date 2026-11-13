@@ -33,9 +33,10 @@ für den Download unverändert unter `docs/engine/`. Budgets prüft `node script
 
 Die großen Tagesdateien gelten für ganz Deutschland; eine Ansicht für eine Gemeinde lud trotzdem alles. Gemessen (13.11.2026, Stuttgart):
 13 Ereignistage 2,15 MB gzip, nur Stuttgart 96 KB; die Disposition lud 3,2 MB. Seit Sprint 3 schreibt der Sammler zusätzlich
-`events/<Tag>/<Land>.json`, `events/hour-totals.json`, `events/daily-summary.json` und `ops-input/<AGS>.json` (`lib/pulse-split.js`);
-die Disposition lädt damit 1,09 MB bei Zeichen für Zeichen gleichem Ergebnis. Die bisherigen Dateien laufen mindestens bis 27.11.2026
-parallel. Noch groß: `ops/<Land>.json`, `latest.json`, Zonen des Anbieters, `history/daily.json` (Ziel 0,4 MB).
+`events/<Tag>/<Land>.json`, `events/hour-totals.json`, `events/daily-summary.json`, `ops-input/<AGS>.json` und
+`ops-input/fleet/<AGS>.json` (`lib/pulse-split.js`); die Disposition lädt damit 0,92 MB bei Zeichen für Zeichen gleichem Ergebnis. Die
+bisherigen Dateien laufen mindestens bis 27.11.2026 parallel. Noch groß (Ziel 0,4 MB): `latest.json` (162 KB, braucht jede Ansicht), Zonen
+des Anbieters (156 KB, ganz Deutschland), `history/daily.json` (112 KB), Ereignisse des Landes (79 KB) und Gruppen-Ereignisse (52 KB).
 
 Bewusst nicht: DuckDB-WASM mit Parquet. Die WASM-Datei hat gezippt 8,1 MB, und Parquet ist über 13 Tage mit 2,32 MB nicht kleiner als
 JSON mit gzip (2,15 MB).

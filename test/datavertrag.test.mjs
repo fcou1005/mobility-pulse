@@ -26,6 +26,8 @@ eq(familyOf('cells/2026-11-12.json'), null, 'alte Tagesdatei der Zellen gehört 
 eq(familyOf('ops/BW.json'), { family: 'ops', def: 'state' }, 'ops Land');
 eq(familyOf('ops-input/08111000.json'), { family: 'ops', def: 'input' }, 'ops-input Gemeinde (S3.8)');
 eq(familyOf('ops-input/index.json'), { family: 'ops', def: 'inputIndex' }, 'ops-input index');
+eq(familyOf('ops-input/fleet/08111000.json'), { family: 'ops', def: 'state' }, 'ops-input Bestand je Gemeinde (1.2)');
+eq(familyOf('ops-input/fleet/index.json'), { family: 'ops', def: 'fleetIndex' }, 'ops-input Bestand index');
 eq(familyOf('events/2026-11-13/BW.json'), { family: 'events', def: 'day' }, 'events je Land (S3.8)');
 eq(familyOf('events/hour-totals.json'), { family: 'events', def: 'hourTotals' }, 'events hour-totals');
 eq(familyOf('events/daily-summary.json'), { family: 'events', def: 'summary' }, 'events daily-summary');

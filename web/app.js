@@ -2672,7 +2672,7 @@ async function init() {
   setInterval(async () => {
     const s = await getJson(fresh('status.json')); if (!s.ok || s.json.at === state.status?.at) return;
     const l = await getJson(latestUrl(s.json)); if (!l.ok) return;
-    state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.docsSt = {}; state.usage.hourTotals = null; state.usage.opsInputIndex = null; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
+    state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.docsSt = {}; state.usage.hourTotals = null; state.usage.opsInputIndex = null; state.usage.opsFleetIndex = null; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = [...REQ].filter(([k]) => k.startsWith('boundaries')); resetCache(); if (state.bIndex) for (const [k, p] of keepB) REQ.set(k, p); // Grenzen ändern sich nicht je Lauf
     groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); M.ops?.resetCaches?.(); M.rp?.resetReportCaches?.(); M.cov?.resetCoverageCache?.(); M.cmp?.resetCompareCache?.(); M.fv?.resetForecastCache?.(); M.sp?.resetSpotsCache?.();

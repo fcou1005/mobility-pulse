@@ -13,7 +13,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [history](#history) | 1.0 | `history/index.json`, `history/<Tag>.json` |
 | [events](#events) | 1.1 | `events/index.json`, `events/<Tag>.json`, `events/<Tag>/<Land>.json`, `events/hour-totals.json`, `events/daily-summary.json` |
 | [cells](#cells) | 1.0 | `cells/<Tag>/<Land>.json` |
-| [ops](#ops) | 1.1 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json` |
+| [ops](#ops) | 1.2 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
@@ -175,9 +175,9 @@ Version 1.0 · Schema: [schemas/cells.schema.json](../schemas/cells.schema.json)
 
 ## ops
 
-ops/&lt;Land&gt;.json – Bestand für die Disposition. ops/&lt;Land&gt;.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/&lt;AGS&gt;.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json.
+ops/&lt;Land&gt;.json – Bestand für die Disposition. ops/&lt;Land&gt;.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/&lt;AGS&gt;.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json. Ab 1.2 ops-input/fleet/&lt;AGS&gt;.json (Bestand einer Gemeinde im Format von $defs/state, Feld ags) und ops-input/fleet/index.json.
 
-Version 1.1 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
+Version 1.2 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 
 ### ops · state
 
@@ -194,6 +194,7 @@ Version 1.1 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 | `munis` | ja | array von string (Muster `^\d{8}$`) |
 | `vehicles` | ja | array von array von number / null |
 | `stations` | ja | array von array |
+| `ags` |  | string (Muster `^\d{8}$`) – nur in ops-input/fleet/&lt;AGS&gt;.json: die Gemeinde des Ausschnitts |
 
 ### ops · input
 
@@ -215,6 +216,15 @@ Version 1.1 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 | `version` | ja | integer |
 | `at` | ja | integer |
 | `cellDays` | ja | array von string (Muster `^\d{4}-\d{2}-\d{2}$`) |
+| `ags` | ja | array von string (Muster `^\d{8}$`) |
+
+### ops · fleetIndex
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern |
+| `version` | ja | integer |
+| `at` | ja | integer |
 | `ags` | ja | array von string (Muster `^\d{8}$`) |
 
 ## boundaries

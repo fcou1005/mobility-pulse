@@ -49,6 +49,7 @@ let bad = 0;
 const fail = (m) => { bad++; console.log(`✗ ${m}`); };
 const blocked = new Map();
 
+const TEXTS = new Map(); // Prüfwert → Text (bei abweichenden Läufen die erste Abweichung zeigen)
 const i18nMissing = new Set(); // S3.5: Schlüssel, deren Wörterbuchbereich beim Zeichnen nicht geladen war (Debug-Warnung von web/i18n.js)
 async function pass(run, { scope, viewport, checks, tag, lang = null }) {
   const { page, errs, setCur } = await openFixturePage(browser, { port: PORT, fx, scope, viewport, lang, blocked,
@@ -57,7 +58,7 @@ async function pass(run, { scope, viewport, checks, tag, lang = null }) {
   for (const v of VIEWS) {
     setCur(v); await page.evaluate((x) => { location.hash = x; }, v);
     const txt = await settledText(page, v);
-    sums[v] = createHash('sha1').update(mask(txt)).digest('hex').slice(0, 10);
+    sums[v] = createHash('sha1').update(mask(txt)).digest('hex').slice(0, 10); TEXTS.set(sums[v], mask(txt));
     const res = [];
     if (txt.length < 300) res.push(`zu wenig Inhalt (${txt.length} Zeichen)`);
     if (BAD_TEXT.test(txt)) res.push(`Ladefehler im Text: „${txt.match(BAD_TEXT)[0]}“`);
@@ -96,7 +97,8 @@ try {
     await close();
   }
 } finally { await browser.close(); server.close(); }
-if (RUNS > 1) for (let r = 1; r < RUNS; r++) for (const side of ['a', 'b']) for (const v of VIEWS) if (runs[r][side][v] !== runs[0][side][v]) fail(`Lauf ${r + 1} weicht ab: ${side === 'a' ? 'Desktop' : 'Handy'} ${v} (${runs[0][side][v]} ≠ ${runs[r][side][v]})`);
+const firstDiff = (h0, h1) => { const a = (TEXTS.get(h0) || '').split(' '), b = (TEXTS.get(h1) || '').split(' '); let i = 0; while (i < a.length && a[i] === b[i]) i++; return `\n    Lauf 1: …${a.slice(Math.max(0, i - 12), i + 18).join(' ')}…\n    dieser: …${b.slice(Math.max(0, i - 12), i + 18).join(' ')}…`; };
+if (RUNS > 1) for (let r = 1; r < RUNS; r++) for (const side of ['a', 'b']) for (const v of VIEWS) if (runs[r][side][v] !== runs[0][side][v]) fail(`Lauf ${r + 1} weicht ab: ${side === 'a' ? 'Desktop' : 'Handy'} ${v} (${runs[0][side][v]} ≠ ${runs[r][side][v]})${firstDiff(runs[0][side][v], runs[r][side][v])}`);
 console.log(`Netz: nur 127.0.0.1 erreicht; abgebrochen ${[...blocked].map(([h, n]) => `${h} ×${n}`).join(', ') || 'nichts'}`);
 if (missing.size) console.log(`Im Fixture nicht vorhanden (404): ${[...missing].sort().join(', ')}`);
 if (i18nMissing.size) fail(`${i18nMissing.size} Texte ohne geladenen Wörterbuchbereich (S3.5): ${[...i18nMissing].slice(0, 12).join(', ')}`);

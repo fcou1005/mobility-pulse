@@ -20,12 +20,15 @@ export async function openFixturePage(browser, { port, fx, scope, viewport, lang
   return { page, context, errs, setCur: (v) => { cur = v; }, close: () => context.close() };
 }
 
-/** Text der Ansicht, sobald er sich 600 ms nicht mehr ändert (höchstens maxMs) */
-export async function settledText(page, v, maxMs = 12000) {
+// Zwischenstände, die noch aufgelöst werden (Adresssuche der Spots: Nominatim ist im Test gesperrt, danach greift der Name aus der Umgebung)
+const PENDING = /Adresse wird gesucht|Looking up address/;
+/** Text der Ansicht, sobald er sich 1 s nicht mehr ändert und keine Zwischenstände mehr zeigt (höchstens maxMs) */
+export async function settledText(page, v, maxMs = 12000, pendingMaxMs = 45000) {
   let last = '', same = 0; const t0 = Date.now();
-  while (Date.now() - t0 < maxMs) {
+  // Adresssuche läuft höchstens 1 Anfrage/s (web/ops.js pumpGeo): solange sie offen ist, bis pendingMaxMs warten
+  while (Date.now() - t0 < maxMs || (PENDING.test(last) && Date.now() - t0 < pendingMaxMs)) {
     const txt = await page.evaluate((x) => (document.getElementById(`view-${x}`)?.innerText || '').replace(/\s+/g, ' ').trim(), v);
-    if (txt === last && txt.length > 200) { if (++same >= 3) return txt; } else same = 0;
+    if (txt === last && txt.length > 200 && !PENDING.test(txt)) { if (++same >= 5) return txt; } else same = 0; // 1 s ruhig: die Sprungleiste „Auf dieser Seite“ kommt 350 ms nach dem letzten Zeichnen (web/app.js scheduleToc)
     last = txt; await page.waitForTimeout(200);
   }
   return last;

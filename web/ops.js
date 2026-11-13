@@ -7,7 +7,7 @@ import { mbBadge, mbBase } from './ui-shared.js';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
-const S = { map: null, layers: {}, canvas: {}, spotMarkers: [], ops: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, official: true, fleet: true, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, retry: false, pending: null, again: false, rescore: null, stale: false, routing: null, op: null, focus: null, prioLevel: urlPrio(),
+const S = { map: null, layers: {}, canvas: {}, spotMarkers: [], ops: {}, fleetAgs: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, official: true, fleet: true, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, retry: false, pending: null, again: false, rescore: null, stale: false, routing: null, op: null, focus: null, prioLevel: urlPrio(),
   // Gruppen-Monatsdateien (groups/<JJJJ-MM>.json) und Ströme (flows/<Tag>.json): fertige Monate/Tage bleiben gecacht; index und laufender Monat werden bei neuem Stand neu geladen
   gidx: undefined, gdocs: {}, flowsIdx: undefined, flowDocs: {}, gf: null };
 // Farben je Thema: hell die dunkleren Stufen (≥ 3:1 auf Weiß und entsättigtem Kartengrund), dunkel die hellen; Ebenen aus den Themen-Tokens
@@ -183,7 +183,7 @@ export function relabelOps() {
  *  gecacht und nur bei neuem Stand neu geladen. Overpass-Ergebnisse, die 10-Min.-Pause nach einem Overpass-Ausfall und amtliche
  *  Flächen (WFS) bleiben: sie hängen nicht am Sammler-Lauf. Fehlschläge werden ohnehin nie gecacht. */
 export function resetCaches() {
-  S.ops = {};
+  S.ops = {}; S.fleetAgs = {};
   for (const k of Object.keys(S.osm)) if (S.osm[k]?.from === 'Sammler') delete S.osm[k];
   // Gruppen: Verzeichnis und laufender (letzter) Monat neu, abgeschlossene Monate bleiben; Ströme: Verzeichnis neu, fertige Tage bleiben
   const lastM = S.gidx?.months?.slice(-1)[0]; if (lastM) delete S.gdocs[lastM];
@@ -210,7 +210,16 @@ async function dataJson(path, opt) {
   return !r.ok && S.retry && (!r.status || r.status >= 500) ? X.getJson(X.CFG.DATA + path + `?retry=${Date.now()}`, opt) : r;
 }
 // Fehlschläge werden nicht gecacht: der nächste Plan versucht es erneut. status 404 = Datei gibt es (noch) nicht
-async function loadOpsDoc(stCode) {
+async function loadOpsDoc(stCode, ags = null) {
+  // S3.8: Bestand nur der Gemeinde (ops-input/fleet/<AGS>.json, gleiches Format, Stationen bis 1,5 km um den Rahmen), wenn gelistet; sonst das Land
+  if (ags) {
+    const fi = await X.loadOnce('opsFleetIndex', 'ops-input/fleet/index.json', 25000);
+    if (fi?.version === 1 && fi.ags?.includes(ags)) {
+      const k = `${ags}|${fi.at}`;
+      if (!(k in S.fleetAgs)) { const r = await dataJson(`ops-input/fleet/${ags}.json`, { timeout: 60000 }); S.fleetAgs[k] = r.ok && r.json?.ags === ags ? O.decodeFleet(r.json) : null; }
+      if (S.fleetAgs[k]) return { fleet: S.fleetAgs[k] };
+    }
+  }
   if (!(stCode in S.ops)) { const r = await dataJson(`ops/${stCode}.json`, { timeout: 90000 }); if (!r.ok) return { fleet: null, status: r.status, error: r.error }; S.ops[stCode] = O.decodeFleet(r.json); }
   return { fleet: S.ops[stCode] };
 }
@@ -345,7 +354,7 @@ async function computePlan() {
     if (!stCode) { status(t('ops.municipalityNotKnownIn')); emptyPlan(t('ops.municipalityNotKnownIn')); return; }
     status(t('ops.loadingFleetAndDemand'));
     S.input = null;
-    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 7, ags)]);
+    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode, ags), loadCellDocs(stCode, +$('#ops-days').value || 7, ags)]);
     if (stop()) return;
     const fleet = fleetRes.fleet;
     if (!fleet) {

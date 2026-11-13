@@ -28,3 +28,5 @@ bleiben mindestens bis 27.11.2026 parallel:
 - `events/daily-summary.json`: Tagessummen je Gruppe (`fields`: start, end, reloc, swap, vmin).
 - `ops-input/<AGS>.json`: Zellen der letzten 7 Zellen-Tage nur dieser Gemeinde und ihr Begrenzungsrahmen für die Disposition;
   `ops-input/index.json` listet die Gemeinden und Tage.
+- `ops-input/fleet/<AGS>.json`: Bestand der Gemeinde im Format von `ops/<Land>.json`, dazu Stationen bis 1,5 km um ihren Rahmen
+  (die Einsammelliste sucht Stationen bis 1 km um ein Fahrzeug); `ops-input/fleet/index.json` listet die Gemeinden.
