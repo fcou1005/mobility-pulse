@@ -43,3 +43,9 @@ node scripts/build-web.mjs --budget  # web/ → docs/ (esbuild), Größenbudget
 | `MP_DATA=<Datenstand> node test/split.test.mjs` | Daten nach Gebiet liefern dieselben Ergebnisse wie die großen Dateien |
 
 Fixture neu schneiden: `node scripts/make-fixture.mjs <Checkout des Branches data>`, danach `UPDATE_SCREENSHOTS=1 node test/a11y.mjs`.
+
+## Alarme, Feeds und Monatsberichte (Sprint 5)
+
+- Phase `alarme` des Sammlers (`scripts/collect/24-alarme.mjs`, `lib/pulse-alarme.js`) vergleicht jeden Lauf mit dem vorigen und schreibt `auflagen/alarme.json` sowie Atom-Feeds `feeds/<AGS>.xml` und `feeds/<AGS>-<cap|source|zone|price|fleet>.xml` in den Datenzweig (nur bei geändertem Inhalt). Push über ntfy: Repository-Variable `NTFY_TOPIC` und im Sammler-Workflow `NTFY_TOPIC: ${{ vars.NTFY_TOPIC }}` unter `env` (Workflow nur über die Weboberfläche ändern).
+- Jahresbuch der Feed-Verfügbarkeit: Phase `ereignisse` schreibt `auflagen/verfuegbarkeit-<Jahr>.json` (`lib/pulse-auflagen.js`; letzte zehn Tage einzeln, ältere je Monat).
+- Monats-Steckbrief: Vorlage `scripts/monatsbericht-workflow.yml` als `.github/workflows/monatsbericht.yml` über die Weboberfläche anlegen; am 1. des Monats entstehen die PDFs des Vormonats im Branch `berichte`.

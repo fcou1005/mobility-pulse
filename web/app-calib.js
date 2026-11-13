@@ -9,6 +9,7 @@ import { cached, emptyRow, getJson, getJsonShared } from './app-load.js';
 import { muniName } from './app-scope.js';
 import { niceTicks, seriesSummary } from './app-energy.js';
 import { econGroups, econOpts, getCalib, loadCells, loadOnce, scopeState } from './app-usage.js';
+import { chartSpec, tableButton } from './charttip.js';
 
 // ---------- Kalibrierung: Referenzwerte (data/reference.json, Branch main) gegen die eigene Messung, Regeln in lib/pulse-calib.js ----------
 // Voi: Umsatz je Fahrzeug und Tag (gemessen, netto × Realisierung) über die Tage der Kalibrierung, Flotte-Tage gewichtet
@@ -35,13 +36,13 @@ export async function renderCalibPanel() {
   // 1. Fahrtdauer
   if (a?.calibrated) rows.push([`${t('app.avgEScooterTrip')}<div class="sub-line">${t('app.berlinQuarters', { from: esc(a.from), to: esc(a.to), n: a.n })}</div>`, `${t('app.avgMinAvgKm', { min: fmt(a.min, 1), v1: f2(a.km) })}<div class="sub-line">${t('app.quartersMinKm', { v0: fmt(a.minRange[0], 1), v1: fmt(a.minRange[1], 1), v2: fmt(a.kmRange[0], 1), v3: fmt(a.kmRange[1], 1) })}</div>`, src(a),
     `${t('app.notMeasurable')}<div class="sub-line">${t('app.idsChangeWithEveryTripStable')}</div>`, `${f2(a.min / a.previous.min)}<div class="sub-line">${t('app.versusPreviouslyMin', { min: fmt(a.previous.min) })}</div>`, t('app.assumptionMinUtilisation', { min: fmt(a.previous.min), min2: fmt(a.min, 1), v2: f2(a.min / a.previous.min) })]);
-  for (const e of (ref.fahrt || []).filter(x => x.ags !== K.BERLIN && x.type === 'scooter')) rows.push([`${t('app.eScooterTrip')}<div class="sub-line">${esc(tx(e.ort))}, ${esc(e.zeitraum)}</div>`, [e.minMedian != null ? t('app.medianMin', { minMedian: fmt(e.minMedian, 1) }) : '', e.minMittel != null ? t('app.avgMin', { minMittel: fmt(e.minMittel, 1) }) : '', e.kmMedian != null ? t('app.medianKm', { v0: f2(e.kmMedian) }) : '', e.kmMittel != null ? `Ø ${f2(e.kmMittel)} km` : ''].filter(Boolean).join(' · '), src(e), '—', a?.calibrated && e.minMittel ? `${f2(a.min / e.minMittel)}<div class="sub-line">${t('app.berlinAvgAvgHere')}</div>` : '—', t('app.crossCheckNotPartOfRuleOne')]);
+  for (const e of (ref.fahrt || []).filter(x => x.ags !== K.BERLIN && x.type === 'scooter')) rows.push([`${t('app.eScooterTrip')}<div class="sub-line">${esc(tx(e.ort))}, ${esc(e.zeitraum)}</div>`, [e.minMedian != null ? t('app.medianMin', { minMedian: fmt(e.minMedian, 1) }) : '', e.minMittel != null ? t('app.avgMin', { minMittel: fmt(e.minMittel, 1) }) : '', e.kmMedian != null ? t('app.medianKm', { v0: f2(e.kmMedian) }) : '', e.kmMittel != null ? `Ø ${f2(e.kmMittel)} km` : ''].filter(Boolean).join(', '), src(e), '—', a?.calibrated && e.minMittel ? `${f2(a.min / e.minMittel)}<div class="sub-line">${t('app.berlinAvgAvgHere')}</div>` : '—', t('app.crossCheckNotPartOfRuleOne')]);
   // 2. Methodenfaktor
   const kr = k?.ref || (ref.rvd || []).filter(e => e.ags === K.BERLIN && e.type === 'scooter').slice(-1)[0];
   if (kr) rows.push([`${t('app.tripsPerVehAndDayEScooter')}<div class="sub-line">${t('app.berlin', { v0: esc(k?.applied ? `${k.quarter} (${k.rule})` : kr.zeitraum) })}</div>`, `<b>${f2(kr.wert)}</b>${k?.refMin != null ? `<div class="sub-line">${t('app.quarters', { v0: f2(k.refMin), v1: f2(k.refMax) })}</div>` : ''}`, src(kr),
     k?.measured?.rvd ? `${f2(k.measured.rvd)}<div class="sub-line">${t('app.ofHoursObserved', { v0: esc(k.source || ''), v1: dd(k.measured.from), v2: dd(k.measured.to), days: k.measured.days, v4: k.measured.days === 1 ? t('app.day2') : t('app.days2'), v5: fmt(k.obsShare * 100) })}</div>${(k.measured.excluded || []).length ? `<div class="sub-line">${t('app.excludedOvercount', { join: esc(k.measured.excluded.map(x => `${x.op} ${f2(x.rvd)}`).join(', ')) })}</div>` : ''}` : '—',
     k?.applied ? `k = <b>${f2(k.k)}</b><div class="sub-line">${f2(k.kLow)}–${f2(k.kHigh)}</div>` : '—',
-    k?.applied ? t('app.eScooterTripsNationwide', { v0: f2(k.k), calibLabel: esc(UI.calibLabel(k)), v2: f2(calib.limits?.scooter), v3: k.prelim ? `<div class="sub-line">${t('app.preliminary2', { join: esc(k.prelimWhy.join(', ')) })}</div>` : '', v4: (k.single ? `<div class="sub-line">${t('app.limitation', { single: esc(k.single) })}</div>` : '') + `<div class="sub-line">${esc(k.statusText || '')}${k.onlyKind ? ` · ${esc(k.onlyKind)}` : ''}</div>` }) : t('app.noCalibration', { v0: esc(k?.reason || '') })]);
+    k?.applied ? t('app.eScooterTripsNationwide', { v0: f2(k.k), calibLabel: esc(UI.calibLabel(k)), v2: f2(calib.limits?.scooter), v3: k.prelim ? `<div class="sub-line">${t('app.preliminary2', { join: esc(k.prelimWhy.join(', ')) })}</div>` : '', v4: (k.single ? `<div class="sub-line">${t('app.limitation', { single: esc(k.single) })}</div>` : '') + `<div class="sub-line">${esc(k.statusText || '')}${k.onlyKind ? `, ${esc(k.onlyKind)}` : ''}</div>` }) : t('app.noCalibration', { v0: esc(k?.reason || '') })]);
   // 3. Abdeckung (+ Hochrechnung nur hier)
   for (const c of calib.coverage || []) {
     // k nur bei angewandtem k und Kennungsart der Stadt wie die Referenz, höchstens bis zur Grenze (K.calibratedRvd); sonst gemessen mit Hinweis
@@ -55,7 +56,7 @@ export async function renderCalibPanel() {
     const u = x.unit === '€' ? ' €' : '';
     const mv = x.measured == null ? '—' : `${f2(x.measured)}${u}${x.calibrated != null ? `<div class="sub-line">${t('app.calibrated5', { v0: f2(x.calibrated), u })}</div>` : x.suspended ? `<div class="sub-line warn-text">${esc(tx(UI.SUSPENDED_TXT))}</div>` : x.notOp?.length ? `<div class="sub-line">${esc(t('cal.notOp', { ops: x.notOp.join(', ') }))}</div>` : ''}<div class="sub-line">${esc(x.kind === 'Untergrenze' ? t('app.openFeeds', { ort: tx(x.ref.ort) }) : x.scope || '')}${x.unit === '€' && voi ? `, ${voi.days} ${voi.days === 1 ? t('app.day2') : t('app.days2')}` : ''}</div>`;
     const ratio = x.ratioCal ?? x.ratio;
-    rows.push([`${esc(tx(x.label.replace(/: .*/, '')))}<div class="sub-line">${esc(x.label.replace(/^[^:]*: /, ''))} · ${esc(x.ref.zeitraum || '')}</div>`, `<b>${x.kind === 'Untergrenze' ? '≥ ' : ''}${f2(x.refValue)}${u}</b>${x.how ? `<div class="sub-line">${esc(t('app.mTripsFleetCap', { v0: fmt(x.trips / 1e6, 2), v1: x.year % 4 ? 365 : 366, limit: fmt(x.limit) }))}</div>` : x.ref.hinweis ? `<div class="sub-line"><span translate="no">${esc(x.ref.hinweis)}</span></div>` : ''}`, `${src(x.ref)}${x.cap && x.cap.url !== x.ref.url ? ` · ${src(x.cap)}` : ''}`, mv,
+    rows.push([`${esc(tx(x.label.replace(/: .*/, '')))}<div class="sub-line">${esc(x.label.replace(/^[^:]*: /, ''))}, ${esc(x.ref.zeitraum || '')}</div>`, `<b>${x.kind === 'Untergrenze' ? '≥ ' : ''}${f2(x.refValue)}${u}</b>${x.how ? `<div class="sub-line">${esc(t('app.mTripsFleetCap', { v0: fmt(x.trips / 1e6, 2), v1: x.year % 4 ? 365 : 366, limit: fmt(x.limit) }))}</div>` : x.ref.hinweis ? `<div class="sub-line"><span translate="no">${esc(x.ref.hinweis)}</span></div>` : ''}`, `${src(x.ref)}${x.cap && x.cap.url !== x.ref.url ? `, ${src(x.cap)}` : ''}`, mv,
       ratio == null ? '—' : `${f2(ratio)}<div class="sub-line">${t('app.reference', { v0: x.ratioCal != null ? t('app.calibrated6') : t('app.measured3') })}</div>`, x.suspended ? t('app.measurementAbove15Largest', { v0: f2(calib.limits?.scooter) }) : x.kind === 'Untergrenze' ? t('app.checkNoFactorLowerBound') : t('app.comparisonNoFactor')]);
   }
   const rules = `<ol class="calib-rules small"><li>${t('app.tripDurationAvgEScooterTrip', { v0: a?.calibrated ? ` (${fmt(a.min, 1)} Min., ${f2(a.km)} km)` : '' })}</li>
@@ -85,7 +86,7 @@ export async function renderArchive() {
     else { const docs = await Promise.all(months.map(m => cached(`archive/${m}.json`, 60000))); state.usage.archiveDays = docs.reduce((a, d) => a + Object.keys(d.json?.days || {}).length, 0); }
   }
   const n = state.usage.archiveDays; const first = /^\d{4}-\d{2}-\d{2}$/.test(idx.firstDay || '') ? idx.firstDay : null; const m0 = months[0];
-  el.textContent = `· ${t('app.archiveSince', { v0: first ? new Date(`${first}T12:00:00`).toLocaleDateString(fmtLocale(), { day: 'numeric', month: 'long', year: 'numeric' }) : new Date(+m0.slice(0, 4), +m0.slice(5, 7) - 1, 1).toLocaleDateString(fmtLocale(), { month: 'long', year: 'numeric' }), n: fmt(n), v2: n === 1 ? t('app.day2') : t('app.days2') })}`;
+  el.textContent = `(${t('app.archiveSince', { v0: first ? new Date(`${first}T12:00:00`).toLocaleDateString(fmtLocale(), { day: 'numeric', month: 'long', year: 'numeric' }) : new Date(+m0.slice(0, 4), +m0.slice(5, 7) - 1, 1).toLocaleDateString(fmtLocale(), { month: 'long', year: 'numeric' }), n: fmt(n), v2: n === 1 ? t('app.day2') : t('app.days2') })})`;
 }
 export function T_empty() { return { start: new Array(24).fill(0), end: new Array(24).fill(0), reloc: new Array(24).fill(0), swap: new Array(24).fill(0), pickup: new Array(24).fill(0), disOn: new Array(24).fill(0), disOff: new Array(24).fill(0), swapWaitSum: 0, swapWaitN: 0, disDurSum: 0, disDurN: 0, tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0, swapWaitCens: 0, disDurCens: 0 }; }
 // swapWaitCens/disDurCens (ab 02.11.2026): davon Mindestwerte (unter 20 % bzw. gesperrt seit erster Sichtung zu Beginn der Verfolgung, Z6) → Anzeige „≥“
@@ -124,7 +125,7 @@ export function hourChart(series, weather, runs, mask = null, holiday = null, W 
   let g = '';
   // nicht gemessene Stunden und Stunden nach Messlücke grau hinterlegen (statt einer Nulllinie)
   const m = mask || hourMask(runs);
-  for (let h = 0; h < 24; h++) if (!m.ok[h]) g += `<rect class="gap" x="${(x(h) - cw / 2).toFixed(1)}" y="${P.t}" width="${cw.toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.text2', { h, v1: h + 1, v2: m.gap[h] ? t('app.runAfterPauseOfMoreThan45Min') : t('app.noCollectorRunNotMeasured') })}</title></rect>`;
+  for (let h = 0; h < 24; h++) if (!m.ok[h]) g += `<rect class="gap" x="${(x(h) - cw / 2).toFixed(1)}" y="${P.t}" width="${cw.toFixed(1)}" height="${H - P.t - P.b}"/>`; // Grund steht im Tooltip (charttip)
   for (let h = 0; h < 24; h++) if (!m.ok[h] && (h === 0 || m.ok[h - 1])) { let e = h; while (e < 23 && !m.ok[e + 1]) e++; if (e - h >= 2) g += `<text x="${((x(h) + x(e)) / 2).toFixed(1)}" y="${P.t + 12}" text-anchor="middle">${t('app.notMeasured')}</text>`; }
   for (const v of nt.ticks) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v, nt.step < 1 ? 1 : 0)}</text>`;
   const yAx = H - WB - 8;
@@ -135,15 +136,17 @@ export function hourChart(series, weather, runs, mask = null, holiday = null, W 
     // eigenes Band: Regen als Balken (eigene Höhe, kein Bezug zur y-Achse), Temperatur als Zahl alle 3 Stunden
     const b0 = H - WB + 6, bh = 26, rmax = Math.max(1, ...weather.rain.map(v => v || 0));
     wx += `<text x="${P.l - 6}" y="${b0 + 12}" text-anchor="end">${t('app.weather2')}</text><line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${b0 + bh}" y2="${b0 + bh}"/>`;
-    for (let h = 0; h < 24; h++) if (weather.rain[h] > 0) { const hh = Math.max(2, (weather.rain[h] / rmax) * bh); wx += `<rect class="rain" x="${(x(h) - cw / 2 + 2).toFixed(1)}" y="${(b0 + bh - hh).toFixed(1)}" width="${(cw - 4).toFixed(1)}" height="${hh.toFixed(1)}"><title>${t('app.n00MmPrecipitation', { h, v1: fmt(weather.rain[h], 1) })}</title></rect>`; }
+    for (let h = 0; h < 24; h++) if (weather.rain[h] > 0) { const hh = Math.max(2, (weather.rain[h] / rmax) * bh); wx += `<rect class="rain" x="${(x(h) - cw / 2 + 2).toFixed(1)}" y="${(b0 + bh - hh).toFixed(1)}" width="${(cw - 4).toFixed(1)}" height="${hh.toFixed(1)}"/>`; }
     for (let h = 0; h < 24; h += HS) if (weather.temp[h] != null) wx += `<text x="${x(h).toFixed(1)}" y="${b0 + bh + 14}" text-anchor="middle">${fmt(weather.temp[h])}°</text>`;
   }
   // Linie an fehlenden Stunden unterbrochen; einzelne gemessene Stunden als Punkt (≥ 8 px)
   const paths = series.map((s, i) => { const col = s.color || palette(i); let d = '', open = false, dots = ''; s.values.forEach((v, h) => { if (v == null) { open = false; return; } const alone = (h === 0 || s.values[h - 1] == null) && (h === 23 || s.values[h + 1] == null); if (alone) dots += `<circle cx="${x(h).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${col}" stroke="var(--panel)" stroke-width="2"/>`; d += `${open ? 'L' : 'M'}${x(h).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); return `<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>${dots}`; }).join('');
-  // Trefferflächen je Stunde mit allen Werten (Tooltip)
-  let hits = '';
-  for (let h = 0; h < 24; h++) { const lines = m.ok[h] ? series.filter(s => s.values[h] != null).sort((a, b) => b.values[h] - a.values[h]).map(s => `${s.name} ${fmt(s.values[h])}`) : [m.gap[h] ? t('app.afterMeasurementGapNot') : t('app.notMeasured')]; if (weather && weather.temp[h] != null) lines.push(`${fmt(weather.temp[h])} °C · ${fmt(weather.rain[h] || 0, 1)} mm`); hits += `<rect class="hit" x="${(x(h) - cw / 2).toFixed(1)}" y="${P.t}" width="${cw.toFixed(1)}" height="${H - P.t - 8}"><title>${t('app.text3', { h, v1: h + 1, join: esc(lines.join('\n')) })}</title></rect>`; }
-  return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('app.tripStartsPerHourGreyNot', { v0: holiday ? `; ${esc(holiday)}` : '' })}. ${esc(seriesSummary(series))}">${g}${wx}${paths}${hits}</svg>`;
+  // S4.5: alle Werte je Stunde im gemeinsamen Hover-Layer (web/charttip.js), auch als Tabelle
+  const cols = series.map((s, i) => s.color || palette(i)), wxRow = (h) => (weather && weather.temp[h] != null ? [{ label: t('app.weather2'), value: t('ct.weatherVal', { temp: fmt(weather.temp[h]), rain: fmt(weather.rain[h] || 0, 1) }) }] : []);
+  const sp = chartSpec({ n: 24, x: (h) => x(h), top: P.t, bottom: H - P.b, head: (h) => t('ct.hour', { h, h2: h + 1 }), label: t('app.tripStartsPerHourGreyNot', { v0: '' }), colHead: t('ct.hourCol'), cols: series.map(s => s.name),
+    cell: (h, k) => (series[k].values[h] == null ? '–' : fmt(series[k].values[h])),
+    rows: (h) => (m.ok[h] ? series.map((s, i) => ({ color: cols[i], label: s.name, value: s.values[h] == null ? '–' : fmt(s.values[h]), sort: s.values[h] ?? -1 })) : [{ label: m.gap[h] ? t('app.afterMeasurementGapNot') : t('app.notMeasured'), value: '' }]).concat(wxRow(h)) });
+  return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" ${sp.attrs} aria-label="${t('app.tripStartsPerHourGreyNot', { v0: holiday ? `; ${esc(holiday)}` : '' })}. ${esc(seriesSummary(series))}">${g}${wx}${paths}</svg>${tableButton(sp.id)}`;
 }
 // Feiertage: lokal gerechnet (lib/pulse-econ.js localHolidays, Ostern nach Gauß/Meeus); wo calendar.json (OpenHolidays) den Tag abdeckt,
 // gilt je Land der Kalender – Länder mit Feiertag laut Kalender ohne lokalen Namen erscheinen als „Feiertag“
@@ -176,18 +179,18 @@ export function renderMbMatrix() {
   const head = `<tr><th scope="col"><span class="vh">${t('mb.dayType')}</span></th>${Array.from({ length: 24 }, (_, h) => `<th scope="col" class="mb-hh">${h % 3 === 0 ? hh(h) : `<span class="vh">${hh(h)}</span>`}</th>`).join('')}<th scope="col" class="n">${t('mb.sum')}</th></tr>`;
   const rows = E.DAY_TYPES.map(k => `<tr><th scope="row" title="${esc(UI.mbTypeName(k))}">${k}<span class="vh"> ${esc(UI.mbTypeName(k))}</span></th>${b.matrix[k].map((m, h) => `<td class="mb-c mb-l${lvl(m)}" title="${esc(t('mb.cellTitle', { type: UI.mbTypeName(k), h: hh(h), h2: hh((h + 1) % 24), m: fmt(m) }))}">${m > 0 ? `<span class="vh">${fmt(m)}</span>` : '<span aria-hidden="true">·</span><span class="vh">0</span>'}</td>`).join('')}<td class="n mono">${fmt(b.byType[k], 1)}&nbsp;h<div class="sub-line">${t(b.days[k] === 1 ? 'mb.nDay' : 'mb.nDays', { n: b.days[k] })}</div></td></tr>`).join('');
   const never = Array.from({ length: 24 }, (_, h) => h).filter(h => E.DAY_TYPES.every(k => !b.matrix[k][h]));
-  box.innerHTML = `<div class="mb-mh"><b>${t('mb.matrixTitle')}</b> <span class="muted">${t('mb.matrixSub', { h: fmt(b.hours, 1), never: never.length ? never.map(hh).join(', ') : '–' })}</span></div>
+  box.innerHTML = `<div class="mb-mh"><b>${t('mb.matrixTitle')}:</b> <span class="muted">${t('mb.matrixSub', { h: fmt(b.hours, 1), never: never.length ? never.map(hh).join(', ') : '–' })}</span></div>
     <div class="tbl" tabindex="0" role="region" aria-label="${t('mb.matrixAria')}"><table class="mb-mx"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
-    <div class="legend mb-leg"><span>${E.DAY_TYPES.map(k => `${k} ${esc(UI.mbTypeName(k))}`).join(' · ')}</span><span><span aria-hidden="true">·</span> ${t('mb.lv0')}</span>${[1, 2, 3, 4].map(l => `<span><i class="sq mb-c mb-l${l}"></i>${t(`mb.lv${l}`)}</span>`).join('')}</div>`;
+    <div class="legend mb-leg"><span>${E.DAY_TYPES.map(k => `${k} ${esc(UI.mbTypeName(k))}`).join(', ')}</span><span><span aria-hidden="true">·</span> ${t('mb.lv0')}</span>${[1, 2, 3, 4].map(l => `<span><i class="sq mb-c mb-l${l}"></i>${t(`mb.lv${l}`)}</span>`).join('')}</div>`;
 }
 // Text für den gewählten Tag und das Gebiet: Feiertag im Land der Gemeinde, deutschlandweit mit Zahl der Länder; sonst Sonntag
-export function dayNote(day) { const a = dayNoteHol(day), f = /^\d{4}-\d{2}-\d{2}$/.test(day || '') ? schoolNote(day) : null; return a && f ? `${a} · ${f}` : a || f; }
+export function dayNote(day) { const a = dayNoteHol(day), f = /^\d{4}-\d{2}-\d{2}$/.test(day || '') ? schoolNote(day) : null; return a && f ? `${a}, ${f}` : a || f; }
 export function dayNoteHol(day) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return null;
   const st = state.scope === 'DE' ? null : scopeState();
   const hits = holidaysOf(day).map(([, name, lands]) => ({ name, lands: lands.map(l => l.replace('*', '')), part: lands.some(l => l.endsWith('*') && (!st || l.startsWith(st))) })).filter(h => !st || h.lands.includes(st));
   const sunday = new Date(`${day}T12:00:00Z`).getUTCDay() === 0;
-  if (hits.length) return `Feiertag: ${hits.map(h => `${h.name}${st ? ` (${st}${h.part ? t('app.partly') : ''})` : h.lands.length === 16 ? ' (bundesweit)' : ` ${t('app.states', { length: h.lands.length })}`}`).join(', ')}${sunday ? ` · ${t('app.sunday')}` : ''}`;
+  if (hits.length) return `Feiertag: ${hits.map(h => `${h.name}${st ? ` (${st}${h.part ? t('app.partly') : ''})` : h.lands.length === 16 ? ' (bundesweit)' : ` ${t('app.states', { length: h.lands.length })}`}`).join(', ')}${sunday ? `, ${t('app.sunday')}` : ''}`;
   return sunday ? t('app.sunday') : null;
 }
 export async function cellsForScope(day) {
@@ -211,7 +214,7 @@ export const GEO = new Map();
  export let geoBusy = false;
 export const geoKey = (lat, lon) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
 try { for (const [k, v] of Object.entries(JSON.parse(sessionStorage.getItem('mp-geo') || '{}'))) GEO.set(k, v); } catch { /* ohne Sitzungsspeicher */ }
-export function geoText(j) { const a = j?.address || {}; const street = a.road || a.pedestrian || a.footway || a.square || a.path || a.cycleway || a.place || j?.name || null; const area = a.suburb || a.city_district || a.quarter || a.neighbourhood || a.village || a.town || null; return [street, area].filter(Boolean).join(' · ') || null; }
+export function geoText(j) { const a = j?.address || {}; const street = a.road || a.pedestrian || a.footway || a.square || a.path || a.cycleway || a.place || j?.name || null; const area = a.suburb || a.city_district || a.quarter || a.neighbourhood || a.village || a.town || null; return [street, area].filter(Boolean).join(', ') || null; }
 export function queueGeo(points) { for (const p of points.slice(0, 20)) if (!GEO.has(p.k) && !geoQueue.some(q => q.k === p.k)) geoQueue.push({ k: p.k, lat: p.lat, lon: p.lon }); pumpGeo(); }
 export async function pumpGeo() {
   if (geoBusy) return; geoBusy = true;

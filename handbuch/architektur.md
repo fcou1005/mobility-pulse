@@ -48,6 +48,7 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `sport-termine`, `streiks`, `prognose`, `training` | Termine, Streiks, Prognose, Trainingsarchiv |
 | `kalibrierung`, `grenzen` | Kalibrierung, Gemeindegrenzen |
 | `gebiet` | Dateien je Gemeinde für die Disposition (`scripts/gebiet.mjs`): `latest-core.json`, `ops-input/cells`, `ops-input/area`, `ops-input/zones` |
+| `alarme` | Alarme je Gemeinde (Obergrenze, Quelle aus, Zonen, Preise, Flottensprung) → `auflagen/alarme.json`, Atom-Feeds `feeds/<AGS>.xml` |
 | `datenvertraege`, `abschluss` | Formatversion, Lizenzen und `status.json` |
 
 ## Startseite in Modulen
@@ -62,6 +63,8 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `web/app-lang.js` | Sprache, Kopfzeile, Übersicht und Leistung |
 | `web/app-map.js`, `web/app-energy.js`, `web/app-signals.js` | Karte und Ebenen, Energie, Signale |
 | `web/app-sources.js`, `web/app-usage.js`, `web/app-calib.js` | Quellen und Datenvertrauen, Nutzung und Umsatz, Kalibrierung |
+
+Gemeinsame Bausteine der Oberfläche: `web/answer.js` (Antwort-Komponente), `web/charttip.js` (Hover-Layer für alle Diagramme), `web/tokens.js` (Farben), `web/app-terms.js` (Begriffe, Erstbesuch). Das Stadt-Paket (`web/stadt.js`) lädt wie die anderen Ansichten erst beim Öffnen.
 
 Die nachgeladenen Ansichten sind ebenso geteilt: `web/ops.js` (Disposition), `web/report.js` (Bericht) und `web/forecast.js` (Prognose) sind
 Fassaden mit `export *` aus `ops-data|plan|extra.js`, `report-core|maps|watch|avail|more.js` und `forecast-data|parts|view.js`. Das

@@ -1,5 +1,6 @@
 // Dashboard: Sprache, Kopfzeile, Übersicht und Leistung (S3.9: aus web/app.js geschnitten, Einstieg bleibt web/app.js).
-import { t, lang, setLang, applyStatic, fmtLocale, suggestLang, dismissSuggestion, tIn, ensureI18n } from './i18n.js';
+import { t, lang, setLang, applyStatic, fmtLocale, suggestLang, dismissSuggestion, tIn, ensureI18n, dateFmt } from './i18n.js';
+import { setAnswer } from './answer.js';
 import { $, $$, DEMO, DIRS, STATUS, TYPE, ageText, cl, emptyTip, esc, fmt, gl, isClient, opColor, pctf, state, timeText } from './app-core.js';
 import { clearNotice, emptyRow, failedText, notice, refreshNotices } from './app-load.js';
 import { USABLE, effStatus, liveRec, muniName, operatorRows, scopeGroups, scopeLabel, sourcesForScope, sumStats } from './app-scope.js';
@@ -70,8 +71,8 @@ export function renderHeader() {
   const showAge = h.staleRun && !$('#notice [data-id="stale"]'); // das Hinweisband „Sammler-Lauf alt“ nennt das Alter schon; die Zeile wiederholt es nur ohne Band
   // Veralteter Stand: keine Abdeckungszahlen („0 von 290 nutzbar“ wäre nur das Alter in anderer Form), sondern eine klare Aussage; ab 6 Std. rot
   const lvl = h.staleRun ? (Date.now() - state.latest.at > 6 * 36e5 ? 'bad' : 'warn') : h.level, head = h.staleRun ? t('ux.dataStale') : h.label;
-  const age = showAge ? ` · ${t(isClient() ? 'app.dataOld' : 'app.collectorRunOld', { v0: ageText(Date.now() - state.latest.at) })}` : '';
-  const counts = !isClient() && !h.staleRun && h.counted ? ` · ${t('app.ofReachableSourcesCurrent', { usable: fmt(h.usable), fresh: fmt(h.fresh), counted: fmt(h.counted) })}` : '';
+  const age = showAge ? `, ${t(isClient() ? 'app.dataOld' : 'app.collectorRunOld', { v0: ageText(Date.now() - state.latest.at) })}` : '';
+  const counts = !isClient() && !h.staleRun && h.counted ? `, ${t('app.ofReachableSourcesCurrent', { usable: fmt(h.usable), fresh: fmt(h.fresh), counted: fmt(h.counted) })}` : '';
   el.innerHTML = `<span class="health ${lvl}"><i></i>${head}${counts}${age}</span>`;
   el.title = isClient() ? gl('fresh') : h.detail;
   renderAttribution(); renderFilterSum();
@@ -79,8 +80,11 @@ export function renderHeader() {
 // Ampel zur Datenlage im Gebiet: nicht erreichbare Quellen und geprüfte Kandidaten ohne Feed zählen nicht als Fehler; ebenso Dubletten
 // (gleiches System über eine zweite Adresse) und länger als 14 Tage verschwundene Quellen (retired)
 export const NOT_COUNTED = new Set(['gone', 'foreign', 'duplicate', 'retired']);
-export function dataHealth() {
-  const recs = sourcesForScope().map(r => liveRec(r.id) || r);
+/** S4.2: der eine Nenner für Quellenzahlen (Kopfzeile, Übersicht, Quellen, Bericht). ags: Gemeinde, 'DE' = alle; ohne Angabe das gewählte Gebiet
+ * @param {{ ags?: string }} [o] */
+export function dataHealth({ ags } = {}) {
+  const all = state.latest?.sources || [];
+  const recs = (ags === undefined ? sourcesForScope() : ags === 'DE' ? all : all.filter(r => (r.municipalities || []).includes(ags))).map(r => liveRec(r.id) || r);
   const eff = recs.map(effStatus);
   const by = {}; for (const e of eff) by[e.status] = (by[e.status] || 0) + 1;
   const counted = eff.filter((e, i) => { const r = recs[i]; return !NOT_COUNTED.has(e.status) && !(r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(e.status)); });
@@ -91,7 +95,7 @@ export function dataHealth() {
   let level = !counted.length ? 'none' : ratio >= 0.8 ? 'ok' : ratio >= 0.5 ? 'warn' : 'bad';
   if (staleRun && level === 'ok') level = 'warn';
   const label = { ok: t('app.dataCoverageGood'), warn: t('app.dataCoverageLimited'), bad: t('app.dataCoverageWeak'), none: state.latest ? cl(t('app.noSourcesInArea'), t('app.noDataInArea')) : cl(t('app.noCollectorSnapshotYet'), t('app.noDataYet')) }[level];
-  const detail = t('app.sourcesInAreaCurrentDataAge', { length: recs.length, v1: Object.entries(by).map(([k, v]) => `${v} ${STATUS[k] || k}`).join(' · '), v2: state.live ? ` · ${t('app.liveDuplicatesRemoved', { duplicates: state.live.dedupe.duplicates })}` : '' });
+  const detail = t('app.sourcesInAreaCurrentDataAge', { length: recs.length, v1: Object.entries(by).map(([k, v]) => `${v} ${STATUS[k] || k}`).join(', '), v2: state.live ? `, ${t('app.liveDuplicatesRemoved', { duplicates: state.live.dedupe.duplicates })}` : '' });
   return { level, label, fresh, delayed, stale, usable, counted: counted.length, staleRun, detail };
 }
 // Namensnennung: Anbieter/Attribution und Lizenzen der Quellen im Gebiet (Vertrag 2), Verzeichnisse und BKG – kompakt für Karte und Fußzeile
@@ -112,7 +116,7 @@ export function renderAttribution() {
   const dirs = extra.filter(x => !/^BKG/.test(x));
   const foot = $('#page-foot');
   if (foot) {
-    foot.innerHTML = `<span>${t('app.data', { v0: esc([...shown, rest > 0 ? t('app.more', { rest }) : null].filter(Boolean).join(', ') || t('app.loadingCollectorSnapshot')), v1: dirs.length ? ` · ${t('app.via', { join: esc(dirs.join(', ')) })}` : '', v2: cl(t('app.licencePerSourceUnderData'), t('app.useSubjectToOperators')) })}</span>`
+    foot.innerHTML = `<span>${t('app.data', { v0: esc([...shown, rest > 0 ? t('app.more', { rest }) : null].filter(Boolean).join(', ') || t('app.loadingCollectorSnapshot')), v1: dirs.length ? `, ${t('app.via', { join: esc(dirs.join(', ')) })}` : '', v2: cl(t('app.licencePerSourceUnderData'), t('app.useSubjectToOperators')) })}</span>`
       + `<span>${t('app.municipalBoundariesVg250DlDe', { v0: esc(state.latest?.boundaries?.attribution?.replace(/\s*\(.*\)\s*$/, '') || '© GeoBasis-DE / BKG') })}</span>`
       + `<span>${t('app.mapsOpenstreetmap')}</span>`
       + `<span class="foot-legal">${t('app.legalLinks')}</span>`
@@ -126,17 +130,26 @@ export function renderAttribution() {
   }
 }
 export function tile(l, v, s, cls = '', title = '') { return `<div class="tile ${cls}"${title ? ` title="${esc(title)}"` : ''}><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }
-// Kernaussage über den Kacheln der Übersicht
+// Kernaussage über den Kacheln der Übersicht (S4.1: Antwort-Komponente – Satz, drei Kennzahlen, „Wie gerechnet?“, Stand)
 export function renderLede() {
   const el = $('#live-lede'); if (!el) return;
-  if (!state.latest && !state.live) { el.textContent = t('app.noDataSnapshotLoadedYet'); return; }
+  if (!state.latest && !state.live) { setAnswer(el, { id: 'live', sentence: esc(t('app.noDataSnapshotLoadedYet')), kpis: [] }); return; }
   const st = sumStats([...scopeGroups().values()]); const h = dataHealth();
   const sig = computeSignals().filter(s => s.sev !== 'info').length;
   const place = state.scope === 'DE' ? t('app.germany') : muniName(state.scope);
   const filt = [state.operator !== 'all' ? state.operator : null, state.type !== 'all' ? TYPE[state.type] : null].filter(Boolean).join(', ');
   const dataTxt = h.level === 'ok' ? t('app.dataCurrent') : h.staleRun ? t('app.old', { v0: cl(t('app.collectorSnapshot'), t('app.data2')), v1: ageText(Date.now() - state.latest.at) }) : h.level === 'warn' ? t('app.dataPartlyDelayed') : h.level === 'bad' ? t('app.dataIncomplete') : cl(t('app.noSources'), t('app.noData2'));
   const sigTxt = `${fmt(sig)} ${sig === 1 ? t('app.anomaly') : t('app.anomalies')}`;
-  el.innerHTML = `${t('app.vehiclesAvailable', { place: esc(place), v1: filt ? ` · ${esc(filt)}` : '', available: fmt(st.available), v3: st.total ? t('app.disabled', { disabled: pctf(st.disabled, st.total) }) : t('app.noVehicleData'), v4: isClient() ? sigTxt : `<a href="#signals">${sigTxt}</a>` })} · <span class="health ${h.level}" title="${esc(isClient() ? gl('fresh') : h.detail)}"><i></i>${dataTxt}</span>`;
+  const sentence = t('ans.live', { available: `<strong>${fmt(st.available)}</strong>`, place: `<b>${esc(place)}</b>`, filt: filt ? ` (${esc(filt)})` : '', sig: isClient() ? sigTxt : `<a href="#signals">${sigTxt}</a>` })
+    + ` <span class="health ${h.level}" title="${esc(isClient() ? gl('fresh') : h.detail)}"><i></i>${dataTxt}</span>`;
+  const disShare = st.total ? st.disabled / st.total : null, at = state.mode === 'live' && state.live ? Date.now() : state.latest?.at;
+  setAnswer(el, { id: 'live', sentence,
+    kpis: [
+      { label: t('ans.kAvailable'), value: fmt(st.available), n: st.available, cmp: t('ans.kAvailableCmp', { total: fmt(st.total) }), eq: '#tbl-operators tbody tr td:nth-child(3)', eqSum: true },
+      { label: t('app.disabled2'), value: disShare == null ? '–' : pctf(st.disabled, st.total), cmp: t('ans.kDisabledCmp', { n: fmt(st.disabled) }), tone: disShare > 0.15 ? 'warn' : '' },
+      { label: t('ans.kSources'), value: t('ans.ofN', { a: fmt(h.usable), b: fmt(h.counted) }), cmp: t('ans.kSourcesCmp', { fresh: fmt(h.fresh), delayed: fmt(h.delayed), stale: fmt(h.stale) }), tone: h.level === 'ok' ? 'ok' : h.level === 'none' ? '' : h.level },
+    ],
+    how: t('ans.liveHow'), asOf: at ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(at)) : '' });
 }
 export const dirLabel = (d) => esc(DIRS[d] || d);
 export const pillStatus = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
@@ -151,12 +164,12 @@ export function renderLive() {
   const dockKnown = st.stationsEmptyDock != null;
   $('#live-tiles').innerHTML = [
     tile(t('app.availableBookable'), fmt(st.available), t('app.reportedReserved', { total: fmt(st.total), reserved: fmt(st.reserved) })),
-    tile(t('app.disabled2'), fmt(st.disabled), `${st.total ? t('app.ofFleet', { disabled: pctf(st.disabled, st.total) }) : t('app.noVehicleData')}${ghostsInScope() ? ` · ${t('app.orphaned', { ghostsInScope: fmt(ghostsInScope()) })}` : ''}`, st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
+    tile(t('app.disabled2'), fmt(st.disabled), `${st.total ? t('app.ofFleet', { disabled: pctf(st.disabled, st.total) }) : t('app.noVehicleData')}${ghostsInScope() ? `, ${t('app.orphaned', { ghostsInScope: fmt(ghostsInScope()) })}` : ''}`, st.total && st.disabled / st.total > 0.15 ? 'warn' : ''),
     tile(t('app.stationsWithVehicles'), `${fmt(st.stationsRenting - st.stationsEmpty)} <small>/ ${fmt(st.stations)}</small>`, st.stations ? t('app.emptyFull', { stationsEmpty: fmt(st.stationsEmpty), v1: dockKnown ? ` ${t('app.docksZonesParen', { docks: fmt(st.stationsEmptyDock), zones: fmt(st.stationsEmptyVirtual) })}` : '', stationsFull: fmt(st.stationsFull) }) : t('app.noStationsInArea'), '', st.stations ? emptyTip(st) : ''),
     tile(t('app.lowEnergy'), energyVal(en), energySub(en), lowE > 0.3 ? 'warn' : ''),
     // ein Nenner mit der Kopfzeile (dataHealth: ohne Dubletten, verschwundene, Ausland), Farbe aus derselben Ampel (Audit UXM-08/DES-11)
     (() => { const hh = dataHealth(), notCounted = recs.length - hh.counted;
-      return tile(cl(t('app.sources2'), t('app.dataFreshness')), `${fmt(hh.usable)} <small>/ ${fmt(hh.counted)}</small>`, t('app.currentDelayedStale', { length: hh.fresh, length2: hh.delayed, length3: hh.stale, v3: (gaps ? ` · ${gaps} ${cl(gaps > 1 ? t('app.dataGaps') : t('app.dataGap'), t('app.operatorsWithoutData'))}` : '') + (notCounted > 0 && !isClient() ? ` · ${t('app.sourcesNotCounted', { all: fmt(recs.length), n: fmt(notCounted) })}` : '') }), hh.level === 'bad' ? 'bad' : hh.level === 'warn' ? 'warn' : '', gl('fresh')); })(),
+      return tile(cl(t('app.sources2'), t('app.dataFreshness')), `${fmt(hh.usable)} <small>/ ${fmt(hh.counted)}</small>`, t('app.currentDelayedStale', { length: hh.fresh, length2: hh.delayed, length3: hh.stale, v3: (gaps ? `, ${gaps} ${cl(gaps > 1 ? t('app.dataGaps') : t('app.dataGap'), t('app.operatorsWithoutData'))}` : '') + (notCounted > 0 && !isClient() ? `, ${t('app.sourcesNotCounted', { all: fmt(recs.length), n: fmt(notCounted) })}` : '') }), hh.level === 'bad' ? 'bad' : hh.level === 'warn' ? 'warn' : '', gl('fresh')); })(),
   ].join('');
   // Tabelle: „Δ Sammler“ nur, wenn es etwas zeigt (Live-Abruf mit Abweichung); Lizenzen stehen unter Datenvertrauen › Quellen
   const showDelta = rows.some(r => r.delta && r.delta.diff !== 0);
@@ -168,9 +181,9 @@ export function renderLive() {
     const d = r.delta ? `<span style="color:var(--${r.delta.diff > 0 ? 'ok' : r.delta.diff < 0 ? 'bad' : 'muted'})">${r.delta.diff > 0 ? '+' : ''}${fmt(r.delta.diff)}</span><div class="sub-line">${ageText(r.delta.sinceMs)}</div>` : '—';
     if (r.gap) return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line">${t('app.since', { city: esc(r.gap.city), since: esc(r.gap.since) })}</div></td><td colspan="${cols - 2}" class="sub-line">${esc(r.gap.note)}</td><td><span class="pill gap">${t('app.dataGap2')}</span></td></tr>`;
     const e = energyOfOp(r.op);
-    const eCell = e.pending ? '…' : !e.known ? t('common.na') : `${energyVal(e)}<div class="sub-line">${t('app.withData', { known: fmt(e.known), v1: e.rangeOnly === e.known ? ` · ${t('app.rangeOnly')}` : e.rangeOnly ? ` · ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : '' })}</div>`;
-    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line internal">${r.sources.length} ${r.sources.length === 1 ? t('app.source') : t('app.sources')}${r.changed ? ` · ${t('app.sourceChange')}` : ''}${r.sources.some(x => x.snapshot) ? ` · ${t('app.collectorSnapshot3')}` : ''}${r.sources.some(x => x.status === 'collector') ? ` · ${t('app.collectorSnapshot')}` : ''}</div></td>
-      <td class="internal">${r.dirs.map(dirLabel).join(' · ') || '–'}<div class="sub-line">${t('app.quality100', { v0: esc(r.quality ?? '–') })}</div></td>
+    const eCell = e.pending ? '…' : !e.known ? t('common.na') : `${energyVal(e)}<div class="sub-line">${t('app.withData', { known: fmt(e.known), v1: e.rangeOnly === e.known ? `, ${t('app.rangeOnly')}` : e.rangeOnly ? `, ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : '' })}</div>`;
+    return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span><div class="sub-line internal">${r.sources.length} ${r.sources.length === 1 ? t('app.source') : t('app.sources')}${r.changed ? `, ${t('app.sourceChange')}` : ''}${r.sources.some(x => x.snapshot) ? `, ${t('app.collectorSnapshot3')}` : ''}${r.sources.some(x => x.status === 'collector') ? `, ${t('app.collectorSnapshot')}` : ''}</div></td>
+      <td class="internal">${r.dirs.map(dirLabel).join(', ') || '–'}<div class="sub-line">${t('app.quality100', { v0: esc(r.quality ?? '–') })}</div></td>
       <td class="n">${fmt(s.available)}<div class="sub-line">${t('app.reported', { total: fmt(s.total) })}</div></td><td class="n">${fmt(s.disabled)}</td>${showDelta ? `<td class="n">${d}</td>` : ''}
       <td class="n">${eCell}</td>
       <td class="n"${s.stations ? ` title="${esc(emptyTip(s))}"` : ''}>${s.stations ? `${fmt(s.stationsEmpty)} / ${fmt(s.stations)}` : '—'}</td><td class="n">${ageText(r.age)}</td>

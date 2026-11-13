@@ -71,8 +71,10 @@ const SINGLE = ['latest.json', 'status.json', 'runs.json', 'sources.json', 'cove
   'stations-quota.json', 'pricing.json', 'pricing-log.json', 'caps-log.json', 'calib.json', 'calendar.json', 'eingriffe.json', 'ereignisse.json', 'veranstaltungen.json',
   'sport.json', 'streiks.json', 'groups.json', 'groups/index.json', 'history/daily.json', 'forecast/latest.json', 'forecast/log.json', 'forecast/series.json',
   'forecast/model.json', 'forecast/moped/latest.json', 'forecast/moped/series.json', 'forecast/car/latest.json', 'forecast/car/series.json', 'boundaries/index.json',
-  'oepnv/index.json', 'shadow/index.json'];
+  'oepnv/index.json', 'shadow/index.json', 'auflagen/alarme.json', 'feeds/index.json'];
 for (const f of SINGLE) if (has(f)) await put(f, trim(await rd(f)));
+// S5.1: Jahresbuch der Feed-Verfügbarkeit (je Kalenderjahr eine Datei)
+for (const f of (await readdir(path.join(SRC, 'auflagen')).catch(() => [])).filter(x => /^verfuegbarkeit-\d{4}\.json$/.test(x))) await put(`auflagen/${f}`, trim(await rd(`auflagen/${f}`)));
 for (const f of (await readdir(path.join(SRC, 'groups')).catch(() => [])).filter(x => /^\d{4}-\d{2}\.json$/.test(x))) if (DAYS.some(d => d.startsWith(f.slice(0, 7)))) await put(`groups/${f}`, trim(await rd(`groups/${f}`)));
 
 // 2. Tagesdateien und Verzeichnisse

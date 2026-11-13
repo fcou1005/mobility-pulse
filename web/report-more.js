@@ -1,7 +1,6 @@
 // Mobility Pulse — Bericht (Ansicht) – Verfügbar ÷ erlaubt, Gebühren, Einsatzbereitschaft, Prognose-Abschnitte (aus report.js geschnitten; report.js bleibt die Fassade für alle Importe).
 import * as R from './pulse-report.js';
 import { t, tx, lang, fmtLocale, fcReason } from './i18n.js';
-import { weatherFor, weatherSvg, WX_CSS } from './weather.js';
 import { mbChecksText, mbLevel, mbNum, mbPct, mbRules } from './ui-shared.js';
 import { FCL, archiveDayList, archiveFor, badge, bindOnce, cellsDoc, dailyDoc, dd, download, emptyBox, eventsDoc, fetchJson, fleetLabel, head, hideTip, histFor, histIndex, lastOf, loadCalibration, pctTxt, plural, reference, safeLink, srcTxt, st, stamp, tile, tripTxt, typeName, usageIndex } from './report-core.js';
 import { TYPE_ORDER } from './report-watch.js';
@@ -29,7 +28,7 @@ export function capInfoTxt(ctx, x) {
   const zc = ds.filter(d => d.check).map(d => `${lim(d)} (${t('zv.nowInArea', { n: ctx.fmt(d.check.total) })})`), z = ds.filter(d => !d.check).map(lim);
   if (zc.length) parts.push(t('zv.subAreasCounted', { v1: zc.join('; ') }));
   if (z.length) parts.push(t('rep.onlyNotCheckableWithoutArea', { v0: z.length > 1 ? t('rep.subAreas') : t('rep.subArea'), v1: z.join('; ') }));
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 // Verfügbar ÷ erlaubt je Anbieter steht im Kommunal-Bericht (Obergrenzen-Wächter, Steckbrief): hier nur ein Satz mit Link und die CSV (UI-10)
 export function capLink(ctx, s) {
@@ -142,7 +141,7 @@ export async function renderDensityScatter(el, ctx) {
     el.addEventListener('click', (e) => { if (e.target.closest('button[data-rp="sctable"]')) { s.showTable = !s.showTable; draw(); } });
     const near = (svg, ev) => { const c = s.sc; if (!c) return null; const r = svg.getBoundingClientRect(); const k = c.W / r.width; const px = (ev.clientX - r.left) * k, py = (ev.clientY - r.top) * k; let best = null, bd = 24 * k; c.pts.forEach((p, i) => { const d = Math.hypot(p.px - px, p.py - py); if (d < bd) { bd = d; best = i; } }); return best; };
     const show = (svg, i) => { const c = s.sc; const box = svg.closest('.rp-chart'); svg.querySelectorAll('circle.on').forEach(x => x.classList.remove('on')); if (i == null) { hideTip(box); return; } const p = c.pts[i]; svg.querySelector(`circle[data-i="${i}"]`)?.classList.add('on'); const r = svg.getBoundingClientRect(); const k = r.width / c.W;
-      showRowsTip(box, svg, r.left + p.px * k, r.top + p.py * k - 6, `${p.name}${p.state ? ` (${p.state})` : ''} · ${typeName(p.ty)}`, [{ color: 'transparent', value: s.ctx.fmt(p.rvd, 2), label: t('rep.tripsPerVehiclePerDay2') }, { color: 'transparent', value: s.ctx.fmt(p.density, 1), label: t('rep.vehiclesPerKm2') }, { color: 'transparent', value: s.ctx.fmt(p.fleet), label: t('rep.avgFleetKm2', { v0: s.ctx.fmt(p.areaKm2, 1) }) }]); c.i = i; };
+      showRowsTip(box, svg, r.left + p.px * k, r.top + p.py * k - 6, `${p.name}${p.state ? ` (${p.state})` : ''}, ${typeName(p.ty)}`, [{ color: 'transparent', value: s.ctx.fmt(p.rvd, 2), label: t('rep.tripsPerVehiclePerDay2') }, { color: 'transparent', value: s.ctx.fmt(p.density, 1), label: t('rep.vehiclesPerKm2') }, { color: 'transparent', value: s.ctx.fmt(p.fleet), label: t('rep.avgFleetKm2', { v0: s.ctx.fmt(p.areaKm2, 1) }) }]); c.i = i; };
     el.addEventListener('pointermove', (e) => { const svg = e.target.closest?.('svg.rp-scatter'); if (svg) show(svg, near(svg, e)); });
     el.addEventListener('pointerout', (e) => { const svg = e.target.closest?.('svg.rp-scatter'); if (svg && !svg.contains(e.relatedTarget)) show(svg, null); });
     el.addEventListener('keydown', (e) => { const svg = e.target.closest?.('svg.rp-scatter'); if (!svg || !s.sc) return; const d = { ArrowRight: 1, ArrowLeft: -1, ArrowUp: 1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); const n = s.sc.pts.length; show(svg, (((s.sc.i ?? -1) + d) % n + n) % n); });
@@ -164,7 +163,7 @@ function drawScatter(el) {
   const scope = state.scope && state.scope !== 'DE' ? state.scope : null;
   const pts = R.densityPoints(rk.rows.filter(r => r.fleet >= s.min || r.ags === scope));
   const btn = `<div class="rp-ctl rp-noprint"><button type="button" data-rp="sctable" aria-expanded="${s.showTable ? 'true' : 'false'}">${s.showTable ? t('rep.asChart') : t('rep.asTable')}</button></div>`;
-  const note = `<div class="muted small" style="margin-top:var(--s2)">${t('rep.municipalitiesWithAreaAnd', { length: pts.length, v1: rk.prelim ? ` · ${t('rep.preliminaryUnder3Full')}` : '', v2: pts.some(p => p.excluded.length) ? ` · ${t('rep.implausibleOperatorsOnlyIn')}` : '' })}</div>`;
+  const note = `<div class="muted small" style="margin-top:var(--s2)">${t('rep.municipalitiesWithAreaAnd', { length: pts.length, v1: rk.prelim ? `, ${t('rep.preliminaryUnder3Full')}` : '', v2: pts.some(p => p.excluded.length) ? `, ${t('rep.implausibleOperatorsOnlyIn')}` : '' })}</div>`;
   if (!pts.length) { s.sc = null; el.innerHTML = title(btn) + filterCtl(ctx, s, { minLabel: t('rep.minimumFleet2') }) + emptyBox(t('rep.noMunicipalityInFilter'), t('rep.lowerMinimumFleetOrChange')); return; }
   if (s.showTable) {
     const rows = R.sortRows(pts, 'rvd', 'desc');
@@ -225,14 +224,15 @@ export async function renderFeeCalculator(el, ctx) {
     <td class="n">${e.rate ? `${e.rate.range ? `${fmt(+[].concat(e.satz)[0])}–${fmt(+[].concat(e.satz).slice(-1)[0])}` : fmt(+[].concat(e.satz)[0], 2)}${/€/.test(e.einheit || '') ? '' : ' €'}` : '—'}<div class="sub-line">${esc(tx(e.einheit || ''))}</div></td><td class="small" translate="no">${esc(e.gebiet || '–')}</td>
     <td class="n">${fmt(e.count)}<div class="sub-line">${plural(e.operators.length, t('rep.operatorOne'), t('rep.operatorMany'))}</div></td><td class="n"><b>${span(ctx, e.yearMin, e.yearMax)}</b></td><td class="n">${span(ctx, e.monthMin, e.monthMax)}</td><td class="small">${safeLink(ctx, e.url, e.quelle || t('rep.source'))}${e.stand ? `<div class="sub-line">${t('rep.asOf4', { v0: /^\d{4}-\d{2}-\d{2}$/.test(e.stand) ? dd(e.stand) : esc(e.stand) })}</div>` : ''}</td></tr>`).join('');
   const table = list.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.city')}</th><th>${t('rep.type')}</th><th class="n">${t('rep.rate')}</th><th>${t('rep.area')}</th><th class="n">${t('rep.counted')}</th><th class="n">${t('rep.perYear')}</th><th class="n">${t('rep.perMonth')}</th><th>${t('rep.source')}</th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : emptyBox(ref?.gebuehren?.length ? t('rep.noFeeRateWithSourceIsStored') : t('rep.noFeeRatesWithSourceStored'), ref?.gebuehren?.length ? t('rep.storedForOwnRateBelow', { list: [...new Set(ref.gebuehren.map(g => g.ort))].map(esc).join(', ') }) : t('rep.referenceJsonGebuehrenIs'));
+    : emptyBox(ref?.gebuehren?.length ? t('rep.noFeeRateWithSourceIsStored') : t('rep.noFeeRatesWithSourceStored'), ref?.gebuehren?.length ? `${t('rep.storedForOwnRateBelow', { list: [...new Set(ref.gebuehren.map(g => g.ort))].map(esc).join(', ') })} <button type="button" class="chip" data-rp-ownrate>${t('ux.enterOwnRate')}</button>` : t('rep.referenceJsonGebuehrenIs'));
   const { types } = groupOptions(state.latest);
-  const own = `<div class="panel-head" style="margin-top:var(--s4)"><div><h3 style="margin:0;font-size:14px">${t('rep.ownRate')}</h3><div class="sub">${t('rep.forMunicipalitiesWithoutRate')}</div></div></div>
+  const own = `<div class="panel-head" style="margin-top:var(--s4)"><div><h3 style="margin:0;font-size:.875rem">${t('rep.ownRate')}</h3><div class="sub">${t('rep.forMunicipalitiesWithoutRate')}</div></div></div>
     <div class="rp-ctl rp-noprint"><label>${t('rep.rate')} <input type="number" data-own="rate" min="0" step="0.5" value="${esc(s.own.rate)}" placeholder="z. B. 50" style="width:7em" aria-label="${t('rep.ownFeeRateInEuros')}"> €</label>
     <label>${t('rep.perVehicleAnd')} <select data-own="unit"><option value="jahr"${s.own.unit === 'jahr' ? ' selected' : ''}>${t('rep.year')}</option><option value="monat"${s.own.unit === 'monat' ? ' selected' : ''}>${t('rep.month')}</option></select></label>
     <label>${t('rep.vehicleType')} <select data-own="type">${types.map(tq => `<option value="${esc(tq)}"${tq === s.own.type ? ' selected' : ''}>${esc(typeName(tq))}</option>`).join('')}</select></label></div>
     <div data-rp="ownout" aria-live="polite" style="margin-top:var(--s2)">${ownOut(ctx, s)}</div>`;
   el.innerHTML = title + `<div class="note small" style="margin-bottom:var(--s3)">${t('rep.countedVehiclesOfType')}</div>` + table + own;
+  el.querySelector('[data-rp-ownrate]')?.addEventListener('click', () => el.querySelector('input[data-own="rate"]')?.focus()); // S4.8: Leerzustand mit Handlung
 }
 function ownOut(ctx, s) {
   const { state, fmt, esc } = ctx; const scope = state.scope;
@@ -242,7 +242,7 @@ function ownOut(ctx, s) {
   const name = state.latest?.municipalities?.[scope]?.name || scope;
   if (!Number.isFinite(rate)) return `<span class="muted small">${t('rep.countedEnterRate', { name: esc(name), count: fmt(count), typeName: esc(typeName(s.own.type)) })}</span>`;
   const r = R.ownFee(rate, s.own.unit, count);
-  return `<div class="tiles">${tile(`${esc(name)} · ${esc(typeName(s.own.type))}`, fmt(count), t('rep.countedVehicles'))}${tile(t('rep.perYear'), euro(ctx, r.year), t('rep.perVehicleAndOwnRate', { rate: fmt(rate, 2), v1: s.own.unit === 'monat' ? t('rep.month') : t('rep.year') }))}${tile(t('rep.perMonth'), euro(ctx, r.month), t('rep.ownRateWithoutSource'))}</div>`;
+  return `<div class="tiles">${tile(`${esc(name)}, ${esc(typeName(s.own.type))}`, fmt(count), t('rep.countedVehicles'))}${tile(t('rep.perYear'), euro(ctx, r.year), t('rep.perVehicleAndOwnRate', { rate: fmt(rate, 2), v1: s.own.unit === 'monat' ? t('rep.month') : t('rep.year') }))}${tile(t('rep.perMonth'), euro(ctx, r.month), t('rep.ownRateWithoutSource'))}</div>`;
 }
 
 // ======================================================================
@@ -260,11 +260,11 @@ export async function renderRegulationProfile(el, ctx) {
   const src = (e) => safeLink(ctx, e.url, e.quelle || t('rep.source'));
   const card = (p) => {
     const caps = p.caps.map(c => t('rep.inTotalCounted', { limit: fmt(c.limit), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.perOperator4', { perOperator: fmt(c.perOperator) }) : '', v3: c.districts.length ? `; ${c.districts.map(d => `${srcTxt(esc, d.label)} ${d.limit != null ? fmt(d.limit) : d.perOperator != null ? t('rep.perOperatorZone', { perOperator: fmt(d.perOperator) }) : '—'}`).join(', ')}` : '', v4: c.previous != null ? ` <span class="muted">${t('rep.fromBeforeThat', { v0: dd(c.since), previous: fmt(c.previous) })}</span>` : '', v5: badge(c.status), total: fmt(c.total), c: src(c) })).join('<br>') || `<span class="muted">${t('rep.notStored')}</span>`;
-    const fees = p.fees.map(f => `${esc([].concat(f.satz).join('–'))} ${esc(tx(f.einheit || ''))} · ${esc([].concat(f.type || []).map(typeName).join(', '))}${f.gebiet ? ` · ${srcTxt(esc, f.gebiet)}` : ''} · ${src(f)}`).join('<br>') || `<span class="muted">${t('rep.noRateWithSourceStored')}</span>`;
+    const fees = p.fees.map(f => `${esc([].concat(f.satz).join('–'))} ${esc(tx(f.einheit || ''))}, ${esc([].concat(f.type || []).map(typeName).join(', '))}${f.gebiet ? `, ${srcTxt(esc, f.gebiet)}` : ''}, ${src(f)}`).join('<br>') || `<span class="muted">${t('rep.noRateWithSourceStored')}</span>`;
     const ops = Object.entries(p.operators).sort((a, b) => TYPE_ORDER.indexOf(a[0]) - TYPE_ORDER.indexOf(b[0])).map(([ty, l]) => `${esc(typeName(ty))}: ${l.length} <span class="muted">(${l.map(esc).join(', ')})</span>`).join('<br>') || `<span class="muted">${t('rep.noVehiclesInOpenFeeds')}</span>`;
     const refs = p.refs.map(r => { const v = r.kind === 'fahrt' ? tripTxt(ctx, r) : fmt(r.wert, r.kind === 'rvd' ? 2 : 0);
-      return `${({ rvd: t('rep.tripsPerVehAndDay'), flotte: fleetLabel(r), fahrt: t('rep.trip2'), fahrten: t('rep.trips') })[r.kind]} ${esc(typeName(r.type))}: ${v} <span class="muted">(${esc(r.zeitraum || r.stand || '')})</span> · ${src(r)}`; }).join('<br>') || `<span class="muted">${t('rep.none')}</span>`;
-    return `<div class="card"><b>${esc(p.name)}${p.state ? ` <span class="muted">(${esc(p.state)})</span>` : ''}</b><div class="foot">AGS ${esc(p.ags)}${p.pop ? ` · ${t('rep.residents', { pop: fmt(p.pop) })}` : ''}</div>
+      return `${({ rvd: t('rep.tripsPerVehAndDay'), flotte: fleetLabel(r), fahrt: t('rep.trip2'), fahrten: t('rep.trips') })[r.kind]} ${esc(typeName(r.type))}: ${v} <span class="muted">(${esc(r.zeitraum || r.stand || '')})</span>, ${src(r)}`; }).join('<br>') || `<span class="muted">${t('rep.none')}</span>`;
+    return `<div class="card"><b>${esc(p.name)}${p.state ? ` <span class="muted">(${esc(p.state)})</span>` : ''}</b><div class="foot">AGS ${esc(p.ags)}${p.pop ? `, ${t('rep.residents', { pop: fmt(p.pop) })}` : ''}</div>
       <dl><dt>${t('rep.fleetCaps')}</dt><dd>${caps}${p.caps.length ? `<div><a href="#bericht" data-rp-jump="rp-caps">${t('rep.capCheckLink')}</a></div>` : ''}</dd><dt>${t('rep.fees')}</dt><dd>${fees}</dd><dt>${t('rep.operatorsAccordingToData')}</dt><dd>${ops}</dd><dt>${t('rep.referenceValues')}</dt><dd>${refs}</dd><dt>${t('rep.accidents')}</dt><dd><span class="muted">${t('rep.noMapUnfallatlasDoesNotListE')}</span></dd></dl></div>`;
   };
   el.innerHTML = title + (profs.length ? `<div class="rp-prof">${profs.map(card).join('')}</div>` : emptyBox(t('rep.noRegulationDataStored'), t('rep.referenceJsonHasNoEntryFor')))
@@ -295,7 +295,7 @@ export async function renderHotspotStability(el, ctx) {
     const obs = Object.fromEntries(days.map((d, i) => [d, edocs[i] ? R.hourQuality(edocs[i].runs, edocs[i].gapHours) : null]));
     const oh = (d) => (obs[d] ? `${fmt(obs[d].obsMin / 60, 1)} h` : '–');
     const thin = stb.pairs.some(p => !obs[p.a]?.full || !obs[p.b]?.full);
-    const tiles = `<div class="tiles">${tile(t('rep.avgOverlap'), stb.meanShare == null ? '—' : pctTxt(ctx, stb.meanShare, 0), t('rep.sharedTopCellsSmallerTopSet', { v0: thin ? ` · ${t('rep.preliminary')}` : '' }))}${tile(t('rep.dayPairs'), fmt(stb.pairs.length), t('rep.withCells', { v0: plural(stb.days.length, t('rep.day'), t('rep.days')) }))}${tile(t('rep.topCellsPerDay'), t('rep.upTo', { top: stb.top }), t('rep.onlyCellsWithTripStarts', { minCount: stb.minCount }))}</div>`;
+    const tiles = `<div class="tiles">${tile(t('rep.avgOverlap'), stb.meanShare == null ? '—' : pctTxt(ctx, stb.meanShare, 0), t('rep.sharedTopCellsSmallerTopSet', { v0: thin ? `, ${t('rep.preliminary')}` : '' }))}${tile(t('rep.dayPairs'), fmt(stb.pairs.length), t('rep.withCells', { v0: plural(stb.days.length, t('rep.day'), t('rep.days')) }))}${tile(t('rep.topCellsPerDay'), t('rep.upTo', { top: stb.top }), t('rep.onlyCellsWithTripStarts', { minCount: stb.minCount }))}</div>`;
     const rows = stb.pairs.map(p => `<tr><td>${dd(p.a)} → ${dd(p.b)}</td><td class="n">${fmt(p.nA)} / ${fmt(p.nB)}</td><td class="n">${fmt(p.common)}</td><td class="n"><b>${pctTxt(ctx, p.share, 0)}</b></td><td class="n">${pctTxt(ctx, p.jaccard, 0)}</td><td class="n">${oh(p.a)} / ${oh(p.b)}</td></tr>`).join('');
     el.innerHTML = title + tiles + (stb.pairs.length ? `<div class="tbl" style="margin-top:var(--s3)"><table><thead><tr><th>${t('rep.days')}</th><th class="n">${t('rep.topCells')}</th><th class="n">${t('rep.shared')}</th><th class="n">${t('rep.overlap')}</th><th class="n">Jaccard</th><th class="n">${t('rep.observed3')}</th></tr></thead><tbody>${rows}</tbody></table></div>` : emptyBox(t('rep.onlyOneDayWithCellsSoFar'), t('rep.overlapNeedsAtLeastTwo')))
       + `<div class="note small" style="margin-top:var(--s3)">${t('rep.measureAsInValidationBy', { v0: thin ? t('rep.caseHere') : t('rep.under20Hours') })}</div>`;
@@ -307,12 +307,6 @@ export async function renderHotspotStability(el, ctx) {
 // Prognose (forecast/latest.json, forecast/log.json): erwartete Fahrtbeginne der nächsten 24 Stunden, Selbstprüfung, Live-Abgleich
 // ======================================================================
 const FC_MIN_FLEET = 5, FC_HIGH = 1.25, FC_LOW = 0.6;
-function fcBars(ctx, series, local, width) {
-  const W = Math.max(300, Math.min(1100, Math.round(width || 720))), H = 140, pl = 4, pb = 22, pt = 8, n = series.length, max = Math.max(1, ...series), bw = (W - 2 * pl) / n, total = series.reduce((a, b) => a + b, 0), every = W < 480 ? 6 : 3;
-  const bars = series.map((v, i) => { const h = Math.max(1, (H - pt - pb) * v / max); return `<rect class="fcb" style="fill:var(--accent)" x="${(pl + i * bw + 1.5).toFixed(1)}" y="${(H - pb - h).toFixed(1)}" width="${Math.max(2, bw - 3).toFixed(1)}" height="${h.toFixed(1)}" rx="2"><title>${local[i][1]}:00 · ${ctx.fmt(v, v < 10 ? 1 : 0)}</title></rect>`; }).join('');
-  const lab = local.map(([, h], i) => (i % every === 0 ? `<text x="${(pl + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" fill="currentColor" opacity=".75" font-size="11">${h}</text>` : '')).join('');
-  return `<div class="rp-chart"><svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:${W}px" role="img" aria-label="${ctx.esc(t('fc.chartAria', { total: ctx.fmt(total) }))}">${bars}${lab}</svg></div>`;
-}
 export async function renderForecast(el, ctx) {
   if (!el) return;
   const s = prep2(el, ctx); const { state, esc, fmt } = ctx; const tok = ++s.tok;
@@ -344,33 +338,27 @@ export async function renderForecast(el, ctx) {
       + tile(t('fc.backtest'), evAvg(fc.active || 'pooled') == null ? '—' : pct(evAvg(fc.active || 'pooled')), evAvg('pooled') == null ? t('fc.backtestNone') : t('fc.backtestSub', { n: evDays.length, profile: pct(evAvg('profile')), pooled: pct(evAvg('pooled')) }))
       + tile(t('fc.weather'), fc.weather?.used ? t('fc.weatherOn') : t('fc.weatherOff'), t('fc.weatherSub', { k: fmt(wg.tempRangeK ?? 0, 1), rain: wg.rainDays ?? 0, dry: wg.dryDays ?? 0, kmin: G.wxTempRangeK ?? 5, dmin: G.wxRainDays ?? 2 }))
       + `</div>`;
-    const chart = series ? `<div style="margin-top:var(--s3)">${fcBars(ctx, series, local, el.clientWidth - 40)}<div class="rp-chart fc-wx"></div></div>` : `<div class="note" style="margin-top:var(--s3)">${t('fc.noMuni')}</div>`;
+    // S4.6: kein zweites Prognose-Diagramm im Bericht – Stunden, Wetter und Verlauf stehen unter Prognose (ein Diagramm, ein Ort)
+    const chart = series ? `<p class="note" style="margin-top:var(--s3)">${t('rep.chartInForecast', { href: '#prognose' })}</p>` : `<div class="note" style="margin-top:var(--s3)">${t('fc.noMuni')}</div>`;
     // Auslastung: erwartete Fahrtbeginne je Fahrzeug gegen den Median der Fahrzeugart (Gruppen ab FC_MIN_FLEET Fahrzeugen)
     const rows = Object.entries(fc.groups || {}).map(([k, g]) => { const [a, op, ty] = k.split('|'); return { k, ags: a, op, ty, fleet: g.fleet, starts: g.start.reduce((x, y) => x + y, 0), perVeh: g.perVeh }; });
     const med = {}; for (const key of new Set(rows.map(r => `${r.op}|${r.ty}`))) { const v = rows.filter(r => `${r.op}|${r.ty}` === key && r.fleet >= FC_MIN_FLEET && r.perVeh != null).map(r => r.perVeh).sort((a, b) => a - b); if (v.length >= 3) med[key] = v[Math.floor(v.length / 2)]; }
     for (const r of rows) { r.vs = med[`${r.op}|${r.ty}`] && r.fleet >= FC_MIN_FLEET && r.perVeh != null ? r.perVeh / med[`${r.op}|${r.ty}`] : null; r.cls = r.vs == null ? null : r.vs >= FC_HIGH ? 'high' : r.vs <= FC_LOW ? 'low' : 'mid'; }
     const clsTxt = (c) => (c === 'high' ? `<span class="rp-status near"><i aria-hidden="true">▲</i>${t('fc.high')}</span>` : c === 'low' ? `<span class="rp-status over"><i aria-hidden="true">▼</i>${t('fc.low')}</span>` : c === 'mid' ? t('fc.mid') : '–');
-    const line = (r, withMuni) => `<tr><td>${withMuni ? `${esc(ctx.muniName?.(r.ags) || state.latest?.municipalities?.[r.ags]?.name || r.ags)} · ` : ''}${esc(r.op)} · ${esc(typeName(r.ty))}</td><td class="n">${fmt(r.fleet, 0)}</td><td class="n">${fmt(r.starts, 0)}</td><td class="n">${r.perVeh == null ? '–' : fmt(r.perVeh, 1)}</td><td class="n">${r.vs == null ? '–' : `${fmt(r.vs, 2)}×`}</td><td>${clsTxt(r.cls)}</td></tr>`;
+    const line = (r, withMuni) => `<tr><td>${withMuni ? `${esc(ctx.muniName?.(r.ags) || state.latest?.municipalities?.[r.ags]?.name || r.ags)}, ` : ''}${esc(r.op)}, ${esc(typeName(r.ty))}</td><td class="n">${fmt(r.fleet, 0)}</td><td class="n">${fmt(r.starts, 0)}</td><td class="n">${r.perVeh == null ? '–' : fmt(r.perVeh, 1)}</td><td class="n">${r.vs == null ? '–' : `${fmt(r.vs, 2)}×`}</td><td>${clsTxt(r.cls)}</td></tr>`;
     const thead = (first) => `<thead><tr><th>${first}</th><th class="n">${t('fc.colFleet')}</th><th class="n">${t('fc.colStarts')}</th><th class="n">${t('fc.colPerVeh')}</th><th class="n">${t('fc.colVs')}</th><th>${t('fc.colClass')}</th></tr></thead>`;
     let body = '';
     if (ags) {
       const mine = rows.filter(r => r.ags === ags).sort((a, b) => b.starts - a.starts);
-      if (mine.length) body = `<h3 style="margin:var(--s4) 0 var(--s1);font-size:14px">${t('fc.tableTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.tableTitle'))}"><table>${thead(t('fc.colOperator'))}<tbody>${mine.map(r => line(r, false)).join('')}</tbody></table></div>`;
+      if (mine.length) body = `<h3 style="margin:var(--s4) 0 var(--s1);font-size:.875rem">${t('fc.tableTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.tableTitle'))}"><table>${thead(t('fc.colOperator'))}<tbody>${mine.map(r => line(r, false)).join('')}</tbody></table></div>`;
     } else {
       const top = Object.entries(fc.municipalities || {}).map(([a, v]) => [a, v.reduce((x, y) => x + y, 0)]).sort((a, b) => b[1] - a[1]).slice(0, 8);
       const big = rows.filter(r => r.fleet >= 20 && r.vs != null), hi = [...big].sort((a, b) => b.vs - a.vs).slice(0, 8), lo = [...big].sort((a, b) => a.vs - b.vs).slice(0, 8);
-      body = `<div class="grid" style="margin-top:var(--s4)"><div class="c4"><h3 style="margin:0 0 var(--s1);font-size:14px">${t('fc.topMunis')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topMunis'))}"><table><tbody>${top.map(([a, v]) => `<tr><td>${esc(ctx.muniName?.(a) || state.latest?.municipalities?.[a]?.name || a)}</td><td class="n">${fmt(v, 0)}</td></tr>`).join('')}</tbody></table></div></div>`
-        + `<div class="c8"><h3 style="margin:0 0 var(--s1);font-size:14px">${t('fc.topHigh', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topHigh', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${hi.map(r => line(r, true)).join('')}</tbody></table></div>`
-        + `<h3 style="margin:var(--s3) 0 var(--s1);font-size:14px">${t('fc.topLow', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topLow', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${lo.map(r => line(r, true)).join('')}</tbody></table></div></div></div>`;
+      body = `<div class="grid" style="margin-top:var(--s4)"><div class="c4"><h3 style="margin:0 0 var(--s1);font-size:.875rem">${t('fc.topMunis')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topMunis'))}"><table><tbody>${top.map(([a, v]) => `<tr><td>${esc(ctx.muniName?.(a) || state.latest?.municipalities?.[a]?.name || a)}</td><td class="n">${fmt(v, 0)}</td></tr>`).join('')}</tbody></table></div></div>`
+        + `<div class="c8"><h3 style="margin:0 0 var(--s1);font-size:.875rem">${t('fc.topHigh', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topHigh', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${hi.map(r => line(r, true)).join('')}</tbody></table></div>`
+        + `<h3 style="margin:var(--s3) 0 var(--s1);font-size:.875rem">${t('fc.topLow', { min: 20 })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('fc.topLow', { min: 20 }))}"><table>${thead(t('fc.colOperator'))}<tbody>${lo.map(r => line(r, true)).join('')}</tbody></table></div></div></div>`;
     }
     el.innerHTML = title + badge + tiles + chart + body + `<div class="note small" style="margin-top:var(--s3)">${t('fc.note', { min: FC_MIN_FLEET })}</div>`;
-    // Wetter der nächsten 24 Stunden unter den Balken (gleiche x-Achse wie fcBars: W, Rand 4)
-    const wxBox = el.querySelector('.fc-wx');
-    if (wxBox && series && Array.isArray(local)) weatherFor(local.map(([d, h]) => [d, h]), ags, ctx.getJson, ctx.CFG.DATA).then((vals) => {
-      if (!wxBox.isConnected || tok !== s.tok) return; const W = Math.max(300, Math.min(1100, Math.round(el.clientWidth - 40 || 720)));
-      const svg = weatherSvg(vals, { W, pl: 4, pr: 4, hours: local.map(([, h]) => h), esc, svgAttrs: `width="100%" style="display:block;max-width:${W}px"` });
-      wxBox.innerHTML = svg ? `<style>${WX_CSS}.fc-wx text{fill:currentColor;opacity:.75;font-size:11px}.fc-wx .gl{stroke:var(--line);stroke-width:1}.fc-wx rect.hit{fill:transparent}</style>${svg}<div class="note small">${t('wx.legend', { scope: scopeTxt })}</div>` : '';
-    });
   } catch (e) { console.error('Prognose', e); if (tok === s.tok) el.innerHTML = title + emptyBox(t('rep.notComputable'), t('fc.noneHint')); }
   finally { if (tok === s.tok) el.classList.remove('rp-busy'); }
 }
@@ -391,7 +379,7 @@ export function mbAmpelHtml(ctx) {
     .sort((a, b) => (W0[b[1].level] || 0) - (W0[a[1].level] || 0) || (b[1].checks?.rides || 0) - (a[1].checks?.rides || 0));
   const shown = rows.filter(([, v]) => v.level !== 'ok').slice(0, 60), n = (lv) => rows.filter(([, v]) => v.level === lv).length, R0 = ec.rules || {};
   const body = shown.map(([k, v]) => { const [a, op, ty] = k.split('|'); const c = v.checks || {};
-    return `<tr><td><span class="op"><i style="background:${ctx.opColor(op)}"></i>${esc(op)}</span><div class="sub-line">${esc(typeName(ty))} · ${esc(ctx.muniName(a))}</div></td><td>${mbLevel(v.level)}</td><td class="n">${mbNum(c.rides)}</td><td class="n">${mbPct(c.pickupShare)}<div class="sub-line">r ${mbNum(c.r, 2)}</div></td><td class="n">${mbNum(c.se, 2)}</td><td class="n">${mbNum(c.swapsPer100, 1)}</td><td class="small">${esc(mbChecksText(c))}</td></tr>`; }).join('');
+    return `<tr><td><span class="op"><i style="background:${ctx.opColor(op)}"></i>${esc(op)}</span><div class="sub-line">${esc(typeName(ty))}, ${esc(ctx.muniName(a))}</div></td><td>${mbLevel(v.level)}</td><td class="n">${mbNum(c.rides)}</td><td class="n">${mbPct(c.pickupShare)}<div class="sub-line">r ${mbNum(c.r, 2)}</div></td><td class="n">${mbNum(c.se, 2)}</td><td class="n">${mbNum(c.swapsPer100, 1)}</td><td class="small">${esc(mbChecksText(c))}</td></tr>`; }).join('');
   const rules = t('mb.ampelRules', { pw: mbPct(R0.pickupWarn ?? 0.1), pb: mbPct(R0.pickupBad ?? 0.2), r: mbNum(R0.pickupR ?? 0.5, 1), lo: mbNum(R0.seWarn?.[0] ?? 0.7, 1), hi: mbNum(R0.seWarn?.[1] ?? 1.3, 1), sw: mbNum(R0.swapZeroRides ?? 300), min: mbNum(R0.minRides ?? 50) });
   const old = ec.ruleCurrent === false ? ` ${t('mb.ampelOldRule', { rule: esc(mbRules(ec.dayRules)), now: esc(ec.ruleNow || '–'), n: rows.filter(([, v]) => v.was === 'bad').length })}` : '';
   return h + `<div class="muted small" style="margin-bottom:var(--s2)">${t('mb.ampelSummary', { red: n('bad'), yellow: n('warn'), ok: n('ok') })}${old} ${rules}</div>`

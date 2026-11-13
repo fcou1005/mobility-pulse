@@ -6,18 +6,19 @@
 // Karten ohne anklickbare Layer (Zellraster) geben eine eigene Liste über opts.items. Unter der Karte steht ein kurzer Hinweis (DE/EN),
 // verknüpft per aria-describedby.
 import { t, onLang } from './i18n.js';
+import { NEUTRAL } from './tokens.js';
 
 export const MAX_ITEMS = 500;
 const STYLE = `
 .leaflet-container.mk-map:focus,.leaflet-container.mk-map:focus-visible{outline:none}
 .leaflet-container.mk-map:focus-visible::after{content:"";position:absolute;inset:0;z-index:1001;pointer-events:none;border-radius:inherit;box-shadow:inset 0 0 0 3px var(--accent),inset 0 0 0 5px var(--panel)}
-.mk-hint{margin:var(--s2) 0 0;font-size:12px;line-height:1.5;color:var(--muted);max-width:96ch}
-.mk-hint kbd{display:inline-block;min-width:1.6em;padding:0 4px;font:500 11px/16px var(--mono);text-align:center;color:var(--fg-2);background:var(--panel-2);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px}
+.mk-hint{margin:var(--s2) 0 0;font-size:.75rem;line-height:1.5;color:var(--muted);max-width:96ch}
+.mk-hint kbd{display:inline-block;min-width:1.6em;padding:0 4px;font:500 .75rem/16px var(--mono);text-align:center;color:var(--fg-2);background:var(--panel-2);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px}
 .mk-live{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 [hidden]+.mk-hint{display:none}
 @media (hover:none) and (pointer:coarse){.mk-hint{display:none}}
 @media print{.mk-hint{display:none}}
-.mk-wheel{position:absolute;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;pointer-events:none;background:rgba(0,0,0,.35);color:#fff;font:500 15px/1.4 var(--sans,system-ui);opacity:0;transition:opacity .2s}
+.mk-wheel{position:absolute;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;pointer-events:none;background:rgba(0,0,0,.35);color:${NEUTRAL.white};font:500 15px/1.4 var(--sans,system-ui);opacity:0;transition:opacity .2s}
 .mk-wheel.on{opacity:1}
 @media (prefers-reduced-motion:reduce){.mk-wheel{transition:none}}`;
 let styled = false, seq = 0;
@@ -134,7 +135,7 @@ export function mapKeys(map, opts = {}) {
   }
   function ring(it) {
     if (it.ring === false) return;
-    const fg = cssVar('--fg', '#111820'), bg = cssVar('--panel', '#ffffff'), o = { pane: 'mk-focus', renderer, interactive: false, fill: false };
+    const fg = cssVar('--fg', NEUTRAL.ink), bg = cssVar('--panel', NEUTRAL.white), o = { pane: 'mk-focus', renderer, interactive: false, fill: false };
     const l = it.layer, r = Math.min(40, radiusOf(l) + 6);
     if (l instanceof L.Polygon) { const s = l.getLatLngs(); rings.push(L.polygon(s, { ...o, color: bg, weight: 6, opacity: 0.85 }), L.polygon(s, { ...o, color: fg, weight: 2.5 })); }
     rings.push(L.circleMarker(it.latlng, { ...o, radius: r, color: bg, weight: 6, opacity: 0.85 }), L.circleMarker(it.latlng, { ...o, radius: r, color: fg, weight: 2.5 }));

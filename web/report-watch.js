@@ -7,6 +7,8 @@ import { STATUS_DEF, WD, WDL, allDocs, bindOnce, dd, dm, emptyBox, fetchJson, fi
 import { capBlock, capInfoTable } from './report-maps.js';
 import { prep2 } from './report-avail.js';
 import { DERIVED_TXT_DEF, mbAmpelHtml } from './report-more.js';
+import { ZONE_SERIES } from './tokens.js';
+import { chartSpec } from './charttip.js';
 
 /**
  * Obergrenzen-Wächter: Gemeinden mit Eintrag in reference.json → obergrenzen (bei 'DE' alle), Bestand aus latest.json groups.
@@ -48,7 +50,7 @@ export async function renderCaps(el, ctx) {
       const total = Object.entries(state.latest.groups || {}).filter(([k]) => k.startsWith(`${ags}|`) && k.endsWith('|scooter')).reduce((a, [, g]) => a + (g.total || 0), 0);
       const rep = repFor(ags, 'scooter');
       body = `<div class="note">${t('rep.noFleetCapIsStoredFor', { v0: esc(m.name || ags), v1: [...new Set(R.capsCheck(ref, state.latest.groups, { asOf: state.latest.at || Date.now() }).filter(c => c.hasRate).map(c => c.ort))].map(esc).join(', ') || t('rep.none') })}</div>
-        <div class="tiles" style="margin-top:var(--s3)">${tile(t('rep.eScootersPer1000Residents'), num(ctx, m.pop ? (total / m.pop) * 1000 : null, 1), m.pop ? t('rep.vehiclesResidents', { total: ctx.fmt(total), pop: ctx.fmt(m.pop) }) : t('rep.populationMissing'))}${tile(t('rep.tripsPer1000ResidentsAndDayMeasured'), num(ctx, rep?.totals.per1000Rides, 1), rep ? t('rep.eScootersExtrapolated', { v0: rep.quality.prelim ? ` · ${t('rep.preliminary')}` : '' }) : t('rep.noDailyFilesYet2'))}</div>`;
+        <div class="tiles" style="margin-top:var(--s3)">${tile(t('rep.eScootersPer1000Residents'), num(ctx, m.pop ? (total / m.pop) * 1000 : null, 1), m.pop ? t('rep.vehiclesResidents', { total: ctx.fmt(total), pop: ctx.fmt(m.pop) }) : t('rep.populationMissing'))}${tile(t('rep.tripsPer1000ResidentsAndDayMeasured'), num(ctx, rep?.totals.per1000Rides, 1), rep ? t('rep.eScootersExtrapolated', { v0: rep.quality.prelim ? `, ${t('rep.preliminary')}` : '' }) : t('rep.noDailyFilesYet2'))}</div>`;
     }
     el.innerHTML = title + body + defn;
   } catch (e) { console.error('Obergrenzen', e); if (tok === s.tok) el.innerHTML = title + emptyBox(t('rep.checkNotPossible'), t('rep.dataNotLoadableTryAgainLater')); }
@@ -62,7 +64,7 @@ const fieldName = (hm) => (hm?.field === 'end' ? t('rep.tripEnds') : t('rep.trip
 function weekLabel(ctx, hm, wd, h) {
   const c = hm.cells[wd][h]; const when = t('rep.text', { v0: WDL()[wd], h, v2: h + 1 }); const F = fieldName(hm);
   if (c.mean != null && R.suppressed(c.raw)) return { value: `< ${R.MIN_COUNT} ${F}`, lines: [when, t('rep.suppressedPrivacyThreshold', { v0: plural(c.n, t('rep.day'), t('rep.days')) })] };
-  if (c.mean != null) return { value: `${ctx.fmt(c.mean, c.mean < 10 ? 1 : 0)} ${F}/h`, lines: [when, t('rep.meanOf', { v0: plural(c.n, t('rep.day'), t('rep.days3')), v1: c.dates.map(d => dm(d)).join(', '), v2: c.gapDays ? ` · ${t('rep.withGapLeftOut', { v0: plural(c.gapDays, t('rep.day'), t('rep.days')) })}` : '' })] };
+  if (c.mean != null) return { value: `${ctx.fmt(c.mean, c.mean < 10 ? 1 : 0)} ${F}/h`, lines: [when, t('rep.meanOf', { v0: plural(c.n, t('rep.day'), t('rep.days3')), v1: c.dates.map(d => dm(d)).join(', '), v2: c.gapDays ? `, ${t('rep.withGapLeftOut', { v0: plural(c.gapDays, t('rep.day'), t('rep.days')) })}` : '' })] };
   const why = !hm.days[wd] ? t('rep.noObservedDay') : c.gapDays ? t('rep.gapRun2', { v0: plural(c.gapDays, t('rep.day'), t('rep.days')) }) : c.thinDays ? t('rep.observedUnderMin', { HEAT_MIN_OBS: R.HEAT_MIN_OBS }) : t('rep.notObserved');
   return { value: t('rep.notMeasured'), lines: [when, why] };
 }
@@ -121,19 +123,21 @@ function zoneMap(el, s, zones, ctx) {
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.zmap);
     mapKeys(s.zmap); // Tastatur: N/P durch die Teilgebiete im Ausschnitt (web/mapkeys.js)
   }
-  const pal = ['#0f766e', '#c2410c', '#6d28d9', '#a16207', '#be185d', '#1d4ed8'];
+  const pal = ZONE_SERIES;
   const layers = zones.filter(z => z.polys?.length).map((z, i) => L.polygon(z.polys.map(rs => rs.map(r => r.map(([x, y]) => [y, x]))), { color: pal[i % pal.length], weight: 2.5, dashArray: '7 6', fillOpacity: 0.06 })
     .bindTooltip(`<b>${ctx.esc(z.name)}</b><br>${t('rep.zwAssumed', { m: ctx.fmt(z.accuracyM || 0) })}`, { sticky: true }).addTo(s.zmap));
   s.zmap.fitBounds(L.featureGroup(layers).getBounds(), { padding: [12, 12] });
   setTimeout(() => s.zmap?.invalidateSize(), 0);
 }
+const dayLabel = (d) => (/^\d{4}-\d{2}-\d{2}/.test(String(d)) ? `${String(d).slice(8, 10)}.${String(d).slice(5, 7)}.` : String(d));
 function sparkline(ctx, series) {
   const pts = (series || []).filter(([, v]) => Number.isFinite(v));
   if (pts.length < 2) return '<span class="muted">–</span>';
   const W = 96, H = 22, P = 3, vs = pts.map(([, v]) => v), lo = Math.min(...vs), hi = Math.max(...vs), sp = hi - lo || 1;
   const xy = pts.map(([, v], i) => [P + (W - 2 * P) * i / (pts.length - 1), H - P - (H - 2 * P) * (v - lo) / sp]);
   const label = t('rep.zwSpark', { n: pts.length, lo: ctx.fmt(lo), hi: ctx.fmt(hi), last: ctx.fmt(vs[vs.length - 1]) });
-  return `<svg class="rp-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(label)}"><title>${ctx.esc(label)}</title><polyline points="${xy.map(p => p.map(x => x.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${xy[xy.length - 1][0].toFixed(1)}" cy="${xy[xy.length - 1][1].toFixed(1)}" r="2.5" fill="var(--accent)"/></svg>`;
+  const cs = chartSpec({ n: pts.length, x: (i) => xy[i][0], top: 0, bottom: H, head: (i) => dayLabel(pts[i][0]), rows: (i) => [{ color: 'var(--accent)', label: t('rep.zwSparkRow'), value: ctx.fmt(vs[i]) }] }, { focus: false });
+  return `<svg class="rp-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(label)}" ${cs.attrs}><polyline points="${xy.map(p => p.map(x => x.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${xy[xy.length - 1][0].toFixed(1)}" cy="${xy[xy.length - 1][1].toFixed(1)}" r="2.5" fill="var(--accent)"/></svg>`;
 }
 export async function renderZoneWatch(el, ctx) {
   if (!el) return;
@@ -150,7 +154,7 @@ export async function renderZoneWatch(el, ctx) {
     const rows = z.rows.map(r => `<tr${r.op === '*' ? ' class="rp-sum"' : ''}><td>${opCell(r.op)}</td><td class="n">${num(r.now)}${r.avail != null && r.avail !== r.now ? `<div class="sub-line">${t('rep.zwAvail', { v: esc(fmt(r.avail)) })}</div>` : ''}</td>
       <td class="n">${r.todayMin == null ? '<span class="muted">–</span>' : `${esc(fmt(r.todayMin))}–${esc(fmt(r.todayMax))}`}</td><td class="n">${num(r.mean7)}</td><td class="n">${num(r.max30)}</td>${trend ? `<td>${sparkline(ctx, r.series)}</td>` : ''}</tr>`).join('');
     const city0 = z.ags ? (ctx.muniName?.(z.ags) || z.ags) : '', city = city0 && !z.name.startsWith(city0) ? city0 : ''; // „Köln Innenstadt · Köln“ vermeiden
-    return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">· ${esc(city)}</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th>${trend ? `<th>${t('rep.zwTrend')}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
+    return `<h3 class="rp-h3">${esc(z.name)}${city ? ` <span class="muted">(${esc(city)})</span>` : ''}</h3>${z.assumed ? `<div class="small muted" style="margin:-4px 0 var(--s2)"><span class="rp-status hint"><i aria-hidden="true">i</i>${t('rep.zwAssumed', { m: fmt(z.accuracyM || 0) })}</span>${z.description ? ` <span translate="no">${esc(z.description)}</span>` : ''}</div>` : ''}${z.rows.length ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.zwNow')}</th><th class="n">${t('rep.zwToday')}</th><th class="n">${t('rep.zwMean7')}</th><th class="n">${t('rep.zwMax30')}</th>${trend ? `<th>${t('rep.zwTrend')}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${t('rep.zwNone')}</div>`}`;
   }).join('');
   const shown = shapes.filter(z => !z.rest && zones.some(x => x.id === z.id));
   s.zmap?.remove(); s.zmap = null;
@@ -240,7 +244,7 @@ export async function renderPriceLog(el, ctx) {
   const rows = list.slice(0, 200).map(e => `<tr><td class="n">${e.at ? stamp(e.at) : esc(e.day || '–')}</td><td><span class="op"><i style="background:${ctx.opColor(e.operator || '')}"></i>${esc(e.operator || '–')}</span></td><td class="small">${area(e)}</td><td>${esc(e.plan || '–')}</td><td>${esc(FIELD[e.field] || FIELD[e.kind] || e.field || e.kind || t('rep.change'))}${e.note ? `<div class="sub-line">${esc(e.note)}</div>` : ''}</td><td class="n">${esc(valTxt(ctx, e.from))} → <b>${esc(valTxt(ctx, e.to))}</b></td></tr>`).join('');
   const at = log.updatedAt || log.at;
   el.innerHTML = title + (rows ? `<div class="tbl"><table><thead><tr><th class="n">${t('rep.detected')}</th><th>${t('rep.operator2')}</th><th>${t('rep.area')}</th><th>${t('rep.tariff')}</th><th>${t('rep.what')}</th><th class="n">${t('rep.oldNew')}</th></tr></thead><tbody>${rows}</tbody></table></div>` : emptyBox(t('rep.noPriceChangeInFilter'), all.length ? t('rep.inTotalWidenAreaOrOperator', { v0: plural(all.length, t('rep.change'), t('rep.changes')) }) : t('rep.soFarCollectorHasNotDetected')))
-    + `<div class="muted small" style="margin-top:var(--s2)">${t('rep.amountsInTariffSCurrencyAsIn', { v0: list.length > 200 ? `${t('rep.olderHidden', { v0: list.length - 200 })} · ` : '', v1: at ? ` · ${t('rep.asOf3', { at: stamp(at) })}` : '' })}</div>`;
+    + `<div class="muted small" style="margin-top:var(--s2)">${t('rep.amountsInTariffSCurrencyAsIn', { v0: list.length > 200 ? `${t('rep.olderHidden', { v0: list.length - 200 })}, ` : '', v1: at ? `, ${t('rep.asOf3', { at: stamp(at) })}` : '' })}</div>`;
 }
 
 // ======================================================================
@@ -257,7 +261,7 @@ export function renderFeedChecks(el, ctx) {
   if (!checked.length) { el.innerHTML = title + emptyBox(state.latest?.sources?.some(r => r.checks) ? t('rep.noCheckedSourceInFilter') : t('rep.noFeedCheckInDataSnapshotYet'), state.latest?.sources?.some(r => r.checks) ? t('rep.widenAreaOrOperatorAbove') : t('rep.checkAppearsWithNext')); return; }
   checked.sort((a, b) => b.c.errors - a.c.errors || b.c.warnings - a.c.warnings || String(a.r.name || a.r.id).localeCompare(String(b.r.name || b.r.id), 'de'));
   const ok = checked.filter(x => !x.c.errors && !x.c.warnings).length;
-  const rows = checked.slice(0, 300).map(({ r, c }) => `<tr><td>${/^https?:/i.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a>` : esc(r.name || r.id)}<div class="sub-line">${esc(r.operator || '')}${r.version ? ` · GBFS ${esc(r.version)}` : ''}${r.status === 'duplicate' ? ` · ${t('rep.duplicateNotCounted')}` : ''}${r.mirror ? ` · ${t('rep.mirrorOf', { of: esc(r.mirror.of), n: ctx.fmt(r.mirror.dropped) })}` : ''}${r.batteryScale?.suspect ? ` · ${t('rep.batteryScaleSuspect', { p99: ctx.fmt(r.batteryScale.p99) })}` : ''}${r.rangeCheck?.derived ? ` · ${t('rep.rangeDerived', { km: r.rangeCheck.types.filter(x => x.derived).map(x => ctx.fmt(x.kmPer100, 1)).join(' / ') })}` : ''}</div></td>
+  const rows = checked.slice(0, 300).map(({ r, c }) => `<tr><td>${/^https?:/i.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name || r.id)}</a>` : esc(r.name || r.id)}<div class="sub-line">${esc(r.operator || '')}${r.version ? `, GBFS ${esc(r.version)}` : ''}${r.status === 'duplicate' ? `, ${t('rep.duplicateNotCounted')}` : ''}${r.mirror ? `, ${t('rep.mirrorOf', { of: esc(r.mirror.of), n: ctx.fmt(r.mirror.dropped) })}` : ''}${r.batteryScale?.suspect ? `, ${t('rep.batteryScaleSuspect', { p99: ctx.fmt(r.batteryScale.p99) })}` : ''}${r.rangeCheck?.derived ? `, ${t('rep.rangeDerived', { km: r.rangeCheck.types.filter(x => x.derived).map(x => ctx.fmt(x.kmPer100, 1)).join(' / ') })}` : ''}</div></td>
     <td class="n">${c.errors ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${c.errors}</span>` : '<span class="muted">0</span>'}</td><td class="n">${c.warnings ? `<span class="rp-status near"><i aria-hidden="true">!</i>${c.warnings}</span>` : '<span class="muted">0</span>'}</td>
     <td class="small">${c.findings.slice(0, 3).map(f => `<div>${f.level === 'error' ? t('rep.error') : t('rep.warning')}: ${esc(tx(f.text)).slice(0, 160)}</div>`).join('') || `<span class="muted">${t('rep.noFindings')}</span>`}${Math.max(c.findings.length, c.errors + c.warnings) > 3 ? `<div class="muted">${t('rep.more', { v0: Math.max(c.findings.length, c.errors + c.warnings) - 3 })}</div>` : ''}</td></tr>`).join('');
   el.innerHTML = title + `<div class="muted small" style="margin-bottom:var(--s2)">${t('rep.checkedWithoutFindingsWith', { v0: plural(checked.length, t('rep.source'), t('rep.sources')), ok, length: checked.filter(x => x.c.errors).length })}</div>

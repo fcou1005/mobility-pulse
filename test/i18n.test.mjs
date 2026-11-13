@@ -27,9 +27,9 @@ assert(used.size > 1900 && !missing.length, `${used.size} verwendete Schlüssel 
   const keysOf = (f) => [...readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8').matchAll(/\bt(?:In)?\(\s*(?:[a-z]+\s*,\s*)?['"`]([a-zA-Z][\w$-]*(?:\.[\p{L}\w$-]+)+)['"`]/gu)].map(m => m[1]);
   const core = new Set([...readdirSync(new URL('../web/', import.meta.url)).filter(f => /^app(-[a-z]+)?\.js$/.test(f)), 'ui-shared.js', 'i18n.js', 'mapkeys.js', 'weather.js'].flatMap(keysOf)); // S3.9: app.js in app-*.js geschnitten
   for (const m of readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) core.add(m[1]);
-  const MOD = { 'ops.js': 'ops', 'report.js': 'report', 'forecast.js': 'forecast', 'spots.js': 'spots', 'flows.js': 'flows', 'compare.js': 'compare', 'coverage.js': 'coverage', 'status.js': 'status' };
+  const MOD = { 'ops.js': 'ops', 'report.js': 'report', 'forecast.js': 'forecast', 'spots.js': 'spots', 'flows.js': 'flows', 'compare.js': 'compare', 'coverage.js': 'coverage', 'status.js': 'status', 'stadt.js': 'stadt' };
   const wrong = []; for (const [f, area] of Object.entries(MOD)) for (const k of keysOf(f)) { const a = core.has(k) ? 'core' : areaOfKey(k); if (a !== 'core' && a !== area) wrong.push(`${f}: ${k} (${a})`); }
-  assert(!wrong.length && Object.keys(AREAS).length === 8, `Bereiche: Ansichtsmodule nutzen nur core und den eigenen Bereich${wrong.length ? ' – ' + wrong.slice(0, 5).join(', ') : ''}`);
+  assert(!wrong.length && Object.keys(AREAS).length === 9, `Bereiche: Ansichtsmodule nutzen nur core und den eigenen Bereich${wrong.length ? ' – ' + wrong.slice(0, 5).join(', ') : ''}`);
 }
 // Glossar: Fachbegriffe der englischen Oberfläche durchgängig
 const enAll = Object.values(DICT.en).join(' \n ');
@@ -39,10 +39,10 @@ assert(!/\b(Umsetzung|Akkutausch|Sperrquote|Obergrenze|Gemeinde|Sammler|Kennungs
 
 // ---------- t(), Platzhalter, Rückfall ----------
 assert(I.lang() === 'de' && I.fmtLocale() === 'de-DE' && I.t('app.copyLink') === 'Link kopieren', 'ohne Wahl: Deutsch (Node ohne localStorage/location)');
-assert(I.t('app.sourcesMunicipalities', { v0: '1.234', v1: 5 }) === '1.234 Quellen · 5 Gemeinden' && I.t('gibt.es.nicht') === 'gibt.es.nicht', 'Platzhalter ersetzt; unbekannter Schlüssel liefert den Schlüssel');
+assert(I.t('app.sourcesMunicipalities', { v0: '1.234', v1: 5 }) === '1.234 Quellen, 5 Gemeinden' && I.t('gibt.es.nicht') === 'gibt.es.nicht', 'Platzhalter ersetzt; unbekannter Schlüssel liefert den Schlüssel');
 const calls = []; const off = I.onLang((l) => calls.push(l));
 assert(I.setLang('en') === true && I.lang() === 'en' && I.fmtLocale() === 'en-GB' && calls.join() === 'en' && I.t('app.copyLink') === 'Copy link', 'setLang: Sprache, Gebietsschema, Abonnent');
-assert(I.t('app.sourcesMunicipalities', { v0: '1,234', v1: 5 }) === '1,234 sources · 5 municipalities' && I.tIn('de', 'app.copyLink') === 'Link kopieren' && I.lang() === 'en', 'Englisch mit Platzhaltern; tIn liest die andere Sprache ohne Wechsel');
+assert(I.t('app.sourcesMunicipalities', { v0: '1,234', v1: 5 }) === '1,234 sources, 5 municipalities' && I.tIn('de', 'app.copyLink') === 'Link kopieren' && I.lang() === 'en', 'Englisch mit Platzhaltern; tIn liest die andere Sprache ohne Wechsel');
 assert(I.numFmt(1).format(1234.5) === '1,234.5' && I.numFmt(0, 'de').format(1234.5) === '1.235' && I.decimalSep() === '.' && I.decimalSep('de') === ',', 'Zahlen je Sprache: 1,234.5 (en-GB) gegen 1.235 (de-DE)');
 const d = new Date('2026-11-01T15:05:00Z');
 assert(I.dateFmt({ dateStyle: 'medium', timeZone: 'Europe/Berlin' }).format(d) === '1 Nov 2026' && I.dateFmt({ dateStyle: 'medium', timeZone: 'Europe/Berlin' }, 'de').format(d) === '01.11.2026' && I.dateFmt({ hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(d) === '16:05',

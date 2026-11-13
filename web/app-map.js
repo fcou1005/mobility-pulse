@@ -12,6 +12,8 @@ import { rangeOnly } from './app-energy.js';
 import { renderSupplyLayer } from './app-sources.js';
 import { groupInScope, loadCells, loadOnce, loadUsageIndex, scopeState } from './app-usage.js';
 import { CELL_LAT, CELL_LON, cellCenterOf, cellsForScope } from './app-calib.js';
+import { ZONE, moreColor, themed } from './tokens.js';
+import { stationName } from './ui-shared.js';
 
 // ---------- Karte ----------
 export const REDUCED = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -71,6 +73,7 @@ export function renderMap() {
   const { vehicles, stations } = src || { vehicles: [], stations: [] };
   const legend = [];
   const inScope = state.scope !== 'DE';
+  setMapOps(vehicles); // S4.3: auf der Karte höchstens drei Farben (zwei Anbieter + „Weitere“)
   if (src) {
     $('#map-title').textContent = t('app.map', { v0: scopeLabel() });
     const step = Math.max(1, Math.ceil(vehicles.length / CFG.MAX_POINTS));
@@ -78,16 +81,16 @@ export function renderMap() {
     if (layerMode === 'points') {
       if ($('#chk-vehicles').checked) for (let i = 0; i < vehicles.length; i += step) {
         const v = vehicles[i]; drawn++;
-        const col = v.disabled ? DISABLED_COL : opColor(v.operator), dim = state.mapFocus && state.mapFocus !== v.operator; // Legende: ein Anbieter hervorgehoben
+        const col = v.disabled ? DISABLED_COL : mapColor(v.operator), dim = state.mapFocus && state.mapFocus !== v.operator; // Legende: ein Anbieter hervorgehoben
         L.circleMarker([v.lat, v.lon], { radius: 4.5, weight: 2, color: bg, fillColor: col, fillOpacity: dim ? .12 : v.disabled ? .7 : .95, opacity: dim ? .2 : 1 })
-          .bindPopup(`<b>${esc(v.operator)}</b> · ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? ` · ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? ` · ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? ` · ${t(v.idleCensored ? 'trk.idleForAtLeast' : 'app.idleFor', { v0: idleClassText(v.idleMin, { en: lang() === 'en', atLeast: v.idleCensored }) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : ` · ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? ` · ${t('app.idReused')}` : ''}${src === coll ? ` · ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
+          .bindPopup(`<b>${esc(v.operator)}</b>, ${esc(TYPE[v.type] || v.type)}<br>${v.disabled ? t('app.disabled3') : v.reserved ? t('common.reservedLc') : t('app.available')}${v.batteryPct != null ? `, ${t('app.battery', { batteryPct: fmt(v.batteryPct) })}` : ''}${v.rangeKm != null ? `, ${fmt(v.rangeKm, 1)} km` : ''}${v.idleMin != null ? `, ${t(v.idleCensored ? 'trk.idleForAtLeast' : 'app.idleFor', { v0: idleClassText(v.idleMin, { en: lang() === 'en', atLeast: v.idleCensored }) })}` : ''}<br><span class="muted">${t('app.position', { v0: ageText(v.positionAgeMs), v1: isClient() ? '' : `, ${v.geoOrigin === 'station' ? t('app.stationPositionAsFallback') : 'GPS'}${v.reusedId ? `, ${t('app.idReused')}` : ''}${src === coll ? `, ${t('app.collectorSnapshot')}` : ''}` })}</span>`).addTo(L_.vehicles);
       }
       if ($('#chk-stations').checked) for (const s of stations) {
         // gemeldet leer, aber Fahrzeuge desselben Anbieters ≤ 50 m daneben: faktisch versorgt. Leer = gestrichelter Rand ohne Füllung (Form statt
         // eigener Farbe: die Anbieterfarbe bleibt die Identität, die Warnfarbe kollidierte mit Dott)
         const near = s.nearbyVehicles || 0, empty = s.renting !== false && (s.bookable ?? 0) === 0 && !near, dim = state.mapFocus && state.mapFocus !== s.operator;
-        L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: opColor(s.operator), opacity: dim ? .2 : 1, dashArray: empty ? '3 3' : null, fillOpacity: empty || dim ? 0 : .25 })
-          .bindPopup(`${t('app.physicalBookableDocks', { v0: esc(s.name || t('app.station')), operator: esc(s.operator), physicalAvailable: fmt(s.physicalAvailable), bookable: fmt(s.bookable), docksAvailable: fmt(s.docksAvailable), v5: near ? t('app.withinM', { near: fmt(near), v1: near === 1 ? t('app.vehicle') : t('app.vehicles'), v2: C.STATION_NEAR_M ?? 50 }) : '', v6: s.nearbyOther ? `<br><span class="muted">${t('app.plusFromOtherOperators', { nearbyOther: fmt(s.nearbyOther), join: esc((s.nearbyOtherOps || []).join(', ')) })}</span>` : '' })}<span class="muted">${s.renting === false ? t('app.rentalDisabled') : t('app.renting')} · ${s.returning === false ? t('app.returnDisabled') : t('app.returnPossible')}</span>`).addTo(L_.stations);
+        L.rectangle([[s.lat - .00035, s.lon - .0005], [s.lat + .00035, s.lon + .0005]], { weight: 2, color: mapColor(s.operator), opacity: dim ? .2 : 1, dashArray: empty ? '3 3' : null, fillOpacity: empty || dim ? 0 : .25 })
+          .bindPopup(`${t('app.physicalBookableDocks', { v0: esc(stationName(s.name) || t('app.station')), operator: esc(s.operator), physicalAvailable: fmt(s.physicalAvailable), bookable: fmt(s.bookable), docksAvailable: fmt(s.docksAvailable), v5: near ? t('app.withinM', { near: fmt(near), v1: near === 1 ? t('app.vehicle') : t('app.vehicles'), v2: C.STATION_NEAR_M ?? 50 }) : '', v6: s.nearbyOther ? `<br><span class="muted">${t('app.plusFromOtherOperators', { nearbyOther: fmt(s.nearbyOther), join: esc((s.nearbyOtherOps || []).join(', ')) })}</span>` : '' })}<span class="muted">${s.renting === false ? t('app.rentalDisabled') : t('app.renting')}, ${s.returning === false ? t('app.returnDisabled') : t('app.returnPossible')}</span>`).addTo(L_.stations);
       }
       // Anbieterfarben stehen einmal, nach Bestand sortiert, in #map-legend-ops (renderOpLegend); hier nur Zustände und Formen
       legend.push(`<span><i class="dot" style="background:${DISABLED_COL}"></i>${t('app.disabled3')}</span>`, `<span><i class="sq"></i>${t('app.station')}</span>`, `<span><i class="sq" style="border-style:dashed;background:transparent"></i>${t('app.stationEmptyNoVehicleM', { v0: C.STATION_NEAR_M ?? 50 })}</span>`, `<span class="muted">${t('app.vehiclesDrawn', { drawn: fmt(drawn), length: fmt(vehicles.length), v2: step > 1 ? ` ${t('app.thinnedOut')}` : '' })}</span>`);
@@ -121,7 +124,7 @@ export function renderMap() {
       const c = centers.get(m.ags); if (!c) continue;
       const top = Object.entries(m.ops).sort((a, b) => b[1] - a[1])[0]?.[0];
       L.circleMarker(c, { radius: 4 + Math.sqrt(m.available / max) * 26, weight: 1.5, color: bg, fillColor: opColor(top), fillOpacity: .5 })
-        .bindPopup(`${t('app.availableReported', { v0: esc(munis[m.ags]?.name || m.ags), v1: esc(munis[m.ags]?.state || ''), available: fmt(m.available), total: fmt(m.total), v4: Object.entries(m.ops).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${esc(o)} ${fmt(n)}`).join(' · ') })}<a href="#live" data-ags="${esc(m.ags)}" class="pick-muni">${t('app.openPlace')}</a>`).addTo(L_.bubbles);
+        .bindPopup(`${t('app.availableReported', { v0: esc(munis[m.ags]?.name || m.ags), v1: esc(munis[m.ags]?.state || ''), available: fmt(m.available), total: fmt(m.total), v4: Object.entries(m.ops).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${esc(o)} ${fmt(n)}`).join(', ') })}<a href="#live" data-ags="${esc(m.ags)}" class="pick-muni">${t('app.openPlace')}</a>`).addTo(L_.bubbles);
     }
     const loading = state.scope !== 'DE' && state.fleet.get(scopeState()) === 'loading';
     legend.push(`<span>${t('app.bubbleAvailableVehiclesPer', { v0: cl(t('app.collectorSnapshot'), t('app.asOf2')), v1: timeText(state.latest?.at) })}</span>`, `<span class="muted">${loading ? t('app.loadingVehiclePositions') : state.scope === 'DE' ? t('app.chooseMunicipalityForVehicle') : cl(t('app.fetchLiveForVehiclePositions'), '')}</span>`);
@@ -226,18 +229,28 @@ export async function renderIdleLayer() {
   const L_ = state.layers; L_.grid.clearLayers();
   const d = await loadOnce('idleLong', 'idle-long.json'); if (!d) return;
   const pts = d.points.filter(p => (state.scope === 'DE' || p.ags === state.scope) && (state.operator === 'all' || p.op === state.operator) && (state.type === 'all' || p.ty === state.type));
-  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: idleClassText(p.hours * 60, { en: lang() === 'en', atLeast: !!p.censored }), v3: (p.bat != null ? ` · ${t('app.battery2', { bat: fmt(p.bat) })}` : '') + (p.censored ? ` · ${t('trk.sinceTrackStart')}` : '') })).addTo(L_.grid);
+  for (const p of pts) L.circleMarker([p.lat, p.lon], { radius: 5, weight: 2, color: bgColor(), fillColor: tok('--warn'), fillOpacity: .85 }).bindPopup(t('app.idleForH', { op: esc(p.op), v1: esc(TYPE[p.ty] || p.ty), hours: idleClassText(p.hours * 60, { en: lang() === 'en', atLeast: !!p.censored }), v3: (p.bat != null ? `, ${t('app.battery2', { bat: fmt(p.bat) })}` : '') + (p.censored ? `, ${t('trk.sinceTrackStart')}` : '') })).addTo(L_.grid);
   $('#map-legend').innerHTML = `<span><i class="dot" style="background:var(--warn)"></i>${t('app.availableButNotMovedForMore')}</span><span class="muted">${t('app.shownAsOf', { length: fmt(pts.length), v1: d.total > d.points.length ? ` ${t('app.thinnedOutPerMunicipality', { total: fmt(d.total) })}` : '', v2: timeText(d.at) })}</span>`;
 }
 // Welche Farbe gehört zu welchem Anbieter: immer unter der Karte, sortiert nach verfügbaren Fahrzeugen im Gebiet
+// S4.3: Karten tragen höchstens drei Farben – der gewählte Anbieter bzw. die zwei größten im Gebiet in ihrer festen Farbe, alle übrigen
+// grau („Weitere“); Hervorheben in der Legende bleibt für jeden Anbieter möglich (zweite Kodierung über Deckkraft)
+let MAP_OPS = new Set();
+export function setMapOps(vehicles) {
+  const n = new Map(); for (const v of vehicles || []) if (!v.disabled) n.set(v.operator, (n.get(v.operator) || 0) + 1);
+  if (!n.size) for (const [k, st] of Object.entries(state.latest?.groups || {})) { if (!groupInScope(k)) continue; const op = k.split('|')[1]; n.set(op, (n.get(op) || 0) + st.available); }
+  MAP_OPS = new Set(state.operator !== 'all' ? [state.operator] : [...n].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([o]) => o));
+}
+export const mapColor = (op) => (MAP_OPS.has(op) ? opColor(op) : moreColor());
 export function renderOpLegend(vehicles) {
+  if (vehicles?.length) setMapOps(vehicles);
   const n = new Map();
   if (vehicles?.length) for (const v of vehicles) { if (!v.disabled) n.set(v.operator, (n.get(v.operator) || 0) + 1); }
   if (!n.size) for (const [k, st] of Object.entries(state.latest?.groups || {})) { if (!groupInScope(k)) continue; const op = k.split('|')[1]; n.set(op, (n.get(op) || 0) + st.available); }
   const ops = [...n].sort((a, b) => b[1] - a[1]);
   if (state.mapFocus && !n.has(state.mapFocus)) state.mapFocus = null;
   // Einträge sind Knöpfe: ein Klick hebt den Anbieter auf der Karte hervor und blendet die übrigen ab (zweite Kodierung neben der Farbe)
-  $('#map-legend-ops').innerHTML = ops.length ? `<span class="muted">${t('app.operator')}</span>${ops.slice(0, 14).map(([o, c]) => `<button type="button" class="leg-hl" data-map-hl="${esc(o)}" aria-pressed="${state.mapFocus === o}" title="${esc(t('cmp.highlightTip', { op: o }))}"><i class="dot" style="background:${opColor(o)}"></i>${esc(o)} <span class="muted mono">${fmt(c)}</span></button>`).join('')}${ops.length > 14 ? `<span class="muted">${t('app.more2', { v0: ops.length - 14 })}</span>` : ''}` : '';
+  $('#map-legend-ops').innerHTML = ops.length ? `<span class="muted">${t('app.operator')}</span>${ops.slice(0, 14).map(([o, c]) => `<button type="button" class="leg-hl" data-map-hl="${esc(o)}" aria-pressed="${state.mapFocus === o}" title="${esc(t('cmp.highlightTip', { op: o }))}"><i class="dot" style="background:${mapColor(o)}"></i>${esc(o)} <span class="muted mono">${fmt(c)}</span></button>`).join('')}${ops.length > 14 ? `<span class="muted">${t('app.more2', { v0: ops.length - 14 })}</span>` : ''}` : '';
 }
 export async function renderZonesLayer() {
   const L_ = state.layers; L_.zones.clearLayers();
@@ -248,7 +261,7 @@ export async function renderZonesLayer() {
   list = list.slice(0, 8);
   let n = 0;
   // Zonenarten aus den Themen-Tokens (hell ≥ 4,5:1 auf Weiß, dunkel die hellen Stufen); Tempolimit Violett je Thema
-  const zc = { noRide: tok('--bad'), noEnd: tok('--warn'), mpz: tok('--info'), slow: isDark() ? '#c084fc' : '#7c3aed' };
+  const zc = { noRide: tok('--bad'), noEnd: tok('--warn'), mpz: tok('--info'), slow: themed(ZONE.slow) };
   for (const z of list) {
     if (!(z.file in state.usage.zones)) { const r = await cached(`zones/${z.file}`, 60000); state.usage.zones[z.file] = r.json || null; }
     const fc = state.usage.zones[z.file]; if (!fc) continue;
@@ -260,7 +273,7 @@ export async function renderZonesLayer() {
       const mpz = ru.some(r => r.parking === true), noRide = ru.some(r => r.rideThrough === false), noEnd = !mpz && ru.some(r => r.endAllowed === false || r.rideAllowed === false), slow = ru.find(r => r.maxSpeed != null)?.maxSpeed;
       const col = noRide ? zc.noRide : noEnd ? zc.noEnd : mpz ? zc.mpz : slow != null ? zc.slow : opColor(z.operator);
       L.geoJSON(f, { style: { color: opColor(z.operator), weight: 1.5, opacity: .9, fillColor: col, fillOpacity: noRide ? .16 : .1, dashArray: (noEnd || mpz) && !noRide ? '4 3' : null } })
-        .bindPopup(`<b>${esc(z.operator)}</b> · ${esc(f.properties.name || t('app.zone'))}<br>${noRide ? t('app.ridingProhibited') : t('app.ridingAllowed')}${noEnd ? ` · ${t('app.parkingProhibited')}` : ''}${mpz ? ` · ${t('app.parkingOnlyAtStations')}` : ''}${slow != null ? ` · ${t('app.maxKmH', { slow: fmt(slow) })}` : ''}`).addTo(L_.zones);
+        .bindPopup(`<b>${esc(z.operator)}</b>, ${esc(f.properties.name || t('app.zone'))}<br>${noRide ? t('app.ridingProhibited') : t('app.ridingAllowed')}${noEnd ? `, ${t('app.parkingProhibited')}` : ''}${mpz ? `, ${t('app.parkingOnlyAtStations')}` : ''}${slow != null ? `, ${t('app.maxKmH', { slow: fmt(slow) })}` : ''}`).addTo(L_.zones);
       n++;
     }
   }

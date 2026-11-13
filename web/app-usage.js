@@ -5,11 +5,12 @@ import * as UI from './ui-shared.js';
 import * as R from './pulse-report.js';
 import { t, tx, lang, dateFmt } from './i18n.js';
 import { totalsDoc, usageDayCandidates } from './pulse-split.js';
-import { $, $$, GLOSS, QS, TYPE, abbr, dateTimeText, esc, flagText, fmt, isClient, opColor, palette, pctf, sig2, state, timeText } from './app-core.js';
+import { $, $$, GLOSS, QS, TYPE, abbr, dateTimeText, esc, flagText, fmt, foldSeries, isClient, opColor, palette, pctf, sig2, state, timeText } from './app-core.js';
 import { FC_dayOfNow, cached, emptyRow, failedText, loadDaily, loadHistory, setChips } from './app-load.js';
 import { muniName } from './app-scope.js';
 import { mod, rpCtx } from './app-router.js';
 import { tile } from './app-lang.js';
+import { setAnswer } from './answer.js';
 import { chartWidth } from './app-energy.js';
 import { BERLIN_DAY } from './app-signals.js';
 import { GAP_MS, T_add, T_empty, atLeast, calibAll, calibFor, dayNote, hourChart, hourMask, hourOf, isGapRun, loadWeather, renderArchive, renderCellsTable, renderMbMatrix, renderQuota } from './app-calib.js';
@@ -42,17 +43,17 @@ export async function renderUsage() {
   const days = idx.days || [];
   const box = $('#usage-tiles');
   renderArchive().catch(() => {});
-  if (!days.length) { renderIdle(days).catch(() => {}); renderQuota().catch(() => {}); box.innerHTML = ''; $('#usage-note').textContent = t('app.noEventDataYetCollectorNeeds'); $('#chart-usage').innerHTML = `<div class="empty">${t('app.noMovementsMeasuredYetThey')}</div>`; $('#tbl-usage tbody').innerHTML = `<tr><td colspan="6" class="empty">${t('app.noDataYetMovementsAppear')}</td></tr>`; $('#tbl-usage-more tbody').innerHTML = `<tr><td colspan="7" class="empty">${t('app.noDataYet2')}</td></tr>`; return; }
+  if (!days.length) { renderIdle(days).catch(() => {}); renderQuota().catch(() => {}); box.innerHTML = ''; setAnswer($('#usage-answer'), { id: 'usage', sentence: esc(t('app.noEventDataYetCollectorNeeds')), kpis: [] }); $('#usage-note').textContent = t('app.noEventDataYetCollectorNeeds'); $('#chart-usage').innerHTML = `<div class="empty">${t('app.noMovementsMeasuredYetThey')}</div>`; $('#tbl-usage tbody').innerHTML = `<tr><td colspan="6" class="empty">${t('app.noDataYetMovementsAppear')}</td></tr>`; $('#tbl-usage-more tbody').innerHTML = `<tr><td colspan="7" class="empty">${t('app.noDataYet2')}</td></tr>`; return; }
   const day = state.usage.day && days.includes(state.usage.day) ? state.usage.day : await defaultUsageDay(days);
   state.usage.day = day;
   // laufender Tag: „02.11. bis 08 Uhr“ (Ereignisse nur aus abgeschlossenen Stunden)
   const run = runningDay(days), runH = run ? partialHour() : null;
-  setChips($('#usage-days'), 'data-uday', days.slice(-7).map(d => { const note = dayNote(d), dm = `${esc(d.slice(8))}.${esc(d.slice(5, 7))}.`, tip = [d === run ? t('app.usagePartialDayTip', { h: runH }) : '', note || ''].filter(Boolean).join(' · '); return `<button class="chip ${d === day ? 'on' : ''}${note ? ' special' : ''}" aria-pressed="${d === day}" data-uday="${esc(d)}"${tip ? ` title="${esc(tip)}"` : ''}>${d === run ? t('app.usageDayUntil', { d: dm, h: runH }) : dm}${note ? '<span aria-hidden="true"> ✱</span>' : ''}</button>`; }).join(''));
+  setChips($('#usage-days'), 'data-uday', days.slice(-7).map(d => { const note = dayNote(d), dm = `${esc(d.slice(8))}.${esc(d.slice(5, 7))}.`, tip = [d === run ? t('app.usagePartialDayTip', { h: runH }) : '', note || ''].filter(Boolean).join(', '); return `<button class="chip ${d === day ? 'on' : ''}${note ? ' special' : ''}" aria-pressed="${d === day}" data-uday="${esc(d)}"${tip ? ` title="${esc(tip)}"` : ''}>${d === run ? t('app.usageDayUntil', { d: dm, h: runH }) : dm}${note ? '<span aria-hidden="true"> ✱</span>' : ''}</button>`; }).join(''));
   const doc = await loadEvents(day);
   // Standzeiten (idle.json) und Stationsquote (stations-quota.json) hängen nicht an der Ereignisdatei: auch ohne sie zeichnen
   renderIdle(days).catch(e => console.error('Standzeiten', e)); renderQuota().catch(e => console.error('Stationsquote', e));
   if (!doc) {
-    box.innerHTML = ''; $('#usage-note').textContent = t('app.chooseAnotherDayOrReload', { v0: failedText(`events/${day}.json`) });
+    box.innerHTML = ''; $('#usage-note').textContent = t('app.chooseAnotherDayOrReload', { v0: failedText(`events/${day}.json`) }); setAnswer($('#usage-answer'), { id: 'usage', sentence: esc(t('app.eventFileNotLoadableChoose')), kpis: [] });
     $('#chart-usage').innerHTML = `<div class="empty">${t('app.eventFileNotLoadableChoose')}</div>`;
     for (const [id, n] of [['#tbl-usage', 6], ['#tbl-usage-more', 7], ['#tbl-cells', 5], ['#tbl-econ', 6], ['#tbl-econ-more', 7]]) { const tb = $(`${id} tbody`); if (tb) tb.innerHTML = emptyRow(n, t('app.noEventDataForThisDay'), t('app.chooseAnotherDay')); }
     for (const id of ['#econ-tiles', '#econ-calib', '#econ-excl']) { const el = $(id); if (el) el.innerHTML = ''; }
@@ -64,7 +65,7 @@ export async function renderUsage() {
   const observedMs = runs.filter(r => r[1] != null && !isGapRun(r) && mask.ok[hourOf(r[0])]).reduce((a, r) => a + Math.min(r[1], GAP_MS), 0);
   const gapH = mask.gap.filter(Boolean).length;
   const note = dayNote(day);
-  $('#usage-note').innerHTML = t('app.collectorRunsOn0024Observed', { v0: note ? `<b>${esc(note)}</b> · ` : '', length: fmt(runs.length), join: esc(day.split('-').reverse().join('.')), observedMs: durText(observedMs), v4: timeText(runs[0]?.[0]), v5: timeText(runs[runs.length - 1]?.[0]), v6: gapH ? ` · ${t('app.notCounted', { v0: abbr(t('app.hAfterMeasurementGap', { gapH }), 'gap') })}` : '' });
+  $('#usage-note').innerHTML = t('app.collectorRunsOn0024Observed', { v0: note ? `<b>${esc(note)}</b>, ` : '', length: fmt(runs.length), join: esc(day.split('-').reverse().join('.')), observedMs: durText(observedMs), v4: timeText(runs[0]?.[0]), v5: timeText(runs[runs.length - 1]?.[0]), v6: gapH ? `, ${t('app.notCounted', { v0: abbr(t('app.hAfterMeasurementGap', { gapH }), 'gap') })}` : '' });
   // Gruppen im Scope aggregieren
   const byOp = new Map(); const tot = T_empty();
   for (const [k, g] of Object.entries(doc.groups || {})) {
@@ -75,12 +76,21 @@ export async function renderUsage() {
   // Eine Fahrten-Definition: gemessene Fahrtbeginne im Beobachtungszeitraum (Hochrechnung und RVD stehen unter Umsatz & Kennzahlen)
   const starts = sum(tot.start), ends = sum(tot.end), reloc = sum(tot.reloc), swaps = sum(tot.swap), pickups = sum(tot.pickup);
   box.innerHTML = [
-    tile(t('app.tripsMeasured'), fmt(starts), (day === run ? `${t('app.usagePartialDay', { h: runH })} · ` : '') + t('app.inOfObservationTripEnds', { observedMs: durText(observedMs), ends: fmt(ends), v2: gapH ? ` · ${t('app.excludingHAfterMeasurement', { gapH })}` : '' })),
+    tile(t('app.tripsMeasured'), fmt(starts), (day === run ? `${t('app.usagePartialDay', { h: runH })}, ` : '') + t('app.inOfObservationTripEnds', { observedMs: durText(observedMs), ends: fmt(ends), v2: gapH ? `, ${t('app.excludingHAfterMeasurement', { gapH })}` : '' })),
     tile(abbr(t('app.rebalancing'), 'reloc'), fmt(reloc), t('app.sameIdMoved150MDidNot')),
-    tile(t('app.batterySwaps'), fmt(swaps), tot.swapWaitN ? t('app.avgBelow20UntilSwap', { v0: atLeast(tot.swapWaitCens, durText(tot.swapWaitSum / tot.swapWaitN)) }) + (tot.swapWaitCens ? ` · ${t('trk.censoredOf', { n: fmt(tot.swapWaitCens), of: fmt(tot.swapWaitN) })}` : '') : t('app.jumpFrom40To85AtSameSpot')),
+    tile(t('app.batterySwaps'), fmt(swaps), tot.swapWaitN ? t('app.avgBelow20UntilSwap', { v0: atLeast(tot.swapWaitCens, durText(tot.swapWaitSum / tot.swapWaitN)) }) + (tot.swapWaitCens ? `, ${t('trk.censoredOf', { n: fmt(tot.swapWaitCens), of: fmt(tot.swapWaitN) })}` : '') : t('app.jumpFrom40To85AtSameSpot')),
     tile(abbr(t('app.pickups'), 'pickup'), fmt(pickups), t('app.disabledOrNearlyEmpty2')),
-    tile(t('app.disabledDuration'), tot.disDurN ? atLeast(tot.disDurCens, durText(tot.disDurSum / tot.disDurN)) : '—', t('app.vehiclesReleasedAgain', { sum: fmt(sum(tot.disOff)) }) + (tot.disDurCens ? ` · ${t('trk.censoredOf', { n: fmt(tot.disDurCens), of: fmt(tot.disDurN) })}` : '')),
+    tile(t('app.disabledDuration'), tot.disDurN ? atLeast(tot.disDurCens, durText(tot.disDurSum / tot.disDurN)) : '—', t('app.vehiclesReleasedAgain', { sum: fmt(sum(tot.disOff)) }) + (tot.disDurCens ? `, ${t('trk.censoredOf', { n: fmt(tot.disDurCens), of: fmt(tot.disDurN) })}` : '')),
   ].join('');
+  // S4.1: Antwort oben – Satz, drei Kennzahlen (Fahrten = Summe der Tabelle je Anbieter), „Wie gerechnet?“, Stand
+  const place = state.scope === 'DE' ? t('app.germany') : muniName(state.scope), dayTxt = `${day.slice(8)}.${day.slice(5, 7)}.${day.slice(0, 4)}`;
+  setAnswer($('#usage-answer'), { id: 'usage', sentence: t('ans.usage', { n: `<strong>${fmt(starts)}</strong>`, place: `<b>${esc(place)}</b>`, day: esc(dayTxt), obs: esc(durText(observedMs)) }) + (day === run ? ` ${esc(t('app.usagePartialDay', { h: runH }))}.` : ''),
+    kpis: [
+      { label: t('ans.kTrips'), value: fmt(starts), n: starts, cmp: t('ans.kTripsCmp', { ends: fmt(ends) }), eq: '#tbl-usage tbody tr td:nth-child(2)', eqSum: true },
+      { label: t('app.rebalancing'), value: fmt(reloc), n: reloc, cmp: starts ? t('ans.per100Trips', { v: fmt(100 * reloc / starts, 1) }) : t('ans.noTrips'), eq: '#tbl-usage tbody tr td:nth-child(4)', eqSum: true },
+      { label: t('app.batterySwaps'), value: fmt(swaps), n: swaps, cmp: t('ans.kPickupsCmp', { n: fmt(pickups) }), eq: '#tbl-usage tbody tr td:nth-child(5)', eqSum: true },
+    ],
+    how: t('ans.usageHow'), asOf: runs.length ? `${dayTxt}, ${timeText(runs[runs.length - 1][0])}` : dayTxt });
   // Tagesgang: eigene Filter im Panel (Vorgabe aus den globalen Filtern); Änderung zeichnet nur das Diagramm neu
   let weather = null;
   if ($('#chk-weather').checked) weather = await loadWeather(day);
@@ -144,10 +154,10 @@ export function renderUsageChart() {
   const order = Object.keys(TYPE), ok = c.mask?.ok || new Array(24).fill(true);
   // nicht gemessene Stunden und Stunden nach Messlücke: null (Linie unterbrochen), nicht 0
   const all = [...by].map(([name, raw]) => { const values = raw.map((v, h) => ok[h] ? v : null); return perType ? { name: TYPE[name] || name, values, color: palette(Math.max(0, order.indexOf(name))) } : { name, values, color: opColor(name) }; }).sort((x, y) => sum(y.values) - sum(x.values));
-  const series = all.slice(0, 8), tyLabel = TYPE[type] || type;
+  const series = perType ? all : foldSeries(all, t('app.moreOperators')), tyLabel = TYPE[type] || type; // S4.6: Farbe je Anbieter bzw. Art, nichts fällt weg
   const box = $('#chart-usage');
   box.innerHTML = series.length ? hourChart(series, c.weather, c.runs, c.mask, dayNote(state.usage.day), chartWidth(box, () => renderUsageChart())) : `<div class="empty">${t('app.noTripStartsForThisSelection')}</div>`;
-  $('#usage-chart-sub').textContent = (perType ? t('app.tripStartsPerHourByVehicle', { op, v1: type !== 'all' ? ` ${t('app.only', { tyLabel })}` : '' }) : t('app.tripStartsPerHourAndOperator', { v0: type !== 'all' ? ` · ${tyLabel}` : '', v1: all.length > 8 ? ` · ${t('app.top8Of', { length: all.length })}` : '' })) + (c.weather ? ` · ${t('app.weather', { name: c.weather.name })}` : '');
+  $('#usage-chart-sub').textContent = (perType ? t('app.tripStartsPerHourByVehicle', { op, v1: type !== 'all' ? ` ${t('app.only', { tyLabel })}` : '' }) : t('app.tripStartsPerHourAndOperator', { v0: type !== 'all' ? `, ${tyLabel}` : '', v1: '' })) + (c.weather ? `, ${t('app.weather', { name: c.weather.name })}` : '');
   $('#usage-legend').innerHTML = series.map((x, i) => `<span><i class="dot" style="background:${x.color || palette(i)}"></i>${esc(x.name)} <span class="mono">${fmt(sum(x.values))}</span></span>`).join('') + (c.weather && series.length ? `<span><i class="sq rain-key"></i>${t('app.precipitationBarsTemperature')}</span>` : '') +(series.length && ok.some(v => !v) ? `<span><i class="sq gap-key"></i>${abbr(t('app.notMeasuredAfterMeasurement'), 'gap')}</span>` : '');
 }
 // ---------- Umsatz & Kennzahlen ----------
@@ -238,7 +248,7 @@ export function syncCalibToggle(st = null) {
     b.setAttribute('aria-pressed', String(kalB ? m === 'kal' && eff : m === 'mess' || !eff));
     if (!kalB || !st) return;
     const lock = eff ? '' : st.label;
-    b.textContent = lock ? `${t('html.calibrated')} · ${lock}` : t('html.calibrated');
+    b.textContent = lock ? `${t('html.calibrated')}, ${lock}` : t('html.calibrated');
     if (lock) { b.setAttribute('aria-disabled', 'true'); b.setAttribute('aria-describedby', 'econ-calib-state'); } else { b.removeAttribute('aria-disabled'); b.removeAttribute('aria-describedby'); }
   });
 }
@@ -280,18 +290,18 @@ export async function renderEcon(day) {
     const m = g(x.cm), c = g(x.cc), lo = g(x.lo), hi = g(x.hi);
     if (m == null || c == null || Math.abs(c - m) <= 1e-9 * Math.max(1, Math.abs(m))) return { main: rng(m, d, unit), sub: '' };
     const span = lo != null && hi != null && Math.abs(hi - lo) > 1e-9 ? `${fu(lo, d)}–${fu(hi, d, unit)}` : null;
-    return kal ? { main: fu(c, d, unit), sub: t(mKey, { v0: span ? `${t('app.range', { span })} · ` : '', v1: rng(m, d, unit) }), lines: [span ? t('app.range', { span }) : null, t(m2Key, { v0: rng(m, d, unit) })].filter(Boolean) } : { main: rng(m, d, unit), sub: t('app.calibrated', { v0: fu(c, d, unit) }), lines: [t('app.calibrated', { v0: fu(c, d, unit) })] };
+    return kal ? { main: fu(c, d, unit), sub: t(mKey, { v0: span ? `${t('app.range', { span })}, ` : '', v1: rng(m, d, unit) }), lines: [span ? t('app.range', { span }) : null, t(m2Key, { v0: rng(m, d, unit) })].filter(Boolean) } : { main: rng(m, d, unit), sub: t('app.calibrated', { v0: fu(c, d, unit) }), lines: [t('app.calibrated', { v0: fu(c, d, unit) })] };
   };
   // Tabellenzelle: Hauptwert, darunter Spanne und Vergleichswert je eine Zeile (schmale Spalten)
   const cell = (p, bold = false) => `${bold ? '<b>' : ''}${p.main}${bold ? '</b>' : ''}${(p.lines || []).map(l => `<div class="sub-line">${l}</div>`).join('')}`;
-  const tsub = (p, base) => [p.sub, base, facTag].filter(Boolean).join(' · '); // Fahrten-Kacheln nennen, ob ein Faktor drin ist (B3)
+  const tsub = (p, base) => [p.sub, base, facTag].filter(Boolean).join(', '); // Fahrten-Kacheln nennen, ob ein Faktor drin ist (B3)
   $('#econ-tiles').classList.toggle('prelim', prelim);
   // Einheiten mit geschütztem Leerzeichen: Spanne „a–b €“ bricht nie zwischen Zahl und Einheit
   const pR = pair(T, 'ridesDay', { mKey: 'app.measuredDayFill', m2Key: 'app.measuredDayFill2' }), pV = pair(T, 'rvd', { d: 2 }), pU = pair(T, 'utilization', { d: 1, unit: ' %', scale: 100 }), pD = pair(T, 'revDay', { unit: ' €' }), pF = pair(T, 'revPerVehicleDay', { d: 2, unit: ' €' });
   // „Fahrten je Tag“ mit Basis (gewählter Tag, mit Faktor oder gemessen); der Kommunal-Bericht nennt dort „Ø n Tage“
   const run = runningDay(idx.days || []), dayLbl = `${day.slice(8)}.${day.slice(5, 7)}.`;
   $('#econ-tiles').innerHTML = tot ? [
-    tile(t('app.tripsDay', { d: day === run ? t('app.usageDayUntil', { d: dayLbl, h: partialHour() }) : dayLbl }), pR.main, [facTag, pR.sub, t('app.fromMeasuredOfDailyProfile', { rides: fmt(T.cm.rides), v1: fmt(cov * 100) })].filter(Boolean).join(' · ')),
+    tile(t('app.tripsDay', { d: day === run ? t('app.usageDayUntil', { d: dayLbl, h: partialHour() }) : dayLbl }), pR.main, [facTag, pR.sub, t('app.fromMeasuredOfDailyProfile', { rides: fmt(T.cm.rides), v1: fmt(cov * 100) })].filter(Boolean).join(', ')),
     tile(abbr(t('app.tripsVehDay'), 'rvd'), pV.main, tsub(pV, t('app.avgVehiclesOnStreet', { fleet: fmt(tot.fleet) }))),
     tile(abbr(t('app.utilisation'), 'util'), pU.main, tsub(pU, t('app.timeOnTripsAvgMinPerTrip', { avgMin: fmt(tot.avgMin, 1) }))),
     tile(t('app.revenueDay', { v0: o.net ? t('common.net') : t('common.gross') }), pD.main, tsub(pD, t('app.listPricesOfFeeds', { v0: abbr(t('app.realisation'), 'real'), v1: fmt(o.realization * 100) }))),
@@ -307,7 +317,7 @@ export async function renderEcon(day) {
   const facTxt = (x) => (x.fac.source === 'Korrektur' ? t('app.correction', { f: fmt(x.fac.f, 2) }) : x.fac.source === 'kalibriert' ? t('app.calibrated2', { f: fmt(x.fac.f, 2) }) : '');
   const DUR = { kalibriert: t('app.berlinMean'), gemessen: t('app.measured3'), Annahme: t('app.assumption'), Vorgabe: t('app.default') };
   // Sechs Standardspalten; Korrektur, Auslastung, Dauer, Tarif und Einzelpreise unter „Weitere Spalten“. Nicht belastbare Zeilen: Kennzeichnung statt Ausgrauen.
-  const nameCell = (x) => { const c = x.c; const dr = x.dropped || []; return `<td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${esc(TYPE[x.ty] || x.ty)}${state.scope === 'DE' ? ` · ${x.list.length} ${x.list.length === 1 ? t('app.municipality') : t('app.municipalities2')}` : ''}</div>${!c.plausible ? `<span class="pill excl-tag">${t('app.notInTotal')}</span>` : ''}${c.flags.length ? `<div class="sub-line warn-text flag-line">${esc(flagText(c.flags[0]))}</div>` : ''}${dr.length ? `<div class="sub-line warn-text flag-line">${t('app.without', { join: esc(dr.slice(0, 3).map(d => muniName(d.ags)).join(', ')), v1: dr.length > 3 ? ` +${dr.length - 3}` : '', v2: esc(flagText(dr[0].m.flags[0]) || t('app.implausible')) })}</div>` : ''}</td>`; };
+  const nameCell = (x) => { const c = x.c; const dr = x.dropped || []; return `<td><span class="op"><i style="background:${opColor(x.op)}"></i>${esc(x.op)}</span><div class="sub-line">${esc(TYPE[x.ty] || x.ty)}${state.scope === 'DE' ? `, ${x.list.length} ${x.list.length === 1 ? t('app.municipality') : t('app.municipalities2')}` : ''}</div>${!c.plausible ? `<span class="pill excl-tag">${t('app.notInTotal')}</span>` : ''}${c.flags.length ? `<div class="sub-line warn-text flag-line">${esc(flagText(c.flags[0]))}</div>` : ''}${dr.length ? `<div class="sub-line warn-text flag-line">${t('app.without', { join: esc(dr.slice(0, 3).map(d => muniName(d.ags)).join(', ')), v1: dr.length > 3 ? ` +${dr.length - 3}` : '', v2: esc(flagText(dr[0].m.flags[0]) || t('app.implausible')) })}</div>` : ''}</td>`; };
   $('#tbl-econ tbody').innerHTML = rows.map(x => { const c = x.cm;
     return `<tr${!x.c.plausible ? ' class="row-excl"' : ''}>${nameCell(x)}
       <td class="n">${fmt(c.fleet)}</td><td class="n">${fmt(c.rides)}<div class="sub-line">${kal && x.fac.source === 'ausgesetzt' ? t('app.notCalibrated') : kal && x.fac.skip === 'op' ? esc(t('cal.notOp', { ops: (x.fac.ops || []).join(', ') })) : kal && x.fac.skip ? esc(t('cal.notKind', { v0: K.kindText(x.fac.kind, lang()) })) : kal && facTxt(x) ? esc(facTxt(x)) : c.rot ? `${fmt(c.rot)} ${abbr(t('app.idRotation'), 'rot')}` : ''}</div></td>
@@ -320,9 +330,9 @@ export async function renderEcon(day) {
       <td class="n">${euro(c.perRide, 2)}</td><td class="n">${cell(pair(x, 'revPerVehicleDay', { d: 2, unit: ' €' }))}</td></tr>`; }).join('') || emptyRow(7, t('app.noTripsInFilter'), t('app.setOperatorOrVehicleTypeTo'));
   // Kalibrierung in zwei Zeilen; Einzelheiten im Panel „Kalibrierung“
   const calOps = Object.keys(cal);
-  const kTxt = k?.applied ? `${t('app.eScooterTrips', { k: fmt(k.k, 2) })} <span class="muted">${t('app.range2', { kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2) })}</span> ${t('app.officialBerlinMeasuredBerlin', { quarter: esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(k.measured.rvd, 2), v3: abbr(t('app.tripsVehDay2'), 'rvd') })} <span class="muted">(${esc(k.source)})</span>${k.prelim ? ` <span class="pill prelim badge" title="${esc(k.prelimWhy.join(', '))}">${t('app.preliminary')}</span>` : ''}${k.single ? ` <span class="muted">· ${t('app.onlyOneOperator')}</span>` : ''} · ${esc(k.statusText || '')}${k.onlyKind ? ` · <span class="muted">${esc(k.onlyKind)}</span>` : ''}${skipOps.length ? ` · ${t('cal.skipped', { v0: esc(skipOps.join(', ')) })}` : ''}` : t('app.tripsNotCalibrated', { v0: esc(k?.reason || t('app.referenceValuesNotLoadable')) });
+  const kTxt = k?.applied ? `${t('app.eScooterTrips', { k: fmt(k.k, 2) })} <span class="muted">${t('app.range2', { kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2) })}</span> ${t('app.officialBerlinMeasuredBerlin', { quarter: esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(k.measured.rvd, 2), v3: abbr(t('app.tripsVehDay2'), 'rvd') })} <span class="muted">(${esc(k.source)})</span>${k.prelim ? ` <span class="pill prelim badge" title="${esc(k.prelimWhy.join(', '))}">${t('app.preliminary')}</span>` : ''}${k.single ? ` <span class="muted">· ${t('app.onlyOneOperator')}</span>` : ''}, ${esc(k.statusText || '')}${k.onlyKind ? `, <span class="muted">${esc(k.onlyKind)}</span>` : ''}${skipOps.length ? `, ${t('cal.skipped', { v0: esc(skipOps.join(', ')) })}` : ''}` : t('app.tripsNotCalibrated', { v0: esc(k?.reason || t('app.referenceValuesNotLoadable')) });
   const aTxt = sc?.calibrated ? t('app.avgEScooterTripMinInsteadOf', { min: fmt(sc.min, 1), min2: fmt(sc.previous.min), from: esc(sc.from), to: esc(sc.to) }) : t('app.avgEScooterTripMinAssumption', { v0: fmt(sc?.min ?? 12) });
-  $('#econ-calib').innerHTML = `<div id="econ-calib-state"><b>${effective ? t('app.calibrated4') : t('app.measured4')}</b> · ${kTxt}</div><div>${t('app.bikesEBikesCargoBikes', { aTxt, v1: r.calib?.limits?.scooter ? ` · ${t('app.aboveTripsVehDayCalibration', { scooter: fmt(r.calib.limits.scooter, 2) })}` : '', v2: calOps.length ? ` · ${t('app.correctionOverriddenFor', { join: esc(calOps.join(', ')) })}` : '' })} · <span class="muted">${t('app.derivationInCalibrationPanel')}</span></div>`;
+  $('#econ-calib').innerHTML = `<div id="econ-calib-state"><b>${effective ? t('app.calibrated4') : t('app.measured4')}</b>, ${kTxt}</div><div>${t('app.bikesEBikesCargoBikes', { aTxt, v1: r.calib?.limits?.scooter ? `, ${t('app.aboveTripsVehDayCalibration', { scooter: fmt(r.calib.limits.scooter, 2) })}` : '', v2: calOps.length ? `, ${t('app.correctionOverriddenFor', { join: esc(calOps.join(', ')) })}` : '' })}, <span class="muted">${t('app.derivationInCalibrationPanel')}</span></div>`;
   const excludedN = rows.length - good.length;
   // sichtbar bleibt der erste Satz (was als Fahrt zählt), die Methodik steht aufklappbar darunter
   const noteHtml = t('app.tripsDisappearedAvailable', { v0: abbr(t('app.idRotation'), 'rot'), source: esc(tx(r.profile.source)), v2: prelim ? t('app.measuredValuesUnder3Full') : '', v3: o.rideMin ? t('app.defaultMin', { rideMin: fmt(o.rideMin) }) : t('app.measuredWhereIdsAreStable20', { v0: sc?.calibrated ? t('app.minFromBerlinQuarterlyValues', { min: fmt(sc.min, 1) }) : t('app.n12Min') }), v4: o.net ? `${t('app.excluding19Vat')} ` : '', v5: abbr(t('app.realisationRate'), 'real'), v6: r.gapH ? ` ${t('app.afterMeasurementGapOver45Min', { gapH: r.gapH, v1: r.gapH === 1 ? t('app.hour') : t('app.hours') })}` : '', v7: excludedN ? ` ${t('app.withImplausibleTripCountAre', { excludedN, v1: excludedN === 1 ? t('app.row') : t('app.rows2') })}` : '', v8: calOps.length ? ` ${t('app.activeFor', { join: esc(calOps.join(', ')) })}` : '' });

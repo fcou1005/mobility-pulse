@@ -5,18 +5,20 @@ import { $, $$, CFG, QS, TYPE, esc, fmt, gl, isClient, opColor, state } from './
 import { LITE_VIEWS, clearNotice, ensureFullLatest, getJsonShared, loadBoundaries, loadCatalog, loadHistory, notice } from './app-load.js';
 import { muniName } from './app-scope.js';
 import { liveFetch, pendingLive, setPendingLive } from './app-live.js';
-import { renderHeader, renderLive } from './app-lang.js';
+import { dataHealth, renderHeader, renderLive } from './app-lang.js';
 import { fitMap } from './app-map.js';
 import { renderCities, renderLab } from './app-energy.js';
 import { loadGroups, renderSignals } from './app-signals.js';
 import { renderCoverage, renderPricing, renderShareChart, renderSources } from './app-sources.js';
 import { econFor, loadCells, loadEvents, loadOnce, loadUsageIndex, renderUsage } from './app-usage.js';
 import { renderCalibPanel } from './app-calib.js';
+import { renderTerms } from './app-terms.js';
 import { TYPE_FILTER, populateOperators, populateScope, renderFilterSum, scheduleToc } from './app.js';
 
 // ---------- Ansichtsmodule bei Bedarf laden (S3.4): Modul und sein Wörterbuchbereich zusammen; M[k] = geladenes Modul ----------
 export const LAZY = { ops: [() => import('./ops.js'), 'ops'], rp: [() => import('./report.js'), 'report'], fl: [() => import('./flows.js'), 'flows'], cov: [() => import('./coverage.js'), 'coverage'],
-  cmp: [() => import('./compare.js'), 'compare'], sp: [() => import('./spots.js'), 'spots'], fv: [() => import('./forecast.js'), 'forecast'], st: [() => import('./status.js'), 'status'] };
+  cmp: [() => import('./compare.js'), 'compare'], sp: [() => import('./spots.js'), 'spots'], fv: [() => import('./forecast.js'), 'forecast'], st: [() => import('./status.js'), 'status'],
+  sd: [() => import('./stadt.js'), 'stadt'] }; // S5: Stadt-Startseite, Datenauflagen, Ausschreibungen
 export const M = {}, MP = {};
 // Teil nicht ladbar (z. B. nach einer neuen Version liegen die Teile unter anderen Namen): Hinweis zum Neuladen, nächster Versuch lädt erneut
 export const mod = (k) => MP[k] || (MP[k] = Promise.all([LAZY[k][0](), ensureI18n([LAZY[k][1]])]).then(([m]) => { M[k] = m; if (k === 'ops') m.initOps(opsCtx()); return m; })
@@ -28,14 +30,18 @@ export const applyOpsParams = (p) => { mod('ops').then(m => m.applyOpsParams(p))
 // ---------- Rendering ----------
 // Vier Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
 // „Städte“: die bundesweiten Vergleiche (Gebietsvergleich, Verfügbarkeit je Stadt, Rangliste, Dichte) aus „Leistung“ ausgelagert
-export const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources', 'status'];
+export const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources', 'status', 'begriffe', 'stadt', 'auflagen', 'ausschreibungen'];
+// S5.6: vier Gruppen nach Aufgaben statt gleichrangiger Ansichten – Heute, Planen, Auswerten, Prüfen
 export const GROUPS_DEF = () => [
-  { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['staedte', t('app.citiesSeg')], ['usage', t('app.usage')], ['coverage', t('app.coverageSeg')], ['vergleich', t('app.compare')], ['bericht', t('app.report')]] },
-  { id: 'prognose', label: t('app.forecast'), segs: [['prognose', t('fv.segVerlauf')], ['prognose-spots', t('fv.segSpots')], ['prognose-basis', t('fv.segBasis')]] },
-  { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')]] },
-  { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')], ['status', t('app.statusSeg')]] },
+  { id: 'heute', label: t('nav.today'), segs: [['live', t('app.overview')], ['stadt', t('nav.city')], ['prognose', t('app.forecast')], ['signals', t('app.signals')]] },
+  { id: 'planen', label: t('nav.plan'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')], ['prognose-spots', t('fv.segSpots')]] },
+  { id: 'auswerten', label: t('nav.analyse'), segs: [['usage', t('app.usage')], ['lab', t('app.performance')], ['staedte', t('app.citiesSeg')], ['vergleich', t('app.compare')], ['bericht', t('app.report')], ['ausschreibungen', t('nav.tenders')], ['coverage', t('app.coverageSeg')]] },
+  { id: 'pruefen', label: t('nav.check'), segs: [['auflagen', t('nav.auflagen')], ['sources', t('app.sources2')], ['status', t('app.statusSeg')], ['prognose-basis', t('fv.segBasis')], ['begriffe', t('nav.terms')]] },
 ];
-export const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources', datenqualität: 'sources', datenqualitaet: 'sources', qualitaet: 'sources' };
+// S5.6: Startansicht nach Rolle (?rolle=stadt|betrieb|analyse, auch gemerkt aus der Erstbesuch-Karte)
+export const ROLE_START = { stadt: 'stadt', betrieb: 'ops', analyse: 'usage' };
+export function roleOf() { const q = new URLSearchParams(location.search).get('rolle'); if (q && ROLE_START[q]) return q; try { const r = localStorage.getItem('mp-rolle'); return ROLE_START[r] ? r : null; } catch { return null; } }
+export const VIEW_ALIAS = { stadtseite: 'stadt', meinestadt: 'stadt', city: 'stadt', datenauflagen: 'auflagen', auflagen: 'auflagen', obligations: 'auflagen', ausschreibung: 'ausschreibungen', tenders: 'ausschreibungen', radar: 'ausschreibungen', heute: 'live', planen: 'ops', auswerten: 'usage', pruefen: 'sources', prüfen: 'sources', begriff: 'begriffe', glossar: 'begriffe', glossary: 'begriffe', terms: 'begriffe', cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources', datenqualität: 'sources', datenqualitaet: 'sources', qualitaet: 'sources' };
 export const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals', 'prognose-basis', 'status']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 export let currentView = 'live', urlReady = false;
 export const resolveView = (h) => { try { h = decodeURIComponent(h); } catch { /* Hash nicht dekodierbar: roh verwenden */ } let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
@@ -54,10 +60,11 @@ export function setView(name) {
   $$('section.view').forEach(s => s.classList.toggle('active', s.id === `view-${name}`));
   $$('#nav a').forEach(a => { const on = a.dataset.group === group.id; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $('#crumb-group').textContent = group.label;
+  { const h1 = document.querySelector(`#view-${name} > .hero h1`)?.textContent?.trim(); const same = !!h1 && h1.toLowerCase() === group.label.toLowerCase(); $('#crumb-group').classList.toggle('vh', same); $('#crumb-group').nextElementSibling?.classList.toggle('vh', same); } // S4.9: kein doppelter Titel (Pfad = Überschrift)
   renderSegments(group, name);
   const segLabel = group.segs.length > 1 ? group.segs.find(([v]) => v === name)?.[1] : null;
   // Titel ohne Dopplung: gleicher Name von Gruppe und Teilansicht nur einmal
-  document.title = `${segLabel && segLabel.toLowerCase() !== group.label.toLowerCase() ? `${segLabel} · ` : ''}${group.label} · Mobility Pulse`;
+  document.title = `${segLabel && segLabel.toLowerCase() !== group.label.toLowerCase() ? `${segLabel} – ` : ''}${group.label} – Mobility Pulse`;
   if (name === 'live') setTimeout(() => { state.map?.invalidateSize(); if (!dirty.has('live')) fitMap(); }, 50);
   // nur die aktive Ansicht ist gerendert; beim Wechsel wird sie nachgezogen, wenn sich seit dem letzten Zeichnen etwas geändert hat
   if (dirty.has(name)) renderView(name);
@@ -124,7 +131,7 @@ export function syncUrl(push = false) {
 // Deep-Link (q = Start-URL) bzw. Zurück/Vorwärts (back: fehlende Parameter heißen Standard – Deutschland, alle Anbieter, alle Arten)
 export function applyUrlParams(q = QS, back = false) {
   const has = (sel, v) => v != null && [...$(sel).options].some(o => o.value === v);
-  const sc = q.get('scope') ?? (back ? 'DE' : null);
+  const sc = q.get('scope') ?? q.get('ags') ?? (back ? 'DE' : null); // S5.4: ?embed=1&ags=… wie ?scope=
   // Gebiet mit nur vereinzelten Fahrzeugen (in der Gebietswahl ausgeblendet): per Link trotzdem wählbar
   if (sc && !has('#sel-scope', sc) && state.latest?.municipalities?.[sc]) { state.scope = sc; populateScope(); }
   if (has('#sel-scope', sc)) { state.scope = sc; $('#sel-scope').value = sc; }
@@ -195,7 +202,7 @@ export async function copyLink() {
 }
 // Nach neuem Datenstand oder Filterwechsel: Kopf sofort, Ansichten als veraltet markieren, nur die aktive zeichnen
 // Berichtsmodul (web/report.js): bekommt die Helfer und Lader der Seite, teilt deren Cache
-export const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells,
+export const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells, health: (ags) => dataHealth({ ags }),
   setScope: (ags) => { const sel = $('#sel-scope'); if (![...sel.options].some(o => o.value === ags)) return; sel.value = ags; sel.dispatchEvent(new Event('change')); },
   // einzelnen Filter der Leiste setzen (kind: scope | op | type) bzw. alle zurücksetzen; wirkt wie die Auswahl in der Leiste
   setFilter: (kind, v) => { const sel = $(kind === 'scope' ? '#sel-scope' : kind === 'op' ? '#sel-operator' : '#sel-type'); if (!sel || sel.value === v || ![...sel.options].some(o => o.value === v)) return; sel.value = v; sel.dispatchEvent(new Event('change')); },
@@ -208,6 +215,8 @@ VIEW_RENDER.bericht = [rp('rp', 'renderReport', 'rp-report'), rp('rp', 'renderFo
 VIEW_RENDER.staedte = [() => renderCities(), rp('rp', 'renderAvailability', 'rp-avail'), rp('rp', 'renderCityRanking', 'rp-rank'), rp('rp', 'renderDensityScatter', 'rp-scatter')];
 VIEW_RENDER.usage.push(rp('fl', 'renderFlows', 'fl-panel'));
 VIEW_RENDER.vergleich = [rp('cmp', 'renderCompare', 'cmp-panel')];
+VIEW_RENDER.begriffe = [() => renderTerms()]; // S4.8
+VIEW_RENDER.stadt = [rp('sd', 'renderStadt', 'stadt-panel')]; VIEW_RENDER.auflagen = [rp('sd', 'renderAuflagen', 'auflagen-panel')]; VIEW_RENDER.ausschreibungen = [rp('sd', 'renderTenders', 'tenders-panel')]; // S5
 export const fvCtx = () => ({ ...rpCtx(), loadOnce });
 export const fv = (part, id) => () => { const el = document.getElementById(id); if (el) return mod('fv').then(m => m.renderForecastView(el, fvCtx(), { part })); };
 VIEW_RENDER.prognose = [fv('verlauf', 'fv-panel')];

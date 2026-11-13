@@ -5,6 +5,7 @@ import { mapKeys } from './mapkeys.js';
 import { calibLabel } from './ui-shared.js';
 import { CAPSRC, artTxt, badge, badge0, cellSvgMarkup, dd, dm, download, emptyBox, hideTip, num, pctTxt, plural, safeLink, srcTxt, st, stamp, tile, tip, typeName } from './report-core.js';
 import { DERIVED_TXT_DEF, capInfoTxt, overMark, rateCell, rateTxt, standTxt } from './report-more.js';
+import { NEUTRAL, PRINT } from './tokens.js';
 
 // ---------- Zellkarten auf OpenStreetMap (Leaflet) ----------
 // Zwei Karten (Fahrtbeginne, Fahrtenden), gekoppelt: die zuletzt bediente Karte führt, die andere folgt ohne eigene Animation.
@@ -30,12 +31,12 @@ function fromOklab([L, a, b]) {
   return `#${rgb.map(c => Math.round(Math.max(0, Math.min(1, unlin(c))) * 255).toString(16).padStart(2, '0')).join('')}`;
 }
 function rampColors(accent, panel) {
-  const A = hexRgb(accent), P = hexRgb(panel); if (!A || !P) return SEQ_P.map(() => accent || '#0f766e');
+  const A = hexRgb(accent), P = hexRgb(panel); if (!A || !P) return SEQ_P.map(() => accent || PRINT.accent);
   const a = toOklab(A), p = toOklab(P);
   return SEQ_P.map(q => fromOklab(a.map((x, i) => x * (q / 100) + p[i] * (1 - q / 100))));
 }
 const cssVar = (el, name, d) => (getComputedStyle(el).getPropertyValue(name) || '').trim() || d;
-const PRINT_ACCENT = '#0f766e', PRINT_PANEL = '#ffffff'; // helle Werte wie @media print in index.html
+const PRINT_ACCENT = PRINT.accent, PRINT_PANEL = PRINT.panel; // helle Werte wie @media print in index.html
 const cellBounds = (c) => [[c.lat - R.CELL_LAT / 2, c.lon - R.CELL_LON / 2], [c.lat + R.CELL_LAT / 2, c.lon + R.CELL_LON / 2]];
 const cellClass = (c, key, max) => (R.suppressed(c[key]) ? 0 : R.heatClass(c[key], max));
 export function unmountCellMaps(s) {
@@ -48,7 +49,7 @@ export function mountCellMaps(el, s) {
   const boxes = [...el.querySelectorAll('.rp-report div.rp-cellmap[data-key]')]; const cs = s.rep?.cells;
   if (!boxes.length || !hasLeaflet() || !cs?.grid?.length) return;
   const L = window.L, still = reducedMotion(), { fmt } = s.ctx;
-  const colors = rampColors(cssVar(el, '--accent', PRINT_ACCENT), cssVar(el, '--panel', PRINT_PANEL)), ink = cssVar(el, '--fg', '#111820');
+  const colors = rampColors(cssVar(el, '--accent', PRINT_ACCENT), cssVar(el, '--panel', PRINT_PANEL)), ink = cssVar(el, '--fg', NEUTRAL.ink);
   const idx = new Map(cs.grid.map((c, n) => [`${c.i}:${c.j}`, n]));
   const all = L.latLngBounds(cs.grid.flatMap(cellBounds));
   const maps = boxes.map(box => {
@@ -117,7 +118,7 @@ async function cellMapImage(m, cs) {
   await tilesSettled(m.tiles);
   const k = 2, cv = document.createElement('canvas'); cv.width = W * k; cv.height = H * k;
   const g = cv.getContext('2d'); if (!g) return null; g.scale(k, k);
-  g.fillStyle = '#eef1f4'; g.fillRect(0, 0, W, H);
+  g.fillStyle = NEUTRAL.paperSoft; g.fillRect(0, 0, W, H);
   const br = m.box.getBoundingClientRect(); let tiles = 0;
   g.save(); if ('filter' in g) g.filter = 'grayscale(1) contrast(.92) brightness(1.04)';
   for (const img of m.box.querySelectorAll('.leaflet-tile-pane img.leaflet-tile-loaded')) { const r = img.getBoundingClientRect(); if (r.right < br.left || r.left > br.right || r.bottom < br.top || r.top > br.bottom) continue; try { g.drawImage(img, r.left - br.left, r.top - br.top, r.width, r.height); tiles++; } catch { /* Kachel nicht zeichenbar */ } }
@@ -126,7 +127,7 @@ async function cellMapImage(m, cs) {
   for (const c of cs.grid) { const [[s0, w0], [n0, e0]] = cellBounds(c); const a = m.map.latLngToContainerPoint([n0, w0]), b = m.map.latLngToContainerPoint([s0, e0]); if (b.x < 0 || a.x > W || b.y < 0 || a.y > H) continue; g.fillStyle = colors[cellClass(c, m.key, cs.max)]; g.fillRect(a.x, a.y, Math.max(0.5, b.x - a.x), Math.max(0.5, b.y - a.y)); }
   g.globalAlpha = 1;
   const note = t('rep.openstreetmapContributors2'); g.font = '10px system-ui, sans-serif'; const tw = g.measureText(note).width;
-  g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - tw - 10, H - 16, tw + 10, 16); g.fillStyle = '#3b4855'; g.fillText(note, W - tw - 5, H - 4.5);
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - tw - 10, H - 16, tw + 10, 16); g.fillStyle = NEUTRAL.inkSoft; g.fillText(note, W - tw - 5, H - 4.5);
   try { return tiles ? cv.toDataURL('image/png') : null; } catch { return null; } // Kacheln ohne CORS-Freigabe: Canvas gesperrt → Rückfall
 }
 export function reportCsv(el) {
@@ -202,7 +203,7 @@ function capChart(ctx, v, c) {
 }
 function violationsBlock(ctx, c, v, s) {
   const { esc, fmt, opColor } = ctx;
-  const h = `<h3 style="font-size:13px;margin:var(--s2) 0 var(--s1)">${t('rep.violationsInLast30Days')}</h3>`;
+  const h = `<h3 style="font-size:.875rem;margin:var(--s2) 0 var(--s1)">${t('rep.violationsInLast30Days')}</h3>`;
   if (v === undefined) return h + `<div class="muted small">${t('rep.noLogYetCapsLogJsonIsCreated', { v0: R.NEAR_CAP * 100 })}</div>`;
   if (!v) return h + `<div class="muted small">${t('rep.logContainsNoCheckForThis')}</div>`;
   const ops = v.ops.filter(o => o.overRuns || o.nearRuns);
@@ -219,14 +220,14 @@ function violationsBlock(ctx, c, v, s) {
 // Teilgebiet mit vermuteter Abgrenzung (zone-watch.json): Statuszeile und je Anbieter Bestand gegen die Grenze
 // Grenze eines Teilgebiets als Text: gesamt, je Anbieter, Anteil an der Flotte (anteilMax/anteilMin)
 const zoneLimitTxt = (ctx, d) => [d.limit != null ? t('rep.total3', { limit: ctx.fmt(d.limit) }) : null, d.perOperator != null ? t('rep.perOperator', { perOperator: ctx.fmt(d.perOperator), v1: d.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' }) : null,
-  d.shareMax != null ? t('zv.shareMax', { p: pctTxt(ctx, d.shareMax, 0) }) : null, d.shareMin != null ? t('zv.shareMin', { p: pctTxt(ctx, d.shareMin, 0) }) : null].filter(Boolean).join(' · ') || '—';
+  d.shareMax != null ? t('zv.shareMax', { p: pctTxt(ctx, d.shareMax, 0) }) : null, d.shareMin != null ? t('zv.shareMin', { p: pctTxt(ctx, d.shareMin, 0) }) : null].filter(Boolean).join(', ') || '—';
 function zoneCheckRows(ctx, d) {
   const { fmt, esc, opColor } = ctx, k = d.check, shareCol = k.shareMax != null || k.shareMin != null;
   const badge = (s) => badge0(k.superset && s === 'hint' ? 'hintUpper' : s); // umfassender Umriss: Hinweis = Bestand ist Obergrenze
   const shareCell = (o) => (o.fleetShare == null ? '<span class="muted">–</span>' : `${pctTxt(ctx, o.fleetShare, 0)}<div class="sub-line">${t('zv.ofFleet', { n: fmt(o.now), f: fmt(o.fleet) })}</div>`);
   const rows = k.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.now)}</td><td class="n">${o.limit != null ? fmt(o.limit) : '—'}</td><td style="min-width:120px">${o.limit != null ? meter(ctx, o.now, o.limit, ((s) => (s === 'hint' ? 'near' : s))(o.countStatus || o.status)) : '<span class="muted small">—</span>'}</td>${shareCol ? `<td class="n">${shareCell(o)}</td>` : ''}<td class="n">${o.todayMax != null ? fmt(o.todayMax) : '–'}</td><td class="n">${o.max30 != null ? fmt(o.max30) : '–'}</td><td class="n">${o.daysOver != null ? `${fmt(o.daysOver)} <span class="muted small">${t('rep.capZoneDaysOf', { n: fmt(o.daysLogged) })}</span>` : '–'}</td><td>${badge(o.status)}</td></tr>`).join('');
   const sub = `<div class="tbl" style="margin-top:var(--s1)"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.capZoneNow')}</th><th class="n">${t('rep.cap')}</th><th>${t('rep.utilisation')}</th>${shareCol ? `<th class="n">${t('zv.fleetShare')}</th>` : ''}<th class="n">${t('rep.capZoneTodayMax')}</th><th class="n">${t('rep.capZoneMax30')}</th><th class="n">${t('rep.capZoneDaysOver')}</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  return `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneLimitTxt(ctx, d)}</td><td>${badge(d.status)}</td><td class="small muted">${t('rep.capZoneChecked', { m: fmt(k.accuracyM || 0), at: stamp(k.at) })}${k.rest ? ` · ${t('zv.rest')}` : ''}${k.superset ? ` · ${t('zv.superset')}` : ''}${k.live ? ` · ${t('zv.live')}` : ''}${d.hinweis ? ` · ${srcTxt(esc, d.hinweis)}` : ''}</td></tr><tr class="rp-zonesub"><td colspan="4">${sub}</td></tr>`;
+  return `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneLimitTxt(ctx, d)}</td><td>${badge(d.status)}</td><td class="small muted">${t('rep.capZoneChecked', { m: fmt(k.accuracyM || 0), at: stamp(k.at) })}${k.rest ? `, ${t('zv.rest')}` : ''}${k.superset ? `, ${t('zv.superset')}` : ''}${k.live ? `, ${t('zv.live')}` : ''}${d.hinweis ? `, ${srcTxt(esc, d.hinweis)}` : ''}</td></tr><tr class="rp-zonesub"><td colspan="4">${sub}</td></tr>`;
 }
 export function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const { fmt, esc, opColor } = ctx;
@@ -244,18 +245,18 @@ export function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
   const meterCell = (o) => (o.licensed === false ? `<span class="muted small">${t('rep.notInSourceSOperatorList')}</span>` : own(o) ? meter(ctx, o.total, o.limit, o.status === 'hint' ? 'near' : o.status) + shareLbl(o) : `<span class="muted small">${t('rep.noCapPerOperator')}</span>${shareLbl(o)}`);
   const ops = c.operators.map(o => `<tr><td><span class="op"><i style="background:${opColor(o.op)}"></i>${esc(o.op)}</span></td><td class="n">${fmt(o.total)}</td><td class="n">${fmt(o.disabled)}</td><td class="n">${fmt(o.available)}</td><td class="n">${limCell(o)}</td><td style="min-width:120px">${meterCell(o)}</td><td class="n">${rateCell(ctx, rate(o, 'availShare'), false, derivedOf(o))}${shareNote(o)}</td><td>${badge(o.licensed === false ? 'unlicensed' : own(o) ? o.status : 'unknown')}</td></tr>`).join('');
   const zoneNum = (d) => zoneLimitTxt(ctx, d);
-  const districts = c.districts.map(d => d.check ? zoneCheckRows(ctx, d) : `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${d.watch ? `${t('zv.noRuns')}${d.hinweis ? ` · ${srcTxt(esc, d.hinweis)}` : ''}` : t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)} · ` : '' })}</td></tr>`).join('');
+  const districts = c.districts.map(d => d.check ? zoneCheckRows(ctx, d) : `<tr><td translate="no">${esc(d.label)}</td><td class="n">${zoneNum(d)}</td><td>${badge('unchecked')}</td><td class="small muted">${d.watch ? `${t('zv.noRuns')}${d.hinweis ? `, ${srcTxt(esc, d.hinweis)}` : ''}` : t('rep.notCheckableWithoutArea', { v0: d.hinweis ? `${srcTxt(esc, d.hinweis)}, ` : '' })}</td></tr>`).join('');
   const per1000 = pop ? (c.total / pop) * 1000 : null;
-  const pre = rep?.quality.prelim ? ` · ${t('rep.preliminary')}` : '';
-  const links = [safeLink(ctx, c.url, c.quelle || t('rep.source')), ...(c.links || []).map((l, i) => safeLink(ctx, l.url, l.quelle || t('rep.source2', { v0: i + 2 })))].join(' · ');
-  const listTxt = c.listed ? ` · ${t('rep.operatorsAccordingToSource', { join: esc(c.listed.join(', ')), v1: c.listComplete ? '' : ` ${t('rep.listIncompleteNoLicenceCheck')}` })}` : '';
+  const pre = rep?.quality.prelim ? `, ${t('rep.preliminary')}` : '';
+  const links = [safeLink(ctx, c.url, c.quelle || t('rep.source')), ...(c.links || []).map((l, i) => safeLink(ctx, l.url, l.quelle || t('rep.source2', { v0: i + 2 })))].join(', ');
+  const listTxt = c.listed ? `, ${t('rep.operatorsAccordingToSource', { join: esc(c.listed.join(', ')), v1: c.listComplete ? '' : ` ${t('rep.listIncompleteNoLicenceCheck')}` })}` : '';
   const head = hasTotal
     ? `<div class="rp-cap-total"><div>${meter(ctx, c.total, c.limit, c.status === 'hint' ? 'near' : c.status)}</div><div><span class="big">${fmt(c.total)}</span> <span class="muted">${t('rep.of3', { limit: fmt(c.limit), v1: pctTxt(ctx, c.share, 0) })}</span></div></div>
-    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)} · ${t('rep.headroomTotal', { n: fmt(Math.max(0, c.limit - c.total)) })}</div>`
+    <div class="small">${t('rep.bookableOfCap', { available: fmt(c.available), limit: fmt(c.limit) })}${overMark(c.availShare, c.limitDerived)}, ${t('rep.headroomTotal', { n: fmt(Math.max(0, c.limit - c.total)) })}</div>`
     : `<div class="small">${t('rep.reported', { total: fmt(c.total), typeName: esc(typeName(c.type)), v2: c.perOperator != null ? t('rep.noTotalCapCapPerOperatorSee') : t('rep.noCityWideCap') })}</div>`;
-  return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? ` · ${artTxt(esc, c)}` : ''}</span></h3>${badge(c.status)}</div>
+  return `<div class="rp-cap"><div class="rp-cap-h"><h3>${esc(c.ort)} <span class="muted small">${esc(typeName(c.type))}${c.art ? `, ${artTxt(esc, c)}` : ''}</span></h3>${badge(c.status)}</div>
     ${head}
-    <div class="small muted">${t('rep.totalFleetCapOfficialSource', { limTxt, v1: c.perOperator != null ? ` · ${t('rep.perOperator', { perOperator: fmt(c.perOperator), v1: c.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' })}` : '', v2: hist ? ` · ${hist}` : '', v3: c.since && !c.previous ? ` · ${t('rep.validSince', { standTxt: esc(standTxt(c.since)) })}` : '', v4: c.stand ? ` · ${t('rep.asOf2', { standTxt: esc(standTxt(c.stand)) })}` : '', links, listTxt })}</div>
+    <div class="small muted">${t('rep.totalFleetCapOfficialSource', { limTxt, v1: c.perOperator != null ? `, ${t('rep.perOperator', { perOperator: fmt(c.perOperator), v1: c.perOperatorDerived ? ` (${DERIVED_TXT_DEF()})` : '' })}` : '', v2: hist ? `, ${hist}` : '', v3: c.since && !c.previous ? `, ${t('rep.validSince', { standTxt: esc(standTxt(c.since)) })}` : '', v4: c.stand ? `, ${t('rep.asOf2', { standTxt: esc(standTxt(c.stand)) })}` : '', links, listTxt })}</div>
     ${c.hinweis ? `<div class="small muted">${`<span translate="no">${esc(c.hinweis)}</span>`}</div>` : ''}
     ${ops ? `<div class="tbl"><table><thead><tr><th>${t('rep.operator2')}</th><th class="n">${t('rep.fleet2')}</th><th class="n">${t('rep.ofWhichDisabled')}</th><th class="n">${t('rep.bookable')}</th><th class="n">${t('rep.cap')}</th><th title="${t('rep.reportedCap')}">${t('rep.utilisation')}</th><th class="n" title="${t('rep.bookableCap')}">${t('rep.availableAllowed')}</th><th>Status</th></tr></thead><tbody>${ops}</tbody></table></div>` : emptyBox(t('rep.noInFeed', { typeName: esc(typeName(c.type)) }), t('rep.noOpenFeedCurrentlyReports'))}
     ${districts ? `<div class="tbl"><table><thead><tr><th>${t('rep.subAreaWithItsOwnCap')}</th><th class="n">${t('rep.cap')}</th><th>Status</th><th>${t('rep.note')}</th></tr></thead><tbody>${districts}</tbody></table></div>` : ''}
@@ -265,7 +266,7 @@ export function capBlock(ctx, c, rep, pop, viol = undefined, s = { show: {} }) {
 // Einträge ohne Prüfung (nicht amtlich, „keine“): kompakte Tabelle mit Zahl laut Quelle und heutigem Bestand zur Einordnung
 export function capInfoTable(ctx, list, title) {
   const { esc, fmt } = ctx; if (!list.length) return '';
-  const rows = list.map(c => `<tr><td><b>${esc(c.ort)}</b><div class="sub-line">${esc(typeName(c.type))}${c.art ? ` · ${artTxt(esc, c)}` : ''}</div></td><td>${badge(c.status)}<div class="sub-line">${esc(CAPSRC[c.sourceStatus] || c.sourceStatus)}${c.statusText && c.statusText !== R.CAP_SOURCE_STATUS[c.sourceStatus] ? ` – ${srcTxt(esc, c.statusText)}` : ''}</div></td>
-    <td class="small">${c.sourceStatus === 'keine' ? '—' : capInfoTxt(ctx, c) || '—'}</td><td class="n">${fmt(c.total)}</td><td class="small">${safeLink(ctx, c.url, c.quelle || t('rep.source'))}${c.stand ? ` · ${esc(standTxt(c.stand))}` : ''}</td></tr>`).join('');
-  return `<h3 style="font-size:13px;margin:var(--s4) 0 var(--s1)">${title}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>${t('rep.city')}</th><th>${t('rep.sourceStatus')}</th><th>${t('rep.figureAccordingToSource')}</th><th class="n">${t('rep.fleetToday')}</th><th>${t('rep.source')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const rows = list.map(c => `<tr><td><b>${esc(c.ort)}</b><div class="sub-line">${esc(typeName(c.type))}${c.art ? `, ${artTxt(esc, c)}` : ''}</div></td><td>${badge(c.status)}<div class="sub-line">${esc(CAPSRC[c.sourceStatus] || c.sourceStatus)}${c.statusText && c.statusText !== R.CAP_SOURCE_STATUS[c.sourceStatus] ? ` – ${srcTxt(esc, c.statusText)}` : ''}</div></td>
+    <td class="small">${c.sourceStatus === 'keine' ? '—' : capInfoTxt(ctx, c) || '—'}</td><td class="n">${fmt(c.total)}</td><td class="small">${safeLink(ctx, c.url, c.quelle || t('rep.source'))}${c.stand ? `, ${esc(standTxt(c.stand))}` : ''}</td></tr>`).join('');
+  return `<h3 style="font-size:.875rem;margin:var(--s4) 0 var(--s1)">${title}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>${t('rep.city')}</th><th>${t('rep.sourceStatus')}</th><th>${t('rep.figureAccordingToSource')}</th><th class="n">${t('rep.fleetToday')}</th><th>${t('rep.source')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }

@@ -1,12 +1,13 @@
 // Dashboard: Energie niedrig: eine Regel für Übersicht, Briefing, Leistung, Karte und CSV (S3.9: aus web/app.js geschnitten, Einstieg bleibt web/app.js).
 import * as R from './pulse-report.js';
 import { t } from './i18n.js';
-import { $, TYPE, abbr, ageText, emptyTip, esc, fmt, isClient, opColor, palette, pctf, state, timeText } from './app-core.js';
+import { $, TYPE, abbr, ageText, emptyTip, esc, fmt, foldSeries, isClient, opColor, palette, pctf, state, timeText } from './app-core.js';
 import { cached, emptyRow, failedText, loadHistory, setChips } from './app-load.js';
 import { USABLE, effStatus, liveRec, muniName, operatorRows, scopeGroups, sourcesForScope, sumStats } from './app-scope.js';
 import { markDirty } from './app-router.js';
 import { tile } from './app-lang.js';
 import { hourOf } from './app-calib.js';
+import { chartSpec, tableButton } from './charttip.js';
 
 // ---------- Energie niedrig: eine Regel für Übersicht, Briefing, Leistung, Karte und CSV (lib/pulse-report.js energyLow) ----------
 // Wie die Disposition (lib/pulse-ops.js needsSwap): Ladestand < 20 % UND Reichweite < 5 km, wo beides gemeldet ist; sonst entscheidet die
@@ -68,7 +69,7 @@ export function energyFor(keep = null) {
 export const energyOfOp = (op) => energyFor(k => k.split('|')[1] === op);
 export const energyRule = () => { const l = energyLimits(); return t('app.chargeAndRangeKm', { charge: fmt(l.charge), range: fmt(l.range) }); };
 export const energyVal = (e) => (e.pending ? '…' : e.known ? `${e.approx ? '≈ ' : ''}${pctf(e.low, e.known)}` : t('common.na'));
-export const energySub = (e) => (e.pending ? t('app.evaluatingEnergyPerVehicle') : e.known ? t('app.ofWithEnergyData', { v0: energyRule(), low: fmt(e.low), known: fmt(e.known), v3: e.rangeOnly ? ` ${t('app.ofWhichRangeOnly', { rangeOnly: fmt(e.rangeOnly) })}` : '', v4: e.approx ? ` · ${t('app.upperBoundWithoutIndividual')}` : '' }) : t('app.noEnergyData'));
+export const energySub = (e) => (e.pending ? t('app.evaluatingEnergyPerVehicle') : e.known ? t('app.ofWithEnergyData', { v0: energyRule(), low: fmt(e.low), known: fmt(e.known), v3: e.rangeOnly ? ` ${t('app.ofWhichRangeOnly', { rangeOnly: fmt(e.rangeOnly) })}` : '', v4: e.approx ? `, ${t('app.upperBoundWithoutIndividual')}` : '' }) : t('app.noEnergyData'));
 export function renderLab() {
   const groups = scopeGroups(); const st = sumStats([...groups.values()]);
   // Energie niedrig je Fahrzeug nach der Regel der Disposition; Anbieter nur mit Reichweite (Lime) zählen über die Reichweite mit
@@ -79,14 +80,14 @@ export function renderLab() {
   const qual = recs.filter((r, i) => USABLE.has(eff[i].status) && Number.isFinite(r.quality)).map(r => r.quality);
   $('#lab-tiles').innerHTML = [
     tile(t('app.rangeBelowKm', { range: fmt(lim.range) }), st.rangeKnown ? pctf(st.lowRange, st.rangeKnown) : t('common.na'), st.rangeKnown ? t('app.ofWithRangeRegardlessOf', { lowRange: fmt(st.lowRange), rangeKnown: fmt(st.rangeKnown) }) : t('app.noRangeData')),
-    tile(t('app.labFreeDocks'), st.stations ? fmt(st.stationDocks) : '—', st.stations ? t('app.labFreeDocksSub', { n: fmt(st.stations), full: fmt(st.stationsFull) }) + (st.stationDocksBad ? ` · ${t('app.docksBad', { n: fmt(st.stationDocksBad) })}` : '') : t('app.noStationsInFilter')),
+    tile(t('app.labFreeDocks'), st.stations ? fmt(st.stationDocks) : '—', st.stations ? t('app.labFreeDocksSub', { n: fmt(st.stations), full: fmt(st.stationsFull) }) + (st.stationDocksBad ? `, ${t('app.docksBad', { n: fmt(st.stationDocksBad) })}` : '') : t('app.noStationsInFilter')),
     tile(abbr(t('app.labDataAge'), 'fresh'), use.length ? ageText(use[Math.floor(use.length / 2)]) : '—', use.length ? t('app.labDataAgeSub', { n: fmt(use.length) }) : t('app.noSourcesInArea')),
     tile(t('app.labQuality'), qual.length ? fmt(qual.reduce((a, b) => a + b, 0) / qual.length) : '—', qual.length ? t('app.labQualitySub', { n: fmt(qual.length) }) : t('app.noSourcesInArea')),
   ].join('');
   // Fahrzeugarten
   const byType = new Map();
   for (const [k, s] of groups) { const ty = k.split('|')[2]; byType.set(ty, [...(byType.get(ty) || []), s]); }
-  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = sumStats(list); const e = energyFor(k => k.split('|')[2] === ty); return `<tr><td>${esc(TYPE[ty] || ty)}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${energyVal(e)}<div class="sub-line">${!e.pending && e.known ? `n = ${fmt(e.known)}${e.rangeOnly ? ` · ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : ''}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : t('common.na')}</td></tr>`; }).sort().join('') || emptyRow(6, t('app.noVehiclesInFilter'), t('app.setVehicleTypeOrOperatorTo'));
+  $('#tbl-types tbody').innerHTML = [...byType].map(([ty, list]) => { const s = sumStats(list); const e = energyFor(k => k.split('|')[2] === ty); return `<tr><td>${esc(TYPE[ty] || ty)}</td><td class="n">${fmt(s.total)}</td><td class="n">${fmt(s.available)}<div class="sub-line">${pctf(s.available, s.total)}</div></td><td class="n">${fmt(s.disabled)}</td><td class="n">${energyVal(e)}<div class="sub-line">${!e.pending && e.known ? `n = ${fmt(e.known)}${e.rangeOnly ? `, ${t('app.rangeOnly2', { rangeOnly: fmt(e.rangeOnly) })}` : ''}` : ''}</div></td><td class="n">${s.rangeKnown ? pctf(s.lowRange, s.rangeKnown) : t('common.na')}</td></tr>`; }).sort().join('') || emptyRow(6, t('app.noVehiclesInFilter'), t('app.setVehicleTypeOrOperatorTo'));
   // Stationen je Anbieter
   const byOp = new Map();
   for (const [k, s] of groups) { const op = k.split('|')[1]; byOp.set(op, [...(byOp.get(op) || []), s]); }
@@ -97,7 +98,7 @@ export function renderLab() {
   $('#tbl-score tbody').innerHTML = rows.map(r => { const s = r.st; const avail = s.total ? s.available / s.total : null; const dis = s.total ? s.disabled / s.total : null; const e = energyOfOp(r.op); const low = !e.pending && e.known ? e.low / e.known : null; const emp = s.stations ? s.stationsEmpty / s.stations : null;
     const named = [[t('app.available2'), avail != null ? avail * 100 : null], [t('app.n100DisabledRate'), dis != null ? 100 - dis * 100 : null], [t('app.n100LowEnergy'), low != null ? 100 - low * 100 : null], [t('app.n100EmptyStations'), emp != null ? 100 - emp * 100 : null], [t('app.sourceQuality'), r.quality]].filter(x => x[1] != null);
     const score = named.length ? Math.round(named.reduce((a, x) => a + x[1], 0) / named.length) : null;
-    const how = named.length ? t('app.weightEach', { v0: named.map(([l, v]) => `${l} ${fmt(v)}`).join(' · '), v1: fmt(100 / named.length) }) : '';
+    const how = named.length ? t('app.weightEach', { v0: named.map(([l, v]) => `${l} ${fmt(v)}`).join(', '), v1: fmt(100 / named.length) }) : '';
     return `<tr><td><span class="op"><i style="background:${opColor(r.op)}"></i>${esc(r.op)}</span></td><td class="n">${fmt(s.total)}</td><td class="n">${avail == null ? '—' : pctf(s.available, s.total)}</td><td class="n">${dis == null ? '—' : pctf(s.disabled, s.total)}</td><td class="n">${e.pending ? '…' : low == null ? t('common.na') : energyVal(e)}</td><td class="n"${emp == null ? '' : ` title="${esc(emptyTip(s))}"`}>${emp == null ? '—' : pctf(s.stationsEmpty, s.stations)}</td><td class="n">${esc(r.quality ?? '—')}</td><td class="n" title="${esc(how)}"><b>${score ?? '—'}</b><div class="sub-line">${t('app.partialScores', { length: named.length })}</div></td></tr>`; }).join('') || emptyRow(8, t('app.noOperatorsInFilter'), t('app.chooseAreaWithService'));
   renderHistory();
 }
@@ -131,12 +132,15 @@ export async function renderHistory() {
     alignSeries(ser.available, h.t.length).forEach((v, i) => { if (v != null) arr[i] = (arr[i] || 0) + v; });
     byOp.set(name, arr);
   }
-  const series = [...byOp].map(([name, values]) => ({ name, values, color: state.scope === 'DE' ? null : opColor(name) })).sort((a, b) => Math.max(...b.values.filter(x => x != null), 0) - Math.max(...a.values.filter(x => x != null), 0)).slice(0, 8);
+  // S4.6: Farbe nach Anbieter bzw. Fahrzeugart (fester Platz), nicht nach Rang; graue Anbieter als eine Reihe „Weitere“
+  const tyIdx = (name) => Object.values(TYPE).indexOf(name);
+  const series0 = [...byOp].map(([name, values]) => ({ name, values, color: state.scope === 'DE' ? palette(Math.max(0, tyIdx(name))) : opColor(name) })).sort((a, b) => Math.max(...b.values.filter(x => x != null), 0) - Math.max(...a.values.filter(x => x != null), 0));
+  const series = state.scope === 'DE' ? series0 : foldSeries(series0, t('app.moreOperators'));
   const changes = (state.latest?.sources || []).filter(r => r.sourceChanged && (state.scope === 'DE' || (r.municipalities || []).includes(state.scope)));
   // Verlaufsdateien laufen nach UTC-Tag (ab 01:00 bzw. 02:00 Uhr), Ereignisdateien unter Nutzung nach Berliner Tag – daher andere Laufzahlen je Tag
   const utcStart = timeText(Date.parse(`${day}T00:00:00Z`));
   const sub = $('#hist-sub'); sub.innerHTML = isClient() ? t('app.availableVehiclesOn', { join: esc(day.split('-').reverse().join('.')), v1: timeText(h.t[0]), v2: timeText(h.t[h.t.length - 1]), v3: abbr(t('app.dataPoints', { length: fmt(h.t.length) }), 'point') })
-    : t('app.onHistoryDayStartsUtcUsage', { v0: abbr(t('app.collectorPoints', { length: fmt(h.t.length) }), 'point'), join: esc(day.split('-').reverse().join('.')), v2: timeText(h.t[0]), v3: timeText(h.t[h.t.length - 1]), utcStart, v5: changes.length ? ` · ${t('app.sourceChangesComparison', { length: changes.length })}` : '' });
+    : t('app.onHistoryDayStartsUtcUsage', { v0: abbr(t('app.collectorPoints', { length: fmt(h.t.length) }), 'point'), join: esc(day.split('-').reverse().join('.')), v2: timeText(h.t[0]), v3: timeText(h.t[h.t.length - 1]), utcStart, v5: changes.length ? `, ${t('app.sourceChangesComparison', { length: changes.length })}` : '' });
   box.innerHTML = lineChart(h.t, series, chartWidth(box, () => renderHistory()));
   $('#chart-legend').innerHTML = series.map((s, i) => `<span><i class="dot" style="background:${s.color || palette(i)}"></i>${esc(s.name)} <span class="mono">${fmt(s.values.filter(x => x != null).pop())}</span></span>`).join('');
 }
@@ -175,7 +179,7 @@ export function lineChart(tq, series, W = 900) {
   const x = (i) => P.l + ((tq[i] - t0) / (t1 - t0)) * (W - P.l - P.r), xt = (ms) => P.l + ((ms - t0) / (t1 - t0)) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
   let g = '';
-  for (let i = 1; i < tq.length; i++) if (tq[i] - tq[i - 1] > GAP) { const w = x(i) - x(i - 1); g += `<rect class="gap" x="${x(i - 1).toFixed(1)}" y="${P.t}" width="${w.toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.noCollectorRun', { v0: timeText(tq[i - 1]), v1: timeText(tq[i]) })}</title></rect>${w > 60 ? `<text x="${(x(i - 1) + w / 2).toFixed(1)}" y="${P.t + 12}" text-anchor="middle">${t('app.notMeasured')}</text>` : ''}`; }
+  for (let i = 1; i < tq.length; i++) if (tq[i] - tq[i - 1] > GAP) { const w = x(i) - x(i - 1); g += `<rect class="gap" x="${x(i - 1).toFixed(1)}" y="${P.t}" width="${w.toFixed(1)}" height="${H - P.t - P.b}"/>${w > 60 ? `<text x="${(x(i - 1) + w / 2).toFixed(1)}" y="${P.t + 12}" text-anchor="middle">${t('app.notMeasured')}</text>` : ''}`; }
   for (const v of nt.ticks) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v, nt.step < 1 ? 1 : 0)}</text>`;
   // volle Stunden (Berliner Zeit; Stundengrenzen fallen mit UTC zusammen)
   // Abstand der Stundenmarken nach Breite: höchstens eine Beschriftung je ≈ 56 px
@@ -184,8 +188,9 @@ export function lineChart(tq, series, W = 900) {
   if (span <= 3600e3 * 1.5) g += `<text x="${x(0).toFixed(1)}" y="${H - 8}" text-anchor="start">${timeText(t0)}</text>`;
   series.forEach(s => { if (s.values.length > tq.length) s.values = s.values.slice(0, tq.length); }); // nie über die Zeitachse hinaus
   const paths = series.map((s, i) => { let d = '', open = false; s.values.forEach((v, j) => { if (v == null || (j && tq[j] - tq[j - 1] > GAP)) open = false; if (v == null) return; d += `${open ? 'L' : 'M'}${x(j).toFixed(1)} ${y(v).toFixed(1)} `; open = true; }); const last = s.values.map((v, j) => [v, j]).filter(([v]) => v != null).pop(); const dots = tq.length <= 12 ? s.values.map((v, j) => v == null ? '' : `<circle cx="${x(j).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="${s.color || palette(i)}"/>`).join('') : ''; return `<path d="${d}" fill="none" stroke="${s.color || palette(i)}" stroke-width="2" stroke-linejoin="round"/>${dots}${last ? `<circle cx="${x(last[1]).toFixed(1)}" cy="${y(last[0]).toFixed(1)}" r="3.5" fill="${s.color || palette(i)}"/>` : ''}`; }).join('');
-  // Trefferflächen je Sammler-Punkt (von Mitte zu Mitte) mit allen Werten als Tooltip
-  let hits = '';
-  for (let i = 0; i < tq.length; i++) { const a = i ? (x(i - 1) + x(i)) / 2 : P.l, b = i < tq.length - 1 ? (x(i) + x(i + 1)) / 2 : W - P.r; const lines = series.filter(s => s.values[i] != null).sort((p, q) => q.values[i] - p.values[i]).map(s => `${s.name} ${fmt(s.values[i])}`); hits += `<rect class="hit" x="${a.toFixed(1)}" y="${P.t}" width="${Math.max(1, b - a).toFixed(1)}" height="${H - P.t - P.b}"><title>${t('app.text', { v0: timeText(tq[i]), v1: esc(lines.join('\n') || t('app.noData2')) })}</title></rect>`; }
-  return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${t('app.historyOfAvailableVehicles')}. ${seriesSummary(series)}`)}">${g}${paths}${hits}</svg>`;
+  // S4.5: alle Werte je Sammler-Punkt im gemeinsamen Hover-Layer (web/charttip.js), auch als Tabelle; Pausen über 45 Min. im Tooltip
+  const cols = series.map((s, i) => s.color || palette(i));
+  const sp = chartSpec({ n: tq.length, x, top: P.t, bottom: H - P.b, head: (i) => (i && tq[i] - tq[i - 1] > GAP ? t('ct.afterGap', { at: timeText(tq[i]), from: timeText(tq[i - 1]) }) : timeText(tq[i])), label: t('app.historyOfAvailableVehicles'), colHead: t('ct.timeCol'), cols: series.map(s => s.name),
+    cell: (i, k) => (series[k].values[i] == null ? '–' : fmt(series[k].values[i])), rows: (i) => series.map((s, k) => ({ color: cols[k], label: s.name, value: s.values[i] == null ? '–' : fmt(s.values[i]), sort: s.values[i] ?? -1 })) });
+  return `<svg class="chart" data-px="1" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" ${sp.attrs} aria-label="${esc(`${t('app.historyOfAvailableVehicles')}. ${seriesSummary(series)}`)}">${g}${paths}</svg>${tableButton(sp.id)}`;
 }

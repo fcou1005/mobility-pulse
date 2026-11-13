@@ -16,6 +16,7 @@ export async function run(ctx) {
       const f = path.join(DATA, 'caps-log.json');
       const prevLog = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null;
       const caps = R.capsCheck(ref, groupsOut, { ags: 'DE', asOf: now });
+      ctx.caps = caps; // S5.2: Alarme vergleichen den Status mit dem vorigen Lauf
       const doc = R.capsLogUpdate(prevLog, caps, { at: now, dt: prev?.at ? now - prev.at : null, days: 30 });
       await writeFile(f, JSON.stringify(doc));
       const over = caps.flatMap(c => [c, ...c.operators].filter(x => x.status === 'over').map(x => `${c.ort}${x.op ? ` ${x.op}` : ''} ${x.total}/${x.limit}`));

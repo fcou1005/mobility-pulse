@@ -1,0 +1,182 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/auflagen.schema.json",
+ "title": "auflagen/ – Datenauflagen-Check und Alarme",
+ "description": "Jahresbuch der Feed-Verfügbarkeit je Quelle (auflagen/verfuegbarkeit-<Jahr>.json, S5.1) und Alarmprotokoll je Gemeinde (auflagen/alarme.json, S5.2; daraus die Atom-Feeds feeds/<AGS>.xml).",
+ "x-version": "1.0",
+ "$defs": {
+  "ledger": {
+   "type": "object",
+   "description": "Verfügbarkeit im Kalenderjahr: Läufe, verfügbare Läufe (aktuell oder leicht verzögert), Fehler – letzte Tage einzeln, ältere je Monat",
+   "required": [
+    "schemaVersion",
+    "year",
+    "at",
+    "sources"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "year": {
+     "type": "integer",
+     "description": "Kalenderjahr"
+    },
+    "at": {
+     "type": "integer",
+     "description": "Stand (ms seit 1970)"
+    },
+    "sources": {
+     "type": "object",
+     "description": "Quelle (id) → Buch",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "mo",
+       "d",
+       "first"
+      ],
+      "properties": {
+       "mo": {
+        "type": "object",
+        "description": "Monat (JJJJ-MM) → [Läufe, verfügbar, Fehler]",
+        "additionalProperties": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer",
+           "minimum": 0
+          },
+          {
+           "type": "integer",
+           "minimum": 0
+          },
+          {
+           "type": "integer",
+           "minimum": 0
+          }
+         ],
+         "items": false,
+         "minItems": 3
+        }
+       },
+       "d": {
+        "type": "object",
+        "description": "Tag (JJJJ-MM-TT, letzte 10 Tage) → [Läufe, verfügbar, Fehler]",
+        "additionalProperties": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer",
+           "minimum": 0
+          },
+          {
+           "type": "integer",
+           "minimum": 0
+          },
+          {
+           "type": "integer",
+           "minimum": 0
+          }
+         ],
+         "items": false,
+         "minItems": 3
+        }
+       },
+       "first": {
+        "type": "string",
+        "description": "erster gemessener Tag im Jahr"
+       }
+      }
+     }
+    }
+   }
+  },
+  "alarms": {
+   "type": "object",
+   "description": "Alarme der letzten 60 Tage, neueste zuerst; Zustand für den Vergleich mit dem nächsten Lauf",
+   "required": [
+    "schemaVersion",
+    "at",
+    "items"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "integer",
+     "description": "Stand (ms seit 1970)"
+    },
+    "items": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "at",
+       "ags",
+       "kind",
+       "title"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "description": "eindeutige Kennung (Art, Gemeinde, Anbieter, Zeit)"
+       },
+       "at": {
+        "type": "integer",
+        "description": "Zeitpunkt (ms)"
+       },
+       "ags": {
+        "type": "string",
+        "description": "Gemeinde"
+       },
+       "kind": {
+        "enum": [
+         "cap",
+         "source",
+         "zone",
+         "price",
+         "fleet"
+        ],
+        "description": "Thema: Obergrenze, Quelle aus, Zonenänderung, Preisänderung, Flottensprung"
+       },
+       "op": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "description": "Anbieter"
+       },
+       "title": {
+        "type": "string",
+        "description": "Überschrift (Deutsch)"
+       },
+       "text": {
+        "type": "string",
+        "description": "Erklärung mit Zahlen (Deutsch)"
+       },
+       "level": {
+        "enum": [
+         "info",
+         "warn",
+         "bad"
+        ],
+        "description": "Schwere"
+       }
+      }
+     }
+    },
+    "state": {
+     "type": "object",
+     "description": "Stand des letzten Laufs für den Vergleich (Obergrenzen, Quellenstatus, Zonen, Preise, Flotte)"
+    }
+   }
+  }
+ }
+}

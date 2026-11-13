@@ -1,6 +1,7 @@
 // Wetter in den Diagrammen: Stundenwerte (Temperatur, Niederschlag) aus dem Wetter-Cache des Sammlers (weather/<UTC-Tag>.json, DWD über Bright Sky),
 // derselbe Stand, mit dem die Prognose rechnet. Gemeinde: ihre Wetterzelle; ganz Deutschland: Mittel über alle Zellen.
 import { t, numFmt } from './i18n.js';
+import { chartSpec } from './charttip.js';
 
 const TZ = 'Europe/Berlin';
 const HOUR_B = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }), DAY_B = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -48,11 +49,14 @@ export function weatherSvg(vals, { W, pl, pr, hours = [], H = 84, esc = (s) => s
   const rain = vals.map((v, i) => (v?.p > 0.05 ? `<rect class="wx-p" x="${(pl + i * bw + 1).toFixed(1)}" y="${(bot - rainH * v.p / pScale).toFixed(1)}" width="${Math.max(1.2, bw - 2).toFixed(1)}" height="${(rainH * v.p / pScale).toFixed(1)}"/>` : '')).join('');
   let d = '', open = false;
   vals.forEach((v, i) => { if (!v) { open = false; return; } d += `${open ? 'L' : 'M'}${(pl + i * bw + bw / 2).toFixed(1)} ${y(v.t).toFixed(1)}`; open = true; });
-  const hit = vals.map((v, i) => (v ? `<rect class="hit" x="${(pl + i * bw).toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H}"><title>${esc(t('wx.tip', { h: String(hours[i] ?? '').padStart(2, '0'), t: f1(v.t), p: v.p == null ? '–' : f1(v.p) }))}</title></rect>` : '')).join('');
+  // S4.5: Werte je Stunde im gemeinsamen Hover-Layer (web/charttip.js) statt <title> auf Trefferflächen
+  const cs = chartSpec({ n, x: (i) => pl + i * bw + bw / 2, top: 0, bottom: bot, head: (i) => t('ct.hour', { h: String(hours[i] ?? '').padStart(2, '0'), h2: String(((hours[i] ?? 0) + 1) % 24).padStart(2, '0') }), label: t('wx.aria', { lo, hi, p: f1(pmax) }), colHead: t('ct.hourCol'),
+    cols: [t('wx.temp'), t('wx.rain')], cell: (i, k) => (vals[i] ? [`${f1(vals[i].t)} °C`, vals[i].p == null ? '–' : `${f1(vals[i].p)} mm`][k] : '–'),
+    rows: (i) => (vals[i] ? [{ color: 'var(--fg-2)', label: t('wx.temp'), value: `${f1(vals[i].t)} °C` }, { color: 'var(--info)', label: t('wx.rain'), value: vals[i].p == null ? '–' : `${f1(vals[i].p)} mm/h` }] : []) });
   // Min/Max links neben der Achse; ohne linken Rand (pl < 24) innen am linken Rand
   const lx = pl >= 24 ? pl - 5 : pl + 2, la = pl >= 24 ? 'end' : 'start';
   const lab = `<text x="${lx}" y="${(y(hi) + 4).toFixed(1)}" text-anchor="${la}">${hi}°</text><text x="${lx}" y="${(y(lo) + 4).toFixed(1)}" text-anchor="${la}">${lo}°</text>`
     + (pmax > 0.05 ? `<text x="${W - pr}" y="9" text-anchor="end" class="wx-pl">${esc(t('wx.rainMax', { p: f1(pmax) }))}</text>` : '');
-  return `<svg viewBox="0 0 ${W} ${H}" ${svgAttrs} role="img" aria-label="${esc(t('wx.aria', { lo, hi, p: f1(pmax) }))}"><line class="gl" x1="${pl}" x2="${W - pr}" y1="${bot}" y2="${bot}"/>${rain}<path class="wx-t" d="${d}"/>${lab}${hit}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" ${svgAttrs} ${cs.attrs} role="img" aria-label="${esc(t('wx.aria', { lo, hi, p: f1(pmax) }))}"><line class="gl" x1="${pl}" x2="${W - pr}" y1="${bot}" y2="${bot}"/>${rain}<path class="wx-t" d="${d}"/>${lab}</svg>`;
 }
 export const WX_CSS = '.wx-t{fill:none;stroke:var(--warn);stroke-width:2;stroke-linejoin:round}.wx-p{fill:color-mix(in srgb,var(--info) 55%,transparent)}.wx-pl{fill:var(--info)}';

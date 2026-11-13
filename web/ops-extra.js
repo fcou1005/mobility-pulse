@@ -93,7 +93,7 @@ export function renderGroups() {
   const rows = groupView(kind), scope = gf.op === 'all' ? all : all.filter(s => s.op === gf.op);
   const where = t('ops.in', { v0: gf.op === 'all' ? t('ops.allOperators3') : gf.op, v1: X.muniName(p.ags) }), ev = scope.reduce((a, s) => a + s.count, 0), first = scope.length ? Math.min(...scope.map(s => s.first)) : null;
   const src = p.groupSrc?.source === 'groups' ? `${f(p.groupSrc.months.length)} ${p.groupSrc.months.length === 1 ? t('ops.monthlyFile') : t('ops.monthlyFiles')}${p.groupSrc.months.length ? ` (${p.groupSrc.months[0]}${p.groupSrc.months.length > 1 ? ` ${t('ops.to3', { v0: p.groupSrc.months[p.groupSrc.months.length - 1] })}` : ''})` : ''}` : t('ops.groupsJson30Days');
-  $('#ops-groups-sub').textContent = t('ops.data', { v0: scope.length ? `${t('ops.atSince', { ev: f(ev), noun, length: f(scope.length), v3: scope.length === 1 ? t('ops.place') : t('ops.places'), v4: new Date(first).toLocaleDateString(fmtLocale()) })} · ` : '', where, src });
+  $('#ops-groups-sub').textContent = t('ops.data', { v0: scope.length ? `${t('ops.atSince', { ev: f(ev), noun, length: f(scope.length), v3: scope.length === 1 ? t('ops.place') : t('ops.places'), v4: new Date(first).toLocaleDateString(fmtLocale()) })}, ` : '', where, src });
   $('#ops-gf-count').textContent = t('ops.ofPlacesShown', { length: f(rows.length), length2: f(all.length) });
   const tb = tbl.querySelector('tbody'), muni = esc(X.muniName(p.ags));
   if (!rows.length) {
@@ -109,7 +109,7 @@ export function renderGroups() {
   tb.innerHTML = rows.map((s, i) => {
     const n = nearOf(s), k = geoKey(s.lat, s.lon), geo = GEO.get(k), ty = typesText(s.types);
     const main = geo ? `<span class="geo-main" translate="no" data-geo="${k}">${esc(geo)}</span>` : i < GROUP_GEO_TOP ? `<span class="geo-main" translate="no" data-geo="${k}" data-fallback="${t('ops.addressNotFound')}">${geo === null ? t('ops.addressNotFound') : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span>` : osmLink(s.lat, s.lon);
-    return `<tr><td>${main}<div class="sub-line">${geo !== undefined || i < GROUP_GEO_TOP ? osmLink(s.lat, s.lon) : ''}${(geo !== undefined || i < GROUP_GEO_TOP) && ty ? ' · ' : ''}${esc(ty)}</div></td>
+    return `<tr><td>${main}<div class="sub-line">${geo !== undefined || i < GROUP_GEO_TOP ? osmLink(s.lat, s.lon) : ''}${(geo !== undefined || i < GROUP_GEO_TOP) && ty ? ', ' : ''}${esc(ty)}</div></td>
     <td><span class="op"><i style="background:${X.opColor(s.op)}"></i>${esc(s.op)}</span></td>
     <td class="n"><b>${f(s.count)}</b><div class="sub-line">${t('ops.vehInTotal', { vehicles: f(s.vehicles) })}</div></td><td class="n">${whenText(s.last)}${s.count > 1 ? `<div class="sub-line">${t('ops.first', { v0: DAYMON.format(s.first) })}</div>` : ''}</td>
     <td class="n">${avgText(s.avg)}</td>
@@ -127,7 +127,7 @@ function geoText(j) {
   const a = j?.address || {};
   const street = a.road || a.pedestrian || a.footway || a.square || a.path || a.cycleway || a.place || j?.name || null;
   const area = a.suburb || a.city_district || a.quarter || a.neighbourhood || a.village || a.town || null;
-  return [street, area].filter(Boolean).join(' · ') || null;
+  return [street, area].filter(Boolean).join(', ') || null;
 }
 export function queueGeo(spots) {
   for (const s of spots) { const k = geoKey(s.lat, s.lon); if (!GEO.has(k) && !geoQueue.some(q => q.k === k)) geoQueue.push({ k, lat: s.lat, lon: s.lon }); }
@@ -216,12 +216,12 @@ async function roadOptimize(r, p) {
 export async function routeRuns() {
   const p = S.plan; if (!p || S.routing === p) return;
   S.routing = p; // eine noch laufende Schleife des vorigen Plans bricht ab; den Abstand zum Server hält osrmGet
-  if (osrmDown()) { status(`${planStatus(p)} · ${t('ops.osrmUnreachable')}`); renderTiles(); S.routing = null; return; }
+  if (osrmDown()) { status(`${planStatus(p)}, ${t('ops.osrmUnreachable')}`); renderTiles(); S.routing = null; return; }
   // Reihenfolge: fokussierte Tour, dann sichtbare Arten, dann der Rest
   // Reihenfolge wird je Schritt neu bestimmt: eine während des Routings angeklickte Tour kommt als nächste dran
   const tried = new Set(), total = allRuns().filter(r => !S.routed[r.id]).length;
   const next = () => allRuns().filter(r => !S.routed[r.id] && !tried.has(r.id)).sort((a, b) => (b.id === S.focus) - (a.id === S.focus) || (S.show[b.kind] ? 1 : 0) - (S.show[a.kind] ? 1 : 0))[0];
-  const base = () => $('#ops-status').textContent.split(` · ${t('ops.routingWord')}`)[0].split(' · Straßenrouting')[0]; // vorigen Routing-Stand abschneiden (Sprache der Seite)
+  const base = () => $('#ops-status').textContent.split(`, ${t('ops.routingWord')}`)[0].split(', Straßenrouting')[0]; // vorigen Routing-Stand abschneiden (Sprache der Seite)
   let n = 0, r;
   try {
     while ((r = next())) {
@@ -236,7 +236,7 @@ export async function routeRuns() {
     }
     // Zähler über S.routed: nach einer Neubewertung (Overpass) behalten die übrigen Touren ihr Routing
     const done = allRuns().filter(x => S.routed[x.id]).length;
-    if (S.plan === p) { status(t('ops.roadRoutingOsrmOfRunsByRoad', { v0: base(), done, length: allRuns().length, v3: done < allRuns().length ? t('ops.restStraightLine135') : '' }) + (osrmDown() ? ` · ${t('ops.osrmUnreachable')}` : '')); renderTiles(); }
+    if (S.plan === p) { status(t('ops.roadRoutingOsrmOfRunsByRoad', { v0: base(), done, length: allRuns().length, v3: done < allRuns().length ? t('ops.restStraightLine135') : '' }) + (osrmDown() ? `, ${t('ops.osrmUnreachable')}` : '')); renderTiles(); }
   } finally { if (S.routing === p) S.routing = null; }
 }
 // ---------- Einsammelliste: im eigenen Abstellverbot oder ohne Station in einer Pflicht-Abstellzone (lib/pulse-ops.js parkingViolations) ----------
@@ -263,7 +263,7 @@ export function initCollect() {
   if ($('#ops-col-panel')) return;
   if (S.show.viol == null) S.show.viol = true;
   const st = document.createElement('style'); st.id = 'ops-col-style';
-  st.textContent = '.ops-col-head{margin:0 0 var(--s2);color:var(--fg-2)}.ops-col-head b{font-size:18px;color:var(--fg)}.ops-col-mk{background:none;border:0}.ops-col-mk svg{display:block}';
+  st.textContent = '.ops-col-head{margin:0 0 var(--s2);color:var(--fg-2)}.ops-col-head b{font-size:1.25rem;color:var(--fg)}.ops-col-mk{background:none;border:0}.ops-col-mk svg{display:block}';
   document.head.appendChild(st);
   const anchor = $('#ops-spots')?.closest('.panel'); if (!anchor) return;
   anchor.insertAdjacentHTML('beforebegin', `<div class="panel c12 internal" id="ops-col-panel"><div class="panel-head"><div><h2 id="ops-col-h">${t('col.title')}</h2><div class="sub" id="ops-col-sub"></div></div><div class="inline-form"><button type="button" id="ops-col-csv" title="${t('col.csvTitle')}">↓ CSV</button></div></div>
@@ -318,7 +318,7 @@ export function renderCollect() {
   if (c.state === 'loading') { show(t('col.loading')); return; }
   if (c.state === 'fail') { show(`${t('col.failed')} <button type="button" class="chip" data-col-retry>${t('ops.tryAgain')}</button>`); return; }
   const r = c.res, k = r.counts;
-  if (!r.features) { show(esc(t('col.noZones', { op: c.op }))); return; }
+  if (!r.features) { show(`${esc(t('col.noZones', { op: c.op }))} <a href="#sources">${t('ux.seeSources')}</a>`); return; }
   // Kopfzeile: Summe und je Art (roh, robust gelistet); darunter die Zählung je Art zur Transparenz
   const kb = k.ban, km = k.mpz, rob = (x) => B.map(b => `${b} m ${f(x.robust[b])}`).join(', '), st = { stationM: r.stationM, mpzStationM: r.mpzStationM };
   head.innerHTML = `${t(k.listed === 1 ? 'col.headOne' : 'col.head', { n: `<b>${f(k.listed)}</b>`, buffers: B.join('/'), ban: f(kb.listed), raw: f(kb.raw), mpz: f(km.listed), mraw: f(km.raw), near: f(km.near), ...st })}`
@@ -328,12 +328,12 @@ export function renderCollect() {
   if (!k.listed) { show(esc(t('col.none')) + (r.zones.ban + r.zones.mpz ? '' : ` ${esc(t('col.noBanZones'))}`)); return; }
   show(null);
   // 5 Spalten (am Telefon schmal): Rang · Standzeit, Lage, Art · Zone (mit Fahrzeugart, bei Pflicht-Abstellzone nächste Station), Ladestand · Reichweite, Karte
-  tbl.querySelector('thead').innerHTML = `<tr><th class="n"># · ${t('col.idle')}</th><th>${t('ops.location')}</th><th>${t('col.kindZone')}</th><th class="n">${t('col.battery')} · ${t('col.range')}</th><th>${t('col.map')}</th></tr>`;
+  tbl.querySelector('thead').innerHTML = `<tr><th class="n">#, ${t('col.idle')}</th><th>${t('ops.location')}</th><th>${t('col.kindZone')}</th><th class="n">${t('col.battery')}, ${t('col.range')}</th><th>${t('col.map')}</th></tr>`;
   tbl.querySelector('tbody').innerHTML = r.list.map((v, i) => {
     const g = geoKey(v.lat, v.lon), geo = GEO.get(g);
     const main = i < COL_GEO_TOP ? `<span class="geo-main" translate="no" data-geo="${g}" data-fallback="${esc(t('ops.addressNotFound'))}">${geo ? esc(geo) : geo === null ? t('ops.addressNotFound') : `<span class="muted">${t('ops.lookingUpAddress')}</span>`}</span><div class="sub-line">${osmLink(v.lat, v.lon)}</div>` : osmLink(v.lat, v.lon);
-    const energy = [v.battery != null ? `${f(v.battery)} %` : null, v.rangeKm != null ? `${f(v.rangeKm, 1)} km` : null].filter(Boolean).join(' · ') || '–';
-    return `<tr><td class="n"><span class="mono muted">${i + 1} ·</span> <b>${idleText(v)}</b></td><td>${main}</td><td>${violSvg(kindColor(v), tok('--panel'), 14, 'display:inline-block;vertical-align:-2px;margin-right:4px;', v.kind === 'mpz')}<b>${kindText(v)}</b><div class="sub-line">${esc(zoneLabel(v.zone))} · ${esc(X.TYPE[v.type] || v.type)}${v.kind === 'mpz' ? ` · ${stationText(v)}` : ''}</div></td>
+    const energy = [v.battery != null ? `${f(v.battery)} %` : null, v.rangeKm != null ? `${f(v.rangeKm, 1)} km` : null].filter(Boolean).join(', ') || '–';
+    return `<tr><td class="n"><span class="mono muted">${i + 1}.</span> <b>${idleText(v)}</b></td><td>${main}</td><td>${violSvg(kindColor(v), tok('--panel'), 14, 'display:inline-block;vertical-align:-2px;margin-right:4px;', v.kind === 'mpz')}<b>${kindText(v)}</b><div class="sub-line">${esc(zoneLabel(v.zone))}, ${esc(X.TYPE[v.type] || v.type)}${v.kind === 'mpz' ? `, ${stationText(v)}` : ''}</div></td>
       <td class="n">${energy}</td><td><button type="button" class="chip" data-col-fly="${i}">${t('ops.onMap')}</button></td></tr>`;
   }).join('');
   queueGeo(r.list.slice(0, COL_GEO_TOP));
@@ -348,7 +348,7 @@ export function drawViol() {
   for (const z of c.res.zonesHit) { const col = kindColor(z); L.geoJSON(z.geometry, { interactive: false, style: { color: col, weight: 1.5, dashArray: '5 4', fillColor: col, fillOpacity: 0.07 } }).addTo(S.vl.zones); }
   c.res.list.forEach((v, i) => {
     S.violMk[i] = L.marker([v.lat, v.lon], { icon: L.divIcon({ className: 'ops-col-mk', html: violSvg(kindColor(v), bg, 20, '', v.kind === 'mpz'), iconSize: [20, 20] }), keyboard: false, zIndexOffset: 400, title: t('col.markerTitle', { i: i + 1, kind: kindText(v), idle: idleText(v) }) })
-      .bindPopup(() => `<b>${t('col.popupTitle', { i: i + 1, kind: kindText(v) })}</b><br>${X.esc(c.op)} · ${X.esc(X.TYPE[v.type] || v.type)} · ${X.esc(zoneLabel(v.zone))}${v.kind === 'mpz' ? ` · ${stationText(v)}` : ''}<br>${t('col.popupIdle', { idle: idleText(v) })}${v.battery != null ? ` · ${t('ops.battery', { battery: X.fmt(v.battery) })}` : ''}${v.rangeKm != null ? ` · ${X.fmt(v.rangeKm, 1)} km` : ''}<br><span style="color:var(--muted)">${t('col.popupNote', { buffers: O.COLLECT.buffers.join('/') })}</span>`).addTo(S.vl.pts);
+      .bindPopup(() => `<b>${t('col.popupTitle', { i: i + 1, kind: kindText(v) })}</b><br>${X.esc(c.op)}, ${X.esc(X.TYPE[v.type] || v.type)}, ${X.esc(zoneLabel(v.zone))}${v.kind === 'mpz' ? `, ${stationText(v)}` : ''}<br>${t('col.popupIdle', { idle: idleText(v) })}${v.battery != null ? `, ${t('ops.battery', { battery: X.fmt(v.battery) })}` : ''}${v.rangeKm != null ? `, ${X.fmt(v.rangeKm, 1)} km` : ''}<br><span style="color:var(--muted)">${t('col.popupNote', { buffers: O.COLLECT.buffers.join('/') })}</span>`).addTo(S.vl.pts);
   });
 }
 const violCount = () => { const c = colValid(); return c?.state === 'ok' ? c.res.list.length : 0; };

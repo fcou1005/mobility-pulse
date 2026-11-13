@@ -5,11 +5,12 @@
  * @param {import('playwright').Browser} browser
  * @param {{ port: number, fx: { at: number }, scope: string, viewport: { width: number, height: number }, lang?: string|null,
  *   blocked?: Map<string, number>, bypassCSP?: boolean, hash?: string, onConsole?: (text: string, cur: string) => void,
- *   patch?: Record<string, (doc: any) => any>, missing?: string[] }} o  patch: Fixture-Datei (Pfad unter /d/) → Änderung am JSON vor der Auslieferung; missing: Dateien mit 404
+ *   patch?: Record<string, (doc: any) => any>, missing?: string[], firstVisit?: boolean, query?: string }} o  firstVisit: Erstbesuch-Karte zeigen (sonst als gesehen markiert); query: weitere URL-Parameter  patch: Fixture-Datei (Pfad unter /d/) → Änderung am JSON vor der Auslieferung; missing: Dateien mit 404
  */
-export async function openFixturePage(browser, { port, fx, scope, viewport, lang = null, blocked = new Map(), bypassCSP = false, hash = 'live', onConsole = null, patch = null, missing = [] }) {
+export async function openFixturePage(browser, { port, fx, scope, viewport, lang = null, blocked = new Map(), bypassCSP = false, hash = 'live', onConsole = null, patch = null, missing = [], firstVisit = false, query = '' }) {
   const context = await browser.newContext({ viewport, locale: 'de-DE', timezoneId: 'Europe/Berlin', bypassCSP });
   const page = await context.newPage();
+  if (!firstVisit) await context.addInitScript(() => { try { localStorage.setItem('mp-first-done', '1'); } catch { /* ohne Speicher */ } }); // S4.8: Erstbesuch-Karte nur im eigenen Test
   await page.clock.install({ time: fx.at + 2 * 60e3 });
   await page.route('**/*', (route) => { const u = new URL(route.request().url()); if (u.hostname === '127.0.0.1') return route.continue(); blocked.set(u.hostname, (blocked.get(u.hostname) || 0) + 1); return route.abort(); });
   for (const file of missing) await page.route((u) => u.pathname === `/d/${file}`, (route) => route.fulfill({ status: 404, body: '' })); // Datei fehlt (älterer Datenstand)
@@ -17,7 +18,7 @@ export async function openFixturePage(browser, { port, fx, scope, viewport, lang
   const errs = []; let cur = 'start';
   page.on('pageerror', e => errs.push(`${cur}: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`${cur}: console ${m.text().slice(0, 200)}`); if (onConsole) onConsole(m.text(), cur); });
-  await page.goto(`http://127.0.0.1:${port}/?data=/d/&scope=${scope}${lang ? `&lang=${lang}` : ''}#${hash}`, { waitUntil: 'load', timeout: 60000 });
+  await page.goto(`http://127.0.0.1:${port}/?data=/d/&scope=${scope}${lang ? `&lang=${lang}` : ''}${query}${hash ? `#${hash}` : ''}`, { waitUntil: 'load', timeout: 60000 });
   return { page, context, errs, setCur: (v) => { cur = v; }, close: () => context.close() };
 }
 

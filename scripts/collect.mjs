@@ -27,11 +27,12 @@ import { run as p20 } from './collect/20-training.mjs';
 import { run as p21 } from './collect/21-kalibrierung.mjs';
 import { run as p22 } from './collect/22-grenzen.mjs';
 import { run as p23 } from './collect/23-gebiet.mjs';
-import { run as p24 } from './collect/24-datenvertraege.mjs';
-import { run as p25 } from './collect/25-abschluss.mjs';
+import { run as p24 } from './collect/24-alarme.mjs';
+import { run as p25 } from './collect/25-datenvertraege.mjs';
+import { run as p26 } from './collect/26-abschluss.mjs';
 
 /** @type {Array<[string, (ctx: any) => Promise<void>]>} */
-const PHASES = [['abruf', p01], ['auswertung', p02], ['preise-zonen', p03], ['konsistenz', p04], ['dubletten', p05], ['betriebsgebiete', p06], ['messbasis', p07], ['obergrenzen', p08], ['zonen-beobachtung', p09], ['kalender-wetter', p10], ['verkehr', p11], ['baustellen', p12], ['oepnv', p13], ['verfolgung', p14], ['abdeckung', p15], ['ereignisse', p16], ['sport-termine', p17], ['streiks', p18], ['prognose', p19], ['training', p20], ['kalibrierung', p21], ['grenzen', p22], ['gebiet', p23], ['datenvertraege', p24], ['abschluss', p25]];
+const PHASES = [['abruf', p01], ['auswertung', p02], ['preise-zonen', p03], ['konsistenz', p04], ['dubletten', p05], ['betriebsgebiete', p06], ['messbasis', p07], ['obergrenzen', p08], ['zonen-beobachtung', p09], ['kalender-wetter', p10], ['verkehr', p11], ['baustellen', p12], ['oepnv', p13], ['verfolgung', p14], ['abdeckung', p15], ['ereignisse', p16], ['sport-termine', p17], ['streiks', p18], ['prognose', p19], ['training', p20], ['kalibrierung', p21], ['grenzen', p22], ['gebiet', p23], ['alarme', p24], ['datenvertraege', p25], ['abschluss', p26]];
 const ctx = {};
 await p00(ctx); // Phase „start“: Umgebung, Katalog, Vorlauf (ctx.PH misst ab hier)
 for (const [name, run] of PHASES) { ctx.PH.phase(name); await run(ctx); }

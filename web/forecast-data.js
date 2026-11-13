@@ -6,6 +6,8 @@ import { t, tMap, dateFmt, numFmt, fcReason } from './i18n.js';
 import { WX_CSS, resetWeatherCache } from './weather.js';
 import { jChip, judge } from './forecast-parts.js';
 import { scopeLabel } from './forecast-view.js';
+import { MODEL, moreColor, seriesColor } from './tokens.js';
+import { chartSpec, tableButton } from './charttip.js';
 
 export const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -22,29 +24,29 @@ export const fj = (ctx, file) => { const at = ctx.state?.latest?.at || '', url =
 
 const CSS = `
 .fv-root .fv-grid{display:grid;gap:var(--s4);grid-template-columns:minmax(0,1fr)}
-.fv-lead{font-size:15px;line-height:1.5;max-width:80ch;margin:0 0 var(--s3)}
+.fv-lead{font-size:.875rem;line-height:1.5;max-width:80ch;margin:0 0 var(--s3)}
 .fv-lead b{font-variant-numeric:tabular-nums}
 .fv-ctl{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;margin:var(--s2) 0 var(--s3)}
-.fv-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--fg-2)}
+.fv-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:.75rem;color:var(--fg-2)}
 .fv-tog{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:10px;background:var(--bg-2);border:1px solid var(--line)}
 .fv-tog button{min-height:28px;border:0;background:transparent;color:var(--fg-2);padding:0 12px;border-radius:7px}
 .fv-top .fv-fam{margin-right:var(--s2)}
 .fv-tog button[aria-pressed="true"]{background:var(--thumb,var(--panel));color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
-.fv-scope{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--fg-2);padding:3px 10px;border:1px solid var(--line);border-radius:999px}
+.fv-scope{display:inline-flex;gap:6px;align-items:center;font-size:.75rem;color:var(--fg-2);padding:3px 10px;border:1px solid var(--line);border-radius:999px}
 .fv-scope b{color:var(--fg);font-weight:600}
-.fv-legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12px;color:var(--fg-2);margin:0 0 var(--s2)}
+.fv-legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2);margin:0 0 var(--s2)}
 .fv-legend i{display:inline-block;vertical-align:-2px;margin-right:6px}
 .fv-legend .k-a{width:12px;height:12px;border-radius:2px;background:var(--accent)}
 .fv-legend .k-l{width:12px;height:12px;border-radius:2px;background:color-mix(in srgb,var(--accent) 28%,transparent);border:1px dashed var(--accent)}
 .fv-legend .k-p{width:18px;height:0;border-top:2.5px solid var(--info);margin-bottom:3px;vertical-align:middle}
-.fv-legend .k-u{width:10px;height:10px;border:1px dashed color-mix(in srgb,var(--fg) 45%,transparent);box-sizing:border-box}.fv-gline{margin:var(--s2) 0 0;font-size:13px}.fv-gline a{font-weight:600;margin-left:4px}.fv-stale{margin:var(--s2) 0 0;font-size:12.5px}
-.fv-legend .k-c{width:18px;height:0;border-top:2px dashed #14b8a6;margin-bottom:3px;vertical-align:middle}
+.fv-legend .k-u{width:10px;height:10px;border:1px dashed color-mix(in srgb,var(--fg) 45%,transparent);box-sizing:border-box}.fv-gline{margin:var(--s2) 0 0;font-size:.875rem}.fv-gline a{font-weight:600;margin-left:4px}.fv-stale{margin:var(--s2) 0 0;font-size:.75rem}
+.fv-legend .k-c{width:18px;height:0;border-top:2px dashed ${MODEL.chronos};margin-bottom:3px;vertical-align:middle}
 .fv-legend .k-ev{width:12px;height:12px;border-radius:2px;background:color-mix(in srgb,var(--fg) 9%,transparent);border-top:3px solid var(--fg-2)}
 .fv-chart .ev-band{fill:color-mix(in srgb,var(--fg) 7%,transparent)}.fv-chart .ev-bar{fill:var(--fg-2)}
 .fv-chart text.ev-t{fill:var(--fg);font-size:10.5px;font-weight:600;paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
-.fv-ev-sum{margin:0 0 var(--s3);font-size:13.5px;color:var(--fg-2)}.fv-ev-sum b{color:var(--fg)}
+.fv-ev-sum{margin:0 0 var(--s3);font-size:.875rem;color:var(--fg-2)}.fv-ev-sum b{color:var(--fg)}
 .fv-ev-cities{display:flex;flex-wrap:wrap;gap:var(--s1);margin:0 0 var(--s3)}
-.fv-ev-h{margin:var(--s3) 0 var(--s1);font-size:13px;font-weight:600;color:var(--fg-2)}
+.fv-ev-h{margin:var(--s3) 0 var(--s1);font-size:.875rem;font-weight:600;color:var(--fg-2)}
 .fv-eff{font-variant-numeric:tabular-nums;font-weight:600}.fv-eff.up{color:var(--ok)}.fv-eff.down{color:var(--bad)}
 .fv-chart{width:100%;overflow:hidden}
 .fv-chart svg{display:block;width:100%;height:auto;max-width:1100px}
@@ -53,7 +55,7 @@ const CSS = `
 .fv-chart .bar-a{fill:var(--accent)}.fv-chart .usual{fill:none;stroke:color-mix(in srgb,var(--fg) 45%,transparent);stroke-width:1;stroke-dasharray:2 2}.fv-chart text.pk{fill:var(--fg);font-size:10.5px;font-weight:600;paint-order:stroke;stroke:var(--panel);stroke-width:3px}
 .fv-chart .bar-l{fill:color-mix(in srgb,var(--accent) 26%,transparent);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2}
 .fv-chart .ln-p{fill:none;stroke:var(--info);stroke-width:2.2;stroke-linejoin:round}
-.fv-chart .ln-c{fill:none;stroke:#14b8a6;stroke-width:2;stroke-dasharray:5 3;stroke-linejoin:round}
+.fv-chart .ln-c{fill:none;stroke:${MODEL.chronos};stroke-width:2;stroke-dasharray:5 3;stroke-linejoin:round}
 .fv-chart .now{stroke:var(--fg-2);stroke-width:1.2;stroke-dasharray:3 3}
 .fv-chart .mid{stroke:var(--line-2);stroke-width:1}
 .fv-chart .dayl{font-weight:600;fill:var(--fg)}
@@ -62,78 +64,80 @@ const CSS = `
 ${WX_CSS}
 .fv-gates{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2);grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
 .fv-gates li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px var(--s3);align-items:center;padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2)}
-.fv-gates .gl{font-size:12.5px;color:var(--fg-2)}.fv-gates .gv{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.fv-gates .gl{font-size:.75rem;color:var(--fg-2)}.fv-gates .gv{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
 .fv-gates .gm{grid-column:1/-1;height:7px;border-radius:4px;background:var(--line);overflow:hidden}.fv-gates .gm span{display:block;height:100%;background:var(--warn);border-radius:4px}
 .fv-gates li.ok .gm span{background:var(--ok)}
-.fv-gates .gs{grid-column:1/-1;font-size:11.5px;color:var(--muted)}
-.fv-st{display:inline-flex;align-items:flex-start;gap:8px;font-size:13.5px;font-weight:500}
-.fv-st i{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font:700 11px/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none;margin-top:1px}
+.fv-gates .gs{grid-column:1/-1;font-size:.75rem;color:var(--muted)}
+.fv-st{display:inline-flex;align-items:flex-start;gap:8px;font-size:.875rem;font-weight:500}
+.fv-st i{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font:700 .75rem/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none;margin-top:1px}
 .fv-st.ok i{background:var(--ok)}.fv-st.near i{background:var(--warn)}.fv-st.none i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
 .fv-bar{display:inline-block;height:9px;border-radius:3px;background:var(--accent);vertical-align:middle;min-width:2px}
 .fv-bar.n{background:var(--muted);opacity:.7}
 .fv-split{display:inline-block;width:72px;height:9px;border-radius:3px;background:color-mix(in srgb,var(--info) 35%,transparent);vertical-align:middle;overflow:hidden}
 .fv-split i{display:block;height:100%;background:var(--accent)}
 .fv-tbl td.bars{min-width:150px}.fv-tbl td.bars span.t{display:inline-block;min-width:3.6em;text-align:right;margin-right:6px;font-variant-numeric:tabular-nums}
-.fv-chip{display:inline-flex;align-items:center;gap:4px;padding:0 8px;border-radius:999px;border:1px solid var(--line-2);font-size:11.5px;line-height:19px;white-space:nowrap}
+.fv-chip{display:inline-flex;align-items:center;gap:4px;padding:0 8px;border-radius:999px;border:1px solid var(--line-2);font-size:.75rem;line-height:19px;white-space:nowrap}
 .fv-chip.A{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,transparent);font-weight:600}
 .fv-chip.B{border-color:var(--accent)}
 .fv-chip.D{color:var(--muted);border-style:dashed}
 .fv-miss{font-weight:700;font-variant-numeric:tabular-nums}.fv-miss.z{font-weight:400;color:var(--muted)}
 .fv-map{height:420px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg-2);isolation:isolate;margin-top:var(--s3)}
-.fv-keys{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
+.fv-keys{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2);margin-top:var(--s2)}
 .fv-keys i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .fv-link{all:unset;cursor:pointer;color:var(--fg);font-weight:500;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px;border-radius:3px}
 .fv-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-munis{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s2)}
-.fv-sub{font-size:13px;color:var(--fg-2);margin:var(--s2) 0 0;max-width:100ch}
-details.fv-data{margin-top:var(--s3)}details.fv-data summary{cursor:pointer;font-size:12.5px;color:var(--fg-2)}
+.fv-sub{font-size:.875rem;color:var(--fg-2);margin:var(--s2) 0 0;max-width:100ch}
+details.fv-data{margin-top:var(--s3)}details.fv-data summary{cursor:pointer;font-size:.75rem;color:var(--fg-2)}
 .fv-top{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;margin:0 0 var(--s4);padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2)}
-.fv-top .lbl{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:var(--s1)}
-.fv-top .sp{flex:1 1 auto}.fv-top .hint{font-size:12px;color:var(--muted)}
-.fv-pill{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 4px 0 11px;border:1px solid var(--line-2);border-radius:999px;font-size:12.5px;background:var(--panel);color:var(--fg-2)}
+.fv-top .lbl{font-size:.75rem;font-weight:500;color:var(--muted);margin-right:var(--s1)}
+.fv-top .sp{flex:1 1 auto}.fv-top .hint{font-size:.75rem;color:var(--muted)}
+.fv-pill{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 4px 0 11px;border:1px solid var(--line-2);border-radius:999px;font-size:.75rem;background:var(--panel);color:var(--fg-2)}
 .fv-pill b{font-weight:600;color:var(--fg)}
 .fv-pill.dim{padding-right:11px;border-style:dashed;color:var(--muted)}.fv-pill.dim b{font-weight:500;color:var(--fg-2)}
 .fv-pill.ign b{text-decoration:line-through}
-.fv-pill button{all:unset;cursor:pointer;width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;color:var(--fg-2);font-size:15px;line-height:1}
+.fv-pill button{all:unset;cursor:pointer;width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;color:var(--fg-2);font-size:.875rem;line-height:1}
 .fv-pill button:hover{background:var(--line)}.fv-pill button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .fv-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:0 var(--s5);margin:var(--s3) 0 0}
 .fv-kv>div{padding:var(--s2) 0;border-top:1px solid var(--line)}
-.fv-kv dt{font-size:12px;color:var(--muted)}.fv-kv dd{margin:2px 0 0;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.fv-kv dd small{display:block;font-weight:400;font-size:12px;line-height:1.4;color:var(--fg-2);margin-top:2px}
+.fv-kv dt{font-size:.75rem;color:var(--muted)}.fv-kv dd{margin:2px 0 0;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.fv-kv dd small{display:block;font-weight:400;font-size:.75rem;line-height:1.4;color:var(--fg-2);margin-top:2px}
 .fv-checks{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2);grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
 .fv-checks li{padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2)}
-.fv-checks .why{display:block;font-size:12.5px;line-height:1.45;color:var(--fg-2);margin:3px 0 0 26px}
-.fv-tag{display:inline-block;padding:0 8px;border-radius:999px;font-size:11.5px;line-height:19px;border:1px solid var(--line-2);white-space:nowrap;color:var(--fg)}
+.fv-checks .why{display:block;font-size:.75rem;line-height:1.45;color:var(--fg-2);margin:3px 0 0 26px}
+.fv-tag{display:inline-block;padding:0 8px;border-radius:999px;font-size:.75rem;line-height:19px;border:1px solid var(--line-2);white-space:nowrap;color:var(--fg)}
 .fv-tag.measured{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
 .fv-tag.derived{border-color:var(--info);background:color-mix(in srgb,var(--info) 14%,transparent)}
 .fv-tag.modelled{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
 .fv-tag.assumed{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 18%,transparent);font-weight:600}
 .fv-tag.rule,.fv-tag.external{color:var(--fg-2)}.fv-tag.external{border-style:dashed}
-.fv-formula{display:block;white-space:pre-wrap;margin:var(--s3) 0 0;padding:var(--s3);background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);font-family:var(--mono);font-size:12.5px;line-height:1.55;overflow-x:auto}
-.fv-tbl.full{max-height:none}.fv-tbl td.wrap{white-space:normal;min-width:22ch}.fv-tbl td code{font-family:var(--mono);font-size:12px}
+.fv-formula{display:block;white-space:pre-wrap;margin:var(--s3) 0 0;padding:var(--s3);background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);font-family:var(--mono);font-size:.75rem;line-height:1.55;overflow-x:auto}
+.fv-tbl.full{max-height:none}.fv-tbl td.wrap{white-space:normal;min-width:22ch}.fv-tbl td code{font-family:var(--mono);font-size:.75rem}
 .fv-links{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
 .fv-flag{color:var(--fg);font-weight:600}
 .fv-list{margin:var(--s3) 0 0;padding-left:1.2em;display:grid;gap:var(--s1);max-width:100ch}
-.fv-verdict{display:flex;gap:10px;align-items:flex-start;font-size:15.5px;line-height:1.5;max-width:95ch;margin:0}
-.fv-verdict i{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font:700 13px/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none;margin-top:2px}
+.fv-verdict{display:flex;gap:10px;align-items:flex-start;font-size:1rem;line-height:1.5;max-width:95ch;margin:0}
+.fv-verdict i{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font:700 .875rem/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none;margin-top:2px}
 .fv-verdict.ok i{background:var(--ok)}.fv-verdict.near i{background:var(--warn)}.fv-verdict.bad i{background:var(--bad)}
 .fv-verdict b{font-weight:600}
-.fv-j{display:inline-block;padding:0 9px;border-radius:999px;font-size:12px;line-height:21px;font-weight:600;white-space:nowrap;border:1px solid var(--line-2);color:var(--fg-2)}
+.fv-verdict-in{white-space:normal}.fv-verdict-in i{display:inline-grid;place-items:center;width:1.25em;height:1.25em;border-radius:50%;font:700 .75em/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);vertical-align:.1em}
+.fv-verdict-in.ok i{background:var(--ok)}.fv-verdict-in.near i{background:var(--warn)}.fv-verdict-in.bad i{background:var(--bad)}
+.fv-j{display:inline-block;padding:0 9px;border-radius:999px;font-size:.75rem;line-height:21px;font-weight:600;white-space:nowrap;border:1px solid var(--line-2);color:var(--fg-2)}
 .fv-j.better{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
 .fv-j.worse{color:var(--bad);border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
-.fv-tbl td .lv{display:block;font-weight:500;color:var(--fg)}.fv-tbl td .lvs{display:block;font-size:11.5px;line-height:1.35;color:var(--muted);white-space:normal}
-.fv-dl{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;margin-top:var(--s3);font-size:12.5px;color:var(--fg-2)}
+.fv-tbl td .lv{display:block;font-weight:500;color:var(--fg)}.fv-tbl td .lvs{display:block;font-size:.75rem;line-height:1.35;color:var(--muted);white-space:normal}
+.fv-dl{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;margin-top:var(--s3);font-size:.75rem;color:var(--fg-2)}
 .fv-curve svg{display:block;width:100%;height:auto;max-width:1100px}
 .fv-curve text{fill:var(--fg-2);font-size:11px;font-family:var(--sans)}
 .fv-curve .gl{stroke:var(--line);stroke-width:1}
 .fv-curve path{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .fv-curve path.act{stroke-width:3.4}.fv-curve path.nv{stroke-dasharray:5 4}
-.fv-keys2{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12px;color:var(--fg-2);margin:var(--s3) 0 var(--s2)}
+.fv-keys2{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2);margin:var(--s3) 0 var(--s2)}
 .fv-keys2 i{display:inline-block;width:18px;height:0;border-top:3px solid;margin-right:6px;vertical-align:middle}.fv-keys2 i.nv{border-top-style:dashed}
 .fv-keys2 b{font-weight:600;color:var(--fg)}
 .fv-tbl .m-only{display:none}
-.fv-tbl .v2+.v2::before{content:' · '}
-@media (max-width:640px){.fv-tbl .v2{display:block}.fv-tbl .v2+.v2::before{content:''}.fv-tbl .mh{display:none}.fv-tbl .m-only{display:block;margin-top:5px}.fv-tbl td.bars .fv-bar{display:none}.fv-tbl td.bars{min-width:0}.fv-tbl td.bars span.t{min-width:0;margin:0}.fv-verdict{font-size:14.5px}}
+.fv-tbl .v2+.v2::before{content:', '}
+@media (max-width:640px){.fv-tbl .v2{display:block}.fv-tbl .v2+.v2::before{content:''}.fv-tbl .mh{display:none}.fv-tbl .m-only{display:block;margin-top:5px}.fv-tbl td.bars .fv-bar{display:none}.fv-tbl td.bars{min-width:0}.fv-tbl td.bars span.t{min-width:0;margin:0}.fv-verdict{font-size:.875rem}}
 `;
 let cssDone = false;
 export const css = () => { if (cssDone || typeof document === 'undefined') return; cssDone = true; const s = document.createElement('style'); s.id = 'fv-style'; s.textContent = CSS; document.head.appendChild(s); };
@@ -203,11 +207,15 @@ export function timeline(ctx, rows, { nowIdx = null, width = 720, blocks = [], p
   let dc = '', openC = false;
   rows.forEach((r, i) => { if (r.c == null) { openC = false; return; } dc += `${openC ? 'L' : 'M'}${(x(i) + bw / 2).toFixed(1)} ${y(r.c).toFixed(1)}`; openC = true; });
   const labels = rows.map((r, i) => (r.h % every === 0 ? `<text x="${(x(i) + bw / 2).toFixed(1)}" y="${H - pb + 14}" text-anchor="middle">${r.h}</text>` : '')).join('');
-  const hit = rows.map((r, i) => `<rect class="hit" x="${x(i).toFixed(1)}" y="${pt}" width="${bw.toFixed(1)}" height="${H - pt - pb}"><title>${ctx.esc(`${String(r.h).padStart(2, '0')}:00 · ${r.a != null ? `${t('fv.ist')} ${n0(r.a)}` : r.l != null ? `${t('fv.live')} ${n0(r.l)}` : t('fv.notObserved')}${r.p != null ? ` · ${t('fv.plan')} ${n0(r.p)}` : ''}${r.c != null ? ` · ${t('fv.chronos')} ${n0(r.c)}` : ''}${r.u ? ` · ${t('fv.usual')} ${n0(r.u[0])}–${n0(r.u[1])}` : ''}`)}</title></rect>`).join('');
   const sepAndDays = blocks.map((b, k) => `${k ? `<line class="mid" x1="${x(b.from).toFixed(1)}" x2="${x(b.from).toFixed(1)}" y1="${pt}" y2="${H - pb}"/>` : ''}<text class="dayl" x="${(x(b.from) + (b.to - b.from) * bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${ctx.esc(b.label)}</text>`).join('');
   const now = nowIdx != null ? `<line class="now" x1="${x(nowIdx).toFixed(1)}" x2="${x(nowIdx).toFixed(1)}" y1="${pt - 6}" y2="${H - pb}"/><text x="${(x(nowIdx) + 4).toFixed(1)}" y="${pt - 6}">${ctx.esc(t('fv.now'))}</text>` : '';
   const total = sum(rows.map(r => r.a ?? r.l ?? 0));
-  return `<div class="fv-chart"><svg viewBox="0 0 ${W} ${H}" data-pl="${pl}" data-bw="${bw}" data-pt="${pt}" data-ph="${H - pt - pb}" role="img" aria-label="${ctx.esc(t('fv.chartAria', { total: n0(total) }))}">${grid}${usual}${bars}${peakTxt}<path class="ln-p" d="${d}"/>${dc ? `<path class="ln-c" d="${dc}"/>` : ''}${now}${sepAndDays}${labels}${hit}</svg></div>`;
+  // S4.5: Werte je Stunde im gemeinsamen Hover-Layer (web/charttip.js) statt <title> auf 5-px-Flächen; ganze Stundenbreite trifft
+  const dayOf = (i) => blocks.find(b => i >= b.from && i < b.to)?.label || '', obs = (r) => (r.a != null ? n0(r.a) : r.l != null ? n0(r.l) : t('fv.notObserved'));
+  const fsp = chartSpec({ n: rows.length, x: (i) => x(i) + bw / 2, top: pt, bottom: H - pb, head: (i) => `${dayOf(i) ? `${dayOf(i)}, ` : ''}${String(rows[i].h).padStart(2, '0')}:00`, label: t('fv.chartAria', { total: n0(total) }), colHead: t('ct.hourCol'),
+    cols: [t('fv.ist'), t('fv.plan'), t('fv.chronos'), t('fv.usual')], cell: (i, k) => { const r = rows[i]; return [obs(r), r.p == null ? '–' : n0(r.p), r.c == null ? '–' : n0(r.c), r.u ? `${n0(r.u[0])}–${n0(r.u[1])}` : '–'][k]; },
+    rows: (i) => { const r = rows[i]; return [{ color: 'var(--accent)', label: r.a != null ? t('fv.ist') : t('fv.live'), value: obs(r), sort: 4 }, ...(r.p != null ? [{ color: 'var(--info)', label: t('fv.plan'), value: n0(r.p), sort: 3 }] : []), ...(r.c != null ? [{ color: MODEL.chronos, label: t('fv.chronos'), value: n0(r.c), sort: 2 }] : []), ...(r.u ? [{ label: t('fv.usual'), value: `${n0(r.u[0])}–${n0(r.u[1])}`, sort: 1 }] : [])]; } });
+  return `<div class="fv-chart"><svg viewBox="0 0 ${W} ${H}" data-pl="${pl}" data-bw="${bw}" data-pt="${pt}" data-ph="${H - pt - pb}" role="img" ${fsp.attrs} aria-label="${ctx.esc(t('fv.chartAria', { total: n0(total) }))}">${grid}${usual}${bars}${peakTxt}<path class="ln-p" d="${d}"/>${dc ? `<path class="ln-c" d="${dc}"/>` : ''}${now}${sepAndDays}${labels}</svg>${tableButton(fsp.id)}</div>`;
 }
 
 // ---------- Daten für die Spots ----------
@@ -252,7 +260,8 @@ export function accRows(S0, sel, G, { withToday = false } = {}) {
 // 80-%-Band als Häufigkeit (Laien lesen Intervalle als harte Grenzen): Soll „etwa 8 von 10“, dazu die letzte bewertete Trefferquote
 const bandFreq = (live) => { const x = (live || []).find(r => Number.isFinite(r?.cover80)); return x ? ` ${t('fv.bandFreq', { k: Math.round(x.cover80 * 10) })}` : ''; };
 export const MODEL_ORDER = ['hybrid', 'blend', 'adaptive', 'pooled', 'pooledWx', 'profile', 'chronos', 'naive', 'week'];
-export const MODEL_COLOR = { week: 'var(--muted)', chronos: '#14b8a6', blend: '#f59e0b', hybrid: '#8b5cf6', adaptive: 'var(--accent)', pooled: 'var(--info)', pooledWx: 'var(--ok)', profile: 'var(--warn)', naive: 'var(--muted)' };
+// S4.6: Modelle als Reihen ohne Anbieter – Plätze der Palette MP-7 der Reihe nach, Vergleichsgrößen („wie gestern“, Vorwoche) grau; keine Statusfarben
+export const MODEL_COLOR = { get hybrid() { return seriesColor(0); }, get blend() { return seriesColor(1); }, get adaptive() { return seriesColor(2); }, get pooled() { return seriesColor(3); }, get pooledWx() { return seriesColor(4); }, get profile() { return seriesColor(5); }, get chronos() { return seriesColor(6); }, get naive() { return moreColor(); }, get week() { return moreColor(); } };
 export const modelName = (m) => (m === 'naive' ? t('fv.naive') : m === 'week' ? t('fv.week') : t(`fc.model.${m}`));
 // Mischung Chronos/Hybrid: Stichtag und was bisher gelernt ist (latest.blend)
 export const blendTxt = (L) => { const b = L?.blend, x = b?.learn, from = b?.activeFrom ? dayTxt(b.activeFrom.slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' }) : '–';
@@ -272,11 +281,11 @@ function decisionHtml(ctx, L, G) {
   const pkOf = (m) => { const v = recs.map(x => x.models?.[m]?.peak?.hit1).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
   const t3Of = (m) => { const v = recs.map(x => x.models?.[m]?.peak?.top3).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
   const ms = [...MODEL_ORDER.filter(m => m !== 'naive'), 'naive', 'week'].filter(m => D?.live?.[m] || selfRel(m) != null || D?.combined?.[m]);
-  if (!ms.length) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><p class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</p>`;
+  if (!ms.length) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.decTitle')}</h3><p class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</p>`;
   const dmTxt = (m) => { const x = D?.dm?.[m]; return x ? `<div class="sub-line">${x.ok ? t('fv.dmOk', { p: numFmt(2).format(x.p), n: x.n }) : t('fv.dmLocked', { n: x.n, min: FC.DM.minDays })}</div>` : ''; };
   const rows = ms.map(m => { const lv = D?.live?.[m], c = D?.combined?.[m], sr = selfRel(m);
     return `<tr><td>${ctx.esc(m === 'week' ? t('fv.week') : modelName(m))}${m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}${dmTxt(m)}</td><td class="n">${f2(c?.r ?? (D?.combined ? null : sr))}</td><td class="n">${f2(lv?.r ?? null)}</td><td class="n mh">${lv ? n0(lv.n) : '–'}</td><td class="n mh">${f2(sr)}</td><td class="n mh">${c ? pc(c.w) : '–'}</td><td class="n mh">${pkOf(m) == null ? '–' : pc(pkOf(m))}</td><td class="n mh">${t3Of(m) == null ? '–' : pc(t3Of(m))}</td></tr>`; }).join('');
-  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.decTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.decTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.decColAll')}</th><th class="n">${t('fv.decColLive')}</th><th class="n mh">${t('fv.decColN')}</th><th class="n mh">${t('fv.decColSelf')}</th><th class="n mh">${t('fv.decColW')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colTop3')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</div>${L?.reason || L?.decision?.why ? `<div class="fv-sub">${t('fv.reasonNow')} <i>${ctx.esc(fcReason(L))}</i></div>` : ''}`;
+  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.decTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.decTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.decColAll')}</th><th class="n">${t('fv.decColLive')}</th><th class="n mh">${t('fv.decColN')}</th><th class="n mh">${t('fv.decColSelf')}</th><th class="n mh">${t('fv.decColW')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colTop3')}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</div>${L?.reason || L?.decision?.why ? `<div class="fv-sub">${t('fv.reasonNow')} <i>${ctx.esc(fcReason(L))}</i></div>` : ''}`;
 }
 export function accuracyPanel(ctx, S0, sel, G, L) {
   const rows = accRows(S0, sel, G);
@@ -286,7 +295,7 @@ export function accuracyPanel(ctx, S0, sel, G, L) {
   const table = rows.length ? `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.accTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th class="n mh">${t('fv.colIst')}</th><th class="n mh">${t('fv.colPlan')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n">${t('fv.colErr')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh" title="${ctx.esc(t('fv.colChronosTip'))}">${t('fv.chronos')}</th><th class="n mh">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colTrain')}</th></tr></thead><tbody>${body}</tbody></table></div>`
     : `<div class="empty"><b>${t('fv.accNone')}</b>${t('fv.accNoneHint')}</div>`;
   const live = (L?.live || []).slice(-6).reverse(), pk1 = (x) => (x?.peak?.hit1 == null ? '–' : pc(x.peak.hit1)), mdl = (x) => (x.model ? ctx.esc(modelName(x.model)) : '–');
-  const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh" title="${ctx.esc(t('fv.colPinballTip'))}">${t('fv.colPinball')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.pinball == null ? '–' : pc(x.pinball)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}${bandFreq(live)}</div>` : '';
+  const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh" title="${ctx.esc(t('fv.colPinballTip'))}">${t('fv.colPinball')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.pinball == null ? '–' : pc(x.pinball)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}${bandFreq(live)}</div>` : '';
   return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}${decisionHtml(ctx, L, G)}</div>`;
 }
 
@@ -328,16 +337,16 @@ export function scopePanel(ctx, S0, sel, G, L) {
   const parts = [[own, 'fv.scPartOwn'], [pool, 'fv.scPartPool'], [judged.length - own - pool, 'fv.scPartMix']].filter(([c]) => c > 0).map(([c, k]) => t(k, { n: n0(c) }));
   const lead = (R.rows.length === 1 ? t('fv.scLead1', { xp: t(judged.length ? 'fv.scLead1Ok' : 'fv.scLead1Low') }) : t('fv.scLead', { n: n0(R.rows.length), x: n0(judged.length) }))
     + (parts.length ? ' ' + t('fv.scLearnLead', { parts: parts.join(', ') }) : '') + ' ' + (area ? t('fv.scArea', { s: esc(((x) => x.charAt(0).toUpperCase() + x.slice(1))(String(scopeLabel(ctx, sel)))), a: pc(area.a), b: pc(area.b), n: area.n, v: t(judge(area.a, area.b) === 'better' ? 'fv.gBetter' : judge(area.a, area.b) === 'worse' ? 'fv.gWorse' : 'fv.gEqual') }) : t('fv.scAreaNone'));
-  const label = (k) => { const [a, o, y] = k.split('|'); return city ? `${esc(o)} · ${esc(tl[y] || y)}` : `${esc(ctx.muniName?.(a) || a)} · ${esc(tl[y] || y)}`; };
+  const label = (k) => { const [a, o, y] = k.split('|'); return city ? `${esc(o)}, ${esc(tl[y] || y)}` : `${esc(ctx.muniName?.(a) || a)}, ${esc(tl[y] || y)}`; };
   // Gruppen ohne eigene Prognose und mit kaum gezählten Fahrten: eine Zeile statt Tabellenzeilen voller Striche
   const quiet = R.rows.filter(r => r.exp == null && r.y < XP.enough), shown = R.rows.filter(r => !quiet.includes(r));
   const better = (r) => (r.eP == null || r.eQ == null || r.y < XP.enough ? '' : ` ${jChipTxt(Math.abs(r.eP - r.eQ) <= 0.05 * r.eQ ? 'eq' : r.eP < r.eQ ? 'own' : 'all')}`);
   const rows = shown.map(r => `<tr><td class="wrap">${label(r.k)}</td>`
     + `<td class="n">${r.exp == null ? '–' : n0(r.exp)}${r.perVeh != null ? `<div class="sub-line">${t('fv.scPerVeh', { v: n1(r.perVeh) })}</div>` : ''}</td>`
     + `<td class="n mh">${n0(r.y)}<div class="sub-line">${xpChip(r.y)}</div></td>`
-    + `<td class="n mh">${r.y >= XP.enough ? `${pc(r.eP)} · ${pc(r.eQ)}${better(r)}` : '–'}</td>`
+    + `<td class="n mh">${r.y >= XP.enough ? `${pc(r.eP)}, ${pc(r.eQ)}${better(r)}` : '–'}</td>`
     + `<td>${r.w == null ? `<span class="muted">${t('fv.scLearnAll', { w: pc(R.w0) })}</span>` : `${splitBar(r.w)} <span class="fv-sub" style="display:inline">${t('fv.scOwnPct', { w: pc(r.w) })}</span>${r.y < XP.enough ? `<div class="sub-line">${t('fv.scLearnShrunk')}</div>` : ''}`}</td>`
-    + `<td class="n">${r.plan ? `${pc(r.plan.a)} · ${pc(r.plan.b)} ${jChip(judge(r.plan.a, r.plan.b))}` : '<span class="muted">–</span>'}</td></tr>`).join('');
+    + `<td class="n">${r.plan ? `${pc(r.plan.a)}, ${pc(r.plan.b)} ${jChip(judge(r.plan.a, r.plan.b))}` : '<span class="muted">–</span>'}</td></tr>`).join('');
   const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>${city ? t('fv.scColGroup') : t('fv.scColGroupCity')}</th><th class="n">${t('fv.scColExp')}</th><th class="n mh">${t('fv.scColXp')}</th><th class="n mh">${t('fv.scColHit')}</th><th>${t('fv.scColLearn')}</th><th class="n">${t('fv.scColPlan')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   const quietHtml = quiet.length ? `<div class="fv-sub">${t('fv.scQuiet', { n: n0(quiet.length), ok: XP.enough, list: quiet.map(r => label(r.k)).join(', ') })}</div>` : '';
   return `<div class="panel" id="fv-scope">${head(title, t('fv.scSub'))}<p class="fv-lead" style="margin-top:var(--s2)">${lead}</p>${shown.length ? tbl : ''}${quietHtml}`

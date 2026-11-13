@@ -62,33 +62,33 @@ export const miniBar = (v) => (v == null ? '' : `<span class="rp-mini" aria-hidd
 const EXTRA_CSS = `
 .rp-sort{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;border-radius:4px}
 .rp-sort:hover,.rp-sort.on{color:var(--fg)}.rp-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.rp-sort span{font-size:9px;min-width:8px}
+.rp-sort span{font-size:.75rem;min-width:8px}
 .rp-city{all:unset;cursor:pointer;font-weight:500;color:var(--fg);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:2px}
 a.rp-city{text-decoration:underline}.rp-city:hover{text-decoration-color:var(--accent)}.rp-city:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 tr.rp-sel td{background:color-mix(in srgb,var(--accent) 11%,transparent)}tr.rp-sel .muted{color:var(--fg)}tr.rp-sel .sub-line{color:var(--fg-2)}tr.rp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .rp-mini{display:inline-block;width:44px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));vertical-align:middle;margin-left:6px;overflow:hidden}.rp-mini>i{display:block;height:100%;background:var(--accent)}
 .rp-defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s2) var(--s4);margin:0 0 var(--s3)}
-.rp-defs div{font-size:12.5px;color:var(--fg-2)}.rp-defs b{color:var(--fg);font-weight:600}
-.rp-keys{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12px;color:var(--fg-2);margin:0 0 var(--s2)}
+.rp-defs div{font-size:.75rem;color:var(--fg-2)}.rp-defs b{color:var(--fg);font-weight:600}
+.rp-keys{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2);margin:0 0 var(--s2)}
 .rp-key{display:inline-block;width:14px;height:2px;border-radius:1px;vertical-align:middle;margin-right:6px;background:var(--c)}
 svg.rp-line{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y}
-svg.rp-line text{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}svg.rp-line text.lab{font-family:var(--sans);font-size:11.5px;fill:var(--fg-2)}
+svg.rp-line text{font-family:var(--sans);font-size:10.5px;fill:var(--muted);font-variant-numeric:tabular-nums}svg.rp-line text.lab{font-family:var(--sans);font-size:11.5px;fill:var(--fg-2)}
 svg.rp-line .grid{stroke:var(--line);stroke-width:1}svg.rp-line .base{stroke:var(--line-2);stroke-width:1}
 svg.rp-line .xh{stroke:var(--fg-2);stroke-width:1}svg.rp-line:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
 svg.rp-line circle.end{stroke:var(--panel);stroke-width:2}svg.rp-line circle.sel{fill:none;stroke:var(--fg);stroke-width:2}
-.rp-tip .row{display:flex;gap:8px;align-items:center;white-space:nowrap}.rp-tip .row b{display:inline;font-size:13px;min-width:56px;text-align:right}.rp-tip .row i{width:12px;height:2px;border-radius:1px;flex:none}
-.rp-tip .hd{color:var(--muted);font-size:11px;margin-bottom:2px}
-.rp-captable tbody th{position:static;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--fg);vertical-align:top;background:transparent;border-bottom:1px solid var(--line);min-width:150px}
+.rp-tip .row{display:flex;gap:8px;align-items:center;white-space:nowrap}.rp-tip .row b{display:inline;font-size:.875rem;min-width:56px;text-align:right}.rp-tip .row i{width:12px;height:2px;border-radius:1px;flex:none}
+.rp-tip .hd{color:var(--muted);font-size:.75rem;margin-bottom:2px}
+.rp-captable tbody th{position:static;text-transform:none;letter-spacing:0;font-size:.875rem;font-weight:500;color:var(--fg);vertical-align:top;background:transparent;border-bottom:1px solid var(--line);min-width:150px}
 .rp-captable tbody th .sub-line{font-weight:400;color:var(--muted)}
 .rp-captable tbody+tbody tr:first-child>*{border-top:1px solid var(--line-2)}
 .rp-captable td.n .sub-line{font-family:var(--sans);white-space:normal;min-width:7em}
 .rp-captable tr.rp-sum td{font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
-.rp-h3{font-size:14px;font-weight:600;margin:var(--s4) 0 var(--s2)}.rp-h3:first-of-type{margin-top:var(--s2)}
+.rp-h3{font-size:.875rem;font-weight:600;margin:var(--s4) 0 var(--s2)}.rp-h3:first-of-type{margin-top:var(--s2)}
 .rp-root tr.rp-sum td{font-weight:600}.rp-zonemap{height:300px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg-2);margin-bottom:var(--s3);isolation:isolate}.rp-root tr.rp-zonesub>td{padding-top:0;border-top:0}.rp-spark{display:block;overflow:visible}
 .rp-captable tbody.rp-selg>tr>*{background:color-mix(in srgb,var(--accent) 11%,transparent)}.rp-captable tbody.rp-selg th{box-shadow:inset 3px 0 0 var(--accent)}.rp-captable tbody.rp-selg .muted,.rp-captable tbody.rp-selg .sub-line{color:var(--fg-2)}
-.rp-over{font-size:11.5px;margin-left:4px;vertical-align:1px}.rp-over i{width:14px;height:14px;font-size:9px}
+.rp-over{font-size:.75rem;margin-left:4px;vertical-align:1px}.rp-over i{width:14px;height:14px;font-size:.75rem}
 .rp-prof{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
-.rp-prof .card dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px var(--s3);font-size:12.5px}
+.rp-prof .card dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px var(--s3);font-size:.75rem}
 .rp-prof .card dt{color:var(--muted)}.rp-prof .card dd{margin:0;color:var(--fg)}
 details.rp-defs-d{margin:0 0 var(--s3)}details.rp-defs-d .rp-defs{margin:0}
 .rp-caplink{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;margin:var(--s4) 0 0}.rp-caplink>span{flex:1 1 44ch;min-width:0}.rp-caplink a{font-weight:500}
@@ -183,7 +183,7 @@ function availChart(ctx, s) {
   const name = state.latest?.municipalities?.[scope]?.name || scope;
   const daySel = s.histDays.length > 1 ? `<label>${t('rep.day')} <select data-f="day">${[...s.histDays].reverse().map(d => `<option value="${esc(d)}"${d === s.day ? ' selected' : ''}>${WD()[R.weekdayOf(d)]}, ${dd(d)}</option>`).join('')}</select></label>` : '';
   const btn = `<button type="button" data-rp="avtable" aria-expanded="${s.showTable ? 'true' : 'false'}">${s.showTable ? t('rep.asChart') : t('rep.asTable')}</button>`;
-  const headH = `<div class="panel-head" style="margin-top:var(--s5)"><div><h3 style="margin:0;font-size:14px">${t('rep.historyIn', { name: esc(name) })}</h3><div class="sub">${t('rep.availabilityPerOperatorFrom', { v0: s.hist?.t?.length ? ` · ${t('rep.points', { length: s.hist.t.length, v1: hhmm(s.hist.t[0]), v2: hhmm(lastOf(s.hist.t)) })}` : '' })}</div></div><div class="rp-ctl rp-noprint">${daySel}${btn}</div></div>`;
+  const headH = `<div class="panel-head" style="margin-top:var(--s5)"><div><h3 style="margin:0;font-size:.875rem">${t('rep.historyIn', { name: esc(name) })}</h3><div class="sub">${t('rep.availabilityPerOperatorFrom', { v0: s.hist?.t?.length ? `, ${t('rep.points', { length: s.hist.t.length, v1: hhmm(s.hist.t[0]), v2: hhmm(lastOf(s.hist.t)) })}` : '' })}</div></div><div class="rp-ctl rp-noprint">${daySel}${btn}</div></div>`;
   if (!s.hist) return headH + emptyBox(s.histLoading ? t('rep.loadingHistory') : t('rep.noHistoryForThisDay'), s.histLoading ? '' : 'history/<Tag>.json fehlt.');
   const ser = R.availabilitySeries(s.hist, scope, { operator: s.op, type: s.type });
   s.chart = null;

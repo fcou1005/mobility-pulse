@@ -8,6 +8,8 @@ import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
 import { DEMAND_DAYS, FAM, MODEL_COLOR, MODEL_ORDER, SPOT_ROWS, TZ, accRows, allTag, blendTxt, dayTxt, famNow, head, loadDemand, loadFleet, loadGroups, mature, modelName, n0, n1, pc, raceOf, setFam, setLastRated, sg, sum, tile } from './forecast-data.js';
 import { renderForecastView, scopeLabel, timeTxt } from './forecast-view.js';
+import { HIT } from './tokens.js';
+import { chartSpec, tableButton } from './charttip.js';
 
 // ---------- Zeugnis: wie gut ist die Prognose, besser als „wie gestern“? ----------
 export const judge = (a, b) => (a == null || b == null ? null : Math.abs(a - b) <= 0.05 * b ? 'eq' : a < b ? 'better' : 'worse');
@@ -32,16 +34,25 @@ export function gradeOf(S0, sel, G, L) {
   return { lv, vl, main, local, natOnly: local && !lv.some(x => x.k === 'scope'), unusable, nb, nw, lvl, act, evalDays: days.length, win, bias: scope?.bias ?? biasG };
 }
 const GRADE_USABLE = 0.5; // Abweichung je Stunde ab 50 %: „nur als Größenordnung lesen“, kein grüner Haken
-function verdictText(ctx, g) {
+/** Hauptsatz des Urteils (S4.2: das einzige Prognose-Urteil, aus gradeOf) */
+export function verdictMain(g) {
   if (!g.vl?.length) return t('fv.vNone');
   const n = g.vl.length, x = g.main;
-  const main = g.unusable ? t('fv.vUnusable', { a: pc(x.a), b: pc(x.b) })
+  return g.unusable ? t('fv.vUnusable', { a: pc(x.a), b: pc(x.b) })
     : n === 1 ? t(x.j === 'better' ? 'fv.vOne' : x.j === 'worse' ? 'fv.vOneWorse' : 'fv.vOneEq', { a: pc(x.a), b: pc(x.b) })
     : g.nw === 0 ? (g.nb === n ? t('fv.vAll', { n }) : t('fv.vNoWorse', { b: g.nb, n })) : g.nb === 0 ? t('fv.vNotYet', { w: g.nw, n }) : t('fv.vMixed', { b: g.nb, w: g.nw, n });
+}
+/** Verzerrung, Grundlage und Geltungsbereich des Urteils */
+export function verdictMore(g) {
+  if (!g.vl?.length) return '';
   const nat = g.natOnly ? ` ${t('fv.vNational')}` : '';
   const basis = g.evalDays < g.win ? t('fv.vBasisEarly', { n: g.evalDays, win: g.win }) : t('fv.vBasis', { n: g.evalDays });
   const bias = g.bias == null ? '' : Math.abs(g.bias) < 0.05 ? t('fv.vBiasNone', { d: sg(g.bias, 0) }) : t(g.bias < 0 ? 'fv.vBiasLow' : 'fv.vBiasHigh', { d: pc(Math.abs(g.bias)) });
-  return `<b>${ctx.esc(main)}</b> ${ctx.esc(bias)} ${ctx.esc(basis)}${ctx.esc(nat)}`;
+  return `${bias} ${basis}${nat}`.trim();
+}
+function verdictText(ctx, g) {
+  if (!g.vl?.length) return t('fv.vNone');
+  return `<b>${ctx.esc(verdictMain(g))}</b> ${ctx.esc(verdictMore(g))}`;
 }
 /** Zeugnis in einer Zeile über dem Diagramm (Audit UXP-05), Details im Panel darunter */
 export function gradeLine(ctx, S0, sel, G, L) {
@@ -67,10 +78,14 @@ function curveSvg(ctx, G, L, width) {
   const every = Math.max(1, Math.ceil(days.length / (W < 520 ? 4 : 8)));
   const xl = days.map((d, i) => (i % every === 0 || i === days.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="${i === 0 ? 'start' : i === days.length - 1 ? 'end' : 'middle'}">${ctx.esc(dayTxt(d, { day: 'numeric', month: 'numeric' }))}</text>` : '')).join('');
   const lines = ms.map(m => { let d = '', open = false, dots = '';
-    days.forEach((day, i) => { const v = FC.scoreOf(ev[day]?.models?.[m]); if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`; open = true; dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${m === L?.active ? 3.6 : 2.6}" fill="${MODEL_COLOR[m]}"><title>${ctx.esc(`${modelName(m)} · ${dayTxt(day)} · ${pc(v, 1)}`)}</title></circle>`; });
+    days.forEach((day, i) => { const v = FC.scoreOf(ev[day]?.models?.[m]); if (v == null) { open = false; return; } d += `${open ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`; open = true; dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${m === L?.active ? 3.6 : 2.6}" fill="${MODEL_COLOR[m]}"/>`; });
     return `<path class="${m === L?.active ? 'act' : ''}${m === 'naive' || m === 'week' ? ' nv' : ''}" style="stroke:${MODEL_COLOR[m]}" d="${d}"/>${dots}`; }).join('');
   const keys = ms.map(m => `<span><i class="${m === 'naive' || m === 'week' ? 'nv' : ''}" style="border-color:${MODEL_COLOR[m]}"></i>${m === L?.active ? `<b>${ctx.esc(modelName(m))}</b> (${t('fv.activeTag')})` : ctx.esc(modelName(m))}</span>`).join('');
-  return `<div class="fv-keys2">${keys}</div><div class="fv-curve"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(t('fv.curveAria'))}">${grid}${lines}${xl}</svg></div>`;
+  // S4.5: Werte je Tag im gemeinsamen Hover-Layer statt <title> an 3-px-Punkten
+  const cs = chartSpec({ n: days.length, x, top: pt, bottom: H - pb, head: (i) => dayTxt(days[i]), label: t('fv.curveAria'), colHead: t('ct.dayCol'), cols: ms.map(modelName),
+    cell: (i, k) => { const v = FC.scoreOf(ev[days[i]]?.models?.[ms[k]]); return v == null ? '–' : pc(v, 1); },
+    rows: (i) => ms.map(m => ({ m, v: FC.scoreOf(ev[days[i]]?.models?.[m]) })).filter(r => r.v != null).map(r => ({ color: MODEL_COLOR[r.m], label: modelName(r.m), value: pc(r.v, 1), sort: -r.v })) });
+  return `<div class="fv-keys2">${keys}</div><div class="fv-curve"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ctx.esc(t('fv.curveAria'))}" ${cs.attrs}>${grid}${lines}${xl}</svg></div>${tableButton(cs.id)}`;
 }
 function curveTrend(ctx, G, L) {
   const ev = G?.evals || {}, act = L?.active, days = Object.keys(ev).sort().slice(-14).filter(d => FC.scoreOf(ev[d]?.models?.[act]) != null);
@@ -79,15 +94,15 @@ function curveTrend(ctx, G, L) {
   const d1 = days[0], d2 = days.at(-1), a = FC.scoreOf(ev[d1].models[act]), b = FC.scoreOf(ev[d2].models[act]);
   return t('fv.curveTrend', { model: ctx.esc(modelName(act)), a: pc(a), d1: ctx.esc(dayTxt(d1)), t1: ev[d1].trainDays ?? '–', b: pc(b), d2: ctx.esc(dayTxt(d2)), t2: ev[d2].trainDays ?? '–' });
 }
-const groupLabel = (ctx, key) => { const [ags, op, ty] = String(key).split('|'), tl = tMap('type', VEHICLE_TYPE_LABEL); return `${ctx.muniName?.(ags) || ags} · ${op} · ${tl[ty] || ty}`; };
+const groupLabel = (ctx, key) => { const [ags, op, ty] = String(key).split('|'), tl = tMap('type', VEHICLE_TYPE_LABEL); return `${ctx.muniName?.(ags) || ags}, ${op}, ${tl[ty] || ty}`; };
 function learnedHtml(ctx, L) {
   const x = L?.learn, gain = pc(L?.gates?.adGain ?? FC.GATES.adGain);
-  if (!x) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.learnedTitle')}</h3><p class="fv-sub">${t('fv.learnedNone')}</p>`;
+  if (!x) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.learnedTitle')}</h3><p class="fv-sub">${t('fv.learnedNone')}</p>`;
   const lead = t('fv.learnedLead', { days: n1(x.days), own: n0(x.leanOwn), pool: n0(x.leanPool), mixed: n0(x.mixed), judged: n0(x.judged), share: pc(x.ownShare), eo: pc(x.errOwn), ep: pc(x.errPooled) });
   const state = L.active === 'adaptive' ? t('fv.learnedActive') : t('fv.learnedCandidate', { gain });
   const rows = [...(x.own || []).filter(r => r[1] >= 0.55).map(r => ['own', ...r]), ...(x.pool || []).filter(r => r[1] <= 0.45).map(r => ['pool', ...r])];
   const tbl = rows.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.learnedTitle'))}"><table><thead><tr><th>${t('fv.colGroup')}</th><th>${t('fv.colLearnsFrom')}</th><th class="n">${t('fv.colOwnW')}</th><th class="n mh">${t('fv.colErrOwn')}</th><th class="n mh">${t('fv.colErrPool')}</th><th class="n mh">${t('fv.colStarts')}</th></tr></thead><tbody>${rows.map(([dir, k, w, eo, ep, y]) => `<tr><td class="wrap">${ctx.esc(groupLabel(ctx, k))}</td><td><span class="fv-chip${dir === 'own' ? ' A' : ''}">${t(dir === 'own' ? 'fv.fromOwn' : 'fv.fromAll')}</span></td><td class="n">${pc(w)}</td><td class="n mh">${pc(eo)}</td><td class="n mh">${pc(ep)}</td><td class="n mh">${n0(y)}</td></tr>`).join('')}</tbody></table></div>` : '';
-  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.learnedTitle')}</h3><p class="fv-sub" style="margin-top:0">${ctx.esc(lead)} ${ctx.esc(state)}</p>${tbl}<div class="fv-sub">${t('fv.learnedNote')}</div>`;
+  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.learnedTitle')}</h3><p class="fv-sub" style="margin-top:0">${ctx.esc(lead)} ${ctx.esc(state)}</p>${tbl}<div class="fv-sub">${t('fv.learnedNote')}</div>`;
 }
 /** Letzter reifer Prüftag: aktives Modell gegen „wie gestern“ je Fahrzeugart und Gruppengröße (die Gesamtwertung ist nach Volumen gewichtet) */
 function partsHtml(ctx, G, L) {
@@ -97,7 +112,7 @@ function partsHtml(ctx, G, L) {
   const rows = [...Object.keys(A.byType).filter(k => A.byType[k][2] > 0).sort((a, b) => A.byType[b][2] - A.byType[a][2]).map(k => [tl[k] || k, A.byType[k], N.byType[k]]),
     ...['L', 'M', 'S'].filter(k => A.bySize?.[k]?.[2] > 0).map(k => [t(`fv.size${k}`), A.bySize[k], N.bySize?.[k]])];
   const sc = (x) => (x ? (x[0] + x[1]) / 2 : null);
-  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.partsTitle')}</h3><div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.partsTitle'))}"><table><thead><tr><th>${t('fv.colPart')}</th><th class="n mh">${t('fv.colStarts')}</th><th class="n">${t('fv.gModel')}</th><th class="n">${t('fv.gNaive')}</th><th class="mh">${t('fv.gVerdict')}</th></tr></thead><tbody>${rows.map(([l, a, n]) => `<tr><td class="wrap"><span class="lv">${ctx.esc(l)}</span><span class="m-only">${jChip(judge(sc(a), sc(n)))}</span></td><td class="n mh">${n0(a[2])}</td><td class="n"><span class="v2">${pc(a[0])}</span><span class="v2">${pc(a[1])}</span></td><td class="n">${n ? `<span class="v2">${pc(n[0])}</span><span class="v2">${pc(n[1])}</span>` : '–'}</td><td class="mh">${jChip(judge(sc(a), sc(n)))}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.partsNote', { d: ctx.esc(dayTxt(d)), model: ctx.esc(modelName(act)) })}</div>`;
+  return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.partsTitle')}</h3><div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.partsTitle'))}"><table><thead><tr><th>${t('fv.colPart')}</th><th class="n mh">${t('fv.colStarts')}</th><th class="n">${t('fv.gModel')}</th><th class="n">${t('fv.gNaive')}</th><th class="mh">${t('fv.gVerdict')}</th></tr></thead><tbody>${rows.map(([l, a, n]) => `<tr><td class="wrap"><span class="lv">${ctx.esc(l)}</span><span class="m-only">${jChip(judge(sc(a), sc(n)))}</span></td><td class="n mh">${n0(a[2])}</td><td class="n"><span class="v2">${pc(a[0])}</span><span class="v2">${pc(a[1])}</span></td><td class="n">${n ? `<span class="v2">${pc(n[0])}</span><span class="v2">${pc(n[1])}</span>` : '–'}</td><td class="mh">${jChip(judge(sc(a), sc(n)))}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.partsNote', { d: ctx.esc(dayTxt(d)), model: ctx.esc(modelName(act)) })}</div>`;
 }
 /** Umgebung und Langzeitgedächtnis: was gelernt ist (Faktor mit 90-%-Bereich), wie viel Erfahrung dahintersteht, ob es im Modell ist */
 const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).format(x)}`);
@@ -117,14 +132,14 @@ export function envHtml(ctx, L, { title = true } = {}) {
   const heldFrom = E?.pendingFrom && Number.isFinite(Date.parse(E.pendingFrom)) ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(E.pendingFrom)) : '–';
   const chip = (st) => `<span class="fv-chip${st === 'on' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: heldFrom })}</span>`;
   const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}</td><td>${chip(r.st)}</td></tr>`).join('')}</tbody></table></div>`;
-  const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(' · ');
+  const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
-  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
+  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
 }
 export function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));
-  const raceHtml = race.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.raceTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.raceTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.colScore')}</th><th class="n mh">${t('fv.colGD')}</th><th class="n mh">${t('fv.colGH')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n mh">${t('fv.colCover')}</th><th class="n mh">${t('fv.colDays')}</th></tr></thead><tbody>${race.map(r => `<tr><td>${ctx.esc(modelName(r.m))}${r.m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}${r.m !== 'naive' && r.sc.v === best ? ` <span class="fv-chip A">${t('fv.bestTag')}</span>` : ''}</td><td class="n bars"><span class="t">${pc(r.sc.v)}</span><span class="fv-bar${r.m === 'naive' ? ' n' : ''}" style="width:${Math.round(r.sc.v / maxS * 110)}px"></span></td><td class="n mh">${pc(r.gd?.v)}</td><td class="n mh">${pc(r.gh?.v)}</td><td class="n mh">${sg(r.bias?.v, 1)}</td><td class="n mh">${pc(r.cov?.v)}</td><td class="n mh">${r.sc.n}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.raceNote')}</div>` : '';
+  const raceHtml = race.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.raceTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.raceTitle'))}"><table><thead><tr><th>${t('fv.colModel')}</th><th class="n">${t('fv.colScore')}</th><th class="n mh">${t('fv.colGD')}</th><th class="n mh">${t('fv.colGH')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n mh">${t('fv.colCover')}</th><th class="n mh">${t('fv.colDays')}</th></tr></thead><tbody>${race.map(r => `<tr><td>${ctx.esc(modelName(r.m))}${r.m === L?.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}${r.m !== 'naive' && r.sc.v === best ? ` <span class="fv-chip A">${t('fv.bestTag')}</span>` : ''}</td><td class="n bars"><span class="t">${pc(r.sc.v)}</span><span class="fv-bar${r.m === 'naive' ? ' n' : ''}" style="width:${Math.round(r.sc.v / maxS * 110)}px"></span></td><td class="n mh">${pc(r.gd?.v)}</td><td class="n mh">${pc(r.gh?.v)}</td><td class="n mh">${sg(r.bias?.v, 1)}</td><td class="n mh">${pc(r.cov?.v)}</td><td class="n mh">${r.sc.n}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.raceNote')}</div>` : '';
   const svg = curveSvg(ctx, G, L, width), trend = curveTrend(ctx, G, L);
   return `<div class="panel" id="fv-curve">${head(t('fv.curveTitle'), t('fv.curveSub'), allTag(ctx))}${trend ? `<p class="fv-lead" style="margin-top:var(--s2)">${trend}</p>` : ''}${svg}${raceHtml}${partsHtml(ctx, G, L)}${learnedHtml(ctx, L)}${envHtml(ctx, L)}</div>`;
 }
@@ -208,7 +223,7 @@ export function bindDl(el, ctx, S0, L, G, sel) {
 }
 
 // ---------- Spots ----------
-const COLORS = { miss: '#e3703d', ok: '#2fa36b', over: '#4f8fe0', none: '#8a949e' };
+const COLORS = HIT;
 export function spotsPanelShell(ctx, s0) { return `<div class="panel" id="fv-spots">${head(t('fv.spotsTitle'), t('fv.spotsSub'))}<div id="fv-spots-body">${s0 || ''}</div></div>`; }
 export async function paintSpots(el, ctx, s, S0, L, sel) {
   const box = el.querySelector('#fv-spots-body'); if (!box) return; const tok = s.tok;
@@ -216,7 +231,7 @@ export async function paintSpots(el, ctx, s, S0, L, sel) {
   s.rated = null; if (csvB) csvB.disabled = true;
   if (!ags || ags === 'DE' || !land) {
     const top = Object.entries(S0.days[S0.tomorrow] || {}).filter(([k]) => k.startsWith('ags:')).map(([k, e]) => [k.slice(4), sum(e.l || e.p || [])]).sort((a, b) => b[1] - a[1]).slice(0, 12);
-    box.innerHTML = `<div class="empty"><b>${t('fv.spotsPick')}</b>${t('fv.spotsPickHint')}</div>${top.length ? `<div class="fv-munis">${top.map(([a, v]) => `<button class="chip" data-ags="${ctx.esc(a)}">${ctx.esc(ctx.muniName?.(a) || a)} · ${n0(v)}</button>`).join('')}</div>` : ''}`;
+    box.innerHTML = `<div class="empty"><b>${t('fv.spotsPick')}</b>${t('fv.spotsPickHint')}</div>${top.length ? `<div class="fv-munis">${top.map(([a, v]) => `<button class="chip" data-ags="${ctx.esc(a)}">${ctx.esc(ctx.muniName?.(a) || a)}, ${n0(v)}</button>`).join('')}</div>` : ''}`;
     box.querySelectorAll('button[data-ags]').forEach(b => b.addEventListener('click', () => ctx.setScope?.(b.dataset.ags))); return;
   }
   box.innerHTML = `<div class="note small">${t('fv.spotsLoading')}</div>`;
@@ -244,10 +259,10 @@ export async function paintSpots(el, ctx, s, S0, L, sel) {
   const T = R.total, opSel = ctx.state.operator !== 'all' ? '' : `<label>${t('fv.operator')} <select id="fv-op">${ops.map(o => `<option value="${ctx.esc(o)}"${o === op ? ' selected' : ''}>${ctx.esc(o)}</option>`).join('')}</select></label>`;
   const lead = !R.items.length ? t('fv.spotsNone', { op: ctx.esc(op) })
     : `<p class="fv-lead">${t('fv.spotsLead', { spots: `<b>${n0(T.spots)}</b>`, miss: `<b>${n0(T.missing)}</b>`, nMiss: `<b>${n0(T.spotsMissing)}</b>`, imp: `<b>${n0(T.missingAB)}</b>`, op: ctx.esc(op) })}</p>`;
-  const tiles = R.items.length ? `<div class="tiles">${tile(t('fv.tSpots'), n0(T.spots), t('fv.tSpotsSub', { d: T.deploy, p: T.park, b: T.both }))}${tile(t('fv.tClasses'), `${T.byCls.A} · ${T.byCls.B} · ${T.byCls.C}`, t('fv.tClassesSub', { d: T.byCls.D }))}${tile(t('fv.tTarget'), n0(T.target), t('fv.tTargetSub', { have: n0(T.have) }), T.missing ? 'warn' : 'ok')}${tile(t('fv.tMissing'), n0(T.missing), t('fv.tMissingSub', { n: T.spotsMissing, ab: T.importantMissing }), T.missing ? 'warn' : 'ok')}</div>` : '';
+  const tiles = R.items.length ? `<div class="tiles">${tile(t('fv.tSpots'), n0(T.spots), t('fv.tSpotsSub', { d: T.deploy, p: T.park, b: T.both }))}${tile(t('fv.tClasses'), `${T.byCls.A}, ${T.byCls.B}, ${T.byCls.C}`, t('fv.tClassesSub', { d: T.byCls.D }))}${tile(t('fv.tTarget'), n0(T.target), t('fv.tTargetSub', { have: n0(T.have) }), T.missing ? 'warn' : 'ok')}${tile(t('fv.tMissing'), n0(T.missing), t('fv.tMissingSub', { n: T.spotsMissing, ab: T.importantMissing }), T.missing ? 'warn' : 'ok')}</div>` : '';
   const rows = R.items.slice(0, s.rows), maxI = 1;
   const kindTxt = (x) => (x.kind === 'both' ? t('fv.kBoth') : x.kind === 'deploy' ? t('fv.kDeploy') : t('fv.kPark'));
-  const info = (x) => [x.deploy ? t('fv.infDeploy', { n: x.deploy.count, avg: n1(x.deploy.avg) }) : '', x.deploy?.last ? t('fv.infLast', { d: dateFmt({ day: '2-digit', month: '2-digit', timeZone: TZ }).format(new Date(x.deploy.last)) }) : '', x.park?.emptyShare != null && x.park.runs >= SP.MIN_RUNS ? t('fv.infEmpty', { p: pc(x.park.emptyShare) }) : '', x.sharedWith ? t('fv.infShared', { n: x.sharedWith }) : ''].filter(Boolean).join(' · ');
+  const info = (x) => [x.deploy ? t('fv.infDeploy', { n: x.deploy.count, avg: n1(x.deploy.avg) }) : '', x.deploy?.last ? t('fv.infLast', { d: dateFmt({ day: '2-digit', month: '2-digit', timeZone: TZ }).format(new Date(x.deploy.last)) }) : '', x.park?.emptyShare != null && x.park.runs >= SP.MIN_RUNS ? t('fv.infEmpty', { p: pc(x.park.emptyShare) }) : '', x.sharedWith ? t('fv.infShared', { n: x.sharedWith }) : ''].filter(Boolean).join(', ');
   const tbl = R.items.length ? `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.spotsTitle'))}"><table><thead><tr><th class="n">#</th><th>${t('fv.colSpot')}</th><th>${t('fv.colClass')}</th><th class="n">${t('fv.colImp')}</th><th class="n">${t('fv.colExp')}</th><th class="n">${t('fv.colTarget')}</th><th class="n">${t('fv.colHave')}</th><th class="n">${t('fv.colMissing')}</th><th>${t('fv.colInfo')}</th></tr></thead><tbody>${rows.map(x => `<tr data-i="${x.rank - 1}"><td class="n">${x.rank}</td><td><button class="fv-link" data-i="${x.rank - 1}">${ctx.esc(x.label || `${x.lat.toFixed(4)}, ${x.lon.toFixed(4)}`)}</button> <span class="fv-chip">${kindTxt(x)}</span></td><td><span class="fv-chip ${x.cls}">${x.cls}</span></td><td class="n bars"><span class="t">${x.cls === 'D' ? '–' : pc(x.importance)}</span><span class="fv-bar" style="width:${Math.round(x.importance / maxI * 80)}px"></span></td><td class="n">${x.expected24 == null ? '–' : n0(x.expected24)}</td><td class="n">${x.cls === 'D' ? '–' : n0(x.targetFc)}</td><td class="n">${n0(x.have)}</td><td class="n"><span class="fv-miss${x.missing ? '' : ' z'}">${x.missing ? n0(x.missing) : '0'}</span></td><td class="sub-line" style="white-space:normal;min-width:18ch">${ctx.esc(info(x))}</td></tr>`).join('')}</tbody></table></div>${R.items.length > rows.length ? `<p><button class="chip" id="fv-more">${t('fv.more', { n: R.items.length - rows.length })}</button></p>` : ''}` : '';
   const notes = [R.prelim ? t('fv.nPrelim', { h: n0(R.hours) }) : '', !R.fc ? t('fv.nNoFc') : '', !dem?.model ? t('fv.nNoDemand') : '', ops.length > 1 ? '' : ''].filter(Boolean).join(' ');
   box.innerHTML = `${opSel ? `<div class="fv-ctl">${opSel}</div>` : ''}${lead}${tiles}${R.items.length ? `<div class="fv-map" id="fv-map" role="region" aria-label="${ctx.esc(t('fv.mapAria'))}"></div><div class="fv-keys"><span><i style="background:${COLORS.miss}"></i>${t('fv.keyMiss')}</span><span><i style="background:${COLORS.ok}"></i>${t('fv.keyOk')}</span><span><i style="background:${COLORS.over}"></i>${t('fv.keyOver')}</span><span><i style="background:${COLORS.none}"></i>${t('fv.keyNone')}</span><span>${t('fv.keySize')}</span></div>` : ''}${tbl}<div class="fv-sub">${t('fv.spotsNote', { r: R.radiusM, h: R.horizonH })} ${ctx.esc(notes)}</div>`;

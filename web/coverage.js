@@ -32,7 +32,7 @@ function load(ctx) {
 
 const CSS = `
 .cov-ctl{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;margin:var(--s2) 0 var(--s3)}
-.cov-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--fg-2)}
+.cov-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:.75rem;color:var(--fg-2)}
 .cov-meter{display:flex;align-items:center;gap:8px;min-width:150px}
 .cov-meter .bar{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:60px}
 .cov-meter .bar span{display:block;height:100%;border-radius:4px;background:var(--ok)}
@@ -79,7 +79,7 @@ function feedCell(r, cov, esc) {
   const parts = (r.src || []).slice(0, 2).map((id) => {
     const x = cov.sources?.[id]; if (!x) return '';
     const name = esc(x.name || id), stt = ST(x.status) || esc(x.status || '');
-    return `<div class="cov-src">${/^https?:/i.test(x.url || '') ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${name}</a>` : name} <span class="muted">· ${stt}</span></div>`;
+    return `<div class="cov-src">${/^https?:/i.test(x.url || '') ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${name}</a>` : name} <span class="muted">(${stt})</span></div>`;
   });
   if ((r.src || []).length > 2) parts.push(`<div class="muted">+${(r.src.length - 2)}</div>`);
   if (r.gap) parts.push(`<div class="muted small">${r.gap.via ? t('cov.via', { p: esc(r.gap.via) }) : ''}${r.gap.since ? ` ${t('cov.since', { d: dayFmt(r.gap.since) })}` : ''}</div>`);
@@ -152,7 +152,7 @@ export function csvOf(cov, list) {
   const head = [t('cov.city'), 'AGS', t('cov.state'), t('cov.op'), t('cov.claimed'), t('cov.cat'), t('cov.vehicles'), t('cov.last'), t('cov.feed'), t('cov.note')];
   const rows = list.map((r) => [r.city, r.ags || '', r.state || '', r.op, r.claimed === null ? t('cov.noList') : r.claimed ? (r.claimRegion ? t('cov.region', { r: r.claimRegion }) : t('cov.yes')) : t('cov.no'), CAT(r.cat) || r.cat,
     r.vehicles, r.vehicles ? t('cov.now') : r.lastActive || '', (r.src || []).map((id) => `${cov.sources?.[id]?.name || id} (${ST(cov.sources?.[id]?.status)})`).join(' | '),
-    [r.partOf ? t('cov.partOf', { c: r.partOf }) : '', r.gap?.via ? t('cov.via', { p: r.gap.via }) : '', r.claimWeak ? t('cov.weak') : ''].filter(Boolean).join(' · ')]);
+    [r.partOf ? t('cov.partOf', { c: r.partOf }) : '', r.gap?.via ? t('cov.via', { p: r.gap.via }) : '', r.claimWeak ? t('cov.weak') : ''].filter(Boolean).join(', ')]);
   return '﻿' + [head, ...rows].map((r) => r.map(cell).join(sep)).join('\r\n');
 }
 function download(name, text) {

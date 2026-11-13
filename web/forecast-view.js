@@ -7,8 +7,10 @@ import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { dayType } from './pulse-econ.js';
 import { t, tMap, dateFmt, numFmt, fcReason } from './i18n.js';
 import { weatherFor, weatherSvg } from './weather.js';
+import { chartExtra } from './charttip.js';
+import { putAnswer } from './answer.js';
 import { FAM, LAST_RATED, TZ, accRows, accuracyPanel, addDays, badge, berlinNow, blendTxt, css, dayStats, dayTxt, famFile, famNow, fj, head, learnPanel, memo, modelName, n0, pc, pickScope, raceOf, scopePanel, seriesOf, sg, st, sum, tile, timeline } from './forecast-data.js';
-import { NOT_KEYS, NOT_STATE, bindDl, bindTop, csvBtn, curvePanel, dlRow, download, envHtml, fileTag, gradeLine, gradePanel, judge, paintSpots, paramRows, spotsPanelShell, topBar } from './forecast-parts.js';
+import { NOT_KEYS, NOT_STATE, bindDl, bindTop, csvBtn, curvePanel, dlRow, download, envHtml, fileTag, gradeOf, gradePanel, verdictMain, verdictMore, judge, paintSpots, paramRows, spotsPanelShell, topBar } from './forecast-parts.js';
 
 // ---------- Hauptansicht ----------
 /** part: 'verlauf' (Standard) | 'spots' | 'basis' – jedes Segment des Reiters „Prognose“ hat einen eigenen Container */
@@ -62,7 +64,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   if (view === 'ahead') {
     rows = [...mk(T, eT, true), ...mk(TM, eM, true)];
     // Audit UXP-10: nach Mitternacht, bevor der erste Lauf des neuen Tags die Reihen fortschreibt, stimmt „Heute“ nicht – dann nur Datum
-    blocks = stale ? [{ from: 0, to: 24, label: dayTxt(T) }, { from: 24, to: 48, label: dayTxt(TM) }] : [{ from: 0, to: 24, label: `${t('fv.today')} · ${dayTxt(T)}` }, { from: 24, to: 48, label: `${t('fv.tomorrow')} · ${dayTxt(TM)}` }];
+    blocks = stale ? [{ from: 0, to: 24, label: dayTxt(T) }, { from: 24, to: 48, label: dayTxt(TM) }] : [{ from: 0, to: 24, label: `${t('fv.today')}, ${dayTxt(T)}` }, { from: 24, to: 48, label: `${t('fv.tomorrow')}, ${dayTxt(TM)}` }];
     nowIdx = nowH < 24 ? nowH : null; title = t('fv.chartAhead');
   } else {
     const e = seriesOf(S0, view, sel); rows = mk(view, e, false); blocks = [{ from: 0, to: 24, label: dayTxt(view, { weekday: 'long', day: 'numeric', month: 'long' }) }]; title = t('fv.chartDay', { d: dayTxt(view) });
@@ -79,9 +81,17 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   const peakOf = (from, to) => { let bi = -1, bv = -1; for (let i = from; i < to; i++) { const r = rows[i], v = r?.a ?? r?.l ?? r?.p; if (v != null && v > bv) { bv = v; bi = i; } } return bi < 0 ? null : { i: bi, h: rows[bi].h, v: bv, src: rows[bi].a != null ? 'a' : rows[bi].l != null ? 'l' : 'p' }; };
   const peaks = view === 'ahead' ? [peakOf(0, 24), peakOf(24, 48)] : [peakOf(0, 24)];
   const pkTile = (pk, lbl) => tile(lbl, pk ? t('fv.kPeakV', { h: String(pk.h).padStart(2, '0'), h2: String((pk.h + 1) % 24).padStart(2, '0') }) : '–', pk ? t(pk.src === 'a' ? 'fv.kPeakSubA' : 'fv.kPeakSubF', { v: n0(pk.v), u: norm ? t('fv.perFullHour') : '' }) : t('fv.kNoPlan'));
-  const tiles = noSeries ? '' : `<div class="tiles">${tile(t('fv.kSoFar'), n0(doneIst), stT ? t('fv.kSoFarSub', { plan: n0(stT.plan), d: sg(stT.bias, 1) }) : t('fv.kNoPlan'))}`
-    + `${tile(t('fv.kErr'), stT ? pc(stT.wape) : '–', stT ? (stT.naive != null ? t('fv.kErrSub', { naive: pc(stT.naive), verdict: t(judge(stT.wape, stT.naive) === 'better' ? 'fv.gBetter' : judge(stT.wape, stT.naive) === 'worse' ? 'fv.gWorse' : 'fv.gEqual') }) : t('fv.kErrSub1', { n: stT.n })) : t('fv.kNoPlan'))}`
-    + `${tile(t('fv.kDay'), n0(expectDay), planDay != null ? t('fv.kDaySub', { plan: n0(planDay), d: sg(planDay > 0 ? expectDay / planDay - 1 : null, 1) }) : t('fv.kNoPlan'))}`
+  // S4.1: Antwort oben – Erwartung bis Tagesende, Ist gegen Plan, Abweichung; das Urteil kommt nur aus gradeOf (S4.2, ein Urteil je Bildschirm)
+  const g = gradeOf(S0, sel, G, L), gIco = g.lvl === 'ok' ? '✓' : g.lvl === 'near' ? '!' : g.lvl === 'bad' ? '✗' : '–';
+  const answer = noSeries ? putAnswer(el, { id: 'prognose', sentence: `<b>${esc(t('fv.noScope'))}</b> ${esc(t('fv.noScopeHint'))}`, kpis: [] }) : putAnswer(el, { id: 'prognose',
+    sentence: `${t('ans.fc', { n: `<strong>${n0(expectDay)}</strong>`, scope: `<b>${esc(scopeTxt)}</b>` })} <span class="fv-verdict-in ${g.lvl}"><i aria-hidden="true">${gIco}</i> ${esc(verdictMain(g))}</span> <a href="#fv-grade" class="fv-gdet">${t('fv.gDetails')}</a>`,
+    kpis: [
+      { label: t('fv.kSoFar'), value: n0(doneIst), n: Math.round(doneIst), cmp: stT ? t('ans.kPlanSame', { plan: n0(stT.plan), d: sg(stT.bias, 1) }) : t('fv.kNoPlan') },
+      { label: t('fv.kErr'), value: stT ? pc(stT.wape) : '–', cmp: stT ? (stT.naive != null ? t('ans.kNaive', { naive: pc(stT.naive) }) : t('fv.kErrSub1', { n: stT.n })) : t('fv.kNoPlan') },
+      { label: t('fv.kDay'), value: n0(expectDay), n: Math.round(expectDay), cmp: planDay != null ? t('ans.kPlanDay', { plan: n0(planDay), d: sg(planDay > 0 ? expectDay / planDay - 1 : null, 1) }) : t('fv.kNoPlan') },
+    ],
+    how: `${esc(t('ans.fcHow'))} ${esc(verdictMore(g))}`, asOf: S0.generatedAt ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) : '' });
+  const tiles = noSeries ? '' : '<div class="tiles">'
     + `${tile(t('fv.kTomorrow'), totalM == null ? '–' : n0(totalM), totalM != null && expectDay > 0 ? t('fv.kTomorrowSub', { d: sg(totalM / expectDay - 1, 0) }) : t('fv.kNoPlan'))}`
     + (view === 'ahead' ? `${pkTile(peaks[0], stale ? t('fv.kPeakD', { d: dayTxt(T) }) : t('fv.kPeakToday'))}${pkTile(peaks[1], stale ? t('fv.kPeakD', { d: dayTxt(TM) }) : t('fv.kPeakTomorrow'))}` : pkTile(peaks[0], t('fv.kPeakD', { d: dayTxt(view) }))) + '</div>';
   const lead = noSeries ? `<div class="empty"><b>${t('fv.noScope')}</b>${esc(t('fv.noScopeHint'))}</div>` : '';
@@ -89,7 +99,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   const notes = [sel.partial ? t('fv.nPartial') : '', sel.ignored ? t('fv.nIgnored') : '', S0.generatedAt ? t('fv.asOf', { time: dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) }) : ''].filter(Boolean).join(' ');
   const accRowsNow = accRows(S0, sel, G);
   el.innerHTML = topBar(ctx, sel, noSeries ? '' : `${csvBtn('series', t('fv.csvSeries'))}${accRowsNow.length ? csvBtn('days', t('fv.csvDays')) : ''}`)
-    + `<div class="fv-grid"><div class="panel">${head(title, t('fv.chartSub'), `<span class="fv-scope">${t('fv.scope')}: <b>${esc(scopeTxt)}</b></span>`)}${gradeLine(ctx, S0, sel, G, L)}${stale ? `<p class="fv-stale warn-text">${esc(t('fv.staleDay', { time: S0.generatedAt ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) : '–' }))}</p>` : ''}${lead || ''}`
+    + `${answer}<div class="fv-grid"><div class="panel">${head(title, t('fv.chartSub'), `<span class="fv-scope">${t('fv.scope')}: <b>${esc(scopeTxt)}</b></span>`)}${stale ? `<p class="fv-stale warn-text">${esc(t('fv.staleDay', { time: S0.generatedAt ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) : '–' }))}</p>` : ''}${lead || ''}`
     + `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.dayAria'))}">${segs.map(([v, l]) => `<button data-v="${esc(v)}" aria-pressed="${v === view}">${esc(l)}</button>`).join('')}</div>`
     + `<div class="fv-tog fv-norm" role="group" aria-label="${esc(t('fv.normAria'))}"><button data-n="1" aria-pressed="${norm}" title="${esc(t('fv.normTip'))}">${t('fv.normOn')}</button><button data-n="0" aria-pressed="${!norm}">${t('fv.normOff')}</button></div></div>`
     + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span>${rows.some(r => r.u) ? `<span title="${esc(t('fv.usualTip'))}"><i class="k-u"></i>${t('fv.usual')}</span>` : ''}${rows.some(r => r.c != null) ? `<span title="${esc(t('fv.chronosTip'))}"><i class="k-c"></i>${t('fv.chronos')}</span>` : ''}</div>${timeline(ctx, rows, { nowIdx: view === 'ahead' && !stale ? nowIdx : null, width: el.clientWidth - 40, blocks, peaks: peaks.filter(Boolean).map(p => p.i) })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${norm ? t('fv.normNote') : ''} ${esc(notes)}</div>${dataTable}`) + '</div>'
@@ -98,7 +108,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
   el.querySelectorAll('.fv-tog button[data-v]').forEach(b => b.addEventListener('click', () => { s.day = b.dataset.v; renderForecastView(el, ctx, { part: 'verlauf' }); }));
   el.querySelectorAll('.fv-norm button').forEach(b => b.addEventListener('click', () => { s.norm = b.dataset.n === '1'; try { localStorage.setItem('fv-norm', s.norm ? '1' : '0'); } catch {} renderForecastView(el, ctx, { part: 'verlauf' }); }));
-  el.querySelector('.fv-gline a')?.addEventListener('click', (e) => { e.preventDefault(); el.querySelector('#fv-grade')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  el.querySelector('a.fv-gdet')?.addEventListener('click', (e) => { e.preventDefault(); el.querySelector('#fv-grade')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   if (!noSeries) fillWx(el.querySelector('.fv-wx'), ctx, rows, sel, el.clientWidth - 40);
   if (!noSeries) markEvents(el, ctx, rows, sel);
   fillEventsMain(el.querySelector('#fv-ev-main .fv-ev-body'), ctx, sel, S0);
@@ -120,7 +130,7 @@ async function fillWx(box, ctx, rows, sel, width) {
 
 async function renderSpotsPart(el, ctx, s, S0, L) {
   const sel = pickScope(S0, ctx.state);
-  el.innerHTML = topBar(ctx, sel, csvBtn('spots', t('fv.csvSpots'), true)) + `<div class="fv-grid">${spotsPanelShell(ctx)}<p class="fv-sub">${t('fv.moreBasis')} <a href="#prognose-basis">${t('fv.segBasis')}</a>. ${t('fv.spotsElsewhere')} <a href="#spots">${t('app.spots')}</a> · <a href="#ops">${t('app.operations')}</a>.</p></div>`;
+  el.innerHTML = topBar(ctx, sel, csvBtn('spots', t('fv.csvSpots'), true)) + `<div class="fv-grid">${spotsPanelShell(ctx)}<p class="fv-sub">${t('fv.moreBasis')} <a href="#prognose-basis">${t('fv.segBasis')}</a>. ${t('fv.spotsElsewhere')} <a href="#spots">${t('app.spots')}</a>, <a href="#ops">${t('app.operations')}</a>.</p></div>`;
   bindTop(el, ctx);
   el.querySelector('[data-fv-csv="spots"]')?.addEventListener('click', () => {
     const R = s.rated; if (!R?.items?.length) return;
@@ -173,8 +183,8 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
   // Panel 2: Eingangsdaten und Herkunft der Pläne
   const prov = accRows(S0, sel, G, { withToday: true }).reverse();
   const provRows = prov.map(r => { const pl = S0.plans?.[r.d], odd = r.bias != null && Math.abs(r.bias) > 0.25;
-    return `<tr><td>${esc(dayTxt(r.d))}${r.d === S0.today ? ` <span class="fv-chip B">${t('fv.today')}</span>` : ''}</td><td class="wrap">${pl ? `${esc(t(`fc.model.${pl.model}`))} · ${t('fv.provDays', { n: pl.trainDays })} · ${pl.retro ? t('fv.provRetro') : t('fv.provFrozen', { time: esc(timeTxt(pl.at)) })}` : '–'}</td><td class="n">${n0(r.ist)}</td><td class="n">${n0(r.plan)}</td><td class="n">${odd ? `<span class="fv-flag" title="${esc(t('fv.oddTip'))}">${sg(r.bias, 1)} ⚑</span>` : sg(r.bias, 1)}</td></tr>`; }).join('');
-  const provTbl = prov.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.provTitle')}</h3><div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.provTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th>${t('fv.colPlanFrom')}</th><th class="n">${t('fv.colIst')}</th><th class="n">${t('fv.colPlan')}</th><th class="n">${t('fv.colBias')}</th></tr></thead><tbody>${provRows}</tbody></table></div><div class="fv-sub">${t('fv.provNote')} ${esc(t('fv.nScopeOf', { s: scopeLabel(ctx, sel) }))}</div>` : '';
+    return `<tr><td>${esc(dayTxt(r.d))}${r.d === S0.today ? ` <span class="fv-chip B">${t('fv.today')}</span>` : ''}</td><td class="wrap">${pl ? `${esc(t(`fc.model.${pl.model}`))}, ${t('fv.provDays', { n: pl.trainDays })}, ${pl.retro ? t('fv.provRetro') : t('fv.provFrozen', { time: esc(timeTxt(pl.at)) })}` : '–'}</td><td class="n">${n0(r.ist)}</td><td class="n">${n0(r.plan)}</td><td class="n">${odd ? `<span class="fv-flag" title="${esc(t('fv.oddTip'))}">${sg(r.bias, 1)} ⚑</span>` : sg(r.bias, 1)}</td></tr>`; }).join('');
+  const provTbl = prov.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.provTitle')}</h3><div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.provTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th>${t('fv.colPlanFrom')}</th><th class="n">${t('fv.colIst')}</th><th class="n">${t('fv.colPlan')}</th><th class="n">${t('fv.colBias')}</th></tr></thead><tbody>${provRows}</tbody></table></div><div class="fv-sub">${t('fv.provNote')} ${esc(t('fv.nScopeOf', { s: scopeLabel(ctx, sel) }))}</div>` : '';
   const p2 = `<div class="panel">${head(t('fv.inTitle'), t('fv.inSub'))}${kv([
     [t('fv.kvTrain'), n0(L.trainDays), t('fv.kvTrainSub')],
     [t('fv.kvEval'), n0(L.evalDays), evKeys.length ? evKeys.slice(-4).map(d => dayTxt(d, { day: 'numeric', month: 'numeric' })).join(', ') : t('fv.kvEvalNone')],
@@ -240,9 +250,9 @@ async function fillOps(box, ctx, sel) {
   const cut = addDays(FC.dayOfLocal(Date.now()), -14), tl = tMap('type', VEHICLE_TYPE_LABEL);
   const fit = (e) => { if (e.day < cut) return false; if (e.key) { const [a, o, y] = e.key.split('|'); return (!ags || a === ags) && (!op || o === op) && (!ty || y === ty); } return (!ags || (e.munis || []).includes(ags)) && (!op || e.op === op); };
   const list = doc.entries.filter(fit), counts = ['price', 'zone', 'fleet', 'outage'].map(k => [k, list.filter(e => e.kind === k).length]);
-  const where = (e) => { if (e.key) { const [a, o, y] = e.key.split('|'); return `${esc(o)} · ${esc(tl[y] || y)} · ${esc(ctx.muniName?.(a) || a)}`; } const m = e.munis || []; return `${esc(e.op)} · ${m.length === 1 ? esc(ctx.muniName?.(m[0]) || m[0]) : t('fv.opsMunis', { n: m.length })}`; };
+  const where = (e) => { if (e.key) { const [a, o, y] = e.key.split('|'); return `${esc(o)}, ${esc(tl[y] || y)}, ${esc(ctx.muniName?.(a) || a)}`; } const m = e.munis || []; return `${esc(e.op)}, ${m.length === 1 ? esc(ctx.muniName?.(m[0]) || m[0]) : t('fv.opsMunis', { n: m.length })}`; };
   const what = (e) => e.kind === 'price' ? t('fv.opsPrice', { n: e.n }) : e.kind === 'zone' ? t('fv.opsZone', { a: e.added, r: e.removed }) : e.kind === 'fleet' ? t('fv.opsFleet', { from: n0(e.from), to: n0(e.to), d: sg(e.ratio - 1, 0) }) : t('fv.opsOutage', { h: e.hours, fleet: n0(e.fleet) });
-  box.innerHTML = `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.opsTitle')}</h3><p class="fv-sub">${t('fv.opsLead', { list: counts.map(([k, n]) => `${t(`fv.opsKind.${k}`)} ${n}`).join(' · ') })}</p>`
+  box.innerHTML = `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.opsTitle')}</h3><p class="fv-sub">${t('fv.opsLead', { list: counts.map(([k, n]) => `${t(`fv.opsKind.${k}`)} ${n}`).join(', ') })}</p>`
     + (list.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.opsTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th>${t('fv.opsColKind')}</th><th>${t('fv.opsColWho')}</th><th>${t('fv.opsColWhat')}</th></tr></thead><tbody>`
       + list.slice(0, 40).map(e => `<tr><td>${esc(dayTxt(e.day))}</td><td>${t(`fv.opsKind.${e.kind}`)}</td><td class="wrap">${where(e)}</td><td class="wrap">${what(e)}</td></tr>`).join('') + `</tbody></table></div>${list.length > 40 ? `<p class="fv-sub">${t('fv.opsMore', { n: list.length - 40 })}</p>` : ''}` : `<p class="fv-sub">${t('fv.opsEmpty')}</p>`);
 }
@@ -264,10 +274,10 @@ async function fillPortable(box, ctx, sel) {
   box.innerHTML = `<p class="fv-lead" style="margin-top:var(--s2)">${t('fv.pmLead', { at: esc(timeTxt(M.trainedAt)), n: M.trainDays ?? '–', types: types.map(x => esc(tl[x] || x)).join(', '), ops: Object.keys(M.operators || {}).length, cities: Object.keys(M.city || {}).length })}</p>`
     + `<div class="fv-links" style="margin:var(--s2) 0 var(--s3)"><button type="button" class="chip" data-pm="json">${t('fv.pmJson')}</button><button type="button" class="chip" data-pm="csv">${t('fv.pmCsv')}</button>`
     + `<a class="chip" href="https://raw.githubusercontent.com/${esc(repo)}/main/tools/prognose-modell.mjs" target="_blank" rel="noopener">${t('fv.pmScript')}</a><a class="chip" href="https://github.com/${esc(repo)}/blob/main/tools/MODELL.md" target="_blank" rel="noopener">${t('fv.pmGuide')}</a></div>`
-    + `<h3 class="rp-h3" style="margin:var(--s3) 0 var(--s2);font-size:14px">${t('fv.pmCalc')}</h3><div class="fv-ctl">`
+    + `<h3 class="rp-h3" style="margin:var(--s3) 0 var(--s2);font-size:.875rem">${t('fv.pmCalc')}</h3><div class="fv-ctl">`
     + `<label>${t('fv.pmType')} <select data-pmi="ty">${types.map(x => `<option value="${esc(x)}"${x === tySel ? ' selected' : ''}>${esc(tl[x] || x)}</option>`).join('')}</select></label>`
     + `<label>${t('fv.pmFleet')} <input data-pmi="fleet" type="number" min="1" max="100000" step="1" value="${st.fleet}" style="width:7em"></label>`
-    + `<label>${t('fv.pmDay')} <select data-pmi="day">${days.map((d, i) => `<option value="${d}">${esc(i === 0 ? `${t('fv.tomorrow')} · ${dayTxt(d)}` : dayTxt(d))}</option>`).join('')}</select></label>`
+    + `<label>${t('fv.pmDay')} <select data-pmi="day">${days.map((d, i) => `<option value="${d}">${esc(i === 0 ? `${t('fv.tomorrow')}, ${dayTxt(d)}` : dayTxt(d))}</option>`).join('')}</select></label>`
     + `<label>${t('fv.pmLevel')} <select data-pmi="q">${opSel ? `<option value="op">${esc(t('fv.pmLevelOp', { op: opSel }))}</option>` : ''}<option value="p25">${t('fv.pmP25')}</option><option value="p50" selected>${t('fv.pmP50')}</option><option value="p75">${t('fv.pmP75')}</option></select></label></div>`
     + `<div class="fv-pm-out"></div><p class="fv-sub">${t('fv.pmNote', { phi: n1v(M.phi) })}</p>`;
   if (opSel) { const o = box.querySelector('[data-pmi="q"]'); o.value = 'op'; st.q = 'op'; }
@@ -278,7 +288,7 @@ async function fillPortable(box, ctx, sel) {
     const rows = Array.from({ length: 24 }, (_, h) => ({ day: st.day, h, p: null, a: null, l: st.fleet * pmRate(M, st.ty, T, level, h), c: null }));
     const tot = sum(rows.map(r => r.l)), pk = rows.reduce((b, r) => (r.l > b.l ? r : b), rows[0]);
     out.innerHTML = `<div class="tiles">${tile(t('fv.pmTotal'), n0(tot), t('fv.pmTotalSub', { per: n1v(tot / Math.max(1, st.fleet)), T: t(`fv.dt.${T}`) }))}${tile(t('fv.kPeakD', { d: dayTxt(st.day) }), t('fv.kPeakV', { h: String(pk.h).padStart(2, '0'), h2: String((pk.h + 1) % 24).padStart(2, '0') }), t('fv.kPeakSubF', { v: n0(pk.l), u: '' }))}`
-      + `${tile(t('fv.pmLevelTile'), hasOp ? esc(opSel) : st.q === 'op' ? t('fv.pmP50') : t(`fv.pm${st.q.toUpperCase()}`), `${hasOp ? t('fv.pmLevelOpSub') : t('fv.pmLevelTypSub')}${city && !hasOp && M.city?.[city] != null ? ` · ${t('fv.pmCity', { c: esc(ctx.muniName?.(city) || city), f: sg(Math.exp(M.city[city]) - 1, 0) })}` : ''}${st.q === 'op' && !hasOp ? ` · ${t('fv.pmOpMissing', { op: esc(opSel) })}` : ''}`)}</div>`
+      + `${tile(t('fv.pmLevelTile'), hasOp ? esc(opSel) : st.q === 'op' ? t('fv.pmP50') : t(`fv.pm${st.q.toUpperCase()}`), `${hasOp ? t('fv.pmLevelOpSub') : t('fv.pmLevelTypSub')}${city && !hasOp && M.city?.[city] != null ? `, ${t('fv.pmCity', { c: esc(ctx.muniName?.(city) || city), f: sg(Math.exp(M.city[city]) - 1, 0) })}` : ''}${st.q === 'op' && !hasOp ? `, ${t('fv.pmOpMissing', { op: esc(opSel) })}` : ''}`)}</div>`
       + timeline(ctx, rows, { width: box.clientWidth - 20, blocks: [{ from: 0, to: 24, label: dayTxt(st.day) }] });
   };
   box.querySelectorAll('[data-pmi]').forEach(inp => inp.addEventListener(inp.tagName === 'INPUT' ? 'input' : 'change', () => { const k = inp.dataset.pmi; st[k] = k === 'fleet' ? Math.max(1, Math.min(100000, +inp.value || 1)) : inp.value; paint(); }));
@@ -298,9 +308,9 @@ const LIGA = { bl1: '1. Bundesliga', bl2: '2. Bundesliga', bl3: '3. Liga', del: 
 const evWhen = (e, until = null) => {
   const d = (x, o) => dateFmt({ ...o, timeZone: TZ }).format(new Date(x)), day = { weekday: 'short', day: '2-digit', month: '2-digit' };
   if (until) return `${d(e.beginn, day)}–${d(CX.localMs(until), { day: '2-digit', month: '2-digit' })}`;
-  return e.noTime ? `${d(e.beginn, day)} · ${t(e.noTime === 1 ? 'fv.evAllDay' : 'fv.evNoTime')}` : d(e.beginn, { ...day, hour: '2-digit', minute: '2-digit' });
+  return e.noTime ? `${d(e.beginn, day)}, ${t(e.noTime === 1 ? 'fv.evAllDay' : 'fv.evNoTime')}` : d(e.beginn, { ...day, hour: '2-digit', minute: '2-digit' });
 };
-const evKind = (e) => (e.src === 'sport' ? `${t('fv.evSport')} · ${LIGA[e.liga] || e.liga || ''}` : e.src === 'liste' ? `${e.kind ? t(`fv.evKind.${e.kind}`) : t('fv.evListe')}${e.auto ? ` · ${t('fv.evAuto')}` : ''}` : e.kind || t('fv.evVenue'));
+const evKind = (e) => (e.src === 'sport' ? `${t('fv.evSport')}, ${LIGA[e.liga] || e.liga || ''}` : e.src === 'liste' ? `${e.kind ? t(`fv.evKind.${e.kind}`) : t('fv.evListe')}${e.auto ? `, ${t('fv.evAuto')}` : ''}` : e.kind || t('fv.evVenue'));
 const evWhat = (ctx, e) => (e.quelle && /^https?:/.test(e.quelle) && e.src !== 'sport' ? `<a href="${ctx.esc(e.quelle)}" target="_blank" rel="noopener">${ctx.esc(e.titel)}</a>` : ctx.esc(e.titel));
 /** gleiche Veranstaltung an Folgetagen (Turnier, Messe) als eine Zeile */
 function evRuns(list) {
@@ -351,7 +361,7 @@ async function fillEventsMain(box, ctx, sel, S0) {
     for (const e of ev?.list || []) { if (e.ags.length !== 1 || !(endMs(e) < now) || e.beginn < now - 8 * 864e5) continue; const f = evEffect(S0, e); if (!f) continue; const g = grp(e); let a = by.get(g); if (!a) by.set(g, a = []); a.push(f.uplift); }
     const med = (a) => { const b = [...a].sort((x, y) => x - y), n = b.length; return (b[(n - 1) >> 1] + b[n >> 1]) / 2; }, pct = (x) => (Math.round(Math.abs(x) * 100) === 0 ? '±0 %' : `${x >= 0 ? '+' : '−'}${n0(Math.abs(x) * 100)} %`);
     const parts = ['football', 'icehockey', 'venue', 'tradefair', 'fair', 'other'].filter(g => (by.get(g) || []).length >= 3).map(g => t('fv.evEffPart', { what: t(`fv.evGrp.${g}`), eff: pct(med(by.get(g))), n: n0(by.get(g).length) }));
-    if (parts.length) html += `<p class="fv-sub">${t('fv.evEffAll', { list: parts.join(' · ') })}</p>`; }
+    if (parts.length) html += `<p class="fv-sub">${t('fv.evEffAll', { list: parts.join(', ') })}</p>`; }
   const upRuns = evRuns(up);
   const upRow = (r) => `<tr><td>${esc(evWhen(r.e, r.until))}</td>${withWhere ? `<td>${esc(muni(r.e.ags[0]))}</td>` : ''}<td class="wrap">${evWhat(ctx, r.e)}</td><td class="mh">${esc(r.e.ort || (r.e.src === 'liste' ? (r.e.kind ? evKind(r.e) : '–') : evKind(r.e)))}</td><td class="n mh">${r.e.cap ? n0(r.e.cap) : '–'}</td></tr>`;
   const upHead = `<thead><tr><th>${t('fv.evColWhen')}</th>${withWhere ? `<th>${t('fv.evColWhere')}</th>` : ''}<th>${t('fv.evColWhat')}</th><th class="mh">${t('fv.evColVenue')}</th><th class="n mh">${t('fv.evColCap')}</th></tr></thead>`;
@@ -360,7 +370,7 @@ async function fillEventsMain(box, ctx, sel, S0) {
   // zuletzt: gemessene Wirkung
   const pastRows = past.slice(0, scope ? 10 : 12).map(e => ({ e, f: evEffect(S0, e) }));
   html += `<div class="fv-ev-h">${t('fv.evPast')}</div>`;
-  html += pastRows.length ? `<div class="tbl fv-tbl full" data-csv="0" tabindex="0" role="region" aria-label="${esc(t('fv.evPast'))}"><table><thead><tr><th>${t('fv.evColWhat')}</th><th class="n" title="${esc(t('fv.evColEffTip'))}">${t('fv.evColEff')}</th></tr></thead><tbody>${pastRows.map(({ e, f }) => `<tr><td class="wrap"><span class="lv">${evWhat(ctx, e)}</span><span class="lvs">${esc([evWhen(e), withWhere ? muni(e.ags[0]) : '', e.ort || evKind(e)].filter(Boolean).join(' · '))}</span></td><td class="n">${effCell(f)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="fv-sub">${t('fv.evNonePast')}</p>`;
+  html += pastRows.length ? `<div class="tbl fv-tbl full" data-csv="0" tabindex="0" role="region" aria-label="${esc(t('fv.evPast'))}"><table><thead><tr><th>${t('fv.evColWhat')}</th><th class="n" title="${esc(t('fv.evColEffTip'))}">${t('fv.evColEff')}</th></tr></thead><tbody>${pastRows.map(({ e, f }) => `<tr><td class="wrap"><span class="lv">${evWhat(ctx, e)}</span><span class="lvs">${esc([evWhen(e), withWhere ? muni(e.ags[0]) : '', e.ort || evKind(e)].filter(Boolean).join(', '))}</span></td><td class="n">${effCell(f)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="fv-sub">${t('fv.evNonePast')}</p>`;
   const later = list.filter(e => e.beginn > now + 14 * 864e5 && (scope || known(e)));
   if (later.length) html += `<p class="fv-sub">${t('fv.evLater', { n: n0(evRuns(later).length), d: esc(dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: TZ }).format(new Date(later[later.length - 1].beginn))) })}</p>`;
   html += `<p class="fv-sub">${t('fv.evMainNote', { d: esc(activeFromTxt(ev?.cu, ev?.sp)) })} <a href="#prognose-basis">${t('fv.evAllLink')}</a></p>`;
@@ -390,9 +400,8 @@ async function markEvents(el, ctx, rows, sel) {
     labels += `<text class="ev-t" x="${x.toFixed(1)}" y="${(pt + 12 + lane * 13).toFixed(1)}">${ctx.esc(txt)}</text>`;
   }
   svg.insertAdjacentHTML('afterbegin', bands);
-  const firstHit = svg.querySelector('rect.hit'); if (firstHit) firstHit.insertAdjacentHTML('beforebegin', labels); else svg.insertAdjacentHTML('beforeend', labels);
-  const hits = svg.querySelectorAll('rect.hit');
-  for (const m of marks) for (let i = m.i0; i <= m.i1; i++) { const tt = hits[i]?.querySelector('title'); if (tt) tt.textContent += `\n◆ ${m.e.titel}${m.e.ort ? ` (${m.e.ort})` : ''}`; }
+  svg.insertAdjacentHTML('beforeend', labels);
+  for (const m of marks) for (let i = m.i0; i <= m.i1; i++) chartExtra(svg, i, { label: `◆ ${m.e.titel}${m.e.ort ? ` (${m.e.ort})` : ''}`, value: '' });
   el.querySelector('.fv-legend')?.insertAdjacentHTML('beforeend', `<span><i class="k-ev"></i>${t('fv.evMark')}</span>`);
 }
 // Grundlagen: vollständige Liste im gewählten Gebiet, 7 Tage zurück bis 14 Tage voraus, mit Quelle und gemessener Wirkung
@@ -414,7 +423,7 @@ async function fillEvents(box, ctx, sel, S0 = null) {
 
 export function scopeLabel(ctx, sel) {
   const parts = [sel.ags && sel.ags !== 'DE' ? (ctx.muniName?.(sel.ags) || sel.ags) : t('fc.scopeDE'), sel.op && sel.op !== 'all' && !sel.ignored ? sel.op : null, sel.ty && sel.ty !== 'all' && !sel.ignored ? sel.ty : null].filter(Boolean);
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 /** Ist des heutigen Tags frisch aus events/<Tag>.json (Sammler-Lauf alle paar Minuten); null = Datei fehlt, dann gelten die Reihen aus series.json */
 async function freshActual(ctx, S0, sel, today) {

@@ -17,6 +17,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
+| [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 
 ## status
 
@@ -377,3 +378,31 @@ Version 1.0 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema
 | `active` |  | string oder null |
 | `plans` |  | object |
 | `days` | ja | object |
+
+## auflagen
+
+auflagen/ – Datenauflagen-Check und Alarme. Jahresbuch der Feed-Verfügbarkeit je Quelle (auflagen/verfuegbarkeit-&lt;Jahr&gt;.json, S5.1) und Alarmprotokoll je Gemeinde (auflagen/alarme.json, S5.2; daraus die Atom-Feeds feeds/&lt;AGS&gt;.xml).
+
+Version 1.0 · Schema: [schemas/auflagen.schema.json](../schemas/auflagen.schema.json)
+
+### auflagen · ledger
+
+Verfügbarkeit im Kalenderjahr: Läufe, verfügbare Läufe (aktuell oder leicht verzögert), Fehler – letzte Tage einzeln, ältere je Monat
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `year` | ja | integer – Kalenderjahr |
+| `at` | ja | integer – Stand (ms seit 1970) |
+| `sources` | ja | object – Quelle (id) → Buch |
+
+### auflagen · alarms
+
+Alarme der letzten 60 Tage, neueste zuerst; Zustand für den Vergleich mit dem nächsten Lauf
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` | ja | integer – Stand (ms seit 1970) |
+| `items` | ja | array von object |
+| `state` |  | object – Stand des letzten Laufs für den Vergleich (Obergrenzen, Quellenstatus, Zonen, Preise, Flotte) |

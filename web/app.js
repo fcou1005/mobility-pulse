@@ -5,7 +5,7 @@ import { $, $$, CFG, DEMO, DIRS, QS, STATUS, TYPE, esc, fmt, gl, isClient, state
 import { LITE_VIEWS, REQ, cached, clearNotice, fresh, getJson, loadBase, loadLatest, notice, resetCache, resetDaily } from './app-load.js';
 import { muniInfo, muniName, operatorRows, scopeLabel } from './app-scope.js';
 import { autoLive, liveFetch, setPendingLive } from './app-live.js';
-import { FILTERS, M, VIEWS, applyUrlParams, bindGlossTips, bindTableCsv, copyLink, currentView, dataReady, dirty, markDirty, opsFleet, placeSeg, renderAll, safe, setClient, setView, syncUrl, urlReady } from './app-router.js';
+import { FILTERS, M, VIEWS, applyUrlParams, bindGlossTips, bindTableCsv, copyLink, currentView, dataReady, dirty, markDirty, opsFleet, placeSeg, renderAll, safe, setClient, setView, syncUrl, urlReady, ROLE_START, roleOf } from './app-router.js';
 import { bindLangSwitch, onLanguage, renderHeader, renderLangHint, renderLangSwitch, renderStamp } from './app-lang.js';
 import { fitMap, initMap, loadWfs, renderMap, renderZonesLayer } from './app-map.js';
 import { ENERGY, energyOfOp, renderHistory } from './app-energy.js';
@@ -13,6 +13,7 @@ import { renderSignals, resetSignalData, setSigFilter } from './app-signals.js';
 import { MORE, MORE_RENDER, checkSupply, renderCoverage, renderSourceTable, renderSupplyLayer, toggleCovAll } from './app-sources.js';
 import { renderEcon, renderUsage, renderUsageChart, setCalibMode } from './app-usage.js';
 import { renderCalibPanel, setCalib } from './app-calib.js';
+import { firstVisit } from './app-terms.js';
 
 // ---------- Steuerung ----------
 export function populateScope() {
@@ -211,7 +212,7 @@ export function buildToc() {
   if (items.length < 4) { toc?.remove(); return; }
   const sig = `${lang()}|${items.map(i => i.join('=')).join('|')}`;
   if (toc?.dataset.sig === sig) return;
-  if (!toc) { toc = document.createElement('nav'); toc.className = 'toc'; const hero = view.querySelector(':scope > .hero'); if (hero) hero.after(toc); else view.prepend(toc); }
+  if (!toc) { toc = document.createElement('nav'); toc.className = 'toc'; const hero = view.querySelector(':scope > .view-answer') || view.querySelector(':scope > .hero'); if (hero) hero.after(toc); else view.prepend(toc); } // S4.1: Sprungleiste unter der Antwort
   toc.dataset.sig = sig; toc.setAttribute('aria-label', t('ux.onThisPage'));
   toc.innerHTML = `<span class="toc-l">${esc(t('ux.onThisPage'))}</span>${items.map(([id, l]) => `<button type="button" class="chip" data-toc="${esc(id)}">${esc(l)}</button>`).join('')}`;
 }
@@ -228,7 +229,8 @@ export function bindOrientation() {
   onLang(scheduleToc);
 }
 export function enhanceUi() {
-  if (window.top !== window.self) { document.body.classList.add('framed'); notice(() => t('app.framedWarning'), 'bad', 'framed'); }
+  if (QS.has('embed')) document.body.classList.add('embed'); // S5.4: gewollt eingebettet (Stadtseite) – kein Hinweis auf fremden Rahmen
+  else if (window.top !== window.self) { document.body.classList.add('framed'); notice(() => t('app.framedWarning'), 'bad', 'framed'); }
   if (CFG.DATA_OK) {
     const b = document.createElement('div'); b.className = 'note warn data-origin'; b.id = 'data-origin';
     const put = () => { b.innerHTML = t('app.dataOriginBanner', { src: `<span class="mono">${esc(QS.get('data'))}</span>` }); };
@@ -273,7 +275,7 @@ export function renderFilterSum() {
   const b = $('#filters-sum'); if (!b) return;
   const fs = (FILTERS[currentView] || 'scope op type mode').split(' ');
   const parts = [fs.includes('scope') ? scopeLabel() : null, fs.includes('op') ? (state.operator === 'all' ? t('app.allOperatorsOnSite') : state.operator) : null, fs.includes('type') ? (state.type === 'all' ? t('html.allVehicleTypes') : TYPE[state.type] || state.type) : null].filter(Boolean);
-  b.textContent = parts.join(' · ');
+  b.textContent = parts.join(', ');
   b.hidden = !parts.length; // Ansicht ohne Filter (#status): keine leere Zusammenfassung
 }
 export async function init() {
@@ -286,7 +288,8 @@ export async function init() {
   $$('abbr[data-gloss]').forEach(a => { a.title = gl(a.dataset.gloss); }); // Glossar-Tooltips aus einer Quelle
   // Platzhalter-Kacheln in der späteren Anzahl: die Seite springt nicht, wenn die Zahlen kommen (CLS)
   for (const [id, n] of [['#live-tiles', 5], ['#lab-tiles', 4], ['#usage-tiles', 5], ['#econ-tiles', 5], ['#cov-tiles', isClient() ? 3 : 4], ['#src-tiles', 4]]) { const el = $(id); if (el && !el.children.length) el.innerHTML = '<div class="tile skel" aria-hidden="true"><div class="l">&nbsp;</div><div class="v">–</div><div class="s">&nbsp;</div></div>'.repeat(n); }
-  setView(location.hash.slice(1) || 'live');
+  firstVisit(); // S4.8: einmal fragen, wofür die Seite genutzt wird
+  setView(location.hash.slice(1) || (QS.has('embed') ? 'stadt' : ROLE_START[roleOf()]) || 'live'); // S5.6: ohne Ansicht im Link die Startansicht der Rolle
   await loadBase(currentView);
   populateScope();
   const deep = applyUrlParams(); // Deep-Link: Gebiet, Anbieter, Fahrzeugart aus der URL

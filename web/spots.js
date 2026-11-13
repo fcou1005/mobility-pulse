@@ -6,6 +6,9 @@ import * as SP from './pulse-spots.js';
 import { decodeFleet, buildDemandModel, GROUP_MIN } from './pulse-ops.js';
 import { t, dateFmt, fmtLocale } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
+import { NEUTRAL } from './tokens.js';
+import { clearAnswer, putAnswer } from './answer.js';
+import { stationName } from './ui-shared.js';
 
 const LISTS = ['missing', 'onlyMine', 'care'], ISSUES = ['zone', 'dup', 'empty'], DEMAND_DAYS = 7, LIMIT = 100, RANK_LABELS = 30;
 const CACHE = new Map();
@@ -16,7 +19,7 @@ export function resetSpotsCache() { CACHE.clear(); }
 
 const STYLE = `
 .sp-root .sp-ctl{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;margin:var(--s2) 0 var(--s3)}
-.sp-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--fg-2)}
+.sp-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:.75rem;color:var(--fg-2)}
 .sp-ctl input[type=search]{min-height:var(--ctl);padding:0 var(--s3);border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--panel-2);min-width:min(240px,100%)}
 .sp-tog{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:10px;background:var(--bg-2);border:1px solid var(--line)}
 .sp-tog button{min-height:26px;border:0;background:transparent;color:var(--fg-2);padding:0 12px;border-radius:7px}
@@ -25,45 +28,45 @@ const STYLE = `
 .sp-chips .chip .sp-n{font-weight:400;font-variant-numeric:tabular-nums}
 .sp-chips .chip i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c,var(--warn))}
 .sp-chips .chip[aria-pressed="false"]{color:var(--fg-2);border-style:dashed;text-decoration:line-through}.sp-chips .chip[aria-pressed="false"] i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c,var(--warn))}
-.sp-lead{font-size:15px;line-height:1.5;color:var(--fg);max-width:78ch;margin:var(--s3) 0}
+.sp-lead{font-size:.875rem;line-height:1.5;color:var(--fg);max-width:78ch;margin:var(--s3) 0}
 .sp-lead b{font-weight:600;font-variant-numeric:tabular-nums}
 .sp-root .sp-feed{margin:0 0 var(--s4);max-width:110ch}
-.sp-h3{font-size:14px;font-weight:600;margin:var(--s4) 0 var(--s2)}
+.sp-h3{font-size:.875rem;font-weight:600;margin:var(--s4) 0 var(--s2)}
 .sp-op{display:inline-flex;align-items:center;gap:6px;font-weight:500;white-space:nowrap}.sp-op i{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none}
 .sp-ops{display:flex;flex-wrap:wrap;gap:2px 10px}
-.sp-tag{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;border:1px solid var(--accent);color:var(--fg);font-size:11px;font-weight:500;line-height:17px}
+.sp-tag{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;border:1px solid var(--accent);color:var(--fg);font-size:.75rem;font-weight:500;line-height:17px}
 .sp-root tr.sp-own td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 .sp-bar{position:relative;display:flex;gap:2px;height:10px;width:100%;min-width:150px;max-width:280px;margin:4px 0 3px;border-radius:3px}
 .sp-bar span{height:100%;background:var(--c);flex:none}
 .sp-bar span:first-of-type{border-radius:3px 0 0 3px}.sp-bar span:last-of-type{border-radius:0 3px 3px 0}.sp-bar span:only-of-type{border-radius:3px}
 .sp-bar span.b{background:color-mix(in srgb,var(--c) 30%,var(--panel))}
 .sp-bar i{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--fg);border-radius:1px}
-.sp-keys{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);align-items:center;font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
+.sp-keys{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);align-items:center;font-size:.75rem;color:var(--fg-2);margin-top:var(--s2)}
 .sp-keys .k{display:inline-block;width:18px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--fg-2)}
 .sp-keys .k.b{background:color-mix(in srgb,var(--fg-2) 30%,var(--panel))}.sp-keys .k.t{width:2px;height:14px;background:var(--fg);vertical-align:-3px}
 .sp-keys .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px;border:2px solid var(--c,var(--fg-2))}
 .sp-keys .dot.fill{background:var(--c,var(--fg-2))}.sp-keys .dot.ring{border-color:var(--warn);background:var(--c,var(--fg-2))}.sp-keys .dot.area{border:1.5px dashed var(--fg-2);width:14px;height:14px}
 .sp-keys .dot.grey{border:0;width:7px;height:7px;background:var(--muted)}
 .sp-tabs{display:flex;flex-wrap:wrap;gap:0 var(--s4);margin:var(--s5) 0 var(--s2);border-bottom:1px solid var(--line)}
-.sp-tabs button,.sp-tabs button[aria-pressed]{min-height:36px;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--fg-2);font-size:14px;font-weight:500;margin-bottom:-1px}
+.sp-tabs button,.sp-tabs button[aria-pressed]{min-height:36px;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--fg-2);font-size:.875rem;font-weight:500;margin-bottom:-1px}
 .sp-tabs button[aria-pressed="true"]{color:var(--fg);border-bottom-color:var(--accent);background:none}
 .sp-tabs button span{margin-left:6px;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:400}
-.sp-sub{font-size:13px;color:var(--fg-2);margin:var(--s2) 0 0;max-width:100ch}
+.sp-sub{font-size:.875rem;color:var(--fg-2);margin:var(--s2) 0 0;max-width:100ch}
 .sp-map{height:460px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg-2);isolation:isolate;margin-top:var(--s2)}
 .sp-link{all:unset;cursor:pointer;color:var(--fg);font-weight:500;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px;border-radius:3px}
 .sp-link:hover{text-decoration-color:currentColor}.sp-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sp-link.none{color:var(--fg-2);font-style:italic}
 .sp-pl{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:start}.sp-rk{min-width:2ch;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
-.sp-why{min-width:30ch;max-width:52ch;white-space:normal;color:var(--fg-2);font-size:12.5px;line-height:1.45}
-.sp-flag{display:inline-flex;gap:5px;align-items:center;font-size:12px;color:var(--fg-2);white-space:nowrap}.sp-flag i{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
-.sp-iss{display:flex;gap:6px;align-items:baseline;white-space:normal;min-width:26ch;max-width:46ch;font-size:12.5px;line-height:1.45}.sp-iss+.sp-iss{margin-top:2px}.sp-iss i{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none;transform:translateY(-1px)}
+.sp-why{min-width:30ch;max-width:52ch;white-space:normal;color:var(--fg-2);font-size:.75rem;line-height:1.45}
+.sp-flag{display:inline-flex;gap:5px;align-items:center;font-size:.75rem;color:var(--fg-2);white-space:nowrap}.sp-flag i{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
+.sp-iss{display:flex;gap:6px;align-items:baseline;white-space:normal;min-width:26ch;max-width:46ch;font-size:.75rem;line-height:1.45}.sp-iss+.sp-iss{margin-top:2px}.sp-iss i{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none;transform:translateY(-1px)}
 .sp-root .tbl td.n .sub-line{white-space:nowrap}
 .sp-root .tbl tr.sp-sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}.sp-root .tbl tr.sp-sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
-.sp-rank span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--panel);color:var(--fg);box-shadow:0 0 0 1.5px var(--fg-2);font:600 10.5px/1 var(--sans);font-variant-numeric:tabular-nums}
-.leaflet-tooltip.sp-tip{background:var(--panel);color:var(--fg-2);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px 10px;font:12px/1.45 var(--sans);max-width:min(320px,72vw);white-space:normal}
+.sp-rank span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--panel);color:var(--fg);box-shadow:0 0 0 1.5px var(--fg-2);font:600 .75rem/1 var(--sans);font-variant-numeric:tabular-nums}
+.leaflet-tooltip.sp-tip{background:var(--panel);color:var(--fg-2);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px 10px;font:.75rem/1.45 var(--sans);max-width:min(320px,72vw);white-space:normal}
 .leaflet-tooltip.sp-tip b{color:var(--fg)}
 .sp-method{margin-top:var(--s4)}
-@media (max-width:720px){.sp-map{height:340px}.sp-lead{font-size:14px}}
+@media (max-width:720px){.sp-map{height:340px}.sp-lead{font-size:.875rem}}
 `;
 let cssDone = false;
 const css = () => { if (cssDone || typeof document === 'undefined') return; cssDone = true; const s = document.createElement('style'); s.textContent = STYLE; document.head.appendChild(s); };
@@ -114,9 +117,9 @@ const signed = (ctx, x) => (x == null ? '—' : x > 0 ? `+${ctx.fmt(x)}` : x < 0
 const listFmt = () => { try { return new Intl.ListFormat(fmtLocale(), { style: 'long', type: 'conjunction' }); } catch { return { format: (a) => a.join(', ') }; } };
 const opCell = (ctx, op) => `<span class="sp-op" style="--c:${ctx.esc(ctx.opColor(op))}"><i></i>${ctx.esc(op)}</span>`;
 const coords = (x) => `${x.lat.toFixed(5)}, ${x.lon.toFixed(5)}`;
-const nameOf = (x) => x.label || t('spots.noName');
+const nameOf = (x) => stationName(x.label) || t('spots.noName');
 // Spot-Namen aus dem Feed (Straßen, Plätze) sind Eigennamen: nicht übersetzen lassen
-const nameHtml = (esc, x) => (x.label ? `<span translate="no">${esc(x.label)}</span>` : esc(t('spots.noName')));
+const nameHtml = (esc, x) => (stationName(x.label) ? `<span translate="no">${esc(x.label)}</span>` : esc(t('spots.noName')));
 
 /** Begründung „Fehlt bei mir“ als Satz (Tabelle, Karte, GeoJSON) */
 function whyMissing(ctx, x) {
@@ -130,21 +133,21 @@ function whyMissing(ctx, x) {
     else if (r.k === 'nearOwn') out.push(t('spots.why.nearOwn', { d: ctx.fmt(r.d) }));
     else if (r.k === 'noOwn') out.push(t('spots.why.noOwn'));
   }
-  return out.join(' · ');
+  return out.join(', ');
 }
 function issueText(ctx, i) {
   if (i.k === 'zone') return i.zone ? t('spots.iss.zone', { zone: i.zone }) : t('spots.iss.zoneNoName');
   if (i.k === 'dup') return t('spots.iss.dup', { of: i.of || coords(i), d: ctx.fmt(i.d) }); // Partner ohne Namen: Koordinaten
   const base = t('spots.iss.empty', { p: ctx.fmt(i.share * 100), n: ctx.fmt(i.runs) });
   const dem = i.demand === 'high' ? ` – ${t('spots.iss.emptyHigh')}` : i.demand === 'low' ? ` – ${t('spots.iss.emptyLow')}` : '';
-  return base + dem + (i.vehNow ? ` · ${t('spots.iss.vehNow', { n: ctx.fmt(i.vehNow) })}` : '');
+  return base + dem + (i.vehNow ? `, ${t('spots.iss.vehNow', { n: ctx.fmt(i.vehNow) })}` : '');
 }
 function whyOnly(ctx, x) {
   const out = [x.emptyShare == null ? t('spots.why.noQuota') : t('spots.iss.empty', { p: ctx.fmt(x.emptyShare * 100), n: ctx.fmt(x.runs) })];
   if (x.nearestOther) out.push(t('spots.why.nearOther', { op: x.nearestOther.operator, d: ctx.fmt(x.nearestOther.d) }));
-  return out.join(' · ');
+  return out.join(', ');
 }
-const reasonOf = (ctx, list, x) => (list === 'missing' ? whyMissing(ctx, x) : list === 'care' ? x.issues.map(i => issueText(ctx, i)).join(' · ') : whyOnly(ctx, x));
+const reasonOf = (ctx, list, x) => (list === 'missing' ? whyMissing(ctx, x) : list === 'care' ? x.issues.map(i => issueText(ctx, i)).join(', ') : whyOnly(ctx, x));
 
 // ---------- Übersicht ----------
 function overview(ctx, res, s) {
@@ -170,11 +173,20 @@ function overview(ctx, res, s) {
   const keys = `<div class="sp-keys"><span><i class="k"></i>${t('spots.keyA')}</span><span><i class="k b"></i>${t('spots.keyB', { r: s.radius })}</span><span><i class="k t"></i>${t('spots.keyTick', { own: ctx.esc(res.own) })}</span></div>`;
   return `<h3 class="sp-h3">${t('spots.ovTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${t('spots.ovTitle')}"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${keys}`;
 }
-function lead(ctx, res) {
+// S4.1: Antwort oben – was dem eigenen Anbieter fehlt, eigene Spots (= Zeile des Anbieters in der Übersicht), Pflegebedarf
+function lead(ctx, res, s) {
   const own = res.rows.find(r => r.own), others = res.rows.filter(r => !r.own && r.spots);
   const list = others.length ? listFmt().format(others.map(r => t('spots.leadOther', { op: r.op, n: ctx.fmt(r.spots), d: signed(ctx, r.diff) }))) : t('spots.leadNoOthers');
   const v = { own: ctx.esc(res.own), n: ctx.fmt(own?.spots || 0), others: ctx.esc(list) };
-  return `<p class="sp-lead">${!own?.spots ? t('spots.leadNone', v) : own.spots === 1 ? t('spots.lead1', v) : t('spots.lead', v)}</p>`;
+  const has = !own?.spots ? t('spots.leadNone', v) : own.spots === 1 ? t('spots.lead1', v) : t('spots.lead', v);
+  return putAnswer(s.el, { id: 'spots',
+    sentence: `${t('ans.spots', { own: `<b>${ctx.esc(res.own)}</b>`, n: `<strong>${ctx.fmt(res.missing.length)}</strong>`, r: ctx.fmt(s.radius) })} ${has}`,
+    kpis: [
+      { label: t('spots.list.missing'), value: ctx.fmt(res.missing.length), n: res.missing.length, cmp: t('ans.kMissingCmp', { r: ctx.fmt(s.radius) }), tone: res.missing.length ? 'warn' : 'ok' },
+      { label: t('ans.kOwnSpots'), value: ctx.fmt(own?.spots || 0), n: own?.spots || 0, cmp: others.length ? t('ans.kOwnSpotsCmp', { op: others.slice().sort((a, b) => b.spots - a.spots)[0].op, n: ctx.fmt(Math.max(...others.map(r => r.spots))) }) : t('spots.leadNoOthers'), eq: '.sp-root tbody tr.sp-own td:nth-child(2)' },
+      { label: t('spots.list.care'), value: ctx.fmt(res.care.length), n: res.care.length, cmp: t('ans.kOnlyMineCmp', { n: ctx.fmt(res.onlyMine.length) }), tone: res.care.length ? 'warn' : '' },
+    ],
+    how: t('ans.spotsHow', { r: ctx.fmt(s.radius) }), asOf: stamp(s.fleet.at) });
 }
 function controls(ctx, res, s) {
   const esc = ctx.esc, opt = (v, l, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`;
@@ -213,10 +225,10 @@ function tools(ctx, res, s) {
 }
 function table(ctx, res, s, items) {
   const esc = ctx.esc;
-  if (!items.length) return `<div class="empty">${(s.list === 'missing' ? res.missing : s.list === 'onlyMine' ? res.onlyMine : res.care).length ? t('spots.emptyFiltered') : t(`spots.empty.${s.list}`, { own: esc(res.own), r: s.radius })}</div>`;
+  if (!items.length) return `<div class="empty">${(s.list === 'missing' ? res.missing : s.list === 'onlyMine' ? res.onlyMine : res.care).length ? t('spots.emptyFiltered') : t(`spots.empty.${s.list}`, { own: esc(res.own), r: s.radius })} <button type="button" class="chip" data-sp-list="${s.list === 'missing' ? 'care' : s.list === 'onlyMine' ? 'missing' : 'onlyMine'}">${t(`spots.list.${s.list === 'missing' ? 'care' : s.list === 'onlyMine' ? 'missing' : 'onlyMine'}`)}</button></div>`;
   const th = (l, tip, n) => `<th${n ? ' class="n"' : ''}>${tip ? `<abbr title="${esc(tip)}">${l}</abbr>` : l}</th>`;
   // Rang steht vor dem Namen (eine Spalte weniger; auf dem Telefon bleibt der Name als erste Spalte stehen)
-  const place = (x, key) => `<div class="sp-pl"><span class="sp-rk">${x.rank}</span><div><button type="button" class="sp-link${x.label ? '' : ' none'}" data-sp-focus="${key}" title="${t('spots.showOnMap')}">${nameHtml(esc, x)}</button><div class="sub-line">${coords(x)}</div></div></div>`;
+  const place = (x, key) => `<div class="sp-pl"><span class="sp-rk">${x.rank}</span><div><button type="button" class="sp-link${stationName(x.label) ? '' : ' none'}" data-sp-focus="${key}" title="${t('spots.showOnMap')}">${nameHtml(esc, x)}</button><div class="sub-line">${coords(x)}</div></div></div>`;
   const dem = (x) => (x.demand ? `${ctx.fmt(x.demand.startsPerHour, 2)}${x.demand.startsPerHour > 0 && (x.demand.pct ?? 0) >= 0.01 ? `<div class="sub-line">${t('spots.abovePct', { p: ctx.fmt((x.demand.pct ?? 0) * 100) })}</div>` : ''}` : '–');
   const quota = (x) => (x.emptyShare == null ? `<span class="sub-line">${t('spots.noQuota')}</span>` : `${pct(ctx, x.emptyShare)}<div class="sub-line">${x.permEmpty ? `<span class="sp-flag"><i aria-hidden="true"></i>${t('spots.permEmpty')}</span>` : t('spots.runsN', { n: ctx.fmt(x.runs) })}</div>`);
   const demTip = res.demand ? t('spots.colDemandTip', { days: ctx.fmt(res.demand.days), h: ctx.fmt(res.demand.hours) }) : t('spots.noDemandData');
@@ -237,7 +249,7 @@ function table(ctx, res, s, items) {
     head = th(t('spots.colSpot')) + th(t('spots.colIssues')) + th(t('spots.colEmptyShare'), t('spots.colEmptyShareTip', { near: SP.STATION_NEAR_M }), true)
       + th(t('spots.colVehNow'), t('spots.colVehNowTip', { own: res.own, r: s.radius }), true) + th(t('spots.colAction'), t('spots.colActionTip'));
     rows = shown.map(x => `<tr><td>${place(x, `care:${x.rank}`)}</td><td>${x.issues.map(i => `<div class="sp-iss"><i aria-hidden="true"></i><span>${esc(issueText(ctx, i))}</span></div>`).join('')}</td>
-      <td class="n">${quota(x)}</td><td class="n">${num(ctx, x.vehNow)}</td><td>${t(`spots.action.${x.action}`)}<div class="sub-line">parkingStatus ${x.export.parkingStatus} · deploymentStatus ${x.export.deploymentStatus}</div></td></tr>`).join('');
+      <td class="n">${quota(x)}</td><td class="n">${num(ctx, x.vehNow)}</td><td>${t(`spots.action.${x.action}`)}<div class="sub-line">parkingStatus ${x.export.parkingStatus}, deploymentStatus ${x.export.deploymentStatus}</div></td></tr>`).join('');
   }
   const more = items.length > s.limit ? `<div class="sp-ctl rp-noprint"><button type="button" data-sp-act="more">${t('spots.more', { n: ctx.fmt(Math.min(LIMIT, items.length - s.limit)), m: ctx.fmt(items.length - s.limit) })}</button></div>` : '';
   const title = t(`spots.list.${s.list}`);
@@ -271,7 +283,7 @@ function drawMap(el, ctx, res, s, items) {
   }
   s.layer.clearLayers(); s.marks = new Map();
   const renderer = L.canvas({ padding: 0.3 }), esc = ctx.esc;
-  const panel = cssVar('--panel', '#fff'), fg2 = cssVar('--fg-2', '#555'), muted = cssVar('--muted', '#888'), warn = cssVar('--warn', '#c90');
+  const panel = cssVar('--panel', NEUTRAL.white), fg2 = cssVar('--fg-2', NEUTRAL.fg2), muted = cssVar('--muted', NEUTRAL.fallback), warn = cssVar('--warn', NEUTRAL.warn);
   const ownC = ctx.opColor(res.own), pts = [];
   // Listeneinträge (key): Klick bzw. Enter wählt den Spot wie „Auf Karte zeigen“ in der Liste (heranzoomen, Tooltip, Zeile markiert)
   const add = (layer, key, html) => { if (html) layer.bindTooltip(html, { className: 'sp-tip', sticky: true }); layer.addTo(s.layer); if (key) { s.marks.set(key, layer); layer.on('click', () => focus(el, s, key)); } return layer; };
@@ -283,7 +295,7 @@ function drawMap(el, ctx, res, s, items) {
       const why = esc(whyMissing(ctx, x));
       const html = `<b>${x.rank}. ${nameHtml(esc, x)}</b><div>${why}</div>`;
       add(L.circle([x.lat, x.lon], { renderer, radius: s.radius, color: fg2, weight: 1, dashArray: '4 4', fillColor: fg2, fillOpacity: 0.07 }), `missing:${x.rank}`, html);
-      for (const m of x.members) { add(L.circleMarker([m.lat, m.lon], { renderer, radius: 5.5, color: panel, weight: 1.5, fillColor: ctx.opColor(m.operator), fillOpacity: 1 }), null, `<b>${nameHtml(esc, m)}</b><div>${esc(m.operator)}${m.emptyShare != null ? ` · ${t('spots.emptyShareShort', { p: ctx.fmt(m.emptyShare * 100) })}` : ''}</div><div>${x.rank}. ${nameHtml(esc, x)}</div>`); pts.push([m.lat, m.lon]); }
+      for (const m of x.members) { add(L.circleMarker([m.lat, m.lon], { renderer, radius: 5.5, color: panel, weight: 1.5, fillColor: ctx.opColor(m.operator), fillOpacity: 1 }), null, `<b>${nameHtml(esc, m)}</b><div>${esc(m.operator)}${m.emptyShare != null ? `, ${t('spots.emptyShareShort', { p: ctx.fmt(m.emptyShare * 100) })}` : ''}</div><div>${x.rank}. ${nameHtml(esc, x)}</div>`); pts.push([m.lat, m.lon]); }
     }
     items.slice(0, RANK_LABELS).forEach(x => L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'sp-rank', html: `<span>${x.rank}</span>`, iconSize: [20, 20], iconAnchor: [10, 26] }), interactive: false, keyboard: false }).addTo(s.layer));
   } else if (s.list === 'onlyMine') {
@@ -343,7 +355,7 @@ const fileName = (s, ext) => `${t(`spots.file.${s.list}`)}_${s.ags}_${String(s.r
 function pickMunicipality(el, ctx) {
   const m = Object.values(ctx.state.latest?.municipalities || {}).map(x => ({ ...x, n: Object.keys(x.operators || {}).length, v: Object.values(x.operators || {}).reduce((a, o) => a + (o.total || 0), 0) }))
     .filter(x => x.n >= 2).sort((a, b) => b.v - a.v).slice(0, 24);
-  el.innerHTML = `<div class="panel-head"><div><h2>${t('spots.title')}</h2><div class="sub">${t('spots.pickSub')}</div></div></div><div class="sp-chips">${m.map(x => `<button type="button" class="chip" data-ags="${ctx.esc(x.ags)}">${ctx.esc(x.name)} <span class="muted">${ctx.esc(ctx.fmt(x.n))} · ${ctx.esc(ctx.fmt(x.v))}</span></button>`).join('')}</div>`;
+  el.innerHTML = `<div class="panel-head"><div><h2>${t('spots.title')}</h2><div class="sub">${t('spots.pickSub')}</div></div></div><div class="sp-chips">${m.map(x => `<button type="button" class="chip" data-ags="${ctx.esc(x.ags)}">${ctx.esc(x.name)} <span class="muted">${ctx.esc(ctx.fmt(x.n))}, ${ctx.esc(ctx.fmt(x.v))}</span></button>`).join('')}</div>`;
 }
 function analysis(s) {
   const z = zonesFor(s.el, s);
@@ -365,10 +377,10 @@ function draw(el, ctx, s) {
   s.el = el;
   const res = analysis(s);
   const name = ctx.muniName?.(s.ags) || s.ags;
-  const head = `<div class="panel-head"><div><h2>${t('spots.title')} · ${ctx.esc(name)}</h2><div class="sub">${t('spots.sub', { at: stamp(s.fleet.at) })}</div></div></div>`;
-  if (!res.total.spots && !s.allCount) { s.map?.remove(); s.map = null; el.innerHTML = `${head}<div class="empty">${t('spots.none')}</div>`; return; }
+  const head = `<div class="panel-head"><div><h2>${t('spots.title')}: ${ctx.esc(name)}</h2><div class="sub">${t('spots.sub', { at: stamp(s.fleet.at) })}</div></div></div>`;
+  if (!res.total.spots && !s.allCount) { s.map?.remove(); s.map = null; clearAnswer(el); el.innerHTML = `${head}<div class="empty">${t('spots.none')}</div>`; return; }
   const feed = `<div class="note sp-feed">${t('spots.feedNote', { runs: ctx.fmt(res.total.maxRuns), h: ctx.fmt(res.total.maxRuns / 3), near: SP.STATION_NEAR_M })}</div>`;
-  const top = `${head}${controls(ctx, res, s)}${res.total.spots ? `${lead(ctx, res)}${feed}${overview(ctx, res, s)}` : `<div class="empty">${t('spots.noneVirtual')}</div>`}`;
+  const top = `${head}${res.total.spots ? lead(ctx, res, s) : (clearAnswer(el), '')}${controls(ctx, res, s)}${res.total.spots ? `${feed}${overview(ctx, res, s)}` : `<div class="empty">${t('spots.noneVirtual')}</div>`}`;
   if (!el.querySelector('[data-sp-map]')) {
     s.map?.remove(); s.map = null;
     el.innerHTML = `<div data-sp-top></div><div data-sp-tools></div><div class="sp-map" data-sp-map role="region" aria-label="${t('spots.mapAria')}"></div><div class="sp-keys" data-sp-legend></div><div data-sp-items style="margin-top:var(--s3)"></div><div data-sp-notes></div>`;
@@ -422,7 +434,7 @@ export async function renderSpots(el, ctx) {
       if (d.spAct === 'geojson') download(fileName(s, 'geojson'), JSON.stringify(SP.spotsGeoJson(filtered(s.res, s), { list: s.list, own: s.res.own, radiusM: s.radius, at: s.fleet.at, reason: (x) => reasonOf(s.ctx, s.list, x) }), null, 1), 'application/geo+json');
     });
   }
-  if (!ags) { s.fleet = null; s.res = null; s.map?.remove(); s.map = null; pickMunicipality(el, ctx); return; }
+  if (!ags) { s.fleet = null; s.res = null; s.map?.remove(); s.map = null; clearAnswer(el); pickMunicipality(el, ctx); return; }
   const land = ctx.state.latest?.municipalities?.[ags]?.state;
   if (!land) { s.fleet = null; s.res = null; el.innerHTML = `<div class="panel-head"><div><h2>${t('spots.title')}</h2></div></div><div class="empty">${t('spots.none')}</div>`; return; }
   if (s.ags !== ags) { s.own = null; s.family = 'auto'; s.kind = null; s.hide.clear(); s.fitKey = null; s.q = ''; s.limit = LIMIT; s.zkey = null; }

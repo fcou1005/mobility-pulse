@@ -12,6 +12,7 @@ import * as FE from '../../lib/pulse-flowest.js';
 import * as TR from '../../lib/pulse-train.js';
 import * as SV from '../../lib/pulse-schema.js';
 import * as SP from '../../lib/pulse-split.js';
+import * as AU from '../../lib/pulse-auflagen.js';
 import { gzipSync } from 'node:zlib';
 
 export async function run(ctx) {
@@ -324,6 +325,13 @@ export async function run(ctx) {
     await writeFile(path.join(DATA, 'idle-long.json'), JSON.stringify({ at: now, total: tr.idleLong.length, points: longOut }));
     await writeFile(path.join(DATA, 'stations-quota.json'), JSON.stringify({ at: now, days: 7, fields: ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns', 'virtual'], stations: T.stationQuota(tr.state) }));
     await writeFile(path.join(DATA, 'reliability.json'), JSON.stringify({ at: now, days: 7, sources: T.reliability(tr.state) }));
+    // S5.1 Datenauflagen-Check: Jahresbuch der Feed-Verfügbarkeit (lib/pulse-auflagen.js), eine Datei je Kalenderjahr
+    if (tr.state.day) {
+      await mkdir(path.join(DATA, 'auflagen'), { recursive: true });
+      const lf = path.join(DATA, 'auflagen', `verfuegbarkeit-${tr.state.day.slice(0, 4)}.json`);
+      const prevL = existsSync(lf) ? JSON.parse(await readFile(lf, 'utf8').catch(() => 'null')) : null;
+      await writeFile(lf, JSON.stringify(SV.withSchema('auflagen', AU.updateLedger(prevL, tr.state.rel, { today: tr.state.day, now }))));
+    }
     // Ereignis- und Zellendateien: 30 bzw. 14 Tage behalten
     for (const f of (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -HISTORY_DAYS)) await rm(path.join(DATA, 'events', f));
     // Umgebungsereignisse wie Ereignisse (+ 2 Tage Vorschau: heute, morgen); was die Prognose daraus gelernt hat, steht im Langzeitgedächtnis

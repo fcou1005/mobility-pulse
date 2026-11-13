@@ -61,7 +61,8 @@ export function cached(file, timeout = 60000) {
 export const resetCache = () => { REQ.clear(); FAILED.clear(); };
 // getJson für ops.js (und künftige Module): Dateien des Datenstands laufen über denselben Cache, fremde URLs direkt
 export const getJsonShared = (url, opt = {}) => typeof url === 'string' && url.startsWith(CFG.DATA) && !url.includes('?') ? cached(url.slice(CFG.DATA.length), opt.timeout) : getJson(url, opt);
-export const failedText = (file) => { const f = FAILED.get(file); return f === 404 ? t('app.fileMissing', { file }) : f ? t('app.fileNotLoadable', { file, f }) : t('app.noData'); };
+// S4.8: Dateinamen nur unter „Prüfen“ (Quellen › Nicht ladbare Dateien); hier Grund und Handlung bzw. Zeitangabe
+export const failedText = (file) => { const f = FAILED.get(file); return f === 404 ? t('ux.dataNotYet') : f ? t('ux.dataNotLoadable') : t('app.noData'); };
 export const emptyRow = (cols, msg, hint = '') => `<tr><td colspan="${cols}" class="empty"><b>${esc(msg)}</b>${esc(hint)}</td></tr>`;
 // Chip-Gruppe neu aufbauen, ohne dass der Tastaturfokus auf <body> fällt: der Knopf mit demselben Wert (attr) bekommt den Fokus zurück
 export function setChips(el, attr, html) {

@@ -6,6 +6,7 @@
 import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
+import { NEUTRAL as NT } from './tokens.js';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -14,8 +15,8 @@ const REQ_TIMEOUT_MS = 15000;
 const LS_KEY = 'mp-fl-routes-v1', LS_MAX = 300, LS_VIEW = 'mp-fl-view';
 const CELL_FALLBACK = [0.0025, 0.0035]; // lib/pulse-track.js CELL_LAT/CELL_LON, falls die Datei kein Zellmaß nennt
 const BANDS_FALLBACK_DEF = () => ([[t('flows.night'), 0, 6], [t('flows.morning'), 6, 9], [t('flows.lateMorning'), 9, 12], [t('flows.midday'), 12, 15], [t('flows.afternoon'), 15, 19], [t('flows.evening'), 19, 24]].map(([label, from, to]) => ({ label, from, to })));
-const NEUTRAL = '#3d4a5c';  // mehrere Anbieter: Schiefergrau außerhalb der Anbieterpalette, auf den hellen OSM-Kacheln ≥ 7:1
-const TILE_BG = '#f2efe9';  // Grundton der OSM-Kacheln: Legende zeigt die Linie wie auf der Karte
+const NEUTRAL = NT.slate;  // mehrere Anbieter: Schiefergrau außerhalb der Anbieterpalette, auf den hellen OSM-Kacheln ≥ 7:1
+const TILE_BG = NT.tileBg;  // Grundton der OSM-Kacheln: Legende zeigt die Linie wie auf der Karte
 const CELL_RE = /^-?\d{1,6}:-?\d{1,6}$/;
 
 const STYLE = `
@@ -23,30 +24,30 @@ const STYLE = `
 .fl-root .panel-head{margin-bottom:0}
 .fl-root [hidden]{display:none!important}
 .fl-ctl select{max-width:240px}
-.fl-note{font-size:12.5px;line-height:1.5}
+.fl-note{font-size:.75rem;line-height:1.5}
 .fl-note b{color:var(--fg);font-weight:600}
-.fl-sum{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:12.5px;color:var(--fg-2)}
-.fl-sum b{font-family:var(--mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.fl-sum{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2)}
+.fl-sum b{font-family:var(--sans);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
 .fl-bar{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;justify-content:space-between}
 .fl-tog{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:var(--bg-2);border:1px solid var(--line)}
 .fl-tog button{min-height:26px;border:0;background:transparent;color:var(--fg-2);padding:0 12px;border-radius:7px}
 .fl-tog button:hover{color:var(--fg)}
 .fl-tog button[aria-pressed="true"]{background:var(--thumb);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
 .fl-map{height:460px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg-2);isolation:isolate}
-.fl-legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);align-items:center;font-size:12px;color:var(--fg-2)}
+.fl-legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);align-items:center;font-size:.75rem;color:var(--fg-2)}
 .fl-legend .mono{font-family:var(--mono);color:var(--fg)}
 .fl-sw{display:inline-block;width:26px;height:12px;margin-right:6px;vertical-align:-2px;border-radius:3px;border:1px solid var(--line-2);background:linear-gradient(var(--fl-c),var(--fl-c)) center/18px var(--fl-w,3px) no-repeat,${TILE_BG}}
 .fl-sw.dash{background:repeating-linear-gradient(90deg,var(--fl-c) 0 5px,transparent 5px 9px) center/18px 3px no-repeat,${TILE_BG}}
 .fl-pt{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:2px solid var(--fg-2)}
 .fl-pt.end{background:var(--fg-2);border-color:var(--fg-2)}
-.fl-status{font-size:12px;color:var(--muted)}
-.fl-cell{font-family:var(--mono);font-size:12px;white-space:nowrap}
+.fl-status{font-size:.75rem;color:var(--muted)}
+.fl-cell{font-family:var(--sans);font-size:.75rem;white-space:nowrap;font-variant-numeric:tabular-nums}
 .fl-root .tbl{max-height:min(62vh,560px)}
 .fl-root td .op{font-weight:500}
-.leaflet-tooltip.fl-tip{background:var(--panel);color:var(--fg-2);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px 10px;font:12px/1.45 var(--sans);width:max-content;max-width:min(300px,70vw);white-space:normal}
-.leaflet-tooltip.fl-tip b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;color:var(--fg)}
+.leaflet-tooltip.fl-tip{background:var(--panel);color:var(--fg-2);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px 10px;font:.75rem/1.45 var(--sans);width:max-content;max-width:min(300px,70vw);white-space:normal}
+.leaflet-tooltip.fl-tip b{display:block;font-family:var(--sans);font-size:.875rem;font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
 .leaflet-tooltip-left.fl-tip::before{border-left-color:var(--line-2)}.leaflet-tooltip-right.fl-tip::before{border-right-color:var(--line-2)}
-@media (max-width:720px){.fl-map{height:340px}.fl-ctl{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s2)}.fl-ctl label{display:flex;flex-direction:column;align-items:stretch;gap:2px;font-size:12px}.fl-ctl select{max-width:none;width:100%}}
+@media (max-width:720px){.fl-map{height:340px}.fl-ctl{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s2)}.fl-ctl label{display:flex;flex-direction:column;align-items:stretch;gap:2px;font-size:.75rem}.fl-ctl select{max-width:none;width:100%}}
 `;
 function injectStyle() {
   if (document.getElementById('fl-style')) return;
@@ -253,7 +254,7 @@ async function update(S) {
   const others = withFlows.filter(([a]) => a !== sel.ags).slice(0, 6).map(([a, m]) => `${esc(name(a))} (${esc(nf(S, m.shown))})`).join(', ');
   const m = sel.ags ? munis[sel.ags] : null, stable = (sel.ags && Array.isArray(doc.stable?.[sel.ags]) ? doc.stable[sel.ags] : []).filter(x => typeof x === 'string');
   q('sub').textContent = t(S.est ? 'flows.originDestinationFlowsEst' : S.week ? 'flows.originDestinationFlowsWeek' : 'flows.originDestinationFlows2', { v0: sel.ags ? name(sel.ags) : t('flows.germany'), v1: lbl(sel.day) })
-    + (S.week && doc.week && doc.week.complete === false ? ` · ${t('flows.weekPartial', { n: Array.isArray(doc.week.days) ? doc.week.days.length : '?' })}` : '');
+    + (S.week && doc.week && doc.week.complete === false ? `, ${t('flows.weekPartial', { n: Array.isArray(doc.week.days) ? doc.week.days.length : '?' })}` : '');
   if (!sel.ags || !(m?.shown > 0)) {
     const place = sel.ags ? esc(name(sel.ags)) : t('flows.germany');
     if (S.week) return empty(S, !sel.ags ? t('flows.weekNone', { wk: esc(lbl(sel.day)) }) : t('flows.weekNoPair', { place, wk: esc(lbl(sel.day)), min: Number.isFinite(doc.min) ? doc.min : minN }),
@@ -269,7 +270,7 @@ async function update(S) {
   fillSelects(S, rowsA);
   // Hinweis: Methode, beitragende Anbieter
   const contrib = Object.entries(m.ops || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${esc(o)} (${esc(nf(S, n))})`).join(', ');
-  q('note').innerHTML = t('flows.contributingOperatorsIn', { howNote: S.est ? `${t('flows.estHow')} ${qualityText(S, doc.quality)}` : howNote, name: esc(name(sel.ags)), v2: contrib || '–', v3: stable.length ? ` · ${t('flows.stableIdsInArea', { join: esc(stable.join(', ')) })}` : '' });
+  q('note').innerHTML = t('flows.contributingOperatorsIn', { howNote: S.est ? `${t('flows.estHow')} ${qualityText(S, doc.quality)}` : howNote, name: esc(name(sel.ags)), v2: contrib || '–', v3: stable.length ? `, ${t('flows.stableIdsInArea', { join: esc(stable.join(', ')) })}` : '' });
   // Filtern und je Zellenpaar zusammenfassen
   const band = sel.band === 'all' ? null : +sel.band;
   const rows = rowsA.filter(r => (sel.op === 'all' || r[3] === sel.op) && (sel.type === 'all' || r[4] === sel.type) && (band == null || r[5] === band));
@@ -284,8 +285,8 @@ async function update(S) {
   S.flows = flows.slice(0, SHOW);
   const inSel = rows.reduce((s, r) => s + r[6], 0);
   const merged = sel.op !== 'all' || sel.type !== 'all' || band != null ? rowsA.filter(r => (sel.op !== 'all' && r[3] == null) || (sel.type !== 'all' && r[4] == null) || (band != null && r[5] == null)).reduce((s, r) => s + r[6], 0) : 0;
-  q('sum').innerHTML = [`<span>${t('flows.tripsInSelection', { fmt: esc(ctx.fmt(flows.length)), v1: flows.length === 1 ? t('flows.flow') : t('flows.flows'), fmt2: esc(nf(S, inSel)), v3: flows.length > SHOW ? ` · ${t('flows.mapAndTableTop', { SHOW })}` : '' })}</span>`,
-    `<span>${t('flows.wholeDayTripsWithStartAnd', { fmt: esc(nf(S, m.trips)), fmt2: esc(nf(S, m.shown)), fmt3: esc(nf(S, m.below || 0)), v3: m.cut ? ` · ${t('flows.outsideTop', { fmt: esc(nf(S, m.cut)), fmt2: esc(ctx.fmt(doc.top || 300)) })}` : '' })}</span>`,
+  q('sum').innerHTML = [`<span>${t('flows.tripsInSelection', { fmt: esc(ctx.fmt(flows.length)), v1: flows.length === 1 ? t('flows.flow') : t('flows.flows'), fmt2: esc(nf(S, inSel)), v3: flows.length > SHOW ? `, ${t('flows.mapAndTableTop', { SHOW })}` : '' })}</span>`,
+    `<span>${t('flows.wholeDayTripsWithStartAnd', { fmt: esc(nf(S, m.trips)), fmt2: esc(nf(S, m.shown)), fmt3: esc(nf(S, m.below || 0)), v3: m.cut ? `, ${t('flows.outsideTop', { fmt: esc(nf(S, m.cut)), fmt2: esc(ctx.fmt(doc.top || 300)) })}` : '' })}</span>`,
     merged ? `<span>${t('flows.tripsInMergedFlowsSeveral', { fmt: esc(nf(S, merged)) })}</span>` : ''].filter(Boolean).join('');
   q('empty').hidden = true; q('bar').hidden = false;
   if (!flows.length) {
@@ -334,14 +335,14 @@ const widthOf = (S, n) => 2 + 6 * Math.sqrt(n / Math.max(1, S.maxN));
 function opsText(S, f) {
   const e = [...f.ops].sort((a, b) => b[1] - a[1]);
   if (e.length === 1) return e[0][0] == null ? t('flows.severalOperatorsLc') : e[0][0];
-  return t('flows.severalOperators', { v0: e.map(([o, n]) => `${o == null ? t('flows.merged') : o} ${nf(S, n)}`).join(' · ') });
+  return t('flows.severalOperators', { v0: e.map(([o, n]) => `${o == null ? t('flows.merged') : o} ${nf(S, n)}`).join(', ') });
 }
 function tipHtml(S, f) {
   const { ctx } = S, esc = ctx.esc, r = cacheGet(f.key);
   const ty = f.types.size === 1 ? typeLabel([...f.types][0]) : t('flows.severalTypes');
   const bd = f.bands.size === 1 ? ([...f.bands][0] == null ? t('flows.timesOfDayMerged') : bandLabel(S, [...f.bands][0])) : t('flows.severalTimesOfDay');
   const route = f.from === f.to ? t('flows.startAndDestinationInSame') : r && !r.fail ? t('flows.routeCycleRouteOsrm', { v0: kmText(ctx, r.d) }) : r?.fail || S.offline ? t('flows.straightLineNoRouteFound') : t('flows.calculatingRoute');
-  return `<b>${esc(plural(ctx, f.n, t('flows.trip'), t('flows.trips2')))}</b><div>${esc(opsText(S, f))} · ${esc(ty)} · ${esc(bd)}</div><div>${t('flows.avgAvgStraightLine', { durText: esc(durText(ctx, avgDur(f))), kmText: esc(kmText(ctx, f.dist / f.n)) })}</div><div>${esc(route)}</div>`;
+  return `<b>${esc(plural(ctx, f.n, t('flows.trip'), t('flows.trips2')))}</b><div>${esc(opsText(S, f))}, ${esc(ty)}, ${esc(bd)}</div><div>${t('flows.avgAvgStraightLine', { durText: esc(durText(ctx, avgDur(f))), kmText: esc(kmText(ctx, f.dist / f.n)) })}</div><div>${esc(route)}</div>`;
 }
 function draw(S, refit = false) {
   if (!S.map) return;
@@ -358,10 +359,10 @@ function draw(S, refit = false) {
     }
     const r = cacheGet(f.key), routed = r && !r.fail, coords = routed ? r.c : [a, b];
     const dash = routed ? null : '6 7';
-    const casing = L.polyline(coords, { color: '#ffffff', weight: w + 3, opacity: 0.85, lineCap: 'round', lineJoin: 'round', interactive: false, dashArray: dash }).addTo(S.layer);
+    const casing = L.polyline(coords, { color: NT.white, weight: w + 3, opacity: 0.85, lineCap: 'round', lineJoin: 'round', interactive: false, dashArray: dash }).addTo(S.layer);
     const line = L.polyline(coords, { color: col, weight: w, opacity: routed ? 0.95 : 0.8, lineCap: 'round', lineJoin: 'round', interactive: false, dashArray: dash }).addTo(S.layer);
-    const ends = [L.circleMarker(a, { radius: 4, color: col, weight: 2, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(S.layer), L.circleMarker(b, { radius: 4, color: '#ffffff', weight: 1.5, fillColor: col, fillOpacity: 1, interactive: false }).addTo(S.layer)];
-    const hit = L.polyline(coords, { color: '#000000', weight: Math.max(16, w + 12), opacity: 0, lineCap: 'round' }).bindTooltip(tipHtml(S, f), { sticky: true, className: 'fl-tip', direction: 'auto', offset: [14, 0] }).addTo(S.layer);
+    const ends = [L.circleMarker(a, { radius: 4, color: col, weight: 2, fillColor: NT.white, fillOpacity: 1, interactive: false }).addTo(S.layer), L.circleMarker(b, { radius: 4, color: NT.white, weight: 1.5, fillColor: col, fillOpacity: 1, interactive: false }).addTo(S.layer)];
+    const hit = L.polyline(coords, { color: NT.black, weight: Math.max(16, w + 12), opacity: 0, lineCap: 'round' }).bindTooltip(tipHtml(S, f), { sticky: true, className: 'fl-tip', direction: 'auto', offset: [14, 0] }).addTo(S.layer);
     hit.on('mouseover', () => { line.setStyle({ weight: w + 2 }); casing.setStyle({ weight: w + 5 }); casing.bringToFront(); line.bringToFront(); ends.forEach(e => e.bringToFront()); }); // nie hit.bringToFront(): das setzt den überfahrenen Pfad im DOM um, der Browser meldet dann kein mouseout und die Info-Box bleibt offen
     hit.on('mouseout', () => { line.setStyle({ weight: w }); casing.setStyle({ weight: w + 3 }); });
     S.drawn.set(f.key, { f, casing, line, hit, w });
@@ -391,7 +392,7 @@ function legend(S) {
   if (multi) items.push(`<span><i class="fl-sw" style="--fl-c:${NEUTRAL}"></i>${t('flows.severalOperators2', { fmt: esc(nf(S, multi)) })}</span>`);
   const lo = Math.min(...list.map(f => f.n)), hi = S.maxN;
   items.push(`<span><i class="fl-sw" style="--fl-c:${NEUTRAL};--fl-w:2px"></i><i class="fl-sw" style="--fl-c:${NEUTRAL};--fl-w:7px"></i>${t('flows.lineWidthTrips', { fmt: esc(nf(S, lo)), fmt2: esc(nf(S, hi)) })}</span>`,
-    `<span><i class="fl-pt" aria-hidden="true"></i>${t('flows.start')} · <i class="fl-pt end" aria-hidden="true"></i>${t('flows.destination')}</span>`, `<span><i class="fl-sw dash" style="--fl-c:${NEUTRAL}"></i>${t('flows.straightLineRouteMissingOr')}</span>`);
+    `<span><i class="fl-pt" aria-hidden="true"></i>${t('flows.start')}, <i class="fl-pt end" aria-hidden="true"></i>${t('flows.destination')}</span>`, `<span><i class="fl-sw dash" style="--fl-c:${NEUTRAL}"></i>${t('flows.straightLineRouteMissingOr')}</span>`);
   S.q('legend').innerHTML = items.join('');
 }
 function status(S) {
@@ -399,7 +400,7 @@ function status(S) {
   const list = (S.flows || []).filter(f => f.from !== f.to); if (!list.length) { el.textContent = ''; return; }
   const ok = list.filter(f => { const r = cacheGet(f.key); return r && !r.fail; }).length, bad = list.filter(f => cacheGet(f.key)?.fail).length;
   const left = list.length - ok - bad;
-  el.textContent = S.offline ? t('flows.routingNotReachableOfRoutes', { ok, length: list.length }) : left ? t('flows.routesOfCalculated1PerSecond', { ok, length: list.length, v2: S.pumpTok ? '' : ` · ${t('flows.paused')}` }) : t('flows.routesOf', { ok, length: list.length, v2: bad ? ` · ${t('flows.asStraightLines', { bad })}` : '' });
+  el.textContent = S.offline ? t('flows.routingNotReachableOfRoutes', { ok, length: list.length }) : left ? t('flows.routesOfCalculated1PerSecond', { ok, length: list.length, v2: S.pumpTok ? '' : `, ${t('flows.paused')}` }) : t('flows.routesOf', { ok, length: list.length, v2: bad ? `, ${t('flows.asStraightLines', { bad })}` : '' });
 }
 
 // ---------- Routing (FOSSGIS-OSRM, Fahrradprofil) ----------

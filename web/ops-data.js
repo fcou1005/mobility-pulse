@@ -6,17 +6,18 @@ import { t, tMap, lang, fmtLocale } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
 import { POP, SPOT_COLS, computePlan, drawLayers, drawMap, drawRoutes, fitAll, focusRun, legend, markFocus, openShared, planStatus, renderRuns, renderSpots, renderTiles, replanRuns, spotHead } from './ops-plan.js';
 import { drawViol, groupsEmpty, initCollect, initGroupsUi, renderCollect, renderGroups, renderMethod, routeRuns } from './ops-extra.js';
+import { IDLE, NEUTRAL, RUN } from './tokens.js';
 
 export let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 export const $ = (s, el = document) => el.querySelector(s);
-export const S = { map: null, layers: {}, canvas: {}, spotMarkers: [], ops: {}, fleetAgs: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, official: true, fleet: true, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, retry: false, pending: null, again: false, rescore: null, stale: false, routing: null, op: null, focus: null, prioLevel: urlPrio(),
+export const S = { map: null, layers: {}, canvas: {}, spotMarkers: [], ops: {}, fleetAgs: {}, osm: {}, wfs: {}, zones: {}, depot: {}, pickDepot: false, plan: null, routed: {}, show: { demand: true, official: true, fleet: false, spots: true, groups: true, collect: false, rebalance: true, swap: false, workshop: false, station: true }, busy: false, retry: false, pending: null, again: false, rescore: null, stale: false, routing: null, op: null, focus: null, prioLevel: urlPrio(),
   // Gruppen-Monatsdateien (groups/<JJJJ-MM>.json) und Ströme (flows/<Tag>.json): fertige Monate/Tage bleiben gecacht; index und laufender Monat werden bei neuem Stand neu geladen
   gidx: undefined, gdocs: {}, flowsIdx: undefined, flowDocs: {}, gf: null, area: {} };
 // Farben je Thema: hell die dunkleren Stufen (≥ 3:1 auf Weiß und entsättigtem Kartengrund), dunkel die hellen; Ebenen aus den Themen-Tokens
 const dk = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
-export const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888888';
-export const RUN_COLOR = { get rebalance() { return dk() ? '#60a5fa' : '#2563eb'; }, get swap() { return dk() ? '#34d399' : '#047857'; }, get workshop() { return dk() ? '#ef6b6b' : '#c93c3c'; }, get station() { return dk() ? '#f59e0b' : '#b45309'; } };
-export const IDLE_COL = () => (dk() ? '#c084fc' : '#7c3aed');
+export const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || NEUTRAL.fallback;
+export const RUN_COLOR = { get rebalance() { return RUN.rebalance[dk() ? 'dark' : 'light']; }, get swap() { return RUN.swap[dk() ? 'dark' : 'light']; }, get workshop() { return RUN.workshop[dk() ? 'dark' : 'light']; }, get station() { return RUN.station[dk() ? 'dark' : 'light']; } };
+export const IDLE_COL = () => IDLE[dk() ? 'dark' : 'light'];
 // Standzeit als Mindestwert (Z6, linkszensiert): Fahrzeuge tragen idleCensored (ops-Feld 13); Stopps nur die gerundete Stunde – sie gilt als „≥“,
 // wenn sie bis auf einen Lauf (45 Min.) der Zeit seit Beginn der Verfolgung (ops trackStart) entspricht
 const idleAtLeast = (h) => { const p = S.plan; return h != null && p?.trackStart != null && p.at != null && h >= (p.at - p.trackStart - 45 * 60e3) / 3600e3 - 0.5; };
@@ -125,17 +126,17 @@ function injectStyle() {
   const st = document.createElement('style'); st.id = 'ops-style';
   st.textContent = `.ops-gfilter{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:var(--s3);align-items:end;margin:0 0 var(--s3);container-type:inline-size}
 @container (min-width:360px){.ops-gfilter .rng.dates{grid-column:span 2}}
-.ops-gfilter label,.ops-gfilter .rng{display:flex;flex-direction:column;gap:var(--s1);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-width:0;margin:0;padding:0;border:0}
+.ops-gfilter label,.ops-gfilter .rng{display:flex;flex-direction:column;gap:var(--s1);font-size:.75rem;font-weight:500;color:var(--muted);min-width:0;margin:0;padding:0;border:0}
 .ops-gfilter .rng>span:last-child{display:flex;gap:var(--s1);align-items:center;text-transform:none;letter-spacing:0;color:var(--fg-2)}
 .ops-gfilter .rng input{flex:1 1 0;min-width:0;width:auto}.ops-gfilter input[type=search],.ops-gfilter select{width:100%}
-.ops-gfilter input[type=date]{height:var(--ctl);background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:0 6px;font:12px var(--mono);color:var(--fg);min-width:0;color-scheme:inherit}
+.ops-gfilter input[type=date]{height:var(--ctl);background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:0 6px;font:.75rem var(--sans);font-variant-numeric:tabular-nums;color:var(--fg);min-width:0;color-scheme:inherit}
 .ops-gfilter .ops-actions{grid-column:1/-1;justify-content:space-between}
 th .th-sort{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;gap:4px;align-items:center;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;border-radius:4px;min-height:24px}
 th .th-sort:hover,th[aria-sort] .th-sort{color:var(--fg)}th .th-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-th .th-sort i{font-style:normal;font-family:var(--mono);min-width:1ch}
+th .th-sort i{font-style:normal;font-family:var(--sans);min-width:1ch;font-variant-numeric:tabular-nums}
 .ops-gkind{display:inline-flex;gap:2px}.ops-gkind button{min-height:28px}
 .ops-form label.ops-prio{min-width:0}.ops-prio input[type=range]{width:100%;margin:0;min-height:var(--ctl);accent-color:var(--accent);cursor:pointer}
-.ops-prio .ops-prio-scale{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);text-transform:none;letter-spacing:0;font-size:11px;font-weight:400;color:var(--muted)}
+.ops-prio .ops-prio-scale{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);text-transform:none;letter-spacing:0;font-size:.75rem;font-weight:400;color:var(--muted)}
 .ops-prio output{color:var(--fg);font-weight:600;text-align:center}.ops-seq{margin:2px 0 0}.ops-run ol li{margin:2px 0}
 @media (pointer:coarse){.ops-gfilter input[type=date],th .th-sort,.ops-gkind button{min-height:44px}}`;
   document.head.appendChild(st);

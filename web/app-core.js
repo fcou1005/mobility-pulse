@@ -1,6 +1,7 @@
 // Dashboard: Grundlagen: Einstellungen, Formatierung, Farben, Glossar, Zustand (S3.9: aus web/app.js geschnitten, Einstieg bleibt web/app.js).
 import * as C from './pulse-core.js';
 import { t, tx, tMap, numFmt, dateFmt } from './i18n.js';
+import { NEUTRAL, SURFACE, moreColor, seriesColor, slotColor } from './tokens.js';
 
 export const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 
@@ -52,28 +53,26 @@ export const dateTimeText = (ms, opts = { dateStyle: 'medium', timeStyle: 'short
 export const TYPE = tMap('type', C.VEHICLE_TYPE_LABEL);
 export const STATUS = tMap('fresh', { ...C.FRESHNESS_LABEL, collector: 1 });
 export const DIRS = { get mobilitydata() { return t('app.mobilitydataOperators'); }, mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', get dott_direct() { return t('app.dottDirectFeed'); }, get lime_direct() { return t('app.limeDirectFeed'); }, get zeus_direct() { return t('app.zeusDirectFeed'); }, get bird_direct() { return t('app.birdDirectFeed'); }, db_api: 'DB API Marketplace' };
-// Anbieterfarben [hell, dunkel], je Anbieter ein Farbton in beiden Themen. Auf Karten und im Streudiagramm stehen alle Anbieter einer Gemeinde
-// nebeneinander, deshalb gilt dort „alle Paare“: Für jedes Paar, das in einer Gemeinde gemeinsam fährt (≥ 5 Fahrzeuge je Anbieter, latest.json
-// vom 01.11.2026), besteht validate_palette.js --pairs all (Normalsicht ΔE ≥ 15, Protan/Deutan ΔE ≥ 8) hell und dunkel; Kontrast ≥ 3:1 gegen
-// Fläche (#fff / #161d26) und entsättigten Kartengrund (#efefef / #1a1a1a). Anbieter, die nie zusammen fahren, dürfen sich eine Farbe teilen
-// (Bolt/Zeus). Abstand zu den Statusfarben als Nebenbedingung. Suche: scratchpad pal/opt2.mjs. Unbekannte Anbieter: PAL_MORE (Hash).
-export const OP_COLORS = { nextbike: ['#de5778', '#f4517e'], Dott: ['#9e3a93', '#ab46a0'], Voi: ['#5d1fbe', '#9a7bf9'], Lime: ['#5285f8', '#2b62ef'], Donkey: ['#1f600c', '#258101'], Bolt: ['#15959b', '#04a3aa'], 'DB Connect': ['#7a4306', '#a35e16'], Zeus: ['#15959b', '#04a3aa'], Yoio: ['#5633a3', '#795bce'], 'swabi - augsburg': ['#9b54b6', '#9654af'], 'RegioRad Stuttgart': ['#839007', '#869225'], 'Hopp Konstanz': ['#703485', '#9a4eb6'], 'LastenVelo Freiburg': ['#9c8a04', '#9c8a04'], zeo: ['#854494', '#9c4fae'], sigo: ['#978c0d', '#9d921a'], 'LaRa to go': ['#ab63c6', '#b367d1'], 'esel.ac': ['#9c8a04', '#7e6f08'], 'AB mit Lara': ['#c066c9', '#ad53b5'], 'ALF - das Affstätter Lastenfahrrad': ['#8c1060', '#ad4d83'], 'FaRe - das Bananologen Lastenrad': ['#6a9708', '#5e8221'], 'Gülf - das Gültsteiner Lastenrad': ['#4e4092', '#7260cb'], StadtRAD: ['#be5ebc', '#cb6ac9'] };
-// Reihen ohne Anbieter (Fahrzeugarten im Deutschland-Verlauf): Nachbarpaare reichen; hell die Stufen ≥ 3:1 auf Weiß (Gelb, Aqua, Magenta, Orange dunkler)
-export const PAL8 = { light: ['#2a78d6', '#d4572a', '#118a5f', '#a87200', '#c4517f', '#008300', '#6250d6', '#e34948'], dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'] };
-export const PAL_MORE = { light: ['#0f8fa8', '#a0652b', '#b05090', '#5b8f2b'], dark: ['#2aa3bd', '#c48244', '#cc6fae', '#6fa02a'] };
-export const DISABLED_COL = '#7d8794'; // gesperrt: neutrales Grau statt Rot (Rot ist eine Anbieterfarbe)
+// Farben aus web/tokens.js (S4.3): Palette MP-7 mit festem Platz je Anbieter, alle übrigen grau als „Weitere“; Reihen ohne Anbieter der
+// Reihe nach, ab der achten grau (keine zyklische Palette, S4.6)
+export const DISABLED_COL = NEUTRAL.disabled; // gesperrt: neutrales Grau
 export const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
-export const palette = (i) => PAL8[isDark() ? 'dark' : 'light'][i % 8];
-export function opColor(op) {
-  const m = isDark() ? 1 : 0;
-  if (Object.hasOwn(OP_COLORS, op)) return OP_COLORS[op][m];
-  const more = PAL_MORE[m ? 'dark' : 'light'];
-  return more[parseInt(C.hashStr(String(op)), 36) % more.length];
+export const palette = (i) => seriesColor(i);
+// S4.6: Reihen mit eigener Farbe bleiben, alle grauen („Weitere“) werden zu einer Reihe zusammengezählt – keine Reihe fällt weg.
+// Nur für Zählwerte und Anteile am selben Ganzen (Summe sinnvoll). label: „Weitere“ in der Sprache der Seite.
+export function foldSeries(list, label) {
+  const grey = moreColor(), keep = [], rest = [];
+  for (const s of list) (s.color && s.color !== grey ? keep : rest).push(s);
+  if (rest.length <= 1) return [...keep, ...rest.map(s => ({ ...s, color: grey }))];
+  const n = Math.max(...rest.map(s => s.values.length)), values = new Array(n).fill(null);
+  for (const s of rest) s.values.forEach((v, i) => { if (v != null) values[i] = (values[i] ?? 0) + v; });
+  return [...keep, { name: `${label} (${rest.length})`, values, color: grey, more: rest.map(s => s.name) }];
 }
+export const opColor = (op) => slotColor(op);
 // Rand der Kartenpunkte in der Hintergrundfarbe (1,5 px), damit sich Punkte voneinander absetzen
-export const bgColor = () => getComputedStyle(document.documentElement).getPropertyValue('--panel').trim() || (isDark() ? '#161d26' : '#ffffff');
+export const bgColor = () => getComputedStyle(document.documentElement).getPropertyValue('--panel').trim() || (isDark() ? SURFACE.dark : SURFACE.light);
 // Farbe aus einem Themen-Token (index.html :root), damit Kartenebenen hell und dunkel die passende Stufe tragen
-export const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888888';
+export const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || NEUTRAL.fallback;
 // Begriffe, die eine kurze Erklärung brauchen (als <abbr title>)
 export const GLOSS = {
   get rvd() { return t('app.tripsPerVehiclePerDayTvd'); },

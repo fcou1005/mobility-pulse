@@ -52,7 +52,7 @@ export function computeSignalsNow() {
     ebk.set(key, e);
   }
   const out = [];
-  const place = (ags) => state.scope === 'DE' ? ` · ${munis[ags]?.name || ags}` : '';
+  const place = (ags) => state.scope === 'DE' ? `, ${munis[ags]?.name || ags}` : '';
   const daily = state.daily || null, today = BERLIN_DAY.format(state.latest?.at || Date.now());
   for (const [key, list] of by) {
     const [ags, op] = key.split('|'); const s = sumStats(list);
@@ -89,7 +89,7 @@ export function computeSignalsNow() {
     if (state.operator !== 'all' && r.operator !== state.operator) continue;
     if (state.type !== 'all' && Array.isArray(r.vehicleTypes) && r.vehicleTypes.length && !r.vehicleTypes.includes(state.type)) continue;
     // Zustand statt Zahl: die Karte zeigt ein Zeichen, der Titel nennt den Zustand („Quelle: Fehler“)
-    if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, n: null, icon: true, title: t('app.source2', { operator: r.operator, v1: STATUS[r.status] || r.status }), text: `${r.name || r.id}${r.feedAgeMs != null ? ` · ${t('app.feedOld', { v0: ageText(r.feedAgeMs) })}` : ''}${r.errors?.length ? ` · ${esc(tx(r.errors[0]))}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(' · ')}` });
+    if (['stale', 'gone', 'error', 'auth'].includes(r.status)) out.push({ cat: 'data', sev: r.status === 'stale' ? 'warn' : 'bad', w: 1, n: null, icon: true, title: t('app.source2', { operator: r.operator, v1: STATUS[r.status] || r.status }), text: `${r.name || r.id}${r.feedAgeMs != null ? `, ${t('app.feedOld', { v0: ageText(r.feedAgeMs) })}` : ''}${r.errors?.length ? `, ${esc(tx(r.errors[0]))}` : ''}`, foot: `${(r.directories || []).map(d => DIRS[d] || d).join(', ')}` });
     if (r.sourceChanged) out.push({ cat: 'data', sev: 'info', w: 1, n: null, icon: true, title: t('app.sourceChangeDetected', { operator: r.operator }), text: t('app.endpointVersionFeedsOr', { v0: r.name || r.id }), foot: t('app.fingerprint') });
   }
   for (const e of state.usage?.consistency?.systems || []) { if (e.verdict !== 'divergent') continue; const r = (state.latest?.sources || []).find(x => x.id === e.sourceId); if (!r || (state.scope !== 'DE' && !(r.municipalities || []).includes(state.scope)) || (state.operator !== 'all' && e.operator !== state.operator)) continue; out.push({ cat: 'data', sev: 'warn', w: Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0)), n: fmt(Math.abs((e.primary?.vehicles || 0) - (e.alt?.vehicles || 0))), short: t('app.sigShortDivergent', { op: e.operator }), title: t('app.stateAndOperatorFeedDiffer', { operator: e.operator }), text: t('app.vsVehiclesMedianDistance', { sourceId: e.sourceId, v1: fmt(e.primary?.vehicles), v2: fmt(e.alt?.vehicles), v3: e.idOverlap == null ? '' : pctf(e.idOverlap, 1) + ` ${t('app.sharedIds')} `, v4: e.medianDistM == null ? '—' : fmt(e.medianDistM) + ' m' }), foot: t('app.consistencyCheck') }); }
@@ -139,13 +139,13 @@ export function groupSignals() {
     if ((state.scope !== 'DE' && ags !== state.scope) || (state.operator !== 'all' && op !== state.operator) || (state.type !== 'all' && !(e[ix.arten]?.[state.type] > 0))) continue;
     const a = by.get(`${ags}|${op}`) || { n: 0, veh: 0 }; a.n++; a.veh += e[ix.anzahl] || 0; by.set(`${ags}|${op}`, a);
   }
-  return [...by].map(([k, a]) => { const [ags, op] = k.split('|'); return { cat: 'deploy', sev: 'info', w: a.n, n: `${fmt(a.n)}×`, short: t('app.sigShortDeploy', { op, ags: ` · ${muniName(ags)}` }), title: t('app.groupsDeployedTodayAvg', { op, ags: muniName(ags), n: fmt(a.n), v3: fmt(a.veh / a.n) }), text: t('app.atLeast5OfOperatorSVehicles', { n: GROUP_MIN, m: GROUP_M }), foot: t('app.derivedFromObservationNo') }; });
+  return [...by].map(([k, a]) => { const [ags, op] = k.split('|'); return { cat: 'deploy', sev: 'info', w: a.n, n: `${fmt(a.n)}×`, short: t('app.sigShortDeploy', { op, ags: `, ${muniName(ags)}` }), title: t('app.groupsDeployedTodayAvg', { op, ags: muniName(ags), n: fmt(a.n), v3: fmt(a.veh / a.n) }), text: t('app.atLeast5OfOperatorSVehicles', { n: GROUP_MIN, m: GROUP_M }), foot: t('app.derivedFromObservationNo') }; });
 }
 export const CATS = { get all() { return t('app.all'); }, get disabled() { return t('app.disabled2'); }, get energy() { return t('app.energy'); }, get stations() { return t('app.stations'); }, get jump() { return t('app.fleetJump'); }, get deploy() { return t('app.deployment'); }, get data() { return t('app.dataQuality'); } };
 export const SEV_LABEL = { get bad() { return t('app.critical'); }, get warn() { return t('app.notable'); }, get info() { return t('app.note'); } };
 // compact: Briefing-Karte mit Zahl + einer Zeile; Begründung und Grundlage unter „Warum?“
 export function sigCard(s, compact = false) {
-  const head = `<div class="k">${esc(CATS[s.cat] || s.cat)} · ${SEV_LABEL[s.sev] || esc(s.sev)}</div>`;
+  const head = `<div class="k">${esc(CATS[s.cat] || s.cat)}, ${SEV_LABEL[s.sev] || esc(s.sev)}</div>`;
   // kompakt: Zahl + Kurztitel (ohne die Zahl ein zweites Mal); Zustandsmeldungen ohne Zahl tragen ein Zeichen
   const lead = s.icon || s.n == null ? `<span class="num ico" aria-hidden="true">${s.sev === 'bad' ? '!' : s.sev === 'warn' ? '!' : 'i'}</span>` : `<span class="num">${esc(s.n)}</span>`;
   if (compact) return `<div class="card ${esc(s.sev)}">${head}<b>${lead} ${esc(s.short || s.title)}</b><details><summary>${t('app.why')}</summary><p>${esc(s.text)}</p><div class="foot">${esc(s.foot)}</div></details></div>`;

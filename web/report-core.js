@@ -7,6 +7,8 @@ import { t, tx, tMap, lang, dateFmt } from './i18n.js';
 import { CALIB_DAYS, calibLabel, mbBase, mbMainType, mbBadge, mbInTile } from './ui-shared.js';
 import { hasLeaflet, mountCellMaps, printReport, reducedMotion, reportCsv, unmountCellMaps } from './report-maps.js';
 import { mbFlagText } from './report-more.js';
+import { PRINT } from './tokens.js';
+import { answerHtml, clearAnswer, setAnswer, viewSlot } from './answer.js';
 
 export const FCL = { liveSummary };
 
@@ -103,19 +105,19 @@ const CSS = `
 .rp-s0{--rp-f:var(--rp-seq-0)}.rp-s1{--rp-f:var(--rp-seq-1)}.rp-s2{--rp-f:var(--rp-seq-2)}.rp-s3{--rp-f:var(--rp-seq-3)}.rp-s4{--rp-f:var(--rp-seq-4)}.rp-s5{--rp-f:var(--rp-seq-5)}.rp-s6{--rp-f:var(--rp-seq-6)}.rp-s7{--rp-f:var(--rp-seq-7)}.rp-s8{--rp-f:var(--rp-seq-8)}
 .rp-root.rp-busy>:not(.panel-head){opacity:.55;transition:opacity .2s}
 .rp-ctl{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center}
-.rp-ctl label{display:inline-flex;gap:var(--s2);align-items:center;font-size:13px;color:var(--fg-2)}
+.rp-ctl label{display:inline-flex;gap:var(--s2);align-items:center;font-size:.875rem;color:var(--fg-2)}
 .rp-report{display:flex;flex-direction:column;gap:var(--s5);min-width:0}
 .rp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s3);flex-wrap:wrap;padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
-.rp-kicker{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.rp-head h2{margin:2px 0 4px;font-size:22px;line-height:1.2;letter-spacing:-.015em;font-weight:700}
-.rp-head h2 small{font-size:13px;font-weight:400;color:var(--fg-2);letter-spacing:0;margin-left:var(--s2)}
-.rp-head .sub{color:var(--fg-2);font-size:12.5px;margin:0;max-width:90ch}
+.rp-kicker{font-size:.75rem;font-weight:500;color:var(--muted)}
+.rp-head h2{margin:2px 0 4px;font-size:1.25rem;line-height:1.2;letter-spacing:-.015em;font-weight:700}
+.rp-head h2 small{font-size:.875rem;font-weight:400;color:var(--fg-2);letter-spacing:0;margin-left:var(--s2)}
+.rp-head .sub{color:var(--fg-2);font-size:.75rem;margin:0;max-width:90ch}
 .rp-sec{min-width:0}
-.rp-sec>h3{margin:0 0 var(--s1);font-size:14px;font-weight:600;color:var(--fg)}
-.rp-sec>.sub{color:var(--muted);font-size:12.5px;margin:0 0 var(--s2)}
-.rp-qual{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s2) var(--s5);padding:var(--s3);border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--panel-2);font-size:13px;color:var(--fg-2)}
+.rp-sec>h3{margin:0 0 var(--s1);font-size:.875rem;font-weight:600;color:var(--fg)}
+.rp-sec>.sub{color:var(--muted);font-size:.75rem;margin:0 0 var(--s2)}
+.rp-qual{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s2) var(--s5);padding:var(--s3);border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--panel-2);font-size:.875rem;color:var(--fg-2)}
 .rp-qual.prelim{box-shadow:inset 3px 0 0 var(--warn)}
-.rp-qual dt{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.rp-qual dt{font-size:.75rem;font-weight:500;color:var(--muted)}
 .rp-qual dd{margin:2px 0 0;color:var(--fg)}.rp-qual dd .muted{color:var(--muted)}
 .rp-qual>div{min-width:0}
 .rp-grid2{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
@@ -132,38 +134,38 @@ a.pick-cell{white-space:nowrap}
 .rp-week .c.na{background:var(--rp-na),var(--panel-2)}
 .rp-week .c:hover,.rp-week .c.on{box-shadow:inset 0 0 0 1.5px var(--fg)}
 .rp-week .c:focus-visible{outline:2px solid var(--fg);outline-offset:1px}
-.rp-week .rl{font-size:12px;color:var(--fg-2);display:flex;align-items:center;justify-content:space-between;gap:4px;padding-right:6px;white-space:nowrap}
-.rp-week .rl small{color:var(--muted);font-family:var(--mono);font-size:10.5px}
-.rp-week .hl{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1;padding:0 0 4px}
+.rp-week .rl{font-size:.75rem;color:var(--fg-2);display:flex;align-items:center;justify-content:space-between;gap:4px;padding-right:6px;white-space:nowrap}
+.rp-week .rl small{color:var(--muted);font-family:var(--sans);font-size:.75rem;font-variant-numeric:tabular-nums}
+.rp-week .hl{font-family:var(--sans);font-size:.75rem;color:var(--muted);line-height:1;padding:0 0 4px;font-variant-numeric:tabular-nums}
 .rp-week .rl,.rp-week .rp-row:first-child>.hl:first-child{position:sticky;left:0;z-index:1;background:var(--panel)}
-.rp-weekwrap.rp-more-r{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent)}.rp-scrollhint{margin:var(--s1) 0 0;font-size:12px;color:var(--muted)}.rp-scrollhint[hidden]{display:none}
+.rp-weekwrap.rp-more-r{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent)}.rp-scrollhint{margin:var(--s1) 0 0;font-size:.75rem;color:var(--muted)}.rp-scrollhint[hidden]{display:none}
 @media (max-width:520px){.rp-week{grid-template-columns:60px repeat(24,minmax(15px,1fr))}}
 .rp-tilewrap{container-type:inline-size}
 .rp-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
 @container (min-width:600px){.rp-tiles{grid-template-columns:repeat(var(--rp-cols,4),minmax(0,1fr))}}
 @container (max-width:599.98px){.rp-tiles>.tile:last-child:nth-child(odd){grid-column:1/-1}}
-.rp-legend{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);align-items:center;font-size:12px;color:var(--fg-2);margin-top:var(--s2)}
+.rp-legend{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);align-items:center;font-size:.75rem;color:var(--fg-2);margin-top:var(--s2)}
 .rp-ramp{display:inline-flex;align-items:center;gap:2px}.rp-ramp>span{width:14px;height:10px;border-radius:2px;background:var(--rp-f)}
-.rp-ramp>em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--fg-2);margin:0 4px}
+.rp-ramp>em{font-style:normal;font-family:var(--sans);font-size:.75rem;color:var(--fg-2);margin:0 4px;font-variant-numeric:tabular-nums}
 .rp-sw{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px;background:var(--rp-f,var(--rp-seq-0))}.rp-sw.na{background:var(--rp-na),var(--panel-2)}
-.rp-tip{position:absolute;z-index:30;pointer-events:none;width:max-content;max-width:280px;padding:6px 10px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--panel);box-shadow:var(--shadow);font-size:12px;line-height:1.4;color:var(--fg-2);transform:translate(-50%,calc(-100% - 8px))}
-.rp-tip b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;color:var(--fg);white-space:nowrap}
+.rp-tip{position:absolute;z-index:30;pointer-events:none;width:max-content;max-width:280px;padding:6px 10px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--panel);box-shadow:var(--shadow);font-size:.75rem;line-height:1.4;color:var(--fg-2);transform:translate(-50%,calc(-100% - 8px))}
+.rp-tip b{display:block;font-family:var(--sans);font-size:.875rem;font-weight:600;color:var(--fg);white-space:nowrap;font-variant-numeric:tabular-nums}
 .rp-maps{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))}
-.rp-fig{margin:0;min-width:0}.rp-fig figcaption{font-size:12.5px;font-weight:600;color:var(--fg);margin-bottom:var(--s1)}
+.rp-fig{margin:0;min-width:0}.rp-fig figcaption{font-size:.75rem;font-weight:600;color:var(--fg);margin-bottom:var(--s1)}
 svg.rp-cellmap{display:block;width:100%;height:auto;max-height:340px;background:var(--panel-2);border-radius:var(--r-sm)}
 svg.rp-cellmap rect{fill:var(--rp-f)}svg.rp-cellmap rect.on{stroke:var(--fg);stroke-width:.18}
-div.rp-cellmap{height:clamp(260px,46vw,380px);border-radius:var(--r-sm);border:1px solid var(--line);overflow:hidden;z-index:0;background:var(--panel-2)}
+div.rp-cellmap{height:clamp(16.25rem,46vw,23.75rem);border-radius:var(--r-sm);border:1px solid var(--line);overflow:hidden;z-index:0;background:var(--panel-2)}
 div.rp-cellmap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 div.rp-cellmap .leaflet-tile-pane{filter:grayscale(1) invert(1) brightness(.8) contrast(.88)}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) div.rp-cellmap .leaflet-tile-pane{filter:grayscale(1) contrast(.92) brightness(1.04)}}
 :root[data-theme="light"] div.rp-cellmap .leaflet-tile-pane{filter:grayscale(1) contrast(.92) brightness(1.04)}
 img.rp-cellmap-img{display:block;width:100%;height:auto;border-radius:var(--r-sm)}
 .rp-cellnote{margin:0 0 var(--s2)}
-.rp-status{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--fg);white-space:nowrap}
-.rp-status i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font:700 10px/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none}
+.rp-status{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:500;color:var(--fg);white-space:nowrap}
+.rp-status i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font:700 .75rem/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none}
 .rp-status.ok i{background:var(--ok)}.rp-status.near i{background:var(--warn)}.rp-status.over i,.rp-status.below i{background:var(--bad)}
 .rp-status.unchecked i,.rp-status.unknown i,.rp-status.none i,.rp-status.unlicensed i,.rp-status.info i,.rp-status.hint i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
-details.rp-capinfo{margin-top:var(--s3);font-size:12.5px;color:var(--fg-2)}details.rp-capinfo summary{cursor:pointer;color:var(--fg);font-weight:500}details.rp-capinfo ul{margin:var(--s2) 0 0;padding-left:1.2em;display:grid;gap:4px}
+details.rp-capinfo{margin-top:var(--s3);font-size:.75rem;color:var(--fg-2)}details.rp-capinfo summary{cursor:pointer;color:var(--fg);font-weight:500}details.rp-capinfo ul{margin:var(--s2) 0 0;padding-left:1.2em;display:grid;gap:4px}
 .rp-meter{position:relative;height:8px;border-radius:4px;background:color-mix(in srgb,var(--rp-c,var(--accent)) 20%,var(--panel-2));min-width:80px}
 .rp-meter>i{display:block;height:100%;border-radius:4px;background:var(--rp-c,var(--accent))}
 .rp-meter>b{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:var(--fg)}
@@ -171,24 +173,27 @@ details.rp-capinfo{margin-top:var(--s3);font-size:12.5px;color:var(--fg-2)}detai
 .rp-cap{display:flex;flex-direction:column;gap:var(--s3);padding:var(--s3) 0;border-top:1px solid var(--line)}
 .rp-cap:first-of-type{border-top:0;padding-top:0}
 .rp-cap-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);flex-wrap:wrap}
-.rp-cap-h h3{margin:0;font-size:15px}
+.rp-cap-h h3{margin:0;font-size:.875rem}
 .rp-cap-total{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s1) var(--s3);align-items:center}
-.rp-cap-total .big{font-family:var(--mono);font-size:22px;font-weight:500;color:var(--fg);font-variant-numeric:normal}
+.rp-cap-total .big{font-family:var(--sans);font-size:1.25rem;font-weight:500;color:var(--fg);font-variant-numeric:normal;font-variant-numeric:tabular-nums}
 .rp-print-root{display:none}
+.rp-print-only{display:none}.rp-appendix{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line)}.rp-app-h{margin:0;font-size:1.25rem}
 @page{size:A4;margin:14mm 12mm}
 @media print{
   body.rp-printing>:not(.rp-print-root){display:none!important}
   body.rp-printing .rp-print-root{display:block!important}
-  body.rp-printing{background:#fff}
+  body.rp-printing{background:${PRINT.panel}}
+  .rp-print-only{display:block!important}
+  .rp-print-root .rp-appendix{break-before:page}
   .rp-noprint,.rp-tip{display:none!important}
   .rp-print-root .rp-report{gap:14px}
   .rp-print-root .rp-qual,.rp-print-root .rp-fig,.rp-print-root .tile,.rp-print-root .rp-legend,.rp-print-root tr{break-inside:avoid}
   .rp-print-root h3,.rp-print-root .sub{break-after:avoid}
   .rp-print-root .tbl{overflow:visible;max-height:none}
-  .rp-print-root table{font-size:10.5px}.rp-print-root th{font-size:8.5px;padding:4px 6px}.rp-print-root td{padding:4px 6px}
-  .rp-print-root .tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.rp-print-root .tile{padding:8px 10px}.rp-print-root .tile .v{font-size:18px}
+  .rp-print-root table{font-size:.75rem}.rp-print-root th{font-size:.75rem;padding:4px 6px}.rp-print-root td{padding:4px 6px}
+  .rp-print-root .tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.rp-print-root .tile{padding:8px 10px}.rp-print-root .tile .v{font-size:1.25rem}
   .rp-print-root .rp-grid2{grid-template-columns:1fr}
-  .rp-print-root .rp-head h2{font-size:20px}
+  .rp-print-root .rp-head h2{font-size:1.25rem}
   .rp-print-root svg.rp-cellmap{max-height:250px}
   .rp-print-root img.rp-cellmap-img{max-height:260px;object-fit:contain}
   .rp-print-root a{color:inherit;text-decoration:none}
@@ -310,7 +315,7 @@ function scooterAgg(rep, cal = null) {
 const fd = (ctx, x) => num(ctx, x, Math.abs(x * 10 - Math.round(x * 10)) > 1e-9 ? 2 : 1);
 export function tripTxt(ctx, r) {
   const one = (unit, mean, med, lo, hi) => [lo != null && hi != null ? `${fd(ctx, lo)}–${fd(ctx, hi)} ${unit}` : null, med != null ? t('rep.median', { v0: fd(ctx, med), unit }) : null, mean != null ? `Ø ${fd(ctx, mean)} ${unit}` : null].filter(Boolean).join(', ');
-  return [one('km', r.kmMittel, r.kmMedian, r.kmMin, r.kmMax), one(t('rep.min2'), r.minMittel, r.minMedian, r.minMin, r.minMax)].filter(Boolean).join(' · ');
+  return [one('km', r.kmMittel, r.kmMedian, r.kmMin, r.kmMax), one(t('rep.min2'), r.minMittel, r.minMedian, r.minMin, r.minMax)].filter(Boolean).join(', ');
 }
 // Flotte laut Quelle: Berlin genehmigt (Abgeordnetenhaus), München aktiv (Stadtrat: keine Genehmigungspflicht)
 export const fleetLabel = (r) => (r?.art === 'genehmigt' ? t('rep.licensedFleet') : r?.art === 'aktiv' ? t('rep.activeFleet') : t('rep.fleet'));
@@ -328,11 +333,11 @@ function referenceRows(ctx, ref, rep, cal = null) {
   for (const r of (ref.rvd || []).filter(x => x.ags === rep.ags)) {
     const hint = r.hinweis ? `<div class="sub-line"><span translate="no">${ctx.esc(r.hinweis)}</span></div>` : '';
     rows.push([t('rep.tripsPerVehiclePerDay', { typeName: ctx.esc(tyName(r)) }) + hint, num(ctx, r.wert, 2), ctx.esc(r.zeitraum || ''), src(r), r.type === 'all' ? ownAll(tq.rvd, ct?.rvd, 2) : r.op ? ownOp(r) : ownRvd(r)]);
-    if (r.type === 'all' && r.flotteJe1000 != null) rows.push([`${t('rep.vehiclesPer1000Residents')} · ${ctx.esc(tyName(r))}`, num(ctx, r.flotteJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Fleet, null, 1)]);
-    if (r.type === 'all' && r.fahrtenJe1000 != null) rows.push([`${t('rep.tripsPer1000ResidentsAndDay')} · ${ctx.esc(tyName(r))}`, num(ctx, r.fahrtenJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Rides, ct?.per1000Rides, 1)]);
+    if (r.type === 'all' && r.flotteJe1000 != null) rows.push([`${t('rep.vehiclesPer1000Residents')}, ${ctx.esc(tyName(r))}`, num(ctx, r.flotteJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Fleet, null, 1)]);
+    if (r.type === 'all' && r.fahrtenJe1000 != null) rows.push([`${t('rep.tripsPer1000ResidentsAndDay')}, ${ctx.esc(tyName(r))}`, num(ctx, r.fahrtenJe1000, 1), ctx.esc(r.zeitraum || ''), src(r), ownAll(tq.per1000Rides, ct?.per1000Rides, 1)]);
   }
-  for (const r of (ref.fahrt || []).filter(x => x.ags === rep.ags)) rows.push([t('rep.trip', { typeName: ctx.esc(typeName(r.type)) }), tripTxt(ctx, r), ctx.esc(r.zeitraum || ''), src(r), [kmTxt(ctx, own?.avgKm), minTxt(ctx, own?.avgMin)].filter(Boolean).join(' · ') || t('rep.notMeasurable')]);
-  for (const r of (ref.flotte || []).filter(x => x.ags === rep.ags)) rows.push([`${fleetLabel(r)} · ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert), r.stand ? dd(r.stand) : '', src(r), own ? `${t('rep.inOpenFeeds', { ctx: num(ctx, own.fleet) })}<div class="sub-line">${pctTxt(ctx, own.fleet / r.wert, 1)} ${r.art === 'genehmigt' ? t('rep.ofLicensedFleetLowerBoundOf') : r.art === 'aktiv' ? t('rep.ofActiveFleet') : t('rep.ofFleetAccordingToSource')}</div>` : '—']);
+  for (const r of (ref.fahrt || []).filter(x => x.ags === rep.ags)) rows.push([t('rep.trip', { typeName: ctx.esc(typeName(r.type)) }), tripTxt(ctx, r), ctx.esc(r.zeitraum || ''), src(r), [kmTxt(ctx, own?.avgKm), minTxt(ctx, own?.avgMin)].filter(Boolean).join(', ') || t('rep.notMeasurable')]);
+  for (const r of (ref.flotte || []).filter(x => x.ags === rep.ags)) rows.push([`${fleetLabel(r)}, ${ctx.esc(typeName(r.type))}`, num(ctx, r.wert), r.stand ? dd(r.stand) : '', src(r), own ? `${t('rep.inOpenFeeds', { ctx: num(ctx, own.fleet) })}<div class="sub-line">${pctTxt(ctx, own.fleet / r.wert, 1)} ${r.art === 'genehmigt' ? t('rep.ofLicensedFleetLowerBoundOf') : r.art === 'aktiv' ? t('rep.ofActiveFleet') : t('rep.ofFleetAccordingToSource')}</div>` : '—']);
   for (const r of (ref.fahrten || []).filter(x => x.ags === rep.ags)) rows.push([t('rep.tripsPerYear', { typeName: ctx.esc(typeName(r.type)) }), num(ctx, r.wert), ctx.esc(r.zeitraum || ''), src(r), '—']);
   if (!rows.length) return '';
   return `<section class="rp-sec"><h3>${t('rep.contextPublicReferenceValues')}</h3><div class="sub">${t('rep.valuesFromOfficialOr', { v0: client ? t('rep.ourValueDat') : t('rep.ofOwnMeasurement') })}</div>
@@ -346,16 +351,16 @@ function calibText(ctx, calib, cal = null) {
   if (isClient()) return k?.applied ? t('rep.eScooterTripsCalibratedTo', { v0: safeLink(ctx, k.ref.url, k.ref.quelle || t('rep.source')) }) : t('rep.notCalibrated');
   if (!k?.applied) return t('rep.notCalibrated2', { v0: ctx.esc(k?.reason || t('rep.noReference')) });
   const m = k.measured;
-  const skip = cal?.skipped?.length ? ` · ${t('cal.skipped', { v0: ctx.esc([...new Set(cal.skipped.map(x => `${x.op} (${K.kindText(x.kind, lang())})`))].join(', ')) })}` : '';
-  return `${ctx.esc(k.statusText || '')} · ${ctx.esc(k.onlyKind || '')}${skip} · ` + t('rep.eScooterTripsRangeOfficial', { k: fmt(k.k, 2), kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2), quarter: ctx.esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(m.rvd, 2), source: ctx.esc(k.source), v7: plural(m.days, t('rep.day'), t('rep.days')), v8: pctTxt(ctx, k.obsShare, 0), v9: dd(m.from), v10: dd(m.to), rule: ctx.esc(k.rule), v12: k.prelim ? ` · ${t('rep.preliminary2')} <span class="muted">(${ctx.esc(k.prelimWhy.join(', '))})</span>` : '', v13: k.single ? ` · <span class="muted">${t('rep.limitation', { single: ctx.esc(k.single) })}</span>` : '', v14: m.excluded?.length ? ` · <span class="muted">${t('rep.excludedOvercount', { join: ctx.esc(m.excluded.map(x => x.op).join(', ')) })}</span>` : '', meta_lim: fmt(meta_lim(calib), 2), v16: safeLink(ctx, k.ref.url, k.ref.quelle || t('rep.source')) });
+  const skip = cal?.skipped?.length ? `, ${t('cal.skipped', { v0: ctx.esc([...new Set(cal.skipped.map(x => `${x.op} (${K.kindText(x.kind, lang())})`))].join(', ')) })}` : '';
+  return `${ctx.esc(k.statusText || '')}, ${ctx.esc(k.onlyKind || '')}${skip}, ` + t('rep.eScooterTripsRangeOfficial', { k: fmt(k.k, 2), kLow: fmt(k.kLow, 2), kHigh: fmt(k.kHigh, 2), quarter: ctx.esc(k.quarter), wert: fmt(k.ref.wert, 2), rvd: fmt(m.rvd, 2), source: ctx.esc(k.source), v7: plural(m.days, t('rep.day'), t('rep.days')), v8: pctTxt(ctx, k.obsShare, 0), v9: dd(m.from), v10: dd(m.to), rule: ctx.esc(k.rule), v12: k.prelim ? `, ${t('rep.preliminary2')} <span class="muted">(${ctx.esc(k.prelimWhy.join(', '))})</span>` : '', v13: k.single ? `, <span class="muted">${t('rep.limitation', { single: ctx.esc(k.single) })}</span>` : '', v14: m.excluded?.length ? `, <span class="muted">${t('rep.excludedOvercount', { join: ctx.esc(m.excluded.map(x => x.op).join(', ')) })}</span>` : '', meta_lim: fmt(meta_lim(calib), 2), v16: safeLink(ctx, k.ref.url, k.ref.quelle || t('rep.source')) });
 }
 function qualityBlock(ctx, rep, extra) {
   const q = rep.quality, { fmt, esc } = ctx; const arch = q.source === 'archiv';
   const obsH = q.obsMin / 60, possH = q.possibleMin / 60;
-  const gaps = q.gaps.slice(0, 4).map(g => `${dm(g.day)} ${g.from != null ? `${hhmm(g.from)}–` : `${t('rep.to')} `}${hhmm(g.at)}${g.ms ? ` (${fmt(g.ms / 3600e3, 1)} h)` : ''}`).join(' · ');
+  const gaps = q.gaps.slice(0, 4).map(g => `${dm(g.day)} ${g.from != null ? `${hhmm(g.from)}–` : `${t('rep.to')} `}${hhmm(g.at)}${g.ms ? ` (${fmt(g.ms / 3600e3, 1)} h)` : ''}`).join(', ');
   const items = [
     [t('rep.observation'), t('rep.hOfH', { obsH: fmt(obsH, 1), possH: fmt(possH), v2: pctTxt(ctx, possH ? obsH / possH : null, 0), v3: arch ? t('rep.dailyValuesFromLongTerm') : plural(q.runs, t('rep.collectorRun'), t('rep.collectorRuns')) })],
-    [t('rep.fullMeasurementDays'), `${t('rep.of', { fullDays: q.fullDays, days: q.days })} <span class="muted">${t('rep.hoursWithMinOfObservation', { FULL_DAY_HOURS: R.FULL_DAY_HOURS, FULL_HOUR_MIN: R.FULL_HOUR_MIN, v2: arch ? t('rep.inArchive1000ObservedMinutes') : '' })}</span>${q.prelim ? ` · ${t('rep.preliminary2')} <span class="muted">${t('rep.underFullDays', { MIN_FULL_DAYS: R.MIN_FULL_DAYS })}</span>` : ''}`],
+    [t('rep.fullMeasurementDays'), `${t('rep.of', { fullDays: q.fullDays, days: q.days })} <span class="muted">${t('rep.hoursWithMinOfObservation', { FULL_DAY_HOURS: R.FULL_DAY_HOURS, FULL_HOUR_MIN: R.FULL_HOUR_MIN, v2: arch ? t('rep.inArchive1000ObservedMinutes') : '' })}</span>${q.prelim ? `, ${t('rep.preliminary2')} <span class="muted">${t('rep.underFullDays', { MIN_FULL_DAYS: R.MIN_FULL_DAYS })}</span>` : ''}`],
     [t('rep.gaps'), arch ? t('rep.notStatedPerRunInArchive') : q.gapRuns ? `${t('rep.longestHNotCounted', { v0: plural(q.gapRuns, t('rep.gapRun'), t('rep.gapRuns')), v1: fmt(q.longestGapMs / 3600e3, 1), v2: plural(q.excludedHours, t('rep.hour'), t('rep.hours')) })}<div class="muted small">${gaps}${q.gaps.length > 4 ? ' …' : ''}</div>` : t('rep.noneIntervalBetweenRunsNever')],
     [t('rep.extrapolationToDay'), arch ? t('rep.tripsObservedShareOfDay', { profileSource: esc(tx(q.profileSource)) }) : t('rep.dailyProfileTripsObserved', { profileSource: esc(tx(q.profileSource)) })],
     [t('rep.fleet'), arch ? t('rep.avgVehiclesPerDayAccordingTo') : q.fleetFromHistory.length ? t('rep.vehicleMinutesObserved', { v0: q.fleetFromHistory.map(d => dm(d)).join(', ') }) : t('rep.vehicleMinutesObserved2')],
@@ -363,7 +368,7 @@ function qualityBlock(ctx, rep, extra) {
     ...(q.incompleteGroups?.length ? [[t('rep.incompleteGroups'), t('rep.incompleteGroupsTxt', { v0: esc(q.incompleteGroups.map(k => k.replace('|', ' ')).join(', ')) })]] : []),
     ...(q.mixedRuleDays?.length ? [[t('rep.ruleVersions'), t('rep.mixedRuleDays', { v0: q.mixedRuleDays.map(d => dm(d.day)).join(', ') })]] : []),
     // Bruchmarken (Z2): je Tag die betroffenen Reihen; Tage davor zählen für sie nicht, am Bruchtag nur Stunden mit dem neuen Regelstand
-    ...(q.breaks?.length ? [[t('cal.breaksTitle'), [...new Set(q.breaks.map(b => b.day))].sort().map(d => t(arch ? 'cal.breakTxtArch' : 'cal.breakTxt', { day: dd(d), v1: esc(q.breaks.filter(b => b.day === d).map(b => `${b.key.split('|')[0]} ${typeName(b.key.split('|')[1])}`).join(', ')) })).join(' · ')]] : []),
+    ...(q.breaks?.length ? [[t('cal.breaksTitle'), [...new Set(q.breaks.map(b => b.day))].sort().map(d => t(arch ? 'cal.breakTxtArch' : 'cal.breakTxt', { day: dd(d), v1: esc(q.breaks.filter(b => b.day === d).map(b => `${b.key.split('|')[0]} ${typeName(b.key.split('|')[1])}`).join(', ')) })).join(', ')]] : []),
     ...extra,
   ];
   return `<dl class="rp-qual${q.prelim ? ' prelim' : ''}">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
@@ -380,8 +385,8 @@ function groupTable(ctx, rep, cal = null) {
   const rvdCell = (g) => { const c = client && cOf(g); return c ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) : withSpan(ctx, g.rvd, g.rvdBand?.[0], g.rvdBand?.[1], 2, true); };
   const calCol = C && !client;
   const calCell = (g) => { const c = cOf(g); const sk = C?.groups.get(g.key)?.skipKind; if (sk) return `<span class="muted">${t('cal.notKind', { v0: esc(K.kindText(sk, lang())) })}</span>`; return c && c.rvd != null ? withSpan(ctx, c.rvd, c.rvdLo, c.rvdHi, 2, true) + (c.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '') : `<span class="muted" title="${t('rep.onlyEScootersAreCalibrated')}">—</span>`; };
-  const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? ` · ${t('rep.currentFleetOnly')}` : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(mbFlagText(g.flags))}</div>` : ''}</td>
-    <td class="n">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line nw">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, g.rides)}</td>`}<td class="n">${rdCell(g)}</td><td class="n">${rvdCell(g)}</td>${calCol ? `<td class="n">${calCell(g)}</td>` : ''}
+  const rows = rep.groups.map(g => `<tr${g.plausible ? '' : ' class="muted"'}><td><span class="op"><i style="background:${opColor(g.op)}"></i>${esc(g.op)}</span><div class="sub-line">${esc(typeName(g.ty))}${g.fleetSource === 'aktuell' ? `, ${t('rep.currentFleetOnly')}` : ''}</div>${g.flags.length ? `<div class="sub-line">${esc(mbFlagText(g.flags))}</div>` : ''}</td>
+    <td class="n fleet">${num(ctx, g.fleet)}${g.fleetDays.length > 1 ? `<div class="sub-line nw">${num(ctx, g.fleetMin)}–${num(ctx, g.fleetMax)}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, g.rides)}</td>`}<td class="n">${rdCell(g)}</td><td class="n">${rvdCell(g)}</td>${calCol ? `<td class="n">${calCell(g)}</td>` : ''}
     <td class="n">${g.avgMin != null ? t('rep.atMost', { v0: minTxt(ctx, g.avgMin) }) : notMeasurable}</td><td class="n">${kmTxt(ctx, g.avgKm) || notMeasurable}</td><td class="n">${pctTxt(ctx, g.disabledShare)}${g.disabledSource === 'aktuell' ? `<div class="sub-line">${t('rep.current')}</div>` : ''}</td><td class="n">${num(ctx, g.per1000Fleet, 2)}</td></tr>`).join('');
   const ct = C?.totals; const cols = 9 + (calCol ? 1 : 0) - (client ? 1 : 0);
   const footRd = client && ct ? withSpan(ctx, ct.ridesDay, ct.lo, ct.hi) : num(ctx, tq.ridesDay), footRvd = client && ct ? withSpan(ctx, ct.rvd, ct.rvdLo, ct.rvdHi, 2) : num(ctx, tq.rvd, 2);
@@ -396,9 +401,9 @@ function dailyTable(ctx, rep, k = null, limits = null, cal = null) {
   const calDay = (d) => { if (!k?.applied || !(d.coverage > 0)) return null; let r = 0, any = false; for (const [key, v] of Object.entries(d.byGroup)) { const sc = key.split('|')[1] === 'scooter' && kOk(key); if (sc && v.rides) any = true; const f = sc ? K.cappedFactor(k.k, v.fleet > 0 ? (v.rides || 0) / d.coverage / v.fleet : null, limits?.scooter ?? null).f : 1; r += (v.rides || 0) * f; } return any ? r / d.coverage : null; };
   const rows = rep.daily.map(d => {
     const byOp = new Map(); for (const [key, v] of Object.entries(d.byGroup)) { const op = key.split('|')[0]; byOp.set(op, (byOp.get(op) || 0) + (v.fleet || 0)); }
-    const ops = [...byOp].filter(([, v]) => v >= 0.5).sort((a, b) => b[1] - a[1]).map(([o, v]) => `${esc(o)} ${num(ctx, v)}`).join(' · '); // Anbieter mit gerundet 0 Fahrzeugen nicht als „Zeus 0“
+    const ops = [...byOp].filter(([, v]) => v >= 0.5).sort((a, b) => b[1] - a[1]).map(([o, v]) => `${esc(o)} ${num(ctx, v)}`).join(', '); // Anbieter mit gerundet 0 Fahrzeugen nicht als „Zeus 0“
     const c = calDay(d);
-    const rd = client && c != null ? `${num(ctx, c)}<div class="sub-line">${t('rep.eScootersCalibrated2')}</div>` : `${num(ctx, d.ridesDay)}<div class="sub-line">${t('rep.observed', { v0: pctTxt(ctx, d.coverage, 0), v1: c != null ? ` · ${t('rep.calibrated', { ctx: num(ctx, c) })}` : '' })}</div>`;
+    const rd = client && c != null ? `${num(ctx, c)}<div class="sub-line">${t('rep.eScootersCalibrated2')}</div>` : `${num(ctx, d.ridesDay)}<div class="sub-line">${t('rep.observed', { v0: pctTxt(ctx, d.coverage, 0), v1: c != null ? `, ${t('rep.calibrated', { ctx: num(ctx, c) })}` : '' })}</div>`;
     return `<tr><td>${WD()[d.weekday]}, ${dd(d.day)}${d.full ? '' : `<div class="sub-line">${t('rep.noFullMeasurementDay')}</div>`}</td><td class="n">${num(ctx, d.obsHours, 1)} h</td><td class="n">${d.runs ?? '–'}</td><td class="n">${d.gapRuns || '–'}</td><td class="n">${num(ctx, d.fleet)}${ops ? `<div class="sub-line">${ops}</div>` : ''}</td>${client ? '' : `<td class="n">${num(ctx, d.rides)}</td>`}<td class="n">${rd}</td></tr>`;
   }).join('');
   return `<div class="tbl"><table><thead><tr><th>${t('rep.day')}</th><th class="n">${t('rep.observed2')}</th><th class="n">${t('rep.runs')}</th><th class="n">${t('rep.gapRuns')}</th><th class="n">${t('rep.avgFleetPerOperator')}</th>${client ? '' : `<th class="n">${t('rep.tripsMeasured')}</th>`}<th class="n">${t('rep.tripsDayExtrapolated')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -440,16 +445,31 @@ function cellsSection(ctx, rep, s) {
       <button type="button" class="rp-noprint" data-rp="cellscsv" title="${t('rep.allCellsCountsBelowAs', { MIN_COUNT: R.MIN_COUNT })}">${t('rep.placesCsv')}</button><button type="button" class="rp-noprint" data-rp="toggle" data-k="cells" aria-expanded="${s.show.cells ? 'true' : 'false'}">${s.show.cells ? t('rep.hideTable') : t('rep.asTable')}</button></div>
     <div class="tbl" data-rp-view="cells"${s.show.cells ? '' : ' hidden'} style="margin-top:var(--s2)"><table><thead><tr><th>${t('rep.cellCentre')}</th><th class="n">${t('rep.tripStarts')}</th><th class="n">${t('rep.tripEnds')}</th><th class="n">${t('rep.avgAvailablePerRun')}</th><th class="n">${t('rep.rebalancing')}</th></tr></thead><tbody>${top.map(c => `<tr><td>${cellLink(c)}</td><td class="n">${cnt(ctx, c.start)}</td><td class="n">${cnt(ctx, c.end)}</td><td class="n">${num(ctx, c.presAvg, 1)}</td><td class="n">${cnt(ctx, c.reloc)}</td></tr>`).join('')}</tbody></table></div>
     <div class="rp-grid2" style="margin-top:var(--s4)">
-      <div><h3 style="font-size:13px;margin:0 0 var(--s1)">${t('rep.strongestPlaces')}</h3><div class="sub small muted" style="margin-bottom:var(--s1)">${t('rep.mostTripStarts')}</div><div class="tbl"><table><thead><tr><th class="n">#</th><th>${t('rep.cell')}</th><th class="n">${t('rep.starts')}</th><th class="n">${t('rep.destinations')}</th><th class="n">${t('rep.avgAvailable')}</th></tr></thead><tbody>${strong}</tbody></table></div></div>
-      <div><h3 style="font-size:13px;margin:0 0 var(--s1)">${t('rep.weakestPlaces')}</h3><div class="sub small muted" style="margin-bottom:var(--s1)">${t('rep.fleetAvailableVehiclesPerRun', { WEAK_MIN_PRESENT: R.WEAK_MIN_PRESENT })}</div><div class="tbl"><table><thead><tr><th class="n">#</th><th>${t('rep.cell')}</th><th class="n">${t('rep.avgAvailable')}</th><th class="n">${t('rep.starts')}</th><th class="n">${t('rep.perVehicle')}</th></tr></thead><tbody>${weak || `<tr><td colspan="5" class="empty">${t('rep.noCellWithEnoughFleet')}</td></tr>`}</tbody></table></div></div>
+      <div><h3 style="font-size:.875rem;margin:0 0 var(--s1)">${t('rep.strongestPlaces')}</h3><div class="sub small muted" style="margin-bottom:var(--s1)">${t('rep.mostTripStarts')}</div><div class="tbl"><table><thead><tr><th class="n">#</th><th>${t('rep.cell')}</th><th class="n">${t('rep.starts')}</th><th class="n">${t('rep.destinations')}</th><th class="n">${t('rep.avgAvailable')}</th></tr></thead><tbody>${strong}</tbody></table></div></div>
+      <div><h3 style="font-size:.875rem;margin:0 0 var(--s1)">${t('rep.weakestPlaces')}</h3><div class="sub small muted" style="margin-bottom:var(--s1)">${t('rep.fleetAvailableVehiclesPerRun', { WEAK_MIN_PRESENT: R.WEAK_MIN_PRESENT })}</div><div class="tbl"><table><thead><tr><th class="n">#</th><th>${t('rep.cell')}</th><th class="n">${t('rep.avgAvailable')}</th><th class="n">${t('rep.starts')}</th><th class="n">${t('rep.perVehicle')}</th></tr></thead><tbody>${weak || `<tr><td colspan="5" class="empty">${t('rep.noCellWithEnoughFleet')}</td></tr>`}</tbody></table></div></div>
     </div></section>`;
+}
+// S4.1: Antwort vorn im Bericht – Bestand (= Summe der Tabelle je Anbieter und Art), Fahrten je Tag, Fahrten je Fahrzeug und Tag
+function reportAnswer(ctx, rep, meta, C) {
+  const { esc } = ctx, tq = rep.totals, client = isClient();
+  const rd = C?.ridesDay ?? tq.ridesDay, rvd = C?.rvd ?? tq.rvd;
+  return ({ id: 'bericht',
+    sentence: t('ans.report', { name: `<b>${esc(meta.name)}</b>`, fleet: `<strong>${num(ctx, tq.fleet)}</strong>`, rides: rd == null ? '–' : num(ctx, rd), days: plural(rep.days.length, t('rep.day'), t('rep.days')) }),
+    kpis: [
+      { label: t('rep.avgFleet'), value: num(ctx, tq.fleet), n: tq.fleet == null ? null : Math.round(tq.fleet), cmp: rep.pop ? t('ans.kPer1000', { v: num(ctx, tq.per1000Fleet, 1) }) : t('rep.populationMissing'), eq: '.rp-report table td.fleet', eqSum: true },
+      { label: t('ans.kRidesDay'), value: num(ctx, rd), cmp: C && C.lo != null ? t('ans.kRange', { lo: num(ctx, C.lo), hi: num(ctx, C.hi) }) : client ? '' : t('ans.kMeasuredRides', { n: num(ctx, tq.rides) }) },
+      { label: t('rep.tripsPerVehiclePerDay2'), value: num(ctx, rvd, 2), cmp: C && C.rvdLo != null ? t('ans.kRange', { lo: num(ctx, C.rvdLo, 2), hi: num(ctx, C.rvdHi, 2) }) : t('ans.kOverDays', { days: plural(rep.days.length, t('rep.day'), t('rep.days')) }) },
+    ],
+    how: t('ans.reportHow'), asOf: stamp(ctx.state.latest?.at) });
 }
 function reportHtml(ctx, rep, meta, ref) {
   const { esc, fmt } = ctx; const tq = rep.totals, q = rep.quality; const client = isClient();
   const k = meta.calib?.k, C = meta.cal?.applied ? meta.cal.totals : null;
-  const pre = q.prelim ? ` · ${t('rep.preliminary')}` : '';
+  const pre = q.prelim ? `, ${t('rep.preliminary')}` : '';
   const sources = (ctx.state.latest?.sources || []).filter(r => (r.municipalities || []).includes(rep.ags) && !['duplicate', 'retired'].includes(r.status));
-  const srcTxt = sources.length ? t('rep.currentDelayedOther', { length: sources.filter(r => r.status === 'live').length, length2: sources.filter(r => r.status === 'delayed').length, length3: sources.filter(r => !['live', 'delayed'].includes(r.status)).length }) : t('rep.none');
+  // S4.2: ein Nenner mit Kopfzeile, Übersicht und Quellen (dataHealth über ctx.health)
+  const hh = ctx.health?.(rep.ags);
+  const srcTxt = hh?.counted ? t('rep.currentDelayedOther', { length: hh.fresh, length2: hh.delayed, length3: hh.counted - hh.fresh - hh.delayed }) : t('rep.none');
   const gaps = (ctx.state.latest?.gaps || []).filter(g => g.city === meta.name);
   const extra = [[t('rep.sourcesInMunicipality'), t('rep.asOf', { srcTxt, v1: stamp(ctx.state.latest?.at) })]];
   if (gaps.length) extra.push([t('rep.operatorsWithoutOpenFeed'), gaps.map(g => `${esc(g.operator)}${g.since ? ` ${t('rep.since', { v0: dd(g.since) })}` : ''}`).join(', ') + ` <span class="muted">${t('rep.missingFromAllFigures')}</span>`]);
@@ -458,7 +478,7 @@ function reportHtml(ctx, rep, meta, ref) {
   if (meta.calib && rep.groups.some(g => g.ty === 'scooter')) extra.push([t('rep.calibration'), calibText(ctx, meta.calib, meta.cal)]);
   // Kennzahlen mit Fahrten: kalibriert (E-Scooter × k) mit Spanne, gemessen daneben; Kundenansicht nur kalibriert
   const calTile0 = (label, v, lo, hi, d, measured, sub) => (C && v != null
-    ? tile(label, num(ctx, v, d), t('rep.range', { v0: client ? '' : `${t('rep.measured', { ctx: num(ctx, measured, d) })} · `, ctx: num(ctx, lo, d), ctx2: num(ctx, hi, d), v3: client ? t('rep.calibratedToOfficialBerlin') : t('rep.eScootersCalibrated3', { calibLabel: esc(calibLabel(k)) }), v4: client ? '' : pre }))
+    ? tile(label, num(ctx, v, d), t('rep.range', { v0: client ? '' : `${t('rep.measured', { ctx: num(ctx, measured, d) })}, `, ctx: num(ctx, lo, d), ctx2: num(ctx, hi, d), v3: client ? t('rep.calibratedToOfficialBerlin') : t('rep.eScootersCalibrated3', { calibLabel: esc(calibLabel(k)) }), v4: client ? '' : pre }))
     : tile(label, num(ctx, measured, d), sub));
   // Reifegrad an den Fahrten-Kennzahlen (Messbasis der Tage des Berichts, Tagtyp der meisten Tage, Regelstand wie quality.rule)
   const mbLand = ctx.state.latest?.municipalities?.[rep.ags]?.state || null, mbB = mbBase(ctx.state, { land: mbLand, days: rep.days, rule: typeof q.rule === 'string' ? q.rule : undefined });
@@ -477,20 +497,22 @@ function reportHtml(ctx, rep, meta, ref) {
   ].filter(Boolean);
   // Spalten nach Anzahl (UI-17): 7 Kacheln → 4 + 3, 6 → 3 + 3, 5 → 3 + 2; keine Kachel allein in der letzten Zeile
   const tileCols = tiles.length >= 5 ? Math.ceil(tiles.length / 2) : tiles.length;
-  const per = meta.period && ['Quartal', 'Monat'].includes(meta.period.kind) ? `${esc(PKIND(meta.period.kind))} ${esc(meta.period.label)} · ` : '';
+  const per = meta.period && ['Quartal', 'Monat'].includes(meta.period.kind) ? `${esc(PKIND(meta.period.kind))} ${esc(meta.period.label)}, ` : '';
   const calMethod = client ? (C ? ` ${t('rep.eScooterTripsAreCalibratedTo')}` : '')
     : (C ? ` ${t('rep.calibrationMeasuredEScooter')}` : '');
   return `<article class="rp-report" aria-label="${t('rep.municipalReport', { name: esc(meta.name) })}">
-    <header class="rp-head"><div><div class="rp-kicker">${t('rep.municipalReportShared')}</div><h2>${t('rep.ags', { name: esc(meta.name), ags: esc(rep.ags), v2: rep.pop ? ` · ${t('rep.residents', { pop: fmt(rep.pop) })}` : '' })}</h2>
+    <header class="rp-head"><div><div class="rp-kicker">${t('rep.municipalReportShared')}</div><h2>${t('rep.ags', { name: esc(meta.name), ags: esc(rep.ags), v2: rep.pop ? `, ${t('rep.residents', { pop: fmt(rep.pop) })}` : '' })}</h2>
       <p class="sub">${t('rep.periodDataAsOfCreated', { per, v1: dd(rep.from), v2: rep.to !== rep.from ? `–${dd(rep.to)}` : '', v3: plural(rep.days.length, t('rep.day'), t('rep.days')), ctx: filterText(ctx), v5: stamp(ctx.state.latest?.at), v6: stamp(Date.now()) })}</p></div>
       ${q.prelim ? `<span class="pill prelim" title="${t('rep.onlyFullMeasurementDaysFrom', { fullDays: q.fullDays, MIN_FULL_DAYS: R.MIN_FULL_DAYS })}">${t('rep.preliminary')}</span>` : `<span class="pill plain">${t('rep.reliable')}</span>`}</header>
-    <section class="rp-sec"><h3>${t('rep.dataQuality')}</h3>${qualityBlock(ctx, rep, extra)}</section>
+    <div class="rp-print-only">${answerHtml(meta.answer = reportAnswer(ctx, rep, meta, C))}</div>
     <section class="rp-sec"><h3>${t('rep.metrics')}</h3><div class="sub">${t('rep.structuredAfterListOfMetrics', { v0: C ? (client ? t('rep.eScooterTripsCalibratedTo2') : t('rep.tripMetricsCalibrated')) : '' })}</div><div class="rp-tilewrap"><div class="tiles rp-tiles" style="--rp-cols:${tileCols}">${tiles.join('')}</div></div></section>
     <section class="rp-sec"><h3>${t('rep.perOperatorAndVehicleType')}</h3><div class="sub">${t('rep.meanOverPeriodFleetWithRange')}</div>${groupTable(ctx, rep, meta.cal)}</section>
+    <div class="rp-appendix"><h2 class="rp-app-h">${t('rep.appendix')}</h2><p class="sub">${t('rep.appendixSub')}</p>
+    <section class="rp-sec"><h3>${t('rep.dataQuality')}</h3>${qualityBlock(ctx, rep, extra)}</section>
     <section class="rp-sec"><h3>${t('rep.dailyValues')}</h3><div class="sub">${t('rep.fleetPerDayObservationAnd')}</div>${dailyTable(ctx, rep, k, meta.calib?.limits, meta.cal)}</section>
     ${q.source === 'archiv' ? '' : cellsSection(ctx, rep, meta.s)}
     ${referenceRows(ctx, ref, rep, meta.cal)}
-    <footer class="rp-sec small muted"><h3>${t('rep.method')}</h3><p style="margin:0 0 var(--s1)">${t('rep.basisIsOperatorsOpenLive')}</p><p style="margin:0">${t('rep.tripsPerDayAreMeasuredTrips', { calMethod, v1: esc(ctx.CFG.REPO || '') })}</p></footer>
+    <footer class="rp-sec small muted"><h3>${t('rep.method')}</h3><p style="margin:0 0 var(--s1)">${t('rep.basisIsOperatorsOpenLive')}</p><p style="margin:0">${t('rep.tripsPerDayAreMeasuredTrips', { calMethod, v1: esc(ctx.CFG.REPO || '') })}</p></footer></div>
   </article>`;
 }
 function reportControls(ctx, s, days, archDays = []) {
@@ -519,7 +541,7 @@ export async function renderReport(el, ctx) {
     bindCellTips(el);
   });
   const title = head(t('rep.municipalReport2'), t('rep.printableReportPer'));
-  const put = (html) => { unmountCellMaps(s); el.innerHTML = html; }; // Karten vor dem Ersetzen abbauen (Leaflet hält sonst Ereignisse und Kacheln)
+  const put = (html) => { unmountCellMaps(s); el.innerHTML = html; if (!html.includes('rp-report')) clearAnswer(el); }; // Karten vor dem Ersetzen abbauen (Leaflet hält sonst Ereignisse und Kacheln); ohne Bericht keine Antwort
   if (!state.latest) { put(title + emptyBox(t('rep.noDataSnapshotYet'), t('rep.reportAppearsAsSoonAs'))); return; }
   if (!state.scope || state.scope === 'DE') { put(title + emptyBox(t('rep.chooseMunicipality'), t('rep.reportAppliesPerMunicipality'))); return; }
   const tok = ++s.tok; el.classList.add('rp-busy');
@@ -556,6 +578,7 @@ export async function renderReport(el, ctx) {
     const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive };
     s.rep = rep; s.meta = meta;
     put(head(t('rep.municipalReport2'), t('rep.printableReportPer2', { name: esc(name) }), reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref));
+    setAnswer(viewSlot(el), meta.answer); // S4.1: Antwort oben in der Ansicht (im Druck steht dieselbe im Bericht)
     mountCellMaps(el, s);
   } catch (e) {
     console.error('Bericht', e);
