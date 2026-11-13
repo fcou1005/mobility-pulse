@@ -99,8 +99,9 @@ export async function startExtra() {
     }
     if (kind === 'robots.txt') return (res.writeHead(200, { 'content-type': 'text/plain' }), res.end('User-agent: *\nDisallow: /kal/geheim\n'));
     if (kind === 'kal') { // Programmseite der Testarena (Termin morgen 20 Uhr, mehrtägig, Tournee), ICS-Kalender, gesperrte Seite
-      const d = new Date(Date.now() + 86400e3), dd = `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()}`;
-      const ymd = d.toISOString().slice(0, 10).replace(/-/g, '');
+      // morgen in Ortszeit (nicht UTC): sonst fällt der Termin zwischen 0 und 1 Uhr (Winter) auf heute und deckt sich mit „Heute ohne Zeit“ (gleicher Ort und Beginn)
+      const bd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date(Date.now() + 86400e3)), dd = `${bd.slice(8, 10)}.${bd.slice(5, 7)}.${bd.slice(0, 4)}`;
+      const ymd = bd.replace(/-/g, '');
       if (file === 'programm') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(`<html><body><div class="e"><span>${dd}, 20:00 Uhr</span><a href="/kal/detail/x">Band X</a></div><div class="e"><h3>Festival</h3><p>01.01.2030 - 31.01.2030</p><a href="/kal/detail/f">Infos</a></div></body></html>`); }
       // Sammelseite wie hallenduo.de: Termin heute ohne Uhrzeit, einziger Link führt zu einer Karte (anderer Host)
       if (file === 'hallen') { const td = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date()); res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(`<html><body><div class="event-item"><div class="event-date">${td}</div><div class="event-title">Heute ohne Zeit</div><span><a href="http://maps.example/?q=Halle+1">Halle 1</a></span></div></body></html>`); }

@@ -249,7 +249,9 @@ if (TR.trainReady(ydM, Date.now())) {
   const wReq = ex.log.filter(x => x.path === '/weather'), lastD = Date.parse(`${wReq[0]?.q?.last_date ?? new Date(Date.now() + 2 * 86400e3).toISOString().slice(0, 10)}T00:00:00Z`);
   const tomorrow = new Date(lastD - 86400e3).toISOString().slice(0, 10);
   assert(wDay.includes(tomorrow), `Wetter-Cache: auch die Datei für morgen (${tomorrow}, Vorhersage) wird geschrieben`);
-  const before = new Date(lastD - 4 * 86400e3).toISOString().slice(0, 10);
+  // Tag vor dem ältesten Ereignistag (Ortstag): zwischen 0 und 1 Uhr Ortszeit liegt der UTC-Tag einen Tag zurück, daher aus den Ereignisdateien statt aus der Uhr
+  const evDays = (await readdir('test/out/events')).filter(n => /^\d{4}-\d{2}-\d{2}\.json$/.test(n)).map(n => n.slice(0, 10)).sort();
+  const before = evDays.length ? new Date(Date.parse(`${evDays[0]}T12:00:00Z`) - 86400e3).toISOString().slice(0, 10) : new Date(lastD - 4 * 86400e3).toISOString().slice(0, 10);
   assert(wDay.includes(before) && wReq.length && wReq.every(x => x.q?.date === before), `Wetter nachgeholt: der UTC-Tag vor dem ältesten Ereignistag (${before}) fehlte und kommt im selben Abruf mit (date=${wReq[0]?.q?.date})`);
   const inc = await readFile(`test/out/incidents/${T.dayOf(Date.now())}.json`, 'utf8').then(JSON.parse).catch(() => null), incT = await readFile(`test/out/incidents/${T.dayOf(Date.now() + 86400e3)}.json`, 'utf8').then(JSON.parse).catch(() => null);
   const warnH = Object.values(inc?.ags || {}).flatMap(a => a.warn || []).filter(v => v === 3).length + Object.values(incT?.ags || {}).flatMap(a => a.warn || []).filter(v => v === 3).length, h = T.hourOf(Date.now());
