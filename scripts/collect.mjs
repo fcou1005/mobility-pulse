@@ -526,12 +526,14 @@ for (const v of [...dv.vehicles, ...(dv.dropped || []).map(d => d.v)]) delete v.
 // nicht CityBikes, dann Kennung – bewusst ohne Fahrzeugzahl, damit der Sieger nicht von Lauf zu Lauf wechselt.
 // Verworfene Kennungen verlassen den Verfolgungszustand still (ghostKeys), sonst zählten sie beim Umstieg als Fahrtbeginne.
 let mirrorsOut = []; // bekannte Spiegelpaare für den nächsten Lauf (latest.json → mirrors)
+let mirrorHoldOut = []; // A19: Entscheid „ganze Quelle je Gemeinde“ mit Haltezeit (latest.json → mirrorHold)
 const mirrorInfo = new Map(); // verlierende Quelle → { of: Map(Sieger → n), ags: Set, n, why: Set }
 {
   const recOf = new Map(sourceOut.map(r => [r.id, r]));
   const rank = (id) => { const r = recOf.get(id) || {}; return [r.priority ?? 2, r.parent ? 1 : 0, (r.directories || []).includes('citybikes') ? 1 : 0]; };
   const extra = (prev?.mirrors || []).filter(m => recOf.has(m.of) && recOf.has(m.source) && now - (m.seen || 0) <= 7 * 86400e3); // bekannte Paare höchstens 7 Tage ohne neuen Beleg
-  const mr = C.dropMirrorVehicles(dv.vehicles, { pairs: consistency.pairs, rank, extra });
+  const mr = C.dropMirrorVehicles(dv.vehicles, { pairs: consistency.pairs, rank, extra, hold: Array.isArray(prev?.mirrorHold) ? prev.mirrorHold : [] });
+  mirrorHoldOut = mr.hold || [];
   dv.vehicles = mr.vehicles;
   for (const { v, of, why } of [...(dv.dropped || []).map(d => ({ ...d, why: 'code' })), ...mr.dropped]) {
     const m = mirrorInfo.get(v.sourceId) || { of: new Map(), ags: new Set(), n: 0, why: new Set(), op: v.operator };
@@ -626,7 +628,7 @@ const latest = {
   energy: { version: 1, fields: ['energyKnown', 'energyLow', 'energyRangeOnly', 'energyRangeOnlyLow', 'ready'], rangeOnlyOps: [...rangeOnlyOps].sort(), // Felder je groups-Eintrag (Q-2)
     rangeLimit: { ...C.RANGE_LIMIT, rule: 'Reichweite < min(rangeThreshold, sources[].rangeLimitKm); rangeLimitKm = share × 95. Perzentil der Reichweite der Quelle, wenn dieses < maxP95Km (ab minN Fahrzeugen), sonst null' },
     rangeFlat: { ...C.RANGE_FLAT, rule: 'Reichweite der Quelle konstant (Spanne p5–p95 < maxSpreadKm oder > maxModeShare gleiche Werte, ab minN Fahrzeugen): für Energie unbekannt (sources[].rangeFlat)' } },
-  sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps, mirrors: mirrorsOut,
+  sources: sourceOut, municipalities: muniOut, groups: groupsOut, totals, gaps, mirrors: mirrorsOut, mirrorHold: mirrorHoldOut,
   ...(presence ? { presence: { version: 1, days: presence.days, rules: V.PRESENCE, counts: Object.fromEntries(Object.keys(presence.counts).map(k => [k, Object.values(muniOut).filter(m => m.presence?.status === k).length])), strayVehicles: Object.values(muniOut).filter(m => m.presence?.status === 'vereinzelt').reduce((s0, m) => s0 + Object.values(m.operators || {}).reduce((x, o) => x + (o.total || 0), 0), 0) } } : {}),
 };
 // Messbasis und Ampel aus dem veröffentlichten Stand der Ereignisse (vom vorigen Lauf): latest.json → measure.days[Tag] (Messminuten je
@@ -909,8 +911,8 @@ if (TRACK_DIR && process.env.SHADOW !== '0') {
     await mkdir(dir, { recursive: true });
     let doc = null; try { doc = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch {}
     if (!doc || doc.rule !== TN.METHOD_VERSION || doc.base !== T.METHOD_VERSION) doc = { version: 1, day: tr.day, base: T.METHOD_VERSION, rule: TN.METHOD_VERSION, fields: SF, note: 'Tagessummen je Gemeinde|Anbieter|Art: [geltend, Kandidat] je Feld; Läufe nur, wenn beide zählten', runs: 0, groups: {}, modeChanges: [] };
-    if (!tr.gap && !trN.gap && !tr.first && !trN.first) {
-      doc.runs++;
+    if (!trN.gap && !tr.first && !trN.first) { // auch Lückenläufe, die der Kandidat schätzt (A22): geltend zählt dort 0
+      doc.runs++; if (trN.gapEstimated) doc.gapRuns = (doc.gapRuns || 0) + 1;
       const add = (hourly, i) => { for (const [k, h] of hourly) { const row = (doc.groups[k] ??= SF.map(() => [0, 0])); SF.forEach((fl, j) => { row[j][i] += (h[fl] || []).reduce((x, y) => x + (y || 0), 0); }); } };
       add(tr.hourly, 0); add(trN.hourly, 1);
     }

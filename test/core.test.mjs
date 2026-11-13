@@ -197,6 +197,16 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
     Z('zeus_leimen', 'c', 49.37, 50, 17, 1), Z('zeus_heidelberg', 'z', 49.37002, 51, 17.4, 2)]; // anderer Ladestand
   const rz = C.dropMirrorVehicles(zs, { rank: (id) => [id === 'zeus_leimen' ? 1 : 2] });
   assert(rz.vehicles.length === 5 && rz.dropped.length === 1 && rz.dropped[0].v.rawId === 'x' && rz.dropped[0].of === 'zeus_leimen', 'M-1: unbekanntes Paar: nur Zwilling mit gleichem Ladestand/Reichweite ≤ 5 m, schwächere Quelle fällt');
+  // A19: kein Zwilling ohne bekanntes Paar bei Autos und an Stationen
+  const zc = zs.slice(0, 2).map(v => ({ ...v, type: 'car' })), zst = zs.slice(0, 2).map((v, i) => ({ ...v, stationId: i ? null : 'st1' }));
+  assert(C.dropMirrorVehicles(zc, { rank: (id) => [id === 'zeus_leimen' ? 1 : 2] }).dropped.length === 0 && C.dropMirrorVehicles(zst, { rank: (id) => [id === 'zeus_leimen' ? 1 : 2] }).dropped.length === 0,
+    'A19: Zwillingsregel nicht für Autos und Fahrzeuge an einer Station');
+  { // A19: Entscheid „ganze Quelle je Gemeinde“ erst nach 3 gleichen Läufen umschalten
+    const on = new Map([['b|A', 'a']]), off = new Map();
+    let h = C.holdWhole(on, []); const seq = [h.whole.has('b|A')];
+    for (const raw of [off, off, on, off, off, off]) { h = C.holdWhole(raw, h.hold); seq.push(h.whole.has('b|A')); }
+    assert(seq.join() === 'true,true,true,true,true,true,false', `A19: Spiegelentscheid hält über 3 Läufe (${seq.map(x => (x ? 1 : 0)).join('')})`);
+  }
   const cmp = C.compareSources(rank);
   assert(cmp('nextbike_kg', 'mobidrom_x:source-nextbike-kvb-rad') < 0 && cmp('b', 'a') > 0, 'Quellenstärke: direkte Quelle vor Manifest-Kind, sonst Kennung');
 }

@@ -24,10 +24,10 @@ export async function runCase(world, mode, { T, check = false } = {}) {
     world.snaps[k].forEach((s, p) => { if (s.vis) keyPhys.set(T.vehicleKey(SIM.SOURCE.operator, SIM.idFor(world, mode, p, k)), p); });
     const vehicles = await SIM.vehiclesOf(fbs, at, world.cfg.vtype);
     const plain = check ? structuredClone(vehicles) : null;
-    const r = T.trackRun(st, { vehicles, stations: [], sourceRecs: recs, now: at, trace: (e) => { e.run = k; log.push(e); } });
+    const r = T.trackRun(st, { vehicles, stations: world.stations || [], sourceRecs: recs, now: at, trace: (e) => { e.run = k; log.push(e); } });
     st = r.state;
     if (check) {
-      const q = T.trackRun(stPlain, { vehicles: plain, stations: [], sourceRecs: recs, now: at }); stPlain = q.state;
+      const q = T.trackRun(stPlain, { vehicles: plain, stations: world.stations || [], sourceRecs: recs, now: at }); stPlain = q.state;
       if (equal && JSON.stringify([hourlyObj(r.hourly), r.srcModes, r.gap, r.dt]) !== JSON.stringify([hourlyObj(q.hourly), q.srcModes, q.gap, q.dt])) { equal = false; firstDiff = k; }
     }
     per.push({ k, at, sAt: world.runs[k].sAt, step: world.runs[k].step, dt: r.dt, gap: r.gap, first: r.first, day: r.day, h: sumHourly(r.hourly), mode: r.srcModes?.[SIM.SOURCE.id] ?? 'unknown', nVeh: vehicles.length, down: world.runs[k].down });

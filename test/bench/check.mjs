@@ -14,9 +14,11 @@ export const LIMITS = {
   luecken: { ...Z, recall: null, count: 0.05 }, alles: { ...Z, precision: 0.90, recall: 0.88, count: 0.05, dist: 0.15 },
   klein50: { ...Z, count: 0.05 }, klein25: { ...Z, count: 0.05, modeOk: null }, ausblendung: { ...Z, precision: 0.95 },
   ausfall: { ...Z, recall: null, count: null }, sommerzeit: { ...Z }, rad: { ...Z, recall: 0.85, count: 0.15 }, 'rad-wechsel': { ...Z, recall: 0.85, count: 0.15 },
-  teilausfall: { ...Z, count: 0.08 },
+  teilausfall: { ...Z, count: 0.08 }, stationen: { ...Z, recall: 0.85, count: 0.15 }, 'station-wechsel': { ...Z, recall: 0.80, count: 0.20 },
 };
 export const TOL = { rate: 0.02, van: 0.05, mode: 0.02 }; // erlaubte Verschlechterung gegen die Basis
+// Laufzeitgrenze relativ zur Rechnerleistung (P6; Referenzlast ≈ 20 ms auf dem Entwicklungsrechner, Faktor 1–3)
+export const SLOW = (() => { const one = () => { const t = performance.now(); const a = new Float64Array(200000); for (let i = 0; i < a.length; i++) a[i] = Math.sin(i) * 1e6; a.sort(); const m = new Map(); for (let i = 0; i < 50000; i++) m.set('k' + (i % 5000), i); return performance.now() - t; }; return Math.min(3, Math.max(1, Math.min(one(), one(), one()) / 20)); })();
 
 const r1 = (x) => x == null ? null : Math.round(x * 1e4) / 1e4;
 /** Alle Fälle rechnen; Rückgabe { out: { 'szenario/kennung': Kennzahlen }, rows, ms } */
@@ -53,12 +55,12 @@ export function targets(out, label) {
 }
 
 /** Keine Verschlechterung gegen eine Basis (hart); skip = Fälle, die bewusst anders rechnen dürfen */
-export function noWorse(out, base, label, { skip = new Set() } = {}) {
+export function noWorse(out, base, label, { skip = new Set(), skipCount = new Set() } = {}) {
   const P = (x) => (100 * x).toFixed(1);
   for (const [id, o] of Object.entries(out)) {
     const b = base?.[id]; if (!b || skip.has(id)) continue;
     if (o.precision != null && b.precision != null) assert(o.precision >= b.precision - TOL.rate && o.recall >= b.recall - TOL.rate, `${label} ${id}: Präzision/Treffer nicht schlechter als Basis − 2 Pp (${P(o.precision)}/${P(o.recall)} gegen ${P(b.precision)}/${P(b.recall)})`);
-    if (o.countErr != null && b.countErr != null) assert(Math.abs(o.countErr) <= Math.abs(b.countErr) + TOL.rate, `${label} ${id}: |Δ Fahrtenzahl| ${P(Math.abs(o.countErr))} ≤ Basis ${P(Math.abs(b.countErr))} + 2 Pp`);
+    if (o.countErr != null && b.countErr != null && !skipCount.has(id)) assert(Math.abs(o.countErr) <= Math.abs(b.countErr) + TOL.rate, `${label} ${id}: |Δ Fahrtenzahl| ${P(Math.abs(o.countErr))} ≤ Basis ${P(Math.abs(b.countErr))} + 2 Pp`);
     if (b.vanAsTrip != null && o.vanAsTrip != null) assert(o.vanAsTrip <= b.vanAsTrip + TOL.van, `${label} ${id}: Umsetzung als Fahrt ${P(o.vanAsTrip)} ≤ Basis ${P(b.vanAsTrip)} + 5 Pp`);
     if (b.modeOk != null && o.modeOk != null) assert(o.modeOk >= b.modeOk - TOL.mode, `${label} ${id}: Kennungsmodus nicht instabiler als Basis (${P(o.modeOk)} gegen ${P(b.modeOk)} %)`);
   }

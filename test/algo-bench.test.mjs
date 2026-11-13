@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Prüfstand der Fahrterkennung (P1, Tab „Algorithmen“): simulierte GBFS-Stände mit bekannter Wahrheit (test/bench/sim.mjs) durch die
-// geltenden Regeln (lib/pulse-track.js, trackRun mit trace-Rückruf). 17 Szenarien × 3 Kennungsarten, Seed 1.
+// geltenden Regeln (lib/pulse-track.js, trackRun mit trace-Rückruf). 19 Szenarien × 3 Kennungsarten, Seed 1.
 // Hart: trace ändert nichts, Buchhaltung, Lückenregel, Fahrzeugminuten ±1 %, keine Verschlechterung gegen test/bench/baseline.json, < 60 s.
 // Weich (Hinweis): Zielgrenzen einer neuen Regelversion. Neue Basis nach einem bewussten Regelwechsel: node test/algo-bench.test.mjs --write-baseline
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runAll, targets, noWorse, assert, note, table } from './bench/check.mjs';
+import { runAll, targets, noWorse, assert, note, table, SLOW } from './bench/check.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const baseFile = path.join(HERE, 'bench', 'baseline.json');
@@ -28,4 +28,4 @@ if (process.argv.includes('--write-baseline')) {
 }
 if (process.argv.includes('--table')) console.log(table(rows));
 const s = (Date.now() - t0) / 1000;
-assert(s < 60, `Prüfstand-Laufzeit ${s.toFixed(1)} s < 60 s`);
+assert(s < 60 * SLOW, `Prüfstand-Laufzeit ${s.toFixed(1)} s < ${(60 * SLOW).toFixed(0)} s`);

@@ -1017,5 +1017,122 @@
   "fpWhy": {
    "Kennung/Rauschen": 126
   }
+ },
+ "stationen/stable": {
+  "precision": 1,
+  "recall": 0.823,
+  "countErr": -0.177,
+  "endRatio": 1.0032,
+  "durErr": 1.1983,
+  "distErr": 0.2042,
+  "vanAsTrip": null,
+  "vminErr": 0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "kurz ohne Akkuverlust (slow)": 36,
+   "Rückkehr an den Ort (< 150 m)": 81,
+   "als Umsetzung": 8
+  },
+  "fpWhy": {}
+ },
+ "stationen/trip": {
+  "precision": 1,
+  "recall": 0.9881,
+  "countErr": -0.0119,
+  "endRatio": 1.0027,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {}
+ },
+ "stationen/run": {
+  "precision": 0.7113,
+  "recall": 0.5403,
+  "countErr": -0.2404,
+  "endRatio": 1.0035,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Kennungswechsel gepaart": 344,
+   "mehrere Fahrten je Intervall": 4
+  },
+  "fpWhy": {
+   "Kennung/Rauschen": 166
+  }
+ },
+ "station-wechsel/stable": {
+  "precision": 1,
+  "recall": 0.823,
+  "countErr": -0.177,
+  "endRatio": 1.0032,
+  "durErr": 1.1983,
+  "distErr": 0.2042,
+  "vanAsTrip": null,
+  "vminErr": 0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "kurz ohne Akkuverlust (slow)": 36,
+   "Rückkehr an den Ort (< 150 m)": 81,
+   "als Umsetzung": 8
+  },
+  "fpWhy": {}
+ },
+ "station-wechsel/trip": {
+  "precision": 0.1634,
+  "recall": 0.9881,
+  "countErr": 5.0476,
+  "endRatio": 1.0004,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {
+   "Kennungswechsel am Ort": 3830
+  }
+ },
+ "station-wechsel/run": {
+  "precision": 0.7113,
+  "recall": 0.5403,
+  "countErr": -0.2404,
+  "endRatio": 1.0035,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Kennungswechsel gepaart": 344,
+   "mehrere Fahrten je Intervall": 4
+  },
+  "fpWhy": {
+   "Kennung/Rauschen": 151,
+   "Kennungswechsel am Ort": 15
+  }
  }
 }

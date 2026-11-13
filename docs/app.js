@@ -1,19 +1,19 @@
-import * as C from './pulse-core.js?v=mweui1mb';
-import * as Ops from './ops.js?v=mweui1mb';
-import * as E from './pulse-econ.js?v=mweui1mb';
-import * as K from './pulse-calib.js?v=mweui1mb';
-import * as Rp from './report.js?v=mweui1mb';
-import * as R from './pulse-report.js?v=mweui1mb';
-import * as Fl from './flows.js?v=mweui1mb';
-import * as Cov from './coverage.js?v=mweui1mb';
-import * as Cmp from './compare.js?v=mweui1mb';
-import * as Sp from './spots.js?v=mweui1mb';
-import * as Fv from './forecast.js?v=mweui1mb';
-import { mapKeys } from './mapkeys.js?v=mweui1mb';
-import { weatherFor } from './weather.js?v=mweui1mb';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mweui1mb';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mweui1mb';
-import { idleClassText } from './pulse-ops.js?v=mweui1mb';
+import * as C from './pulse-core.js?v=mwexbqd2';
+import * as Ops from './ops.js?v=mwexbqd2';
+import * as E from './pulse-econ.js?v=mwexbqd2';
+import * as K from './pulse-calib.js?v=mwexbqd2';
+import * as Rp from './report.js?v=mwexbqd2';
+import * as R from './pulse-report.js?v=mwexbqd2';
+import * as Fl from './flows.js?v=mwexbqd2';
+import * as Cov from './coverage.js?v=mwexbqd2';
+import * as Cmp from './compare.js?v=mwexbqd2';
+import * as Sp from './spots.js?v=mwexbqd2';
+import * as Fv from './forecast.js?v=mwexbqd2';
+import { mapKeys } from './mapkeys.js?v=mwexbqd2';
+import { weatherFor } from './weather.js?v=mwexbqd2';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwexbqd2';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwexbqd2';
+import { idleClassText } from './pulse-ops.js?v=mwexbqd2';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 

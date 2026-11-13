@@ -28,6 +28,7 @@ export const BASE = {
   noBattery: false,  // Feed ohne Ladestand (Räder ohne Akku, viele nextbike-Feeds)
   churn: 0,          // Anteil abgestellter Fahrzeuge, die je Lauf am Ort eine neue Kennung bekommen (nur Kennungsart „je Fahrt“)
   dropout: [],       // Teilausfall des Feeds: [['hh:mm', Anteil]] – im ersten Lauf ab hh:mm fehlt dieser Anteil der Fahrzeuge (zufällig), danach wieder da
+  stations: 0,       // stationsgebunden: so viele eigene Stationen; Fahrzeuge stehen an Stationen (± 1,5 m), Fahrten enden an der nächsten Station
 };
 export const SCENARIOS = {
   basis: {},
@@ -48,6 +49,8 @@ export const SCENARIOS = {
   rad: { vtype: 'bike', noBattery: true },
   'rad-wechsel': { vtype: 'bike', noBattery: true, churn: 0.1 },
   teilausfall: { dropout: [['12:00', 0.25]] },
+  stationen: { vtype: 'bike', noBattery: true, stations: 60 },
+  'station-wechsel': { vtype: 'bike', noBattery: true, stations: 60, churn: 0.1 },
 };
 export const ID_MODES = ['stable', 'trip', 'run']; // stabil, neue Kennung je Fahrt (GBFS 2.1+), neue Kennung je Lauf (z. B. Lime direkt)
 
@@ -97,11 +100,15 @@ export function simulate(over = {}) {
   // Hotspots (Nachfrage-Schwerpunkte, Abstellspots)
   const hot = []; for (let i = 0; i < cfg.hotspots; i++) { const rad = cfg.radiusM * Math.sqrt(r()) * 0.85, a = U(r, 0, 2 * Math.PI); hot.push([rad * Math.cos(a), rad * Math.sin(a)]); }
   const clampDisk = (x, y) => { const d = Math.hypot(x, y), R = cfg.radiusM * 0.98; return d > R ? [x * R / d, y * R / d] : [x, y]; };
+  // eigene Stationen (eigener Zufall, damit die übrigen Szenarien gleich bleiben)
+  const ST = []; { const rs = rngOf(cfg.seed * 13 + 1); for (let i = 0; i < cfg.stations; i++) { const rad = cfg.radiusM * Math.sqrt(rs()) * 0.9, a = U(rs, 0, 2 * Math.PI); ST.push([rad * Math.cos(a), rad * Math.sin(a)]); } }
+  const snap = (x, y) => { let b = ST[0], bd = Infinity; for (const p of ST) { const d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; b = p; } } return [b[0] + U(r, -1.5, 1.5), b[1] + U(r, -1.5, 1.5)]; };
   const near = (p, s) => { const a = U(r, 0, 2 * Math.PI), d = Math.abs(normal(r)) * s; return clampDisk(p[0] + d * Math.cos(a), p[1] + d * Math.sin(a)); };
   // Fahrzeuge
   const V = [];
   for (let i = 0; i < cfg.n; i++) {
-    const p = r() < 0.7 ? near(hot[Math.floor(r() * hot.length)], 250) : (() => { const rad = cfg.radiusM * Math.sqrt(r()), a = U(r, 0, 2 * Math.PI); return [rad * Math.cos(a), rad * Math.sin(a)]; })();
+    let p = r() < 0.7 ? near(hot[Math.floor(r() * hot.length)], 250) : (() => { const rad = cfg.radiusM * Math.sqrt(r()), a = U(r, 0, 2 * Math.PI); return [rad * Math.cos(a), rad * Math.sin(a)]; })();
+    if (ST.length) p = snap(p[0], p[1]);
     V.push({ i, x: p[0], y: p[1], bat: U(r, 20, 100), st: 'avail', until: Infinity, ep: 0, cep: 0, svcAt: null, svcKind: null, act: null });
   }
   const lam = DERIVED.diurnal.per_vehicle_hour; // Fahrtbeginne je verfügbarer Fahrzeugstunde, Ortsstunde (events/*.json)
@@ -115,7 +122,8 @@ export function simulate(over = {}) {
     if (u < cfg.roundShare) { kind = 'round'; dur = U(r, 4, 15); dist = U(r, 0, 30); bearing = U(r, 0, 2 * Math.PI); routeKm = 12 * dur / 60; }
     else if (u < cfg.roundShare + cfg.shortShare) { kind = 'short'; dur = U(r, 1, 4); dist = U(r, 150, 700); routeKm = 1.35 * dist / 1000; }
     else { dur = Math.min(90, Math.max(1, Math.exp(Math.log(6.9) + SIG_D * normal(r)))); const kmh = Math.min(18, Math.exp(Math.log(9.5) + 0.25 * normal(r))); dist = kmh * dur / 60 * 1000; routeKm = 1.35 * dist / 1000; }
-    const [x, y] = clampDisk(v.x + dist * Math.cos(bearing), v.y + dist * Math.sin(bearing));
+    let [x, y] = clampDisk(v.x + dist * Math.cos(bearing), v.y + dist * Math.sin(bearing));
+    if (ST.length) [x, y] = snap(x, y);
     return { kind, durMin: Math.max(1, Math.round(dur)), x, y, drain: cfg.noBattery ? 0 : 1.8 * routeKm };
   };
   const startTrip = (v, t, trip) => { v.st = 'trip'; v.until = t + trip.durMin * 60e3; v.trip = { ...trip, ts: t, x0: v.x, y0: v.y, bat0: v.bat }; act(v, 'trip', t); };
@@ -200,7 +208,8 @@ export function simulate(over = {}) {
       snaps.push(snap); runMeta.push({ at, sAt: tm, step, down: outAt.some(([a, b]) => at >= a && at < b) });
     }
   }
-  return { cfg, runs: runMeta, snaps, truth, dayStart, dayEnd, T0, T1 };
+  const stations = ST.map(([x, y], i) => { const [lat, lon] = G.ll(x, y); return { operator: SOURCE.operator, id: `st${i}`, name: `Station ${i}`, lat: +lat.toFixed(6), lon: +lon.toFixed(6), ags: AGS, isVirtual: false }; });
+  return { cfg, runs: runMeta, snaps, truth, dayStart, dayEnd, T0, T1, stations };
 }
 
 // ---------- Kennungen + GBFS-Dokumente je Lauf ----------
