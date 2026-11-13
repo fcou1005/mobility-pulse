@@ -1,7 +1,8 @@
+// @ts-check
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mwf6frp1';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mwf6frp1';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mwf6w7ds';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mwf6w7ds';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -252,7 +253,7 @@ export const BOOT = { z: 2, draws: 200, seed: 20261102, minShare: 0.8 };
  * höher, Top 25 ±0,5 Punkte) – die Rangfolge hängt an Zellen mit vielen Starts, wo die Schrumpfung nichts ändert. Daher: Rate wie bisher, 7 Tage.
  */
 export function buildDemandModel(cellDocs, ags, band = 'day') {
-  const bands = band === 'day' ? BANDS.map(b => b.id) : [band];
+  const bands = /** @type {number[]} */ (band === 'day' ? BANDS.map(b => b.id) : [band]);
   let hours = 0, runs = 0, days = 0, belowS = 0, belowE = 0;
   const cells = new Map(), dayHours = {}, dayH = [], dayBS = [], dayBE = []; // S2.11: je Tag (Reihenfolge der Dateien) für den Bootstrap über ganze Tage
   for (const doc of cellDocs) {
@@ -299,7 +300,7 @@ export function buildDemandModel(cellDocs, ags, band = 'day') {
  * target = Bedarf aufgerundet, mindestens minPerSpot, höchstens maxPerSpot (capped = rechnerisch mehr).
  */
 export function needOf(c, share = 1, opts = {}) {
-  const o = { ...DEFAULTS, ...opts };
+  const o = /** @type {any} */ ({ ...DEFAULTS, ...opts });
   const startsOp = (c?.startsPerHour ?? 0) * share, endsOp = (c?.endsPerHourBal ?? c?.endsPerHour ?? 0) * share, outOp = startsOp - endsOp;
   const base = startsOp * o.baseH, drain = Math.max(0, outOp) * o.horizonH, raw = base + drain, up = Math.ceil(raw - 1e-9);
   return { startsOp, endsOp, outOp, base, drain, raw, target: Math.max(o.minPerSpot, Math.min(o.maxPerSpot, up)), capped: up > o.maxPerSpot };
@@ -480,7 +481,7 @@ function rank(cands, weights, topN, minSpacingM) {
  * Standard BOOT); stabilityLabel „stabil“ nur bei allen Gewichtsvarianten und ≥ 80 % der Ziehungen, unter 80 % „unsicher“.
  */
 export function scoreSpots(model, ctx = {}) {
-  const o = { ...DEFAULTS, ...ctx };
+  const o = /** @type {any} */ ({ ...DEFAULTS, ...ctx });
   const share = o.share ?? 1;
   const cands = standardize(model, { ...o, share });
   const weights = { ...AHP.weights, ...(o.weights || {}) };
@@ -771,7 +772,7 @@ export function matrixCost(points, D, { detour = DEFAULTS.detour } = {}) {
  * bei Umsetzen/Stationen eine Ausbringung samt gleich vielen Abholungen niedrigster Priorität –, dann wird neu geordnet (cost, lambda).
  * Rückgabe { stops, vehicles, removed, driveMin, handleMin, totalMin }; removed = Fahrzeuge, die nicht mehr eingeplant sind.
  */
-export function trimRun(r, { depot, cost = makeCost(), minOf, limitMin, lambda = DEFAULTS.prioLambda } = {}) {
+export function trimRun(r, { depot = undefined, cost = makeCost(), minOf = undefined, limitMin = undefined, lambda = DEFAULTS.prioLambda } = {}) {
   const hv = r.vehicles > 0 ? r.handleMin / r.vehicles : 0, low = (a, b) => ((b.prio ?? 0) < (a.prio ?? 0) ? b : a);
   let stops = r.stops.slice(), veh = r.vehicles, removed = 0;
   const drive = (st) => minOf([depot, ...st, depot]);
@@ -802,7 +803,7 @@ export function runGroups(stops) {
  * ohne Verbesserung), kmPrio (reine Prioritätsfolge), reachKm / reachKmMin (nach Priorität gewichtete mittlere Anfahrstrecke dieser bzw. der
  * kürzesten Tour), obj (Zielwert J in m), lambda. quick: schnelle Rechnung (Probe der Einsatzzeit: ein Start, ohne exakte Lösung).
  */
-export function sequenceRun(groups, { depot, cost = makeCost(), lambda = DEFAULTS.prioLambda, quick = false } = {}) {
+export function sequenceRun(groups, { depot = undefined, cost = makeCost(), lambda = DEFAULTS.prioLambda, quick = false } = {}) {
   const G = groups.filter(g => g?.length), opt = { start: depot, end: depot, cost, weight: s => s.prio ?? 0 };
   const res = orderTour(G, { ...opt, lambda, starts: quick ? 1 : 6, exact: !quick });
   const km = (m) => +(m / 1000).toFixed(1);
@@ -827,7 +828,7 @@ const seqSummary = (sq, o) => ({ km: sq.km, driveMin: Math.round((sq.L / 1000) /
 // ok = false: schon der nächstgelegene Auftrag allein ist zu lang (nicht eingeplant).
 const centerOf = (pts) => ({ lat: sum(pts.map(p => p.lat)) / pts.length, lon: sum(pts.map(p => p.lon)) / pts.length });
 // order(a, b): optionale Vorrangregel für den Tour-Start (Umsetzen: größte Fehlmenge zuerst), bei Gleichstand weitester vom Depot
-export function clusterRuns(items, capacity, depot, maxRuns = Infinity, weight = () => 1, fit = null, order = null) {
+export function clusterRuns(items, capacity, depot, maxRuns = Infinity, weight = (..._a) => 1, fit = null, order = null) {
   const dd = new Map(items.map(x => [x, dist(depot, x)])), far = (a, b) => dd.get(b) - dd.get(a), byDepot = order ? (a, b) => order(a, b) || far(a, b) : far;
   const left = items.slice().sort(byDepot), runs = [], tooLong = []; // einmal sortiert, Reihenfolge bleibt beim Entnehmen
   while (left.length && runs.length < maxRuns) {
@@ -862,7 +863,7 @@ function timeCap(build, maxMin, spread = (x, c) => dist(c, x)) {
   return { fit, built: (run) => memo.get(run) || build(run) };
 }
 // gleiche Position (≤ 30 m) zu einem Stopp zusammenfassen
-function groupStops(points, keyFn = () => '', maxM = 30) {
+function groupStops(points, keyFn = (..._a) => '', maxM = 30) {
   const out = [];
   for (const p of points) { const g = out.find(s => s.key === keyFn(p) && dist(s, p) <= maxM); if (g) { g.items.push(p); g.count++; } else out.push({ lat: p.lat, lon: p.lon, key: keyFn(p), items: [p], count: 1 }); }
   return out;
@@ -875,7 +876,7 @@ function groupStops(points, keyFn = () => '', maxM = 30) {
  * Vorrang nach Fehlmenge: Spots mit der größten Fehlmenge bekommen zuerst Überschussfahrzeuge, eröffnen zuerst eine Tour, R1 deckt die größte.
  */
 export function planRebalance({ spots, vehicles, model, share = 1, depot, ...opts }) {
-  const o = { ...DEFAULTS, ...opts };
+  const o = /** @type {any} */ ({ ...DEFAULTS, ...opts });
   const cost = makeCost(o);
   // S2.11: jedes Fahrzeug zählt nur am nächsten Spot (Spots ≥ minSpacingM auseinander, Umkreis spotRadiusM: Kreise überlappen) – sonst zählt es als
   // Bestand zweier Spots und kann zweimal als Überschuss in die Umsetzungen
@@ -965,7 +966,7 @@ export function lockedForEnergy(v, floor) {
   return rangeUsable(v) && floor.rangeKm != null && v.rangeKm < floor.rangeKm;
 }
 export function planSwaps({ vehicles, model, depot, ...opts }) {
-  const o = { ...DEFAULTS, ...opts }; o.swapCapacity = Math.max(1, Math.min(MAX_SWAP, o.swapCapacity));
+  const o = /** @type {any} */ ({ ...DEFAULTS, ...opts }); o.swapCapacity = Math.max(1, Math.min(MAX_SWAP, o.swapCapacity));
   const cost = makeCost(o);
   const floor = disableFloor(vehicles);
   const low = vehicles.filter(v => needsSwap(v, o) || lockedForEnergy(v, floor)).map(v => ({ ...v, lockedLow: !!v.disabled }));
@@ -990,7 +991,7 @@ export function planSwaps({ vehicles, model, depot, ...opts }) {
 
 /** Werkstatt: gesperrte Fahrzeuge einsammeln und zum Depot bringen. */
 export function planWorkshop({ vehicles, depot, ...opts }) {
-  const o = { ...DEFAULTS, ...opts };
+  const o = /** @type {any} */ ({ ...DEFAULTS, ...opts });
   const cost = makeCost(o);
   const floor = disableFloor(vehicles); // gesperrt wegen leerem Akku → Akkutausch (planSwaps), nicht Werkstatt
   const dis = vehicles.filter(v => v.disabled && !lockedForEnergy(v, floor)).sort((a, b) => (b.idleMin ?? 0) - (a.idleMin ?? 0));
@@ -1012,7 +1013,7 @@ export function planWorkshop({ vehicles, depot, ...opts }) {
  * Füllgrad = buchbar / Kapazität (Kapazität fehlt → buchbar + freie Plätze). Ziel ist `fill` (Standard 50 %).
  */
 export function planStationBalance({ stations, depot, low = 0.2, high = 0.8, fill = 0.5, ...opts }) {
-  const o = { ...DEFAULTS, ...opts };
+  const o = /** @type {any} */ ({ ...DEFAULTS, ...opts });
   const cost = makeCost(o);
   const list = stations.map(s => ({ ...s, cap: s.capacity ?? (s.docks != null && s.bookable != null ? s.docks + s.bookable : null) })).filter(s => s.cap > 0 && s.bookable != null);
   const deficits = [], givers = [];
@@ -1140,7 +1141,7 @@ export function runsCsv(runs, depot, lang = 'de') {
 // Orte je Anbieter und Art: ein Ereignis fällt in den Ort, dessen Mittelpunkt ≤ mergeM (60 m) entfernt ist (sonst neuer Ort); zeitlich sortiert,
 // der Mittelpunkt ist das Mittel der zugeordneten Ereignisse. Gleiches Ereignis aus mehreren Dateien (at, Art, Anbieter, Ort) zählt einmal.
 export const GROUP_MERGE_M = 60;
-export function groupPlaces(docs, { ags, mergeM = GROUP_MERGE_M } = {}) {
+export function groupPlaces(docs, { ags = undefined, mergeM = GROUP_MERGE_M } = {}) {
   const evs = [], seen = new Set();
   for (const doc of (Array.isArray(docs) ? docs : [docs]).filter(Boolean)) {
     const ix = Object.fromEntries((doc.fields || GROUP_FIELDS).map((f, i) => [f, i]));
@@ -1178,7 +1179,7 @@ const BERLIN_DAY = (ms) => dayOf(ms, 'Europe/Berlin');
  * Filter je Spalte: q = Text in der Lage (labelOf(place): Adresse, Koordinaten), op = Anbieter ('all' = alle), countMin/countMax = Ausbringungen,
  * avgMin/avgMax = Ø Fahrzeuge, from/to = Zeitraum „zuletzt“ als Tag JJJJ-MM-TT (Europe/Berlin, beide Grenzen einschließlich). Leere Werte filtern nicht.
  */
-export function filterPlaces(list, f = {}, labelOf = () => '') {
+export function filterPlaces(list, f = {}, labelOf = (..._a) => '') {
   const num = (x) => x === '' || x == null || !Number.isFinite(+x) ? null : +x;
   const cMin = num(f.countMin), cMax = num(f.countMax), aMin = num(f.avgMin), aMax = num(f.avgMax), q = fold(f.q).trim();
   return (list || []).filter(p => {
@@ -1191,14 +1192,14 @@ export function filterPlaces(list, f = {}, labelOf = () => '') {
   });
 }
 // Sortierung nach Spalte: lage (Text), op, count, last, avg, near (Abstand zum nächsten Plan-Spot); Gleichstand: Ausbringungen, dann zuletzt
-export function sortPlaces(list, key = 'count', dir = 'desc', { labelOf = () => '', nearOf = () => null } = {}) {
+export function sortPlaces(list, key = 'count', dir = 'desc', { labelOf = (..._a) => '', nearOf = (..._a) => null } = {}) {
   const val = { lage: (p) => fold(labelOf(p) || `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`), op: (p) => fold(p.op), count: (p) => p.count, last: (p) => p.last, avg: (p) => p.avg, near: (p) => nearOf(p)?.d ?? Infinity }[key] || ((p) => p.count);
   const s = dir === 'asc' ? 1 : -1;
   return list.slice().sort((a, b) => { const x = val(a), y = val(b); const c = typeof x === 'string' ? x.localeCompare(y, 'de') : x - y; return s * c || b.count - a.count || b.last - a.last; });
 }
 const STAMP = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 export const PLACES_FIELDS = ['art', 'anbieter', 'lage', 'lat', 'lon', 'anzahl', 'fahrzeuge_summe', 'fahrzeuge_mittel', 'erstmals', 'zuletzt', 'fahrzeugarten', 'naechster_spot', 'abstand_m'];
-export function placesCsv(list, { labelOf = () => '', nearOf = () => null, lang = 'de' } = {}) {
+export function placesCsv(list, { labelOf = (..._a) => '', nearOf = (..._a) => null, lang = 'de' } = {}) {
   const rows = (list || []).map(p => { const n = nearOf(p);
     return [p.kind === 'deploy' ? (lang === 'en' ? 'Deployment' : 'Ausbringen') : (lang === 'en' ? 'Pickup' : 'Einsammeln'), p.op, labelOf(p) || '', p.lat.toFixed(5), p.lon.toFixed(5), p.count, p.vehicles, +p.avg.toFixed(2), STAMP.format(p.first), STAMP.format(p.last),
       Object.entries(p.types || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', '), n ? n.rank : null, n ? Math.round(n.d) : null]; });

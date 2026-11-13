@@ -14,7 +14,8 @@
     "test:unit": "node scripts/test-all.mjs --unit",
     "smoke": "node scripts/smoke.mjs",
     "test:browser": "node test/browser.mjs",
-    "fixture": "node scripts/make-fixture.mjs"
+    "fixture": "node scripts/make-fixture.mjs",
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@types/leaflet": "1.9.22",
+    "@types/node": "22.20.5",
     "ajv": "8.20.0",
     "esbuild": "0.28.2",
     "playwright": "1.63.0",

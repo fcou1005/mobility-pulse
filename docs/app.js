@@ -1,20 +1,20 @@
-import * as C from './pulse-core.js?v=mwf6frp1';
-import * as Ops from './ops.js?v=mwf6frp1';
-import * as E from './pulse-econ.js?v=mwf6frp1';
-import * as K from './pulse-calib.js?v=mwf6frp1';
-import * as Rp from './report.js?v=mwf6frp1';
-import * as R from './pulse-report.js?v=mwf6frp1';
-import * as Fl from './flows.js?v=mwf6frp1';
-import * as Cov from './coverage.js?v=mwf6frp1';
-import * as Cmp from './compare.js?v=mwf6frp1';
-import * as Sp from './spots.js?v=mwf6frp1';
-import * as Fv from './forecast.js?v=mwf6frp1';
-import { renderStatus } from './status.js?v=mwf6frp1';
-import { mapKeys } from './mapkeys.js?v=mwf6frp1';
-import { weatherFor } from './weather.js?v=mwf6frp1';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwf6frp1';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwf6frp1';
-import { idleClassText } from './pulse-ops.js?v=mwf6frp1';
+import * as C from './pulse-core.js?v=mwf6w7ds';
+import * as Ops from './ops.js?v=mwf6w7ds';
+import * as E from './pulse-econ.js?v=mwf6w7ds';
+import * as K from './pulse-calib.js?v=mwf6w7ds';
+import * as Rp from './report.js?v=mwf6w7ds';
+import * as R from './pulse-report.js?v=mwf6w7ds';
+import * as Fl from './flows.js?v=mwf6w7ds';
+import * as Cov from './coverage.js?v=mwf6w7ds';
+import * as Cmp from './compare.js?v=mwf6w7ds';
+import * as Sp from './spots.js?v=mwf6w7ds';
+import * as Fv from './forecast.js?v=mwf6w7ds';
+import { renderStatus } from './status.js?v=mwf6w7ds';
+import { mapKeys } from './mapkeys.js?v=mwf6w7ds';
+import { weatherFor } from './weather.js?v=mwf6w7ds';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwf6w7ds';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwf6w7ds';
+import { idleClassText } from './pulse-ops.js?v=mwf6w7ds';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 

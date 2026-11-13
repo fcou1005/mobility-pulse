@@ -1,8 +1,8 @@
 // Mobility Pulse — Ansicht #status (S3.2): Laufzeit des Sammlers gegen das Budget, Zeit je Phase und Verlauf der letzten 7 Tage.
 // Daten: status.json v2 (lib/pulse-status.js statusDoc) und runs.json (Spalte dauer_ms). Eigenständig: renderStatus(el, ctx),
 // ctx = { state, CFG, esc, fmt, getJson }. Ältere status.json ohne Phasen: nur Laufzeit und Verlauf.
-import { t, dateFmt } from './i18n.js?v=mwf6frp1';
-import { BUDGET, levelOf, runtimeTrend } from './pulse-status.js?v=mwf6frp1';
+import { t, dateFmt } from './i18n.js?v=mwf6w7ds';
+import { BUDGET, levelOf, runtimeTrend } from './pulse-status.js?v=mwf6w7ds';
 
 const TZ = 'Europe/Berlin';
 const lvlCls = { ok: 'ok', warn: 'warn', fail: 'bad' };

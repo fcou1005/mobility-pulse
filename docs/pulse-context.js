@@ -1,3 +1,4 @@
+// @ts-check
 // Umgebung der Prognose: Ereignisse je Gemeinde und Ortsstunde, die die Nachfrage verschieben können.
 //
 // Quellen (alle optional, jede einzeln abschaltbar):
@@ -12,7 +13,7 @@
 //            Zehntausenden Fans anders wirken als Hallenkonzerte (seit 08.11.2026; ab aktivAb in data/sport-spielorte.json)
 // Gespeichert werden nur abgeleitete Kennzeichen (Gemeinde, Stunde, Stufe bzw. ja/nein), keine Meldungstexte.
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
-import { hourOf, dayOf } from './pulse-track.js?v=mwf6frp1';
+import { hourOf, dayOf } from './pulse-track.js?v=mwf6w7ds';
 
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport']; // neue Merkmale nur hinten anfügen (Gedächtnis, lib/pulse-forecast.js memoryResize)
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -137,7 +138,7 @@ const localStamp = (t) => { const d = new Date(t); return `${dayOf(t)}T${String(
  * Heimspiele → Einträge. rows: compactMatches-Zeilen, venues: data/sport-spielorte.json ({ ligen: { bl1: 'alle' | 'liste' }, vereine: { Name: { ort, land, ags?, alias? } } }),
  * resolve(ort, land) → ags | null. Rückgabe { entries, unknown: [Heimmannschaft ohne Spielort in Ligen „alle“], noAgs: [Ort ohne Gemeinde] }
  */
-export function sportEntries(rows, venues, { now, resolve = () => null, beforeMin = SPORT.beforeMin, afterMin = SPORT.afterMin, pastDays = SPORT.pastDays, aheadDays = SPORT.aheadDays, base = 'https://api.openligadb.de' } = {}) {
+export function sportEntries(rows, venues, { now = undefined, resolve = (..._a) => null, beforeMin = SPORT.beforeMin, afterMin = SPORT.afterMin, pastDays = SPORT.pastDays, aheadDays = SPORT.aheadDays, base = 'https://api.openligadb.de' } = {}) {
   const byName = new Map();
   for (const [name, v] of Object.entries(venues?.vereine || {})) for (const n of [name, ...(Array.isArray(v?.alias) ? v.alias : [])]) byName.set(norm(n), v);
   const entries = [], unknown = new Set(), noAgs = new Set(), agsOf = new Map();
@@ -294,7 +295,11 @@ export function htmlEvents(tree, baseUrl, { link = null } = {}) {
 }
 /** ICS (RFC 5545) → [{ name, start: 'YYYY-MM-DDTHH:MM' | 'YYYY-MM-DD', utc: bool, place, url }] (Zeilen entfaltet; TZID wird als Ortszeit Berlin gelesen) */
 export function icsEvents(text) {
-  const lines = String(text || '').replace(/\r?\n[ \t]/g, '').split(/\r?\n/), out = []; let e = null;
+  const lines = String(text || '').replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
+  /** @type {any[]} */
+  const out = [];
+  /** @type {Record<string, any> | null} */
+  let e = null;
   const val = (l) => l.slice(l.indexOf(':') + 1).replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
   for (const l of lines) {
     if (l === 'BEGIN:VEVENT') e = {}; else if (l === 'END:VEVENT') { if (e?.start) out.push(e); e = null; }
@@ -343,7 +348,7 @@ export function robotsAllowed(txt, path) {
   return !best || best[0] === 'allow';
 }
 /** Zeilen → Einträge wie data/ereignisse.json (art veranstaltung, Gemeinde des Orts) für Orte ab modelMinCap, im Fenster [now − pastDays, now + aheadDays] */
-export function venueEntries(rows, venues, { now, pastDays = SPORT.pastDays, aheadDays = 3, beforeMin = VENUES.beforeMin, afterMin = VENUES.afterMin, minCap = VENUES.modelMinCap } = {}) {
+export function venueEntries(rows, venues, { now = undefined, pastDays = SPORT.pastDays, aheadDays = 3, beforeMin = VENUES.beforeMin, afterMin = VENUES.afterMin, minCap = VENUES.modelMinCap } = {}) {
   const V = new Map((venues || []).map(v => [v.id, v])), out = [];
   for (const [id, name, t, vid, kind, , url, allDay] of rows || []) {
     const v = V.get(vid); if (!v?.ags || v.cap < minCap || !(t >= now - pastDays * 86400e3 && t <= now + aheadDays * 86400e3)) continue;
@@ -395,7 +400,7 @@ export function eventList({ sport = null, venues = null, curated = [], now = Dat
   }
   // gleiche Veranstaltung aus zwei Quellen (Liste und Programmseite): Liste gewinnt, wenn Gemeinde, Tag und Name übereinstimmen
   const key = (e) => `${e.ags[0] || ''}|${e.von.slice(0, 10)}|${norm(e.titel).replace(/[^a-z0-9]/g, '').slice(0, 12)}`, seen = new Set(out.filter(e => e.src === 'liste').map(key));
-  const res = out.filter(e => e.src === 'liste' || !seen.has(key(e))).sort((a, b) => a.beginn - b.beginn || a.titel.localeCompare(b.titel));
+  const res = /** @type {any[]} */ (out).filter(e => e.src === 'liste' || !seen.has(key(e))).sort((a, b) => a.beginn - b.beginn || a.titel.localeCompare(b.titel));
   for (const e of res) e.endMs = localMs(e.bis); // einmal je Eintrag statt bei jedem Filter (Audit OPS-03)
   return res;
 }

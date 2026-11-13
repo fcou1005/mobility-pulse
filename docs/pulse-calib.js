@@ -1,3 +1,4 @@
+// @ts-check
 // Mobility Pulse — Kalibrierung an öffentlichen Referenzwerten (data/reference.json). Reine Funktionen für Browser und Node.
 // Regeln (auch im Methodentext und im Panel „Kalibrierung“):
 //  1. Ø Fahrtdauer/-strecke E-Scooter = Mittel der Berliner Quartalswerte (reference.fahrt, Berlin, Quartale). Gemessene Dauer
@@ -13,9 +14,9 @@
 //     bis zur Plausibilitätsgrenze (rvdLimits), gekennzeichnet (capped).
 //  3. Abdeckung = eigene E-Scooter ÷ amtliche Flotte (Stand und Art der Zahl laut Quelle).
 //  4. Plausibilität ohne Faktor: Frankfurt (Jahresfahrten ÷ Tage ÷ Obergrenze = Untergrenze), Düsseldorf (SMM-CPI, alle Arten), Europa, Voi Konzern.
-import { DEFAULT_RIDE, bootstrapDays, dayType } from './pulse-econ.js?v=mwf6frp1';
-import { capLimit, SUSPENDED, hourQuality, municipalReport, cityRanking, docRule } from './pulse-report.js?v=mwf6frp1';
-import { PERIODIC_RATE } from './pulse-track.js?v=mwf6frp1';
+import { DEFAULT_RIDE, bootstrapDays, dayType } from './pulse-econ.js?v=mwf6w7ds';
+import { capLimit, SUSPENDED, hourQuality, municipalReport, cityRanking, docRule } from './pulse-report.js?v=mwf6w7ds';
+import { PERIODIC_RATE } from './pulse-track.js?v=mwf6w7ds';
 export { SUSPENDED };
 
 export const BERLIN = '11000000';

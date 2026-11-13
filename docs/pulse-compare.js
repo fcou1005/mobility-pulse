@@ -1,9 +1,10 @@
+// @ts-check
 // Mobility Pulse — Anbieter-Vergleich in einer Gemeinde: Bestand, Zustand, Stationen/Spots, belegte Zellen, einzigartig gegen geteilt.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: ops/<Land>.json, dekodiert mit pulse-ops.js decodeFleet
 // ({ vehicles: [{ lat, lon, operator, type, reserved, disabled, battery, rangeKm, idleMin, ags }], stations: [{ lat, lon, operator, name, bookable, docks, capacity, ags, physical, virtual }] }).
 // physical ist der physische Bestand an der Station (physicalAvailable, Fahrzeuge), kein Merkmal der Station; virtuell/physisch: isVirtualStation.
-import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mwf6frp1';
-import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mwf6frp1';
+import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mwf6w7ds';
+import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mwf6w7ds';
 
 export const RADII = [25, 50, 100];          // Meter: Station gilt als geteilt, wenn eine Station eines anderen Anbieters so nah liegt
 export const DEFAULT_RADIUS = 50;
@@ -34,7 +35,7 @@ export function gridIndex(points, radiusM) {
     for (let a = i - 1; a <= i + 1; a++) for (let b = j - 1; b <= j + 1; b++) for (const q of g.get(key(a, b)) || []) { if (q === p || !pred(q)) continue; const d = distM(p, q); if (d <= radiusM) fn(q, d); } };
   return {
     near(p, pred) { let best = null; each(p, pred, (q, d) => { if (!best || d < best.d) best = { p: q, d }; }); return best; }, // nächster Punkt im Umkreis, der pred erfüllt → { p, d } | null
-    within(p, pred = () => true) { const out = []; each(p, pred, (q, d) => out.push({ p: q, d })); return out.sort((x, y) => x.d - y.d); }, // alle im Umkreis, nach Abstand
+    within(p, pred = (..._a) => true) { const out = []; each(p, pred, (q, d) => out.push({ p: q, d })); return out.sort((x, y) => x.d - y.d); }, // alle im Umkreis, nach Abstand
   };
 }
 
@@ -79,7 +80,7 @@ export function matchQuota(stations, quota, ags) {
  * Fläche und Dichte, Anteil der Fahrzeuge mit einem Fahrzeug eines anderen Anbieters im Umkreis.
  * overlap[A][B] = Anteil der Zellen von A, in denen auch B steht. stations: alle Stationen mit unique und nächster fremder Station.
  */
-export function compareOperators(fleet, { ags, type = 'all', radiusM = DEFAULT_RADIUS, quota = null } = {}) {
+export function compareOperators(fleet, { ags = undefined, type = 'all', radiusM = DEFAULT_RADIUS, quota = null } = {}) {
   const veh = (fleet?.vehicles || []).filter(v => v.ags === ags && Number.isFinite(v.lat) && Number.isFinite(v.lon) && (type === 'all' || v.type === type));
   // Stationen: Fahrzeugart nur über den Anbieter eingrenzbar (Stationen tragen keine Art) → Anbieter mit Fahrzeugen dieser Art
   const typeOps = type === 'all' ? null : new Set(veh.map(v => v.operator));

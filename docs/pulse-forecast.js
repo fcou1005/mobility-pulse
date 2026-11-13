@@ -1,3 +1,4 @@
+// @ts-check
 // Prognose-Engine (Fahrtbeginne je Anbieter × Gemeinde × Art und Stunde): ein Modell über ALLE Gruppen, das sich täglich selbst prüft.
 //
 // Idee: Jede Gruppe (Gemeinde|Anbieter|Art) liefert je Stunde Starts y und Fahrzeugstunden e (Summe der Fahrzeugminuten ÷ 60). Gepoolt gilt
@@ -11,10 +12,10 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mwf6frp1';
-import { hourOf, dayOf } from './pulse-track.js?v=mwf6frp1';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwf6frp1';
-import { familyOf, FAMILIES } from './pulse-core.js?v=mwf6frp1';
+import * as E from './pulse-econ.js?v=mwf6w7ds';
+import { hourOf, dayOf } from './pulse-track.js?v=mwf6w7ds';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwf6w7ds';
+import { familyOf, FAMILIES } from './pulse-core.js?v=mwf6w7ds';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 // Je Fahrzeugfamilie ein eigenes Modell (seit 08.11.2026): micro (E-Scooter, Räder, Lastenräder, Sonstige) wie bisher in forecast/, E-Roller in
@@ -114,7 +115,7 @@ export const classOf = (dt) => CLS[dt] ?? 0;
  * Zeilen aufbauen. days: [{ day, cls (Funktion ags → 0..3), era (ganze Zahl ≥ 0, Regelstand-Folge), complete, hourMin[24], groups: { 'ags|op|ty': { start[24], vmin[24] } } }]
  * wx(ags, day, h) → [kalt, warm, Regen] | null. Rückgabe: Spaltenfelder für schnelle Schleifen.
  */
-export function buildRows(days, wx = () => null, { hourMin = GATES.hourMinObserved, ctx = null } = {}) {
+export function buildRows(days, wx = (..._a) => null, { hourMin = GATES.hourMinObserved, ctx = null } = {}) {
   const keys = [], keyIx = new Map(), cols = { y: [], e: [], g: [], hr: [], cl: [], era: [], w: Array.from({ length: NW }, () => []), hasW: [], day: [] }, cc = CTX_KEYS.map(() => []);
   days.forEach((d, di) => {
     for (const [k, g] of Object.entries(d.groups || {})) {
@@ -761,7 +762,7 @@ export function predictBaseline(R, days, before, F, sel, kind, dayOfRow) {
  * Alle gewünschten Modelle auf denselben Zukunftszeilen (Plan, Live-Prognose, Schattenprognosen): want = Set der Modellnamen (MODELS, 'naive', 'week').
  * envFit = Umgebung für das gepoolte Modell mit Umgebung (auch Basis von adaptive/hybrid), before = Index des Zieltags für Hybrid und Vergleichswerte.
  */
-export function predictAll(R, days, before, trainSel, F, sel, want, { envFit = {}, fb = null, dayOfRow = () => null, chronosOf = null, fbC = null } = {}) {
+export function predictAll(R, days, before, trainSel, F, sel, want, { envFit = {}, fb = null, dayOfRow = (..._a) => null, chronosOf = null, fbC = null } = {}) {
   const out = new Map(); let phiQ = 1, phiP = 1, muPn = null, muQ = null, mQ = null, mP = null;
   const profN = () => (muPn ??= predictProfile(R, trainSel, sel, F, NaN));
   const envQ = () => { if (!muQ) { const m = fitPooled(R, trainSel, envFit); mQ = m; phiQ = m.phi; muQ = predictPooled(m, F, sel); } return muQ; };
@@ -894,7 +895,7 @@ export function wxLookup(docs) {
   };
 }
 /** Zukunftszeilen (gleiche Gruppenindizes wie R): expo(key, h) liefert erwartete Fahrzeugstunden, fut = [{ day, h, era: 0 }] */
-export function buildFuture(R, fut, expo, wx = () => null, ctx = null) {
+export function buildFuture(R, fut, expo, wx = (..._a) => null, ctx = null) {
   const cols = { y: [], e: [], g: [], hr: [], cl: [], era: [], w: Array.from({ length: NW }, () => []), hasW: [], fh: [] }, cc = CTX_KEYS.map(() => []);
   R.keys.forEach((key, gi) => {
     const ags = key.split('|')[0];
@@ -1171,7 +1172,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   const useWx = usesEnv && env.weather, envFit = env.on ? { weather: env.weather, ctx: env.ctx, prior } : {};
   const incSum = { days: incidents.filter(d => d?.ags).length, warnAt: incidents.map(d => d?.sources?.warn?.at).filter(Boolean).sort().at(-1) ?? null, roadAt: incidents.map(d => d?.sources?.road?.at).filter(Boolean).sort().at(-1) ?? null, curated: curated.length,
     upcoming: curated.filter(e => String(e.bis ?? e.von).slice(0, 10) >= today).slice(0, 10).map(e => ({ art: e.art, von: e.von, bis: e.bis ?? e.von, gebiet: e.gebiet, titel: e.titel ?? null, quelle: e.quelle })) };
-  const support = Object.fromEntries(CTX_KEYS.map((k, j) => { let n = 0; const ds = new Set(); for (const i of all) if (R.c[j][i]) { n++; ds.add(R.day[i]); } return [k, { rows: n, days: ds.size, memRows: Math.round(prior?.n?.[3 + j] || 0), memDays: +(prior?.dk?.[3 + j] || 0).toFixed(1) }]; }));
+  const support = Object.fromEntries(CTX_KEYS.map(/** @returns {[string, any]} */ (k, j) => { let n = 0; const ds = new Set(); for (const i of all) if (R.c[j][i]) { n++; ds.add(R.day[i]); } return [k, { rows: n, days: ds.size, memRows: Math.round(prior?.n?.[3 + j] || 0), memDays: +(prior?.dk?.[3 + j] || 0).toFixed(1) }]; }));
   // zurückgehaltene Einträge (Lernphase: Veranstaltungen, Sport, Volksfeste erst ab pendingFrom): nur zählen, wie viele Gemeinde-Stunden sie
   // im Training kennzeichnen würden – fließt nicht ins Modell, zeigt im Dashboard „erfasst, wirkt ab …“
   if (pending?.length) {
@@ -1179,7 +1180,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     for (const i of all) { const x = pc(agsOf[R.g[i]], days[R.day[i]].day, R.hr[i]); for (let j = 0; j < NCTX; j++) if (x[j]) { pn[j]++; pd[j].add(R.day[i]); } }
     CTX_KEYS.forEach((k, j) => { if (pn[j]) support[k].pending = { rows: pn[j], days: pd[j].size }; });
   }
-  const out = { version: FORECAST_VERSION, generatedAt: new Date(now).toISOString(), status: trainDays < GATES.minTrainDays ? 'insufficient' : choice.status, active: trainDays < GATES.minTrainDays ? null : (choice.active === 'pooledWx' && !env.on ? 'pooled' : choice.active), reason: choice.reason, scores: choice.scores, evalDays: choice.evalDays, trainDays,
+  /** @type {any} */ const out = { version: FORECAST_VERSION, generatedAt: new Date(now).toISOString(), status: trainDays < GATES.minTrainDays ? 'insufficient' : choice.status, active: trainDays < GATES.minTrainDays ? null : (choice.active === 'pooledWx' && !env.on ? 'pooled' : choice.active), reason: choice.reason, scores: choice.scores, evalDays: choice.evalDays, trainDays,
     volume: volume == null ? null : Math.round(volume), ...(small ? { minVolume: MIN_VOLUME[family] } : {}),
     excluded: exclude?.size || 0, gates: { ...GATES }, weather: { gate, used: useWx, source: weather.length ? weather[0].source ?? null : null },
     env: { keys: CTX_KEYS, ready: env.ctx.map(k => CTX_KEYS[k]), active: usesEnv ? env.ctx.map(k => CTX_KEYS[k]) : [], support, sources: incSum, ...(pending?.length && pendingFrom ? { pendingFrom } : {}) }, memory: null,
@@ -1245,7 +1246,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   } else log.history.push({ at: out.generatedAt, active: null, status: out.status, reason: out.status === 'small' ? out.reason : `${trainDays} Tage Daten – zu wenig` });
   log.history = log.history.slice(-60);
   out.memory = memorySummary(mem, today, out.phi ?? 1);
-  out.live = Object.entries(log.live).sort((a, b) => a[0] - b[0]).slice(-12).map(([at, v]) => ({ at: +at, ...v }));
+  out.live = Object.entries(log.live).sort((a, b) => +a[0] - +b[0]).slice(-12).map(([at, v]) => ({ at: +at, ...v }));
   // Stundenreihen für das Dashboard: Plan heute (und für noch nicht gespeicherte, abgeschlossene Tage), Ist, Live-Prognose bis Ende morgen
   const plans = new Map(), has = (d) => Object.values(prevSeries?.version === 1 ? prevSeries.days?.[d] || {} : {}).some(x => x.p), keepFrom = dayOf(now - (SERIES_KEEP_DAYS - 1) * 86400e3);
   if (trainDays >= GATES.minTrainDays) {

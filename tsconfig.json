@@ -1,0 +1,39 @@
+{
+  "//": "Typprüfung ohne Build (S3.3): JavaScript mit JSDoc, nicht strict. lib/ muss fehlerfrei bleiben, web/ und scripts/ dürfen nur weniger Fehler bekommen (scripts/typecheck.mjs, Stand in typecheck-baseline.json).",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "target": "es2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "es2023",
+      "dom",
+      "dom.iterable"
+    ],
+    "types": [
+      "leaflet",
+      "node"
+    ],
+    "allowUmdGlobalAccess": true,
+    "skipLibCheck": true,
+    "rootDirs": [
+      "web",
+      "lib"
+    ]
+  },
+  "include": [
+    "lib/*.js",
+    "web/*.js",
+    "scripts/*.mjs",
+    "test/*.mjs"
+  ],
+  "exclude": [
+    "docs",
+    "node_modules",
+    "test/out",
+    "test/fixtures/web-data"
+  ]
+}

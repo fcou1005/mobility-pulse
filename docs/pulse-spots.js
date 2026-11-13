@@ -1,10 +1,11 @@
+// @ts-check
 // Mobility Pulse — Spot-Abgleich: Park- und Abstellflächen aus den offenen Feeds (GBFS station_information, meist virtuelle
 // Stationen) je Anbieter gegeneinander, aus Sicht eines eigenen Anbieters: was bei mir fehlt, was nur ich habe, was gepflegt werden muss.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlagen: ops/<Land>.json (decodeFleet), stations-quota.json (Leerquote bis 7 Tage),
 // optional das Nachfragemodell aus cells/<Tag>/<Land>.json (buildDemandModel) und die GBFS-Zonen des eigenen Anbieters (zones/*.json).
-import { RADII, DEFAULT_RADIUS, distM, gridIndex, compareOperators } from './pulse-compare.js?v=mwf6frp1';
-import { cellOf, csvCell, needOf, operatorShare, geomContains, isAvailable, DEFAULTS, GROUP_MIN } from './pulse-ops.js?v=mwf6frp1';
-import { STATION_NEAR_M } from './pulse-core.js?v=mwf6frp1';
+import { RADII, DEFAULT_RADIUS, distM, gridIndex, compareOperators } from './pulse-compare.js?v=mwf6w7ds';
+import { cellOf, csvCell, needOf, operatorShare, geomContains, isAvailable, DEFAULTS, GROUP_MIN } from './pulse-ops.js?v=mwf6w7ds';
+import { STATION_NEAR_M } from './pulse-core.js?v=mwf6w7ds';
 
 export { RADII, DEFAULT_RADIUS, STATION_NEAR_M };
 export const DUP_M = 25;          // eigene Spots näher als 25 m = Dublette
@@ -47,7 +48,7 @@ export function quotaRows(doc, ags) {
  * sonst nächste ≤ 5 m; jede Quote-Zeile höchstens einmal). virtuell laut Quote (is_virtual_station), sonst: ohne freie Plätze (Docks) = virtuell.
  * kind 'virtual' = nur virtuelle Stationen (Abstellflächen), 'all' = alle.
  */
-export function spotsOf(fleet, { ags, quota = null, kind = 'virtual' } = {}) {
+export function spotsOf(fleet, { ags = undefined, quota = null, kind = 'virtual' } = {}) {
   const q = quota ? quotaRows(quota, ags) : [];
   const qIdx = gridIndex(q, QUOTA_MATCH_M), used = new Set();
   const all = (fleet?.stations || []).filter(s => s.ags === ags && s.operator && Number.isFinite(s.lat) && Number.isFinite(s.lon)).map((s, i) => {
@@ -126,7 +127,7 @@ const pick = (s) => ({ id: s.id, operator: s.operator, name: s.name, label: s.la
  * onlyMine („Nur bei mir“): eigene Spots ohne fremden im Umkreis. care („Pflegebedarf“): Durchfahrt verboten (eigene Zone), Dublette, dauerhaft leer.
  * Jeder Eintrag trägt export = { deploymentStatus, parkingStatus, deploymentVehicles } für die Backend-CSV.
  */
-export function analyzeSpots(fleet, { ags, own = null, family = 'auto', radiusM = DEFAULT_RADIUS, kind = 'virtual', quota = null, demand = null, zones = null, dupM = DUP_M, emptyShare = EMPTY_SHARE, minRuns = MIN_RUNS } = {}) {
+export function analyzeSpots(fleet, { ags = undefined, own = null, family = 'auto', radiusM = DEFAULT_RADIUS, kind = 'virtual', quota = null, demand = null, zones = null, dupM = DUP_M, emptyShare = EMPTY_SHARE, minRuns = MIN_RUNS } = {}) {
   const OF = operatorFamilies(fleet, ags), famOps = new Map(); for (const [op, f] of OF.fam) famOps.set(f, (famOps.get(f) || 0) + [...(OF.n.get(op)?.values() || [])].reduce((a, b) => a + b, 0));
   if (family === 'auto') family = (own && OF.fam.get(own)) || (famOps.has('scooter') ? 'scooter' : [...famOps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]) || 'all';
   if (family !== 'all' && !FAMILIES.includes(family)) family = 'all';
@@ -190,7 +191,7 @@ export function analyzeSpots(fleet, { ags, own = null, family = 'auto', radiusM 
     put(best);
   }
   const ownVehNoSpot = (p) => vIdx.within(p, v => v.operator === own && !atOwnSpot(v)).length;
-  const missing = places.map(pl => {
+  const missing = places.map(/** @returns {any} */ (pl) => {
     const members = pl.members.slice().sort((a, b) => a.operator.localeCompare(b.operator, 'de') || a.id - b.id);
     const byOp = new Map(); for (const m of members) byOp.set(m.operator, (byOp.get(m.operator) || 0) + 1);
     const ops = [...byOp.keys()].sort((a, b) => byOp.get(b) - byOp.get(a) || a.localeCompare(b, 'de'));
@@ -198,7 +199,7 @@ export function analyzeSpots(fleet, { ags, own = null, family = 'auto', radiusM 
     const p = { lat: pl.lat, lon: pl.lon }, dem = demandAt(D, p), vehN = ownVehNoSpot(p), near = nearestAny(p, ownSpots);
     const qk = members.filter(m => m.runs >= minRuns), otherEmpty = qk.length ? qk.reduce((x, m) => x + m.emptyShare, 0) / qk.length : null;
     const score = D ? 2 * (dem?.factor ?? 0) + Math.min(1, vehN / GROUP_MIN) : ops.length + Math.min(1, vehN / GROUP_MIN); // A18: Nachfrage vor Anbieterzahl
-    const reasons = [{ k: 'ops', ops, n: members.length, spread: Math.round(spread) }];
+    /** @type {any[]} */ const reasons = [{ k: 'ops', ops, n: members.length, spread: Math.round(spread) }];
     if (dem) reasons.push(dem.startsPerHour > 0 ? { k: 'demand', v: dem.startsPerHour, pct: dem.pct } : { k: 'noDemand' });
     if (vehN) reasons.push({ k: 'veh', n: vehN });
     if (otherEmpty != null && otherEmpty >= emptyShare) reasons.push({ k: 'otherEmpty', share: otherEmpty });
@@ -223,7 +224,7 @@ export function analyzeSpots(fleet, { ags, own = null, family = 'auto', radiusM 
   const Z = zones ? zoneClasses(zones, own) : null;
   const dupOf = new Map(dupsByOp.get(own)?.map(d => [d.spot, d]) || []);
   let inNoFree = 0;
-  const care = [];
+  /** @type {any[]} */ const care = [];
   for (const s of ownSpots) {
     const issues = [];
     const z = Z ? hit(Z.noThrough, s) : null;
@@ -265,7 +266,7 @@ export const RATE = { classA: 0.5, classB: 0.2, linkM: 60 };
  * Bestand an physischen Stationen). Fehlbestand = max(0, Soll − Ist). Wichtigkeit = Erwartung ÷ größte Erwartung der Liste (ohne Prognose: Fahrtbeginne/h).
  * Klassen: A ≥ 50 %, B ≥ 20 %, C darunter, D = ohne gemessene Nachfrage am Ort.
  */
-export function rateSpots(fleet, { ags, op, demand = null, groups = null, quota = null, fc = null, horizonH = DEFAULTS.horizonH, radiusM = DEFAULTS.spotRadiusM, type = 'all' } = {}) {
+export function rateSpots(fleet, { ags = undefined, op = undefined, demand = null, groups = null, quota = null, fc = null, horizonH = DEFAULTS.horizonH, radiusM = DEFAULTS.spotRadiusM, type = 'all' } = {}) {
   const D = demand && demand.hours > 0 && demand.cells?.size ? demand : null;
   const share = operatorShare(fleet, ags, op);
   const veh = (fleet?.vehicles || []).filter(v => v.ags === ags && v.operator === op && isAvailable(v) && (type === 'all' || v.type === type));
@@ -274,7 +275,7 @@ export function rateSpots(fleet, { ags, op, demand = null, groups = null, quota 
   const sumRate = rates.reduce((a, b) => a + b, 0);
   const day24 = Array.isArray(fc?.day24) ? fc.day24 : null, fcDay = day24 ? day24.reduce((a, b) => a + b, 0) : null, fcH = day24 ? day24.slice(0, horizonH).reduce((a, b) => a + b, 0) : null;
   // Orte zusammenführen
-  const items = [];
+  /** @type {any[]} */ const items = [];
   for (const g of (groups?.deploy || []).filter(g => g.op === op)) items.push({ kind: 'deploy', lat: g.lat, lon: g.lon, label: '', deploy: { count: g.count, vehicles: g.vehicles, avg: g.avg, last: g.last, first: g.first, rank: g.rank } });
   const parks = spotsOf(fleet, { ags, quota, kind: 'all' }).filter(x => x.operator === op);
   for (const x of parks) {
@@ -318,7 +319,7 @@ export function spotsBackendCsv(items, { name = 'Spot' } = {}) {
   return [SPOTS_CSV_FIELDS, ...rows].map(r => r.map(c => csvCell(c, ',')).join(',')).join('\n');
 }
 /** GeoJSON (Punkte, WGS84); reason(x) liefert die Begründung als Text der Oberfläche */
-export function spotsGeoJson(items, { list, own, radiusM, at, reason = () => '' } = {}) {
+export function spotsGeoJson(items, { list = undefined, own = undefined, radiusM = undefined, at = undefined, reason = (..._a) => '' } = {}) {
   return {
     type: 'FeatureCollection', name: `spots-${list}`,
     meta: { list, own, radiusM, at: at ? new Date(at).toISOString() : null, source: 'GBFS station_information (laut Feed), Momentaufnahme; Leerquote stations-quota.json' },

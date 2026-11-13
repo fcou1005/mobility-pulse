@@ -31,6 +31,21 @@ jobs:
       - name: Testdateien (ohne Netz; Fixture-Test auf Port 8765)
         run: npm run test:all
 
+  types:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Typprüfung (lib/ fehlerfrei, sonst nicht mehr Fehler als in typecheck-baseline.json)
+        run: |
+          npm ci --no-audit --no-fund
+          node scripts/typecheck.mjs
+
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
