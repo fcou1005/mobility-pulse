@@ -38,7 +38,7 @@ const BAD_TEXT = /nicht ladbar|konnte nicht geladen|Fehler beim Laden/i;
 const missing = new Set(); // Dateien, die die Seite anfragt und das Fixture nicht hat (Hinweis; optionale Dateien wie incidents/<heute> fehlen erlaubt)
 // S3.8 Byte-Budget je Ansicht: Daten (gzip, wie Pages ausliefert), die eine frisch geöffnete Ansicht aus dem Datenstand lädt. Grenzen auf dem
 // Fixture (2 Gemeinden, 3 Tage) mit etwa 15 % Luft – wächst eine Ansicht darüber, lädt sie mehr Dateien oder größere als bisher.
-const BYTE_BUDGET_KB = { live: 145, ops: 240, bericht: 245, prognose: 220, sources: 140, usage: 140, staedte: 95 };
+const BYTE_BUDGET_KB = { live: 145, ops: 190, bericht: 245, prognose: 220, sources: 140, usage: 140, staedte: 95 };
 let byteView = null; const viewBytes = {};
 const bytes = { add: (u, n) => { if (byteView && u.startsWith('/d/')) { const v = (viewBytes[byteView] ||= {}); v[u.slice(3)] = (v[u.slice(3)] || 0) + n; } } };
 const server = await startFixtureServer(PORT, { missing, bytes });
@@ -88,6 +88,20 @@ try {
     const top = files.slice(0, 4).map(([f, n]) => `${f} ${(n / 1024).toFixed(0)}`).join(', ');
     if (lim && kb > lim) fail(`Datenmenge ${v}: ${kb.toFixed(0)} KB gzip über Budget ${lim} KB (${top})`);
     else console.log(`✓ Datenmenge ${v.padEnd(9)} ${kb.toFixed(0).padStart(4)} KB gzip${lim ? ` (Budget ${lim} KB)` : ' (ohne Budget)'} · ${top}`);
+  }
+  // S3.8 Rest: Start in der Disposition mit latest-core.json – gleicher Text wie ohne latest-core.json (älterer Datenstand: Start mit latest.json),
+  // auch nach dem Wechsel in Ansichten, die latest.json nachladen
+  if (!ONLY) {
+    const seq = ['ops', 'live', 'sources', 'staedte'], got = {};
+    for (const [tag, missing] of /** @type {Array<[string, string[]]>} */ ([['voll', ['latest-core.json']], ['lite', []]])) {
+      byteView = tag;
+      const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1440, height: 900 }, hash: 'ops', missing });
+      got[tag] = {}; for (const v of seq) { if (v !== 'ops') await page.evaluate((x) => { location.hash = x; }, v); got[tag][v] = createHash('sha1').update(mask(await settledText(page, v))).digest('hex').slice(0, 10); }
+      await close(); byteView = null; if (errs.length) fail(`Start in der Disposition (${tag}): Skriptfehler ${errs.slice(0, 3).join('; ')}`);
+    }
+    const files = Object.keys(viewBytes.lite || {}), diff = seq.filter(v => got.lite[v] !== got.voll[v]);
+    if (diff.length || !files.includes('latest-core.json') || !files.includes('latest.json')) fail(`Start in der Disposition: ${diff.length ? `anders als mit latest.json: ${diff.join(', ')}` : ''}${files.includes('latest-core.json') ? '' : ' latest-core.json nicht geladen'}${files.includes('latest.json') ? '' : ' latest.json beim Wechsel nicht nachgeladen'}`);
+    else console.log(`✓ Start in der Disposition mit latest-core.json: ${seq.join(', ')} gleich wie mit latest.json, latest.json erst beim Wechsel`);
   }
   // S3.7: passt die MAJOR-Version einer Datei nicht zur Seite, erscheint ein Hinweis (hier status.json mit 9.0)
   if (!ONLY) {

@@ -2,8 +2,8 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/latest.schema.json",
  "title": "latest.json – Bestand des letzten Laufs",
- "description": "Quellen mit Status und Lizenz, Gemeinden, Gruppen je Gemeinde|Anbieter|Art, Summen und Messbasis.",
- "x-version": "1.0",
+ "description": "Quellen mit Status und Lizenz, Gemeinden, Gruppen je Gemeinde|Anbieter|Art, Summen und Messbasis. latest-core.json (S3.8 Rest): gleiche Datei mit Quellen nur aus den Kernfeldern und leeren groups (lite nennt sie), Start der Disposition.",
+ "x-version": "1.1",
  "type": "object",
  "required": [
   "schemaVersion",
@@ -204,6 +204,21 @@
   },
   "presence": {
    "type": "object"
+  },
+  "lite": {
+   "type": "object",
+   "description": "nur latest-core.json: sourceFields = enthaltene Felder je Quelle, groups = false (leer)",
+   "properties": {
+    "sourceFields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "groups": {
+     "type": "boolean"
+    }
+   }
   }
  }
 }

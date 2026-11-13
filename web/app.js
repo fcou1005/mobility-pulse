@@ -2,7 +2,7 @@
 import * as C from './pulse-core.js';
 import { t, lang, setLang, onLang, applyStatic } from './i18n.js';
 import { $, $$, CFG, DEMO, DIRS, QS, STATUS, TYPE, esc, fmt, gl, isClient, state } from './app-core.js';
-import { REQ, cached, clearNotice, fresh, getJson, latestUrl, loadBase, notice, resetCache, resetDaily } from './app-load.js';
+import { LITE_VIEWS, REQ, cached, clearNotice, fresh, getJson, loadBase, loadLatest, notice, resetCache, resetDaily } from './app-load.js';
 import { muniInfo, muniName, operatorRows, scopeLabel } from './app-scope.js';
 import { autoLive, liveFetch, setPendingLive } from './app-live.js';
 import { FILTERS, M, VIEWS, applyUrlParams, bindGlossTips, bindTableCsv, copyLink, currentView, dataReady, dirty, markDirty, opsFleet, placeSeg, renderAll, safe, setClient, setView, syncUrl, urlReady } from './app-router.js';
@@ -287,7 +287,7 @@ export async function init() {
   // Platzhalter-Kacheln in der späteren Anzahl: die Seite springt nicht, wenn die Zahlen kommen (CLS)
   for (const [id, n] of [['#live-tiles', 5], ['#lab-tiles', 4], ['#usage-tiles', 5], ['#econ-tiles', 5], ['#cov-tiles', isClient() ? 3 : 4], ['#src-tiles', 4]]) { const el = $(id); if (el && !el.children.length) el.innerHTML = '<div class="tile skel" aria-hidden="true"><div class="l">&nbsp;</div><div class="v">–</div><div class="s">&nbsp;</div></div>'.repeat(n); }
   setView(location.hash.slice(1) || 'live');
-  await loadBase();
+  await loadBase(currentView);
   populateScope();
   const deep = applyUrlParams(); // Deep-Link: Gebiet, Anbieter, Fahrzeugart aus der URL
   bindTableCsv(); bindGlossTips(); renderAll(); syncUrl();
@@ -296,7 +296,7 @@ export async function init() {
   // Sammler-Stand alle 2 Min. prüfen; bei neuem Lauf alles neu laden (Ereignis-, Zonen- und Flottendateien inklusive)
   setInterval(async () => {
     const s = await getJson(fresh('status.json')); if (!s.ok || s.json.at === state.status?.at) return;
-    const l = await getJson(latestUrl(s.json)); if (!l.ok) return;
+    const l = await loadLatest(s.json, !!state.latest?.lite && LITE_VIEWS.has(currentView)); if (!l.ok) return; // weiter mit dem Kern, solange nur die Disposition offen war
     state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.docsSt = {}; state.usage.hourTotals = null; state.usage.opsInputIndex = null; state.usage.opsFleetIndex = null; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = [...REQ].filter(([k]) => k.startsWith('boundaries')); resetCache(); if (state.bIndex) for (const [k, p] of keepB) REQ.set(k, p); // Grenzen ändern sich nicht je Lauf

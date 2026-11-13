@@ -4,7 +4,7 @@ import * as K from './pulse-calib.js';
 import * as UI from './ui-shared.js';
 import * as R from './pulse-report.js';
 import { t, tx, lang, dateFmt } from './i18n.js';
-import { totalsDoc } from './pulse-split.js';
+import { totalsDoc, usageDayCandidates } from './pulse-split.js';
 import { $, $$, GLOSS, QS, TYPE, abbr, dateTimeText, esc, flagText, fmt, isClient, opColor, palette, pctf, sig2, state, timeText } from './app-core.js';
 import { FC_dayOfNow, cached, emptyRow, failedText, loadDaily, loadHistory, setChips } from './app-load.js';
 import { muniName } from './app-scope.js';
@@ -33,7 +33,7 @@ export const durText = (ms) => ms == null || !Number.isFinite(ms) ? '—' : ms <
 export const runningDay = (days) => { const d = days[days.length - 1]; return d && state.latest?.at && BERLIN_DAY.format(state.latest.at) === d ? d : null; };
 export const partialHour = () => String(hourOf(state.latest.at)).padStart(2, '0'); // Ereignisse des laufenden Tages reichen bis zum Beginn dieser Stunde
 export async function defaultUsageDay(days, st = null) {
-  const run = runningDay(days), cand = days.slice(-7).filter(d => d !== run).reverse();
+  const cand = usageDayCandidates(days, runningDay(days)); // gleiche Regel wie der Sammler (scripts/gebiet.mjs, lib/pulse-split.js pickUsageDay)
   for (const d of cand) { const doc = st ? await loadEventsState(d, st) : await loadEvents(d); if (doc && R.hourQuality(doc.runs, doc.gapHours).full) return d; }
   return cand[0] || days[days.length - 1];
 }
@@ -172,10 +172,11 @@ export async function econProfile(day) {
 // Kennzahlen je Gruppe (Gemeinde|Anbieter|Art) eines Tages; Ergebnis je Schlüssel.
 // Je Gruppe: m = gemessen (Ø Fahrt aus der Kalibrierung: E-Scooter Berliner Quartalswerte, sonst Annahme), cal = × Faktor (pulse-calib factorFor:
 // eigene Korrektur übersteuert, sonst k für E-Scooter), lo/hi = Spanne des Faktors; die Gruppe selbst trägt die Werte des gewählten Modus.
-export async function econGroups(day, keep, st = null) {
+// src (Disposition, S3.8 Rest): Eingabe einer Gemeinde aus ops-input/area (econSource) statt Landes-, Tarif-, Tageswert- und Kalibrierungsdatei
+export async function econGroups(day, keep, st = null, src = null) {
   // Audit OPS-04: für abgeschlossene Tage reicht das Tagesmittel aus history/daily.json (Ø Bestand als Rückfall), statt je Tag history/<Tag>.json (3–5 MB)
-  const histDay = async (d) => { if (d < FC_dayOfNow()) { const dl = await loadDaily(); const h = dl ? R.histFromDaily(dl, d) : null; if (h) return h; } return loadHistory(d); };
-  const [doc, pricing, hist, prof, calib] = await Promise.all([st ? loadEventsState(day, st) : loadEvents(day), loadOnce('pricing', 'pricing.json'), histDay(day), econProfile(day), getCalib()]);
+  const histDay = async (d) => { if (d < FC_dayOfNow()) { const dl = src ? src.daily : await loadDaily(); const h = dl ? R.histFromDaily(dl, d) : null; if (h) return h; } return loadHistory(d); };
+  const [doc, pricing, hist, prof, calib] = await Promise.all([src ? src.events : st ? loadEventsState(day, st) : loadEvents(day), src ? null : loadOnce('pricing', 'pricing.json'), histDay(day), econProfile(day), src ? src.calib : getCalib()]);
   if (!doc) return null;
   // Fahrzeugminuten nur nutzen, wenn alle Läufe des Tages sie gezählt haben (Umstellungstag: Ø Bestand aus dem Verlauf)
   // Stunden ohne Messung oder mit Lücken-Lauf (> 45 Min. Pause, Flag 0) fallen aus Beobachtungszeit, Fahrten und Fahrzeugminuten: keine Hochrechnung aus Lücken
@@ -189,10 +190,10 @@ export async function econGroups(day, keep, st = null) {
   for (const [k, g] of Object.entries(doc.groups || {})) {
     if (!keep(k)) continue;
     const [ags, op, ty] = k.split('|');
-    const pk = `${op}|${ags}|${ty}`; if (!planCache.has(pk)) planCache.set(pk, E.planFor(pricing, op, ags, ty, assume?.[ty] || undefined));
+    const pk = `${op}|${ags}|${ty}`; if (!planCache.has(pk)) planCache.set(pk, src ? src.plans[`${op}|${ty}`] ?? null : E.planFor(pricing, op, ags, ty, assume?.[ty] || undefined));
     const pl = planCache.get(pk);
     const series = hist?.series?.[k]?.total?.filter(x => x != null) || [];
-    const fleetFallback = series.length ? series.reduce((a, b) => a + b, 0) / series.length : (state.latest?.groups?.[k]?.total ?? null);
+    const fleetFallback = series.length ? series.reduce((a, b) => a + b, 0) / series.length : ((src ? src.latestGroups : state.latest?.groups)?.[k]?.total ?? null);
     // Messung über der Plausibilitätsgrenze (Überzählung): nicht kalibrieren, nicht in Summen
     const chk = K.checkMeasured(E.kpis({ g: maskG(g), obsMin, obsMinV, profile: prof.profile, plan: pl?.plan || null, type: ty, fleetFallback, ride: o.rideMin ? { min: o.rideMin } : null, assume, realization: o.realization, net: o.net, hourMin: doc.hourMin || null }), ty, calib?.limits);
     const m = chk.kpi;
@@ -205,12 +206,23 @@ export async function econGroups(day, keep, st = null) {
   return { out, doc, obsMin, profile: prof, gapH: mask.gap.filter(Boolean).length, calib };
 }
 // für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter voller Tag wie die Vorauswahl der Nutzung, Werte des gewählten Modus)
-export async function econFor(ags, op, type) {
+export async function econFor(ags, op, type, area = null) {
   const idx = await loadUsageIndex(); if (!idx.days?.length) return null;
   const st = state.latest?.municipalities?.[ags]?.state || null; // S3.8: nur die Ereignisse des Landes der Gemeinde
-  const day = await defaultUsageDay(idx.days, st);
-  const r = await econGroups(day, (k) => { const [a, o, tq] = k.split('|'); return a === ags && o === op && (type === 'all' || tq === type); }, st);
+  const src = await econSource(area, idx.days); // S3.8 Rest: Vorauswahl-Tag und Eingabe vom Sammler (gleiche Regel), sonst wie bisher
+  const day = src ? src.day : await defaultUsageDay(idx.days, st);
+  const r = await econGroups(day, (k) => { const [a, o, tq] = k.split('|'); return a === ags && o === op && (type === 'all' || tq === type); }, st, src);
   return r ? E.combine([...r.out.values()]) : null;
+}
+// Umsatz-Eingabe einer Gemeinde (ops-input/area/<AGS>.json → econ, lib/pulse-split.js econSlice) mit dem gemeinsamen Teil der Kalibrierung
+// (ops-input/area/calib.json): nur gültig wie die vorab gerechnete Kalibrierung in report.js loadCalibration (höchstens 2 Std. vom Datenstand)
+// und mit Tarifen in der eingestellten Sprache; sonst null (dann die großen Dateien).
+export async function econSource(area, days) {
+  const e = area?.econ; if (!e?.events?.groups || !e.calib || !e.plans || !days.includes(e.day) || area.at !== state.latest?.at) return null;
+  const sh = await loadOnce('areaCalib', 'ops-input/area/calib.json', 25000), L = lang(), at = state.latest?.at || 0;
+  const c = sh?.version === 1 && sh.at === e.calib.at && (!at || Math.abs(at - sh.at) <= 2 * 3600e3) ? sh.langs?.[L] : null;
+  if (!c || !e.plans[L]) return null;
+  return { day: e.day, events: e.events, daily: e.daily, plans: e.plans[L], calib: { ...c, kinds: e.calib.kinds || {} }, latestGroups: e.latestGroups || {} };
 }
 // Kalibrierung: geteilt mit dem Bericht (report.js loadCalibration), Modus „kalibriert“ / „gemessen“ je Browser gemerkt
 export const getCalib = () => mod('rp').then(m => m.loadCalibration(rpCtx()));

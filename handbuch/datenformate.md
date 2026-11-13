@@ -8,12 +8,12 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | Familie | Version | Dateien |
 | --- | --- | --- |
 | [status](#status) | 2.0 | `status.json` |
-| [latest](#latest) | 1.0 | `latest.json` |
+| [latest](#latest) | 1.1 | `latest.json` |
 | [sources](#sources) | 1.0 | `sources.json` |
 | [history](#history) | 1.0 | `history/index.json`, `history/<Tag>.json` |
 | [events](#events) | 1.1 | `events/index.json`, `events/<Tag>.json`, `events/<Tag>/<Land>.json`, `events/hour-totals.json`, `events/daily-summary.json` |
 | [cells](#cells) | 1.0 | `cells/<Tag>/<Land>.json` |
-| [ops](#ops) | 1.2 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
+| [ops](#ops) | 1.3 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
@@ -40,9 +40,9 @@ Version 2.0 · Schema: [schemas/status.schema.json](../schemas/status.schema.jso
 
 ## latest
 
-latest.json – Bestand des letzten Laufs. Quellen mit Status und Lizenz, Gemeinden, Gruppen je Gemeinde|Anbieter|Art, Summen und Messbasis.
+latest.json – Bestand des letzten Laufs. Quellen mit Status und Lizenz, Gemeinden, Gruppen je Gemeinde|Anbieter|Art, Summen und Messbasis. latest-core.json (S3.8 Rest): gleiche Datei mit Quellen nur aus den Kernfeldern und leeren groups (lite nennt sie), Start der Disposition.
 
-Version 1.0 · Schema: [schemas/latest.schema.json](../schemas/latest.schema.json)
+Version 1.1 · Schema: [schemas/latest.schema.json](../schemas/latest.schema.json)
 
 | Feld | Pflicht | Typ |
 | --- | --- | --- |
@@ -59,6 +59,7 @@ Version 1.0 · Schema: [schemas/latest.schema.json](../schemas/latest.schema.jso
 | `totals` |  | object |
 | `measure` |  | object |
 | `presence` |  | object |
+| `lite` |  | object – nur latest-core.json: sourceFields = enthaltene Felder je Quelle, groups = false (leer) |
 
 ## sources
 
@@ -177,7 +178,7 @@ Version 1.0 · Schema: [schemas/cells.schema.json](../schemas/cells.schema.json)
 
 ops/&lt;Land&gt;.json – Bestand für die Disposition. ops/&lt;Land&gt;.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/&lt;AGS&gt;.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json. Ab 1.2 ops-input/fleet/&lt;AGS&gt;.json (Bestand einer Gemeinde im Format von $defs/state, Feld ags) und ops-input/fleet/index.json.
 
-Version 1.2 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
+Version 1.3 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 
 ### ops · state
 
@@ -217,6 +218,7 @@ Version 1.2 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 | `at` | ja | integer |
 | `cellDays` | ja | array von string (Muster `^\d{4}-\d{2}-\d{2}$`) |
 | `ags` | ja | array von string (Muster `^\d{8}$`) |
+| `compact` |  | integer – S3.8 Rest: Version von ops-input/cells/&lt;AGS&gt;.json, wenn die spaltenweise Datei für alle Gemeinden geschrieben ist |
 
 ### ops · fleetIndex
 
@@ -226,6 +228,62 @@ Version 1.2 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 | `version` | ja | integer |
 | `at` | ja | integer |
 | `ags` | ja | array von string (Muster `^\d{8}$`) |
+
+### ops · inputCompact
+
+ops-input/cells/&lt;AGS&gt;.json (S3.8 Rest): Zellen wie ops-input/&lt;AGS&gt;.json, je Tag spaltenweise (cols: Zellschlüssel x, y als Differenzen in Originalreihenfolge, v je Feld ohne drop), dazu die Start-Ziel-Ströme der Gemeinde für die Zellen-Tage.
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern |
+| `version` | ja | integer |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `state` | ja | string (Muster `^[A-Z]{2}$`) |
+| `bbox` |  | null oder array von number |
+| `cellDays` | ja | array von string (Muster `^\d{4}-\d{2}-\d{2}$`) |
+| `cells` | ja | array von object |
+| `flows` | ja | object |
+
+### ops · area
+
+ops-input/area/&lt;AGS&gt;.json (S3.8 Rest, je Lauf): Umsatz-Eingabe der Disposition (Vorauswahl-Tag, Ereignisse der Gemeinde, Tageswerte, Tarife je Anbieter|Art und Sprache vorab, kinds der Kalibrierung, Ersatz-Bestand), Gruppen-Ereignisse der Gemeinde über alle Monate, Zonen-Dateien je Anbieter (path = Ausschnitt ops-input/zones/…, null = ganze Dateien unter zones/). zones null: Zonen-Verzeichnis unvollständig.
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern |
+| `version` | ja | integer |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `at` | ja | integer |
+| `zonesAt` |  | null oder integer |
+| `econ` |  | null oder object |
+| `groups` |  | null oder object |
+| `zones` |  | null oder object |
+| `parking` |  | null oder object – amtliche Abstellflächen und Abstellverbote der Gemeinde aus sources.json → parking_reference (null: Katalog fehlte) |
+
+### ops · areaCalib
+
+ops-input/area/calib.json (S3.8 Rest): gemeinsamer Teil der Kalibrierung für die Umsatz-Eingabe, je Sprache assume, limits, k (wie calib.json).
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern |
+| `version` | ja | integer |
+| `at` | ja | integer |
+| `langs` | ja | object |
+
+### ops · zoneSlice
+
+ops-input/zones/&lt;AGS&gt;/&lt;n&gt;.json (S3.8 Rest): Geofencing-Zonen eines Anbieters (GBFS, wie zones/&lt;Datei&gt;.json) für eine Gemeinde; Features außerhalb von cover (Rahmen ± 0,02° + 200 m) sind null, Index und Anzahl bleiben. full = ganze Datei laden.
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern |
+| `version` | ja | integer |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `operator` | ja | string |
+| `bbox` |  | array von number |
+| `cover` | ja | array von number |
+| `files` | ja | array von object |
 
 ## boundaries
 

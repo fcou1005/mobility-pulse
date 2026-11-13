@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/ops.schema.json",
  "title": "ops/<Land>.json – Bestand für die Disposition",
  "description": "ops/<Land>.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/<AGS>.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json. Ab 1.2 ops-input/fleet/<AGS>.json (Bestand einer Gemeinde im Format von $defs/state, Feld ags) und ops-input/fleet/index.json.",
- "x-version": "1.2",
+ "x-version": "1.3",
  "$defs": {
   "state": {
    "type": "object",
@@ -216,6 +216,10 @@
       "type": "string",
       "pattern": "^\\d{8}$"
      }
+    },
+    "compact": {
+     "type": "integer",
+     "description": "S3.8 Rest: Version von ops-input/cells/<AGS>.json, wenn die spaltenweise Datei für alle Gemeinden geschrieben ist"
     }
    }
   },
@@ -246,6 +250,490 @@
      "items": {
       "type": "string",
       "pattern": "^\\d{8}$"
+     }
+    }
+   }
+  },
+  "inputCompact": {
+   "type": "object",
+   "description": "ops-input/cells/<AGS>.json (S3.8 Rest): Zellen wie ops-input/<AGS>.json, je Tag spaltenweise (cols: Zellschlüssel x, y als Differenzen in Originalreihenfolge, v je Feld ohne drop), dazu die Start-Ziel-Ströme der Gemeinde für die Zellen-Tage.",
+   "required": [
+    "schemaVersion",
+    "version",
+    "ags",
+    "state",
+    "cellDays",
+    "cells",
+    "flows"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "state": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$"
+    },
+    "bbox": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "array",
+       "minItems": 4,
+       "maxItems": 4,
+       "items": {
+        "type": "number"
+       }
+      }
+     ]
+    },
+    "cellDays": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "cells": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "day"
+      ],
+      "properties": {
+       "day": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+       },
+       "cols": {
+        "type": "object",
+        "required": [
+         "ags",
+         "x",
+         "y",
+         "v"
+        ],
+        "properties": {
+         "ags": {
+          "type": "string",
+          "pattern": "^\\d{8}$"
+         },
+         "drop": {
+          "type": "array",
+          "items": {
+           "type": "integer"
+          },
+          "description": "Feldnummern, die fehlen (beim Auspacken null): 1 end, 2 present (Tagessummen)"
+         },
+         "x": {
+          "type": "array",
+          "items": {
+           "type": "integer"
+          }
+         },
+         "y": {
+          "type": "array",
+          "items": {
+           "type": "integer"
+          }
+         },
+         "v": {
+          "type": "array",
+          "items": {
+           "type": "array"
+          }
+         }
+        }
+       },
+       "munis": {
+        "type": "object"
+       },
+       "below": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    "flows": {
+     "type": "object",
+     "required": [
+      "days",
+      "docs"
+     ],
+     "properties": {
+      "indexed": {
+       "type": "boolean"
+      },
+      "days": {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+       },
+       "description": "veröffentlichte Ströme-Tage (flows/index.json)"
+      },
+      "docs": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "required": [
+         "day",
+         "munis",
+         "flows"
+        ],
+        "properties": {
+         "day": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+         },
+         "fields": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "munis": {
+          "type": "object"
+         },
+         "flows": {
+          "type": "array"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "area": {
+   "type": "object",
+   "description": "ops-input/area/<AGS>.json (S3.8 Rest, je Lauf): Umsatz-Eingabe der Disposition (Vorauswahl-Tag, Ereignisse der Gemeinde, Tageswerte, Tarife je Anbieter|Art und Sprache vorab, kinds der Kalibrierung, Ersatz-Bestand), Gruppen-Ereignisse der Gemeinde über alle Monate, Zonen-Dateien je Anbieter (path = Ausschnitt ops-input/zones/…, null = ganze Dateien unter zones/). zones null: Zonen-Verzeichnis unvollständig.",
+   "required": [
+    "schemaVersion",
+    "version",
+    "ags",
+    "at"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "at": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    },
+    "zonesAt": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "integer",
+       "minimum": 1500000000000.0,
+       "maximum": 4100000000000.0
+      }
+     ]
+    },
+    "econ": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "required": [
+        "day",
+        "events",
+        "calib",
+        "plans"
+       ],
+       "properties": {
+        "day": {
+         "type": "string",
+         "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "events": {
+         "type": "object",
+         "required": [
+          "groups"
+         ],
+         "properties": {
+          "groups": {
+           "type": "object"
+          },
+          "runs": {
+           "type": "array"
+          }
+         }
+        },
+        "daily": {
+         "anyOf": [
+          {
+           "type": "null"
+          },
+          {
+           "type": "object"
+          }
+         ]
+        },
+        "calib": {
+         "type": "object",
+         "required": [
+          "at",
+          "kinds"
+         ],
+         "properties": {
+          "at": {
+           "type": "integer"
+          },
+          "kinds": {
+           "type": "object"
+          }
+         }
+        },
+        "plans": {
+         "type": "object"
+        },
+        "pricingAt": {
+         "anyOf": [
+          {
+           "type": "null"
+          },
+          {
+           "type": "integer"
+          }
+         ]
+        },
+        "latestGroups": {
+         "type": "object"
+        }
+       }
+      }
+     ]
+    },
+    "groups": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "required": [
+        "months",
+        "fields",
+        "events"
+       ],
+       "properties": {
+        "months": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "fields": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "events": {
+         "type": "array"
+        }
+       }
+      }
+     ]
+    },
+    "zones": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "additionalProperties": {
+        "type": "object",
+        "required": [
+         "files"
+        ],
+        "properties": {
+         "path": {
+          "anyOf": [
+           {
+            "type": "null"
+           },
+           {
+            "type": "string"
+           }
+          ]
+         },
+         "files": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "required": [
+            "file"
+           ],
+           "properties": {
+            "file": {
+             "type": "string"
+            },
+            "at": {
+             "anyOf": [
+              {
+               "type": "null"
+              },
+              {
+               "type": "integer"
+              }
+             ]
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    "parking": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object"
+      }
+     ],
+     "description": "amtliche Abstellflächen und Abstellverbote der Gemeinde aus sources.json → parking_reference (null: Katalog fehlte)"
+    }
+   }
+  },
+  "areaCalib": {
+   "type": "object",
+   "description": "ops-input/area/calib.json (S3.8 Rest): gemeinsamer Teil der Kalibrierung für die Umsatz-Eingabe, je Sprache assume, limits, k (wie calib.json).",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "langs"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    },
+    "langs": {
+     "type": "object"
+    }
+   }
+  },
+  "zoneSlice": {
+   "type": "object",
+   "description": "ops-input/zones/<AGS>/<n>.json (S3.8 Rest): Geofencing-Zonen eines Anbieters (GBFS, wie zones/<Datei>.json) für eine Gemeinde; Features außerhalb von cover (Rahmen ± 0,02° + 200 m) sind null, Index und Anzahl bleiben. full = ganze Datei laden.",
+   "required": [
+    "schemaVersion",
+    "version",
+    "ags",
+    "operator",
+    "cover",
+    "files"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "operator": {
+     "type": "string"
+    },
+    "bbox": {
+     "type": "array",
+     "minItems": 4,
+     "maxItems": 4,
+     "items": {
+      "type": "number"
+     }
+    },
+    "cover": {
+     "type": "array",
+     "minItems": 4,
+     "maxItems": 4,
+     "items": {
+      "type": "number"
+     }
+    },
+    "files": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "file"
+      ],
+      "properties": {
+       "file": {
+        "type": "string"
+       },
+       "at": {
+        "anyOf": [
+         {
+          "type": "null"
+         },
+         {
+          "type": "integer"
+         }
+        ]
+       },
+       "full": {
+        "type": "boolean"
+       },
+       "doc": {
+        "type": "object",
+        "properties": {
+         "features": {
+          "type": "array"
+         }
+        }
+       }
+      }
      }
     }
    }

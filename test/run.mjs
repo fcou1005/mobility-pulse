@@ -450,10 +450,19 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
     const lat = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
     const fi = existsSync('test/out/ops-input/fleet/index.json') ? JSON.parse(await readFile('test/out/ops-input/fleet/index.json', 'utf8')) : null;
     const fl = fi?.ags?.length ? JSON.parse(await readFile(`test/out/ops-input/fleet/${fi.ags[0]}.json`, 'utf8')) : null;
-    assert(lat.schemaVersion === '1.0' && full.schemaVersion === '1.1' && parts.length >= 1 && nG === Object.keys(full.groups).length && ht.days[d0]?.startsH?.length === 24 && ds.days.includes(d0)
-      && oi && one?.schemaVersion === '1.2' && one.cells.every(c => Object.keys(c.munis).length <= 1)
+    assert(lat.schemaVersion === '1.1' && full.schemaVersion === '1.1' && parts.length >= 1 && nG === Object.keys(full.groups).length && ht.days[d0]?.startsH?.length === 24 && ds.days.includes(d0)
+      && oi && one?.schemaVersion === '1.3' && one.cells.every(c => Object.keys(c.munis).length <= 1)
       && fl?.ags === fi.ags[0] && fl.vehicles.every(r => fl.munis[r[8]] === fl.ags) && fl.ops.length >= 1,
       `S3.7/S3.8: schemaVersion vorn, events/${d0}/ je Land (${parts.join(', ')}, ${nG} Gruppen), hour-totals, daily-summary, ops-input für ${oi?.ags?.length ?? 0} Gemeinde(n), Bestand je Gemeinde für ${fi?.ags?.length ?? 0}`);
+  }
+  // S3.8 Rest (Phase „gebiet“): latest-core.json, Zellen spaltenweise, Ausschnitt je Gemeinde
+  {
+    const core = JSON.parse(await readFile('test/out/latest-core.json', 'utf8')), lat = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+    const oi = JSON.parse(await readFile('test/out/ops-input/index.json', 'utf8')), a0 = oi.ags?.[0];
+    const cc = a0 ? JSON.parse(await readFile(`test/out/ops-input/cells/${a0}.json`, 'utf8')) : null, ar = a0 ? JSON.parse(await readFile(`test/out/ops-input/area/${a0}.json`, 'utf8')) : null;
+    assert(core.lite?.groups === false && core.at === lat.at && core.sources.length === lat.sources.length && !Object.keys(core.groups).length && oi.compact === 1 && cc?.ags === a0 && Array.isArray(cc.cells) && cc.flows && ar?.at === lat.at && ar.ags === a0
+      && stj.phases.some(([n]) => n === 'gebiet'),
+      `S3.8 Rest: latest-core.json (${core.sources.length} Quellen, ohne groups), ops-input/cells und ops-input/area für ${a0}, Phase „gebiet“`);
   }
   assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
 }

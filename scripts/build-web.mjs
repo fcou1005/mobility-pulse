@@ -55,7 +55,9 @@ for (const [l, D] of [['de', DE], ['en', EN]]) {
 
 // 5. Prognose-Engine unverändert (Download) und statische Teile
 await mkdir(path.join(out, 'engine'), { recursive: true });
-for (const f of ['pulse-forecast.js', 'pulse-context.js', 'pulse-econ.js', 'pulse-track.js', 'pulse-core.js']) await writeFile(path.join(out, 'engine', f), await readFile(path.join(ROOT, 'lib', f), 'utf8'));
+// Teile der geschnittenen Module (pulse-forecast-*.js usw.) kommen mit; die Datei selbst ist dann eine Fassade (export * from …)
+const ENGINE = ['pulse-forecast', 'pulse-context', 'pulse-econ', 'pulse-track', 'pulse-core'], libFiles = await readdir(path.join(ROOT, 'lib'));
+for (const f of libFiles.filter(f => ENGINE.some(e => f === `${e}.js` || (f.startsWith(`${e}-`) && f !== 'pulse-track-next.js')))) await writeFile(path.join(out, 'engine', f), await readFile(path.join(ROOT, 'lib', f), 'utf8'));
 await cp(path.join(ROOT, 'web', 'vendor'), path.join(out, 'vendor'), { recursive: true, force: true }); // Schriften, Leaflet (DSGVO, CSP nur 'self')
 for (const f of ['datenschutz.html']) await writeFile(path.join(out, f), await readFile(path.join(ROOT, 'web', f), 'utf8')); // ohne Skript (S0.5)
 await writeFile(path.join(out, '.nojekyll'), '');

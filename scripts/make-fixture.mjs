@@ -10,6 +10,7 @@
 import { readFile, writeFile, mkdir, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { writeArea, writeCellsCompact } from './gebiet.mjs';
 
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const SRC = path.resolve(args.find(a => !a.startsWith('--') && !args[args.indexOf(a) - 1]?.startsWith('--')) || 'data-branch');
@@ -107,6 +108,9 @@ if (has('zone-watch.json')) { const z = await rd('zone-watch.json'); const ids =
 if (has('zones/index.json')) { const zi = await rd('zones/index.json'); await put('zones/index.json', { ...zi, zones: [] }); }
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
+
+// S3.8 Rest: Dateien je Gemeinde für die Disposition aus dem geschnittenen Stand selbst ableiten, wie der Sammler (Phase „gebiet“)
+await writeCellsCompact(OUT, { log: console.log }); await writeArea(OUT, { log: console.log });
 
 const at = latest.at;
 await put('FIXTURE.json', { at, generatedAt: latest.generatedAt, days: DAYS, ags: [...KEEP], states: [...states], source: 'scripts/make-fixture.mjs' });

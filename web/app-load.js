@@ -2,7 +2,7 @@
 import * as C from './pulse-core.js';
 import { t, fmtLocale } from './i18n.js';
 import { checkMajor } from './pulse-schema.js';
-import { $, $$, CFG, DEMO, ageText, cl, esc, fmt, isClient, state } from './app-core.js';
+import { $, $$, CFG, DEMO, QS, ageText, cl, esc, fmt, isClient, state } from './app-core.js';
 import { scopeState } from './app-usage.js';
 
 // ---------- Laden ----------
@@ -82,15 +82,34 @@ export const refreshNotices = () => $$('#notice .note').forEach(el => { if (el._
 export const clearNotice = (id) => $(`#notice [data-id="${id}"]`)?.remove();
 
 // latest.json mit dem Zeitpunkt aus status.json als Anhang: unveränderter Lauf = gleiche Adresse, der Browser fragt nur nach (304) statt 1 MB neu zu laden
-export const latestUrl = (status) => (status?.at ? `${CFG.DATA}latest.json?t=${encodeURIComponent(status.at)}` : fresh('latest.json'));
-export async function loadBase() {
-  const pSrc = cached('sources.json', 25000), pHist = cached('history/index.json', 25000);
+export const latestUrl = (status, file = 'latest.json') => (status?.at ? `${CFG.DATA}${file}?t=${encodeURIComponent(status.at)}` : fresh(file));
+// S3.8 Rest: Ansichten, die mit latest-core.json starten (Quellen ohne Prüfdetails, ohne groups; lib/pulse-split.js latestCore). Jede andere
+// Ansicht lädt vor dem Zeichnen latest.json (ensureFullLatest), ebenso der Live-Abruf (volle Quellen).
+export const LITE_VIEWS = new Set(['ops']);
+export const liteWanted = (view) => LITE_VIEWS.has(view);
+/** latest.json bzw. latest-core.json zum Stand status; Kern ohne Kennzeichen lite (älterer Datenstand) → latest.json */
+export async function loadLatest(status, lite) {
+  if (lite) { const c = await getJson(latestUrl(status, 'latest-core.json')); if (c.ok && c.json?.lite && c.json.at === status?.at) return c; }
+  return getJson(latestUrl(status));
+}
+let fullReq = null;
+/** Vollständiges latest.json zum geladenen Stand nachladen (nach Start mit latest-core.json); true, wenn state.latest danach vollständig ist */
+export function ensureFullLatest() {
+  if (!state.latest?.lite) return Promise.resolve(true);
+  const at = state.latest.at;
+  return (fullReq ??= Promise.all([getJson(latestUrl(state.status)), state.catalog ? null : loadCatalog()]).then(([r]) => { fullReq = null; if (r.ok && r.json?.at === at && state.latest?.at === at) state.latest = r.json; return !state.latest?.lite; }, () => { fullReq = null; return false; }));
+}
+// Quellenkatalog (sources.json; fehlt er im Datenstand, der vom Branch main). Start mit latest-core.json: erst mit ensureFullLatest –
+// die Disposition braucht daraus nur parking_reference der Gemeinde, das steht in ops-input/area/<AGS>.json
+export const loadCatalog = async () => (state.catalog = (await cached('sources.json', 25000)).json || (await getJson(CFG.MAIN + 'sources.json')).json);
+export async function loadBase(view = null) {
+  const lite = !DEMO && liteWanted(view), pSrc = lite ? null : cached('sources.json', 25000), pHist = cached('history/index.json', 25000);
   const pCal = cached('calendar.json', 25000).then(r => { state.calendar = r.json?.version === 1 ? r.json : null; }); // Tagtyp-Kalender (Sammler, OpenHolidays); fehlt er: lokale Feiertagsrechnung
   const status = await getJson(fresh('status.json'));
-  const [latest, sources, hist] = await Promise.all([getJson(latestUrl(status.json)), pSrc, pHist]);
+  const [latest, hist] = await Promise.all([loadLatest(status.json, lite), pHist]);
   state.status = status.json; state.latest = latest.json; state.histIndex = hist.json; await pCal;
   if (!latest.ok) FAILED.set('latest.json', latest.status || latest.error); // für die Leerzeilen der Tabellen
-  state.catalog = sources.json || (await getJson(CFG.MAIN + 'sources.json')).json;
+  if (!state.latest?.lite) { await pSrc; await loadCatalog(); } else state.catalog = null;
   const standTxt = state.status?.at ? new Date(state.status.at).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }) : '';
   if (!DEMO && state.status?.at && Date.now() - state.status.at > 45 * 60e3) notice(() => cl(t('app.lastCollectorRunIsOld', { v0: ageText(Date.now() - state.status.at), standTxt, REPO: CFG.REPO }), t('app.figuresAreOldAsOfNextUpdate', { v0: ageText(Date.now() - state.status.at), standTxt })), 'warn', 'stale');
   // Audit OPS-02: Verzeichnis ausgefallen, Quellen aus dem vorigen Katalog übernommen (Sammler: catalogFallback)

@@ -2,7 +2,7 @@
 import * as C from './pulse-core.js';
 import { t } from './i18n.js';
 import { $, CFG, DEMO, STATUS, cl, esc, fmt, state } from './app-core.js';
-import { clearNotice, getJson, loadBoundaries, notice } from './app-load.js';
+import { clearNotice, ensureFullLatest, getJson, loadBoundaries, notice } from './app-load.js';
 import { sourcesForScope } from './app-scope.js';
 import { currentView, renderAll } from './app-router.js';
 import { populateOperators } from './app.js';
@@ -22,6 +22,7 @@ export function autoLive() {
 }
 export async function liveFetch() {
   if (DEMO) return; // Demo-Stand bleibt eingefroren
+  if (state.latest?.lite && !(await ensureFullLatest())) return; // Live-Abgleich braucht die vollen Quellen (S3.8 Rest)
   const cat = state.catalog?.sources || [];
   const recs = sourcesForScope();
   const idSet = new Set(recs.map(r => r.id));

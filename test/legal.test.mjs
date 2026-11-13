@@ -5,7 +5,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCo
 const read = (f) => readFileSync(f, 'utf8');
 
 const dsg = read('web/datenschutz.html'), index = read('web/index.html'), app = readdirSync(new URL('../web/', import.meta.url)).filter(f => /^app(-[a-z]+)?\.js$/.test(f)).map(f => read(`web/${f}`)).join('\n'), // S3.9: app.js in app-*.js geschnitten
-   i18n = read('web/i18n-dict.js');
+   i18n = readdirSync(new URL('../web/', import.meta.url)).filter(f => /^i18n-(dict|de-\d+|en-\d+)\.js$/.test(f)).map(f => read(`web/${f}`)).join('\n'); // Wörterbuch in Teilen (web/i18n-de-*.js, web/i18n-en-*.js)
 assert(!/<script/i.test(dsg) && !dsg.includes('impressum.html'), 'Datenschutzerklärung kommt ohne JavaScript aus und verweist nicht auf ein Impressum, das es noch nicht gibt');
 assert(/href="datenschutz\.html"/.test(index), 'Seitenleiste verlinkt die Datenschutzerklärung (auch ohne JavaScript)');
 assert(app.includes("t('app.legalLinks')") && (i18n.match(/"app\.legalLinks": "/g) || []).length === 2 && (i18n.match(/"html\.legalLinks": "/g) || []).length === 2, 'Fußzeile jeder Ansicht verlinkt die Datenschutzerklärung, Deutsch und Englisch');

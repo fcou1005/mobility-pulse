@@ -35,8 +35,16 @@ Die großen Tagesdateien gelten für ganz Deutschland; eine Ansicht für eine Ge
 13 Ereignistage 2,15 MB gzip, nur Stuttgart 96 KB; die Disposition lud 3,2 MB. Seit Sprint 3 schreibt der Sammler zusätzlich
 `events/<Tag>/<Land>.json`, `events/hour-totals.json`, `events/daily-summary.json`, `ops-input/<AGS>.json` und
 `ops-input/fleet/<AGS>.json` (`lib/pulse-split.js`); die Disposition lädt damit 0,92 MB bei Zeichen für Zeichen gleichem Ergebnis. Die
-bisherigen Dateien laufen mindestens bis 27.11.2026 parallel. Noch groß (Ziel 0,4 MB): `latest.json` (162 KB, braucht jede Ansicht), Zonen
-des Anbieters (156 KB, ganz Deutschland), `history/daily.json` (112 KB), Ereignisse des Landes (79 KB) und Gruppen-Ereignisse (52 KB).
+bisherigen Dateien laufen mindestens bis 27.11.2026 parallel.
+
+Für das Ziel 0,4 MB kamen in der Phase `gebiet` dazu: `ops-input/cells/<AGS>.json` (Zellen spaltenweise ohne die zwei Tagessummen, die das
+Nachfragemodell nicht liest, dazu die Ströme der Gemeinde), `ops-input/area/<AGS>.json` (Umsatz-Eingabe mit vorab gewähltem Tag und Tarif,
+Gruppen-Ereignisse der Gemeinde, Liste der Zonen-Dateien je Anbieter), `ops-input/zones/<AGS>/<n>.json` (Zonen im Rahmen ± 0,02° + 200 m,
+übrige Features `null`, damit Kennungen und Zählungen gleich bleiben) und `latest-core.json` (Quellen mit 12 Kernfeldern, ohne `groups`). Die
+Seite prüft vor jeder Nutzung Stand, Rahmen und Fahrzeuge und fällt sonst auf die großen Dateien zurück. Gemessen auf dem Datenstand vom
+13.11.2026: Stuttgart 918 → 392 KB gzip, Tübingen 724 → 193 KB, Köln 1,43 MB → 1,03 MB (sehr viele Zellen und drei gleiche Voi-Zonendateien).
+Die Reihenfolge der Zellen bleibt wie in den Landesdateien, obwohl sortiert 20 KB kleiner wäre: Der Bootstrap der Spots zieht je Zelle in
+dieser Reihenfolge.
 
 Bewusst nicht: DuckDB-WASM mit Parquet. Die WASM-Datei hat gezippt 8,1 MB, und Parquet ist über 13 Tage mit 2,32 MB nicht kleiner als
 JSON mit gzip (2,15 MB).

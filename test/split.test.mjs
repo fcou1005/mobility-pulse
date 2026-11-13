@@ -2,7 +2,12 @@
 // Grundlage: Fixture (test/fixtures/web-data) und der Datenzweig, falls MP_DATA gesetzt ist (z. B. MP_DATA=/home/claude/mp-data).
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { eventsByState, hourTotals, totalsDoc, groupDaySums, dailySummary, opsSlice, cellsSlice, SUMMARY_FIELDS } from '../lib/pulse-split.js';
+import { eventsByState, hourTotals, totalsDoc, groupDaySums, dailySummary, opsSlice, cellsSlice, SUMMARY_FIELDS, cellsCompact, cellsExpand, flowsSlice, econSlice, econCalib, groupsSlice, zonesSlice, zoneCover, featureBoxes, latestCore, pickUsageDay, usageDayCandidates, CORE_SOURCE_FIELDS } from '../lib/pulse-split.js';
+import { planFor } from '../lib/pulse-econ.js';
+import { hourQuality, histFromDaily } from '../lib/pulse-report.js';
+import { dayOf } from '../lib/pulse-track.js';
+import { attachFlows, groupPlaces, zoneConstraints, parkingViolations } from '../lib/pulse-ops.js';
+import { existsSync } from 'node:fs';
 import { hourProfile, DAY_TYPES } from '../lib/pulse-econ.js';
 import { decodeFleet, buildDemandModel, BANDS } from '../lib/pulse-ops.js';
 import { haversineM } from '../lib/pulse-core.js';
@@ -76,6 +81,78 @@ for (const DIR of DIRS) {
     check(gs.length === gap.length && !Object.keys(gs[0].munis).length && same(buildDemandModel(gs, ags, 'day'), buildDemandModel(gap, ags, 'day')), `${tag}: Tag ohne Zellen der Gemeinde zählt mit (Modell gleich)`);
   }
   for (const band of /** @type {any[]} */ (['day', ...BANDS.map(b => b.id)])) { const m1 = buildDemandModel(cs, ags, band), m0 = buildDemandModel(cdocs, ags, band); check(same(m1, m0) && (band !== 'day' || m0.cells.size > 0), `${tag}: Nachfragemodell ${ags} Band ${band} gleich (${m0.cells.size} Zellen, ${m0.hours?.toFixed?.(1)} h)`); }
+
+  // ---------- S3.8 Rest ----------
+  // Zellen spaltenweise: gleiche Schlüssel in gleicher Reihenfolge, gleiches Modell je Band, kleiner
+  const cx = cellsExpand(JSON.parse(JSON.stringify(cellsCompact(cs, ags))));
+  check(cx.every((d, i) => same(Object.keys(d.munis[ags] || {}), Object.keys(cs[i].munis[ags] || {}))), `${tag}: Zellen spaltenweise – Schlüssel und Reihenfolge gleich`);
+  check(/** @type {any[]} */ (['day', ...BANDS.map(b => b.id)]).every(band => same(buildDemandModel(cx, ags, band), buildDemandModel(cs, ags, band))), `${tag}: Zellen spaltenweise – Nachfragemodell in allen Bändern gleich`);
+  check(JSON.stringify(cellsCompact(cs, ags)).length < JSON.stringify(cs).length, `${tag}: spaltenweise ${(JSON.stringify(cellsCompact(cs, ags)).length / 1e3).toFixed(0)} statt ${(JSON.stringify(cs).length / 1e3).toFixed(0)} KB roh`);
+  // Ströme der Gemeinde: attachFlows gleich
+  const flIdx = existsSync(path.join(DIR, 'flows', 'index.json')) ? await rd(path.join(DIR, 'flows', 'index.json')) : null;
+  const flDocs = await Promise.all((flIdx?.days || []).filter(d => cdays.includes(d)).map(d => rd(path.join(DIR, 'flows', `${d}.json`)).catch(() => null)));
+  if (flDocs.filter(Boolean).length) {
+    const mA = attachFlows(buildDemandModel(cs, ags, 'day'), flDocs.filter(Boolean)), mB = attachFlows(buildDemandModel(cs, ags, 'day'), JSON.parse(JSON.stringify(flowsSlice(flDocs.filter(Boolean), ags))));
+    check(same(mA, mB), `${tag}: Ströme der Gemeinde – attachFlows gleich (${mA.flow?.trips ?? 0} Fahrten)`);
+  }
+  // Umsatz-Eingabe: Vorauswahl-Tag wie im Browser, Gruppen, Tageswerte, Tarife und Kalibrierung der Gemeinde gleich
+  {
+    const idx = await rd(path.join(DIR, 'events', 'index.json')), ht = await rd(path.join(DIR, 'events', 'hour-totals.json'));
+    const runDay = dayOf(latest.at) === idx.days.at(-1) ? idx.days.at(-1) : null;
+    const viaTotals = pickUsageDay(idx.days, runDay, (d) => ht.days?.[d] || null, (doc) => hourQuality(doc.runs, doc.gapHours).full);
+    let viaDocs = null; for (const d of usageDayCandidates(idx.days, runDay)) { const p = path.join(DIR, 'events', `${d}.json`); const doc = existsSync(p) ? await rd(p) : null; if (doc && hourQuality(doc.runs, doc.gapHours).full) { viaDocs = d; break; } }
+    viaDocs ??= usageDayCandidates(idx.days, runDay)[0] || idx.days.at(-1);
+    check(viaTotals === viaDocs, `${tag}: Vorauswahl-Tag aus hour-totals = aus den Tagesdateien (${viaTotals})`);
+    const day = viaTotals, full = await rd(path.join(DIR, 'events', `${day}.json`));
+    const [daily, pricing, calib] = await Promise.all(['history/daily.json', 'pricing.json', 'calib.json'].map(f => rd(path.join(DIR, f)).catch(() => null)));
+    const stDoc = eventsByState(full, stateOf).get(stateOf(ags)) || null;
+    const es = calib ? JSON.parse(JSON.stringify(econSlice({ ags, day, doc: stDoc, daily, pricing, calib, latestGroups: latest.groups }))) : null;
+    if (es) {
+      const keys = Object.keys(full.groups).filter(k => k.startsWith(`${ags}|`));
+      check(same(Object.keys(es.events.groups), keys) && keys.every(k => same(es.events.groups[k], full.groups[k])) && same(es.events.runs, full.runs) && same(es.events.hourMin, full.hourMin), `${tag}: Umsatz-Eingabe ${ags}: ${keys.length} Gruppen und Kopf gleich`);
+      const h0 = histFromDaily(daily, day), h1 = histFromDaily(es.daily, day);
+      check(!h0 || keys.every(k => same(h0.series[k], h1?.series?.[k])), `${tag}: Tageswerte der Gruppen gleich`);
+      const L = Object.keys(calib.langs || {});
+      check(L.length > 0 && L.every(l => keys.every(k => { const [, op, ty] = k.split('|'); return same(es.plans[l][`${op}|${ty}`], planFor(pricing, op, ags, ty, calib.langs[l]?.assume?.[ty] || undefined)); })), `${tag}: Tarife je Anbieter|Art vorab gleich planFor (${L.join(', ')})`);
+      const sh = econCalib(calib);
+      check(L.every(l => same(sh.langs[l].assume, calib.langs[l].assume) && same(sh.langs[l].k, calib.langs[l].k) && same(sh.langs[l].limits, calib.langs[l].limits)) && keys.every(k => es.calib.kinds[k] === calib.kinds?.[k]), `${tag}: Kalibrierung (assume, k, limits, kinds) gleich`);
+      check(keys.every(k => same(es.latestGroups[k], latest.groups[k])), `${tag}: Ersatz-Bestand aus latest.groups gleich`);
+    } else check(!calib, `${tag}: Umsatz-Eingabe ohne Kalibrierung null`);
+  }
+  // Gruppen-Ereignisse der Gemeinde: groupPlaces gleich
+  {
+    const gi = existsSync(path.join(DIR, 'groups', 'index.json')) ? await rd(path.join(DIR, 'groups', 'index.json')) : null;
+    if (gi?.months?.length) {
+      const docs = await Promise.all(gi.months.map(m => rd(path.join(DIR, 'groups', `${m}.json`))));
+      const gs = JSON.parse(JSON.stringify(groupsSlice(docs, gi.months, ags)));
+      check(same(groupPlaces([{ fields: gs.fields, events: gs.events }], { ags }), groupPlaces(docs, { ags })), `${tag}: Gruppen-Ereignisse ${ags} (${gs.events.length}) – groupPlaces gleich`);
+    }
+  }
+  // latest-core.json: Quellen nur mit den Kernfeldern, sonst gleich
+  {
+    const core = latestCore(latest), { sources: _a, groups: _b, lite: _c, ...rest } = core, { sources: _d, groups: _e, ...rest0 } = latest;
+    check(same(rest, rest0) && core.sources.length === latest.sources.length && core.sources.every((r, i) => Object.keys(r).every(k => CORE_SOURCE_FIELDS.includes(k) && same(r[k], latest.sources[i][k]))) && !Object.keys(core.groups).length, `${tag}: latest-core.json – ${core.sources.length} Quellen mit ${CORE_SOURCE_FIELDS.length} Feldern, ${(JSON.stringify(core).length / 1e3).toFixed(0)} statt ${(JSON.stringify(latest).length / 1e3).toFixed(0)} KB`);
+  }
+  // Zonen-Ausschnitt (nur Datenzweig; das Fixture hat keine Betreiber-Geometrien): Abstellverbote im Rahmen ± 0,02° und Einsammelliste gleich
+  {
+    const zi = existsSync(path.join(DIR, 'zones', 'index.json')) ? await rd(path.join(DIR, 'zones', 'index.json')) : null;
+    const bIdx = existsSync(path.join(DIR, 'boundaries', 'index.json')) ? await rd(path.join(DIR, 'boundaries', 'index.json')) : null;
+    const bdoc = bIdx?.states?.[stateOf(ags)] ? await rd(path.join(DIR, 'boundaries', `${stateOf(ags)}.json`)) : null, bbox = bdoc?.features?.find(f => f.properties?.ags === ags)?.bbox;
+    const list = (zi?.zones || []).filter(z => (z.municipalities || []).includes(ags));
+    if (list.length && bbox) {
+      const cover = zoneCover(bbox), req = [bbox[0] - 0.02, bbox[1] - 0.02, bbox[2] + 0.02, bbox[3] + 0.02];
+      const ovl = (g, b) => { const c = JSON.stringify(g.coordinates).match(/-?\d+\.\d+/g) || []; let x0 = 999, x1 = -999, y0 = 999, y1 = -999; for (let i = 0; i + 1 < c.length; i += 2) { const x = +c[i], y = +c[i + 1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } return !(x1 < b[0] || x0 > b[2] || y1 < b[1] || y0 > b[3]); };
+      let nOk = 0, nAll = 0;
+      for (const z of list) {
+        const d = await rd(path.join(DIR, 'zones', z.file)), sl = zonesSlice(d, cover, { boxes: featureBoxes(d), maxShare: 1.01 }); nAll++;
+        const a = zoneConstraints(d), b = zoneConstraints(JSON.parse(JSON.stringify(sl)));
+        const pick = (c) => ({ noPark: c.noPark.filter(g => ovl(g, req)), mandatory: c.mandatory.filter(g => ovl(g, req)) });
+        const vs = part.vehicles.filter(v => v.operator === z.operator);
+        if (same(pick(a), pick(b)) && same(parkingViolations({ vehicles: vs, stations: part.stations }, [d], { operator: z.operator }), parkingViolations({ vehicles: vs, stations: part.stations }, [sl], { operator: z.operator }))) nOk++;
+      }
+      check(nOk === nAll, `${tag}: Zonen-Ausschnitt ${ags}: ${nOk}/${nAll} Dateien – Abstellverbote und Einsammelliste gleich`);
+    }
+  }
 }
 console.log(`${bad ? '✗' : '✓'} split: ${ok} ok, ${bad} fehlgeschlagen`);
 process.exit(bad ? 1 : 0);

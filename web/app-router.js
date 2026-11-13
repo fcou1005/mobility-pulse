@@ -2,7 +2,7 @@
 import * as R from './pulse-report.js';
 import { t, lang, ensureI18n } from './i18n.js';
 import { $, $$, CFG, QS, TYPE, esc, fmt, gl, isClient, opColor, state } from './app-core.js';
-import { clearNotice, getJsonShared, loadBoundaries, loadHistory, notice } from './app-load.js';
+import { LITE_VIEWS, clearNotice, ensureFullLatest, getJsonShared, loadBoundaries, loadCatalog, loadHistory, notice } from './app-load.js';
 import { muniName } from './app-scope.js';
 import { liveFetch, pendingLive, setPendingLive } from './app-live.js';
 import { renderHeader, renderLive } from './app-lang.js';
@@ -80,6 +80,8 @@ export const dirty = new Set(VIEWS);
 export const safe = (f) => { try { const r = f(); if (r?.catch) r.catch(e => console.error(f.name, e)); } catch (e) { console.error(f.name, e); } };
 export function renderView(name) {
   if (!dataReady) return; // vor dem ersten Datenstand nichts zeichnen (sonst kurz „keine Daten“)
+  // S3.8 Rest: gestartet mit latest-core.json (Disposition) – andere Ansichten erst mit dem vollen latest.json zeichnen
+  if (state.latest?.lite && !LITE_VIEWS.has(name)) { dirty.add(name); ensureFullLatest().then(ok => { if (ok) { populateOperators(); renderAll(); } }); return; }
   dirty.delete(name); (VIEW_RENDER[name] || []).forEach(safe);
 }
 export const markDirty = (...names) => { for (const n of names) if (n === currentView) renderView(n); else dirty.add(n); };
@@ -199,7 +201,7 @@ export const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, shar
   setFilter: (kind, v) => { const sel = $(kind === 'scope' ? '#sel-scope' : kind === 'op' ? '#sel-operator' : '#sel-type'); if (!sel || sel.value === v || ![...sel.options].some(o => o.value === v)) return; sel.value = v; sel.dispatchEvent(new Event('change')); },
   resetFilters: () => { for (const [id, v] of [['#sel-type', 'all'], ['#sel-operator', 'all'], ['#sel-scope', 'DE']]) { const sel = $(id); if (sel && sel.value !== v && [...sel.options].some(o => o.value === v)) { sel.value = v; sel.dispatchEvent(new Event('change')); } } } });
 // Disposition: Helfer und Lader der Seite; getJsonShared lädt ops/<Land>.json, Zonen, Zellen usw. über denselben Cache wie die Übersichtskarte
-export function opsCtx() { return { state, CFG, getJson: getJsonShared, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE, econFor, syncUrl }; }
+export function opsCtx() { return { state, CFG, getJson: getJsonShared, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE, econFor, syncUrl, loadCatalog }; }
 // rp(k, Funktion, Element): Modul k laden (S3.4), dann Funktion(Element, Kontext)
 export const rp = (k, fn, id) => () => { const el = document.getElementById(id); if (el) return mod(k).then(m => m[fn](el, rpCtx())); };
 VIEW_RENDER.bericht = [rp('rp', 'renderReport', 'rp-report'), rp('rp', 'renderForecast', 'rp-fc'), rp('rp', 'renderRegulationProfile', 'rp-reg'), rp('rp', 'renderCaps', 'rp-caps'), rp('rp', 'renderZoneWatch', 'rp-zones'), rp('rp', 'renderFeeCalculator', 'rp-fees'), rp('rp', 'renderWeekHeatmap', 'rp-week'), rp('rp', 'renderHotspotStability', 'rp-hot')];

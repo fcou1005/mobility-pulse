@@ -46,7 +46,9 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `kalender-wetter`, `verkehr`, `baustellen`, `oepnv` | Umgebung der Prognose |
 | `verfolgung`, `abdeckung`, `ereignisse` | Fahrten, Umsetzungen, Zellen, Ströme, Bestand je Land und Gemeinde, Daten nach Gebiet |
 | `sport-termine`, `streiks`, `prognose`, `training` | Termine, Streiks, Prognose, Trainingsarchiv |
-| `kalibrierung`, `grenzen`, `datenvertraege`, `abschluss` | Kalibrierung, Gemeindegrenzen, Formatversion, Lizenzen und `status.json` |
+| `kalibrierung`, `grenzen` | Kalibrierung, Gemeindegrenzen |
+| `gebiet` | Dateien je Gemeinde für die Disposition (`scripts/gebiet.mjs`): `latest-core.json`, `ops-input/cells`, `ops-input/area`, `ops-input/zones` |
+| `datenvertraege`, `abschluss` | Formatversion, Lizenzen und `status.json` |
 
 ## Startseite in Modulen
 
@@ -61,7 +63,16 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `web/app-map.js`, `web/app-energy.js`, `web/app-signals.js` | Karte und Ebenen, Energie, Signale |
 | `web/app-sources.js`, `web/app-usage.js`, `web/app-calib.js` | Quellen und Datenvertrauen, Nutzung und Umsatz, Kalibrierung |
 
+Die nachgeladenen Ansichten sind ebenso geteilt: `web/ops.js` (Disposition), `web/report.js` (Bericht) und `web/forecast.js` (Prognose) sind
+Fassaden mit `export *` aus `ops-data|plan|extra.js`, `report-core|maps|watch|avail|more.js` und `forecast-data|parts|view.js`. Das
+Wörterbuch `web/i18n-dict.js` fügt `web/i18n-de-1…7.js` und `web/i18n-en-1…7.js` in der ursprünglichen Reihenfolge zusammen.
+
 ## Rechenkerne in `lib/`
+
+Keine Datei hat mehr als 600 Zeilen. Fünf große Module sind Fassaden (`export *` aus ihren Teilen, Importe bleiben gleich):
+`pulse-core.js` (`-base`, `-feeds`, `-agg`), `pulse-track.js` (`-rules`, `-run`, `-publish`), `pulse-report.js` (`-base`, `-caps`, `-city`),
+`pulse-ops.js` (`-model`, `-tours`, `-places`) und `pulse-forecast.js` (`-model`, `-select`, `-series`). Der Download der Prognose-Engine
+liefert die Teile mit.
 
 | Datei | Inhalt |
 | --- | --- |
@@ -74,7 +85,7 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `pulse-flowest.js` | geschätzte Ströme für rotierende Kennungen |
 | `pulse-status.js` | Laufzeit-Budget und `status.json` |
 | `pulse-schema.js` | Formatversion je Dateifamilie |
-| `pulse-split.js` | Daten nach Gebiet (Ereignisse je Land, Stundensummen, `ops-input`) |
+| `pulse-split.js` | Daten nach Gebiet (Ereignisse je Land, Stundensummen, `ops-input`, Ausschnitte je Gemeinde, `latest-core.json`) |
 | `pulse-coverage.js`, `pulse-compare.js`, `pulse-spots.js` | Abdeckung (Anbieter-Website gegen Feeds), Anbieter-Vergleich, Spot-Abgleich |
 | `pulse-strike.js`, `pulse-termine.js`, `pulse-oepnv.js` | Streiks, Termine aus Quellenseiten, ÖPNV-Störungen (Umgebung der Prognose) |
 | `pulse-train.js` | Langzeitarchiv der Trainingsdaten (`train/`, `train-cells/`) |
@@ -88,8 +99,10 @@ und Bereich in `docs/i18n/<de|en>/<bereich>.json` (Quelle `web/i18n-dict.js`). B
 270 KB gzip (`--budget`).
 
 Dateien des Datenstands lädt die Seite über einen gemeinsamen Cache je Datenstand (`web/app.js` `cached`). Passt die MAJOR-Version
-einer Datei nicht, erscheint ein Hinweis ([Datenformate](datenformate.md)). Für eine Gemeinde liest die Disposition nur
-`ops-input/<AGS>.json` und die Ereignisse ihres Landes ([Entscheidungen](entscheidungen.md#aufteilung-der-daten)).
+einer Datei nicht, erscheint ein Hinweis ([Datenformate](datenformate.md)). Für eine Gemeinde liest die Disposition nur Dateien dieser
+Gemeinde unter `ops-input/` ([Entscheidungen](entscheidungen.md#aufteilung-der-daten)). Öffnet jemand die Seite direkt in der Disposition,
+startet sie mit `latest-core.json` (Quellen ohne Prüfdetails, ohne `groups`); jede andere Ansicht lädt vor dem Zeichnen `latest.json`
+(`web/app-load.js` `ensureFullLatest`).
 
 ## Datenschutz
 

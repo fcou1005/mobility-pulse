@@ -5,13 +5,14 @@
  * @param {import('playwright').Browser} browser
  * @param {{ port: number, fx: { at: number }, scope: string, viewport: { width: number, height: number }, lang?: string|null,
  *   blocked?: Map<string, number>, bypassCSP?: boolean, hash?: string, onConsole?: (text: string, cur: string) => void,
- *   patch?: Record<string, (doc: any) => any> }} o  patch: Fixture-Datei (Pfad unter /d/) → Änderung am JSON vor der Auslieferung
+ *   patch?: Record<string, (doc: any) => any>, missing?: string[] }} o  patch: Fixture-Datei (Pfad unter /d/) → Änderung am JSON vor der Auslieferung; missing: Dateien mit 404
  */
-export async function openFixturePage(browser, { port, fx, scope, viewport, lang = null, blocked = new Map(), bypassCSP = false, hash = 'live', onConsole = null, patch = null }) {
+export async function openFixturePage(browser, { port, fx, scope, viewport, lang = null, blocked = new Map(), bypassCSP = false, hash = 'live', onConsole = null, patch = null, missing = [] }) {
   const context = await browser.newContext({ viewport, locale: 'de-DE', timezoneId: 'Europe/Berlin', bypassCSP });
   const page = await context.newPage();
   await page.clock.install({ time: fx.at + 2 * 60e3 });
   await page.route('**/*', (route) => { const u = new URL(route.request().url()); if (u.hostname === '127.0.0.1') return route.continue(); blocked.set(u.hostname, (blocked.get(u.hostname) || 0) + 1); return route.abort(); });
+  for (const file of missing) await page.route((u) => u.pathname === `/d/${file}`, (route) => route.fulfill({ status: 404, body: '' })); // Datei fehlt (älterer Datenstand)
   for (const [file, fn] of Object.entries(patch || {})) await page.route((u) => u.pathname === `/d/${file}`, async (route) => { const r = await route.fetch(); route.fulfill({ response: r, json: fn(await r.json()) }); });
   const errs = []; let cur = 'start';
   page.on('pageerror', e => errs.push(`${cur}: ${e.message}`));
