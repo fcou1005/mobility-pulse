@@ -19,6 +19,7 @@ import * as TMN from '../lib/pulse-termine.js';
 import * as TR from '../lib/pulse-train.js';
 import * as K from '../lib/pulse-calib.js';
 import * as OE from '../lib/pulse-oepnv.js';
+import * as SS from '../lib/pulse-status.js';
 import { gzipSync, gunzipSync, inflateRawSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -26,6 +27,7 @@ const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const DATA = process.env.DATA_DIR || path.join(ROOT, 'data');
 const now = Date.now();
 const log = (...a) => console.error('[collect]', ...a);
+const PH = SS.phaseClock(now); // S3.2: Zeit je Phase (status.json → phases)
 const CONCURRENCY = +process.env.CONCURRENCY || 8;
 const TIMEOUT = +process.env.FETCH_TIMEOUT || 20000;
 const MAX_BYTES = +process.env.MAX_BYTES || 40e6; // Obergrenze je Antwort
@@ -161,6 +163,7 @@ async function pool(items, worker, n = CONCURRENCY) {
   return results;
 }
 
+PH.phase('abruf');
 // ---------- Abruf ----------
 const active = catalog.sources.filter(s => !s.disabled);
 await setupMobidrom(active);
@@ -210,6 +213,7 @@ const results = new Array(expanded.length);
   if (cbN) log(`CityBikes: ${cbN} Netze nacheinander (Abstand ${CB_GAP_MS} ms), ${cb429} mit HTTP 429, ${cbHit} aus dem letzten guten Abruf`);
 }
 
+PH.phase('auswertung');
 // ---------- Auswertung ----------
 let allVehicles = [], allStations = [], snapshots = [];
 const sourceOut = [];
@@ -340,6 +344,7 @@ for (const rec of sourceOut) {
   if (now - rec.goneSince > C.RETIRED_MS) rec.status = 'retired';
 }
 
+PH.phase('preise-zonen');
 // ---------- Preise und Betriebszonen (GBFS system_pricing_plans / geofencing_zones) ----------
 const pricing = [], zonesIndex = [];
 await mkdir(path.join(DATA, 'zones'), { recursive: true });
@@ -414,6 +419,7 @@ log(`Preise: ${pricing.length} Quellen · Zonen: ${zonesIndex.length} Quellen`);
 }
 if (!existsSync(path.join(DATA, 'pricing-log.json'))) await writeFile(path.join(DATA, 'pricing-log.json'), JSON.stringify({ updatedAt: now, days: 180, fields: ['at', 'sourceId', 'operator', 'planId', 'field', 'old', 'new'], changes: [] }));
 
+PH.phase('konsistenz');
 // ---------- Konsistenz: Alternativ-Feeds desselben Systems und mehrere Quellen je Anbieter × Gemeinde ----------
 const consistency = { at: now, systems: [], pairs: [] };
 {
@@ -495,6 +501,7 @@ const consistency = { at: now, systems: [], pairs: [] };
   log(`Konsistenz: ${consistency.systems.length} Alternativ-Feeds ${JSON.stringify(vc)} · ${consistency.pairs.length} Quellenpaare je Anbieter×Gemeinde`);
 }
 
+PH.phase('dubletten');
 // ---------- Quellen-Dubletten: Zählquellen ohne Fahrzeugliste (CityBikes), deren Stationen ≤ 30 m neben gleichnamigen Stationen einer stärkeren Quelle liegen ----------
 // z. B. CityBikes „stadtrad-stuttgart“ = RegioRad Stuttgart (MobiData BW). Die Kopie bleibt in sources sichtbar (status duplicate), zählt aber nirgends.
 const dupOf = new Map(); // sourceId → Quelle, die stattdessen zählt
@@ -591,6 +598,7 @@ for (const [ags, m] of munis) {
 // Betriebsgebiet-Erkennung (V.presenceOf): wo ein Anbieter wirklich fährt, aus den Tagesdateien der letzten 14 Tage und dem aktuellen Stand.
 // Vereinzelte Orte (ein verirrtes Fahrzeug, sporadisch ein, zwei E-Scooter am Rand) bleiben in den Daten, erscheinen aber nicht als eigenes Gebiet.
 let presence = null;
+PH.phase('betriebsgebiete');
 try {
   const evDir0 = path.join(DATA, 'events'), cur = {};
   const files = existsSync(evDir0) ? (await readdir(evDir0)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(-V.PRESENCE.windowDays) : [];
@@ -638,6 +646,7 @@ const latest = {
 // aktuellen Regelstand ruleNow: rot schließt nur aus, wenn der ausgewertete Tag ihn trägt (sonst gelb „älterer Regelstand“).
 let ecInput = null; // Tagesdokument des letzten vollständigen Tags
 const ampel = () => { if (ecInput) latest.eventChecks = E.eventChecks(ecInput, sourceOut, E.EVENT_CHECKS, { ruleNow: T.METHOD_VERSION }); };
+PH.phase('messbasis');
 try {
   const evDir = path.join(DATA, 'events'), today = T.dayOf(now);
   const evDays = existsSync(evDir) ? (await readdir(evDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort() : [];
@@ -657,8 +666,10 @@ try {
 await mkdir(path.join(DATA, 'history'), { recursive: true });
 await mkdir(path.join(DATA, 'snapshot'), { recursive: true });
 await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(latest));
-await writeFile(path.join(DATA, 'status.json'), JSON.stringify({ at: now, generatedAt: latest.generatedAt, runMs: latest.runMs, counts: latest.counts, byStatus: statusCounts }));
+// vorläufig (complete: false); am Ende des Laufs mit allen Phasen, Laufzeit und Trend überschrieben (S3.2)
+await writeFile(path.join(DATA, 'status.json'), JSON.stringify(SS.statusDoc({ at: now, generatedAt: latest.generatedAt, runMs: latest.runMs, phases: PH.list(true), counts: latest.counts, byStatus: statusCounts, complete: false })));
 
+PH.phase('obergrenzen');
 // Obergrenzen je Lauf prüfen (Gemeinden mit Eintrag in reference.json → obergrenzen, liegt auf main im Checkout): Läufe ab 90 % der Grenze
 // gesamt und je Anbieter, dazu je Tag das Maximum; 30 Tage (caps-log.json, Format in lib/pulse-report.js capsLogUpdate)
 try {
@@ -678,6 +689,7 @@ try {
 // Zonen-Beobachtung: vermutete Umrisse aus data/zonen-vermutet.json (ZONES_FILE, leer = keine) und optional privat aus ZONE_WATCH;
 // Bestand je Zone × Anbieter × Art → zone-watch.json (Läufe 2 Tage, Tageswerte 30 Tage; Format in lib/pulse-report.js zoneLogUpdate)
 const zonesFile = process.env.ZONES_FILE ?? path.join(ROOT, 'data', 'zonen-vermutet.json');
+PH.phase('zonen-beobachtung');
 if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
   try {
     const seen = new Set();
@@ -696,6 +708,7 @@ if ((zonesFile && existsSync(zonesFile)) || process.env.ZONE_WATCH) {
   } catch (e) { log(`Zonen-Beobachtung: ${e.message}`); }
 }
 
+PH.phase('kalender-wetter');
 // Tagtyp-Kalender (calendar.json, Format in lib/pulse-econ.js calendarFromApi): gesetzliche Feiertage und Schulferien je Land aus der
 // OpenHolidays API (ODbL), einmal je Berliner Kalendertag, Zeitraum heute −400 bis +400 Tage (eine Anfrage je Endpunkt; 800 Tage am
 // 02.11.2026 geprüft). Ohne Netz, bei Fehler oder unplausibler Antwort bleibt die alte Datei. CALENDAR_URL leer = aus (Fixture-Test).
@@ -779,6 +792,7 @@ async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true
   }
 }
 
+PH.phase('verkehr');
 // Autobahn (verkehr.autobahn.de, Autobahn GmbH des Bundes): Sperrungen und Staus mit Koordinate → Gemeinde, eingetragen zur aktuellen Ortsstunde
 // in incidents/<Ortstag>.json (Merkmal „road“ der Prognose). Einmal je Ortsstunde (rund 220 Abrufe: Liste der Autobahnen, je Autobahn Sperrungen
 // und Verkehrsmeldungen), damit keine Stunde ohne Beobachtung bleibt; nur frische Sperrungen und Staus (CX.ROAD_FRESH), keine Dauer-Baustellen.
@@ -812,6 +826,7 @@ async function writeIncidents(docs) { await mkdir(incidentDir, { recursive: true
   }
 }
 
+PH.phase('baustellen');
 // Baustellen und Sperrungen in Städten (lib/pulse-context.js WORKS_SOURCES: MobiData BW, Hamburg, München; dl-de/by-2.0): einmal je Ortsstunde,
 // frische Vollsperrungen je Gemeinde → incidents/<Tag>.json ags[].works. Nur gesammelt (nicht in CTX_KEYS), keine Wirkung auf die Prognose.
 // WORKS=0 = aus (Fixture-Test).
@@ -829,6 +844,7 @@ if (process.env.WORKS !== '0' && index) {
   } catch (e) { log(`Baustellen: ${e.message} – übersprungen`); }
 }
 
+PH.phase('oepnv');
 // ÖPNV-Störungen (lib/pulse-oepnv.js; gtfs.de: Echtzeit CC BY-SA 4.0, Haltestellen CC BY 4.0): je Lauf ein Abruf des Echtzeit-Stroms (~11 MB gzip),
 // Halte je Gemeinde und Ortsstunde → incidents/<Tag>.json ags[].ptN/ptSkip/ptLate/pt. Haltestellen → Gemeinde aus stops.txt des freien statischen
 // Feeds: nur dieser Eintrag wird per Range geladen (~12 MB statt 264 MB), neu gebaut, wenn sich der Feed ändert (Prüfung höchstens alle 20 h),
@@ -879,6 +895,7 @@ if (process.env.OEPNV !== '0' && index) {
 for (const f of await readdir(path.join(DATA, 'snapshot')).catch(() => [])) if (f.endsWith('.json')) await rm(path.join(DATA, 'snapshot', f));
 for (const snap of snapshots) await writeFile(path.join(DATA, 'snapshot', `${snap.id.replace(/[^\w.-]+/g, '_')}.json`), JSON.stringify(snap));
 
+PH.phase('verfolgung');
 // ---------- Fahrzeug-Verfolgung: Zustand lesen (ggf. auf gesalzene Schlüssel umziehen) und Lauf auswerten ----------
 // Vor dem Verlauf, damit die Tagesdatei das Lauf-Flag (Lücke) mitführt.
 const readState = async (f) => { if (!existsSync(f)) return null; try { return JSON.parse(gunzipSync(await readFile(f)).toString('utf8')); } catch (e) { log('Track-Zustand unlesbar, Neustart:', e.message); return null; } };
@@ -1028,6 +1045,7 @@ await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days:
   await writeFile(dailyFile, JSON.stringify({ days: useDays, fields: [...DAILY, 'runs'], updatedAt: now, series, dayRuns, breaks }));
 }
 
+PH.phase('abdeckung');
 // Abdeckung: Städte laut Anbieter-Website (data/operator-cities.json, liegt auf main im Checkout) gegen Feeds mit und ohne Fahrzeuge
 // (coverage.json, Format in lib/pulse-coverage.js); „zuletzt aktiv“ aus daily.json und dem vorigen coverage.json
 try {
@@ -1043,6 +1061,7 @@ try {
   log(`Abdeckung: ${cov.rows.length} Zeilen, ${Object.entries(cov.totals).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(', ')}${lost.length ? `; ohne Gemeinde: ${lost.join(', ')}` : ''}`);
 } catch (e) { log(`Abdeckung: ${e.message}`); }
 
+PH.phase('ereignisse');
 // ---------- Fahrzeug-Verfolgung (Fahrten, Standzeiten, Tausch, Umsetzungen, Sperren, Zellen, Stationsquote, Zuverlässigkeit) ----------
 {
   await mkdir(path.join(DATA, 'events'), { recursive: true });
@@ -1360,6 +1379,7 @@ try {
   log(`Verfolgung: ${Object.keys(tr.state.v).length} Kennungen im Zustand${tr.first ? ' (erster Lauf)' : ` · Fahrten begonnen ${ev.start}, beendet ${ev.end}, Umsetzungen ${ev.reloc}, Akkutausch ${ev.swap}`} · lange Standzeiten ${tr.idleLong.length}`);
 }
 
+PH.phase('sport-termine');
 // Sport-Ereignisse (lib/pulse-context.js SPORT): Heimspiele 1.–3. Liga aus OpenLigaDB (ODbL), je Liga höchstens alle 6 h abgefragt; Spielorte aus
 // data/sport-spielorte.json → sport.json (kompakte Spiele im Fenster, Einträge wie data/ereignisse.json, Vereine ohne Spielort). In die Prognose
 // (Merkmal event) erst ab aktivAb – gesammelt wird vorher schon. Fällt OpenLigaDB aus, bleiben die zuletzt geholten Spiele. SPORT_URL leer = aus.
@@ -1447,6 +1467,7 @@ let venueCurated = [];
   } catch (e) { log(`Veranstaltungen: ${e?.message || e}`); }
 }
 
+PH.phase('streiks');
 // Streiks automatisch erkennen (lib/pulse-strike.js): Nachrichtensuche der tagesschau-App (frei, ohne Schlüssel; Regionalmeldungen der ARD-Anstalten
 // eingeschlossen), höchstens alle STRIKE.refreshMin Minuten, je Lauf etwa 12–25 Abrufe (die App erlaubt 60 je Stunde), vollständiger Text nur für
 // neue Streik-Meldungen (höchstens maxDetails) → streiks.json: nur abgeleitete Angaben (Art, Tage, Gebiet, erkannte Orte/Betriebe) und Link, keine
@@ -1502,6 +1523,7 @@ let strikeAuto = [];
 // FORECAST_EVERY_MIN Minuten (Standard 60); FORECAST=0 = aus. Bei Fehler bleiben die alten Dateien.
 // forecast/series.json: Stundenreihen fürs Dashboard (Plan heute eingefroren, Ist, Live-Prognose bis Ende morgen, je Anbieter, Art, Gemeinde und große Gruppe).
 let trainCtx = null; // Einträge, die in diesem Lauf in der Prognose wirken bzw. zurückgehalten sind (fürs Trainingsarchiv, unten)
+PH.phase('prognose');
 if (process.env.FORECAST !== '0') {
   try {
     const fLatest = path.join(DATA, 'forecast', 'latest.json');
@@ -1575,6 +1597,7 @@ if (process.env.FORECAST !== '0') {
 // wie in der Prognose). weather-fc/ (gesicherte Vorhersagen) 40 Tage. TRAIN=0 = aus. Ohne Wirkung auf Prognose und Chronos.
 // Eingriffe der Anbieter und Ausfälle je abgeschlossenem Ortstag (lib/pulse-train.js opsSignals) → eingriffe.json (120 Tage) und train/ (ops)
 const opsByDay = new Map();
+PH.phase('training');
 if (process.env.TRAIN !== '0') {
   try {
     const rdj = async (f) => { try { return existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch { return null; } };
@@ -1622,6 +1645,7 @@ if (process.env.TRAIN !== '0') {
   } catch (e) { log(`Trainingsarchiv: ${e.message}`); }
 }
 
+PH.phase('kalibrierung');
 // Kalibrierung vorrechnen (Audit OPS-04): calib.json mit Faktor k, Prüfwerten und Abdeckung, wie web/report.js loadCalibration – das Dashboard
 // lädt dann eine kleine Datei statt 14 Ereignis- und Verlaufsdateien und rechnet nicht dreimal die Städte-Rangliste. Höchstens stündlich
 // (mit der Prognose) oder wenn die Datei fehlt bzw. älter als 2 Stunden ist; sonst bleibt der alte Stand. CALIB=0 = aus.
@@ -1642,6 +1666,7 @@ if (process.env.CALIB !== '0') {
   } catch (e) { log(`Kalibrierung: ${e.message}`); }
 }
 
+PH.phase('grenzen');
 // Aktive Gemeindegrenzen fürs Dashboard
 if (boundaries) {
   const activeAgs = new Set(munis.keys());
@@ -1664,6 +1689,7 @@ if (boundaries) {
   } catch (e) { log(`Grenzen je Land: ${e.message}`); }
   log(`Aktive Gemeinden: ${feats.length}`);
 }
+PH.phase('abschluss');
 // Namensnennung und Lizenzen des Datenstands (DATA-LICENSE.md im Datenzweig)
 {
   const md = (x) => String(x ?? '').replace(/[\r\n|]+/g, ' ').replace(/[<>]/g, '').replace(/([\[\]`*_\\])/g, '\\$1').trim(); // Text aus Feeds entschärfen (Markdown/HTML)
@@ -1728,5 +1754,13 @@ if (boundaries) {
     const failSrc = med != null && cur < HEALTH.minShare * med, failVeh = vMed != null && vCur < HEALTH.minVehShare * vMed, fail = failSrc || failVeh;
     await writeFile(process.env.HEALTH_FILE, `${fail ? 'fail' : 'ok'}\n${cur} Quellen aktuell/verzögert${med != null ? ` (Median 7 Tage ${med}, Schwelle ${Math.ceil(HEALTH.minShare * med)})` : ''} · ${dv.vehicles.length} Fahrzeuge${vMed != null ? ` (Median ${vMed}, Schwelle ${Math.ceil(HEALTH.minVehShare * vMed)})` : ''}${catalog.catalogFallback?.length ? ` · Verzeichnis nicht erreichbar: ${catalog.catalogFallback.map(x => x.dir).join(', ')}` : ''} · ${((Date.now() - now) / 1000).toFixed(0)} s\n`);
   }
+}
+// status.json v2 (S3.2): Laufzeit, Zeit je Phase, Budget und Trend aus runs.json; RUNTIME_FILE für den Workflow (Issue „laufzeit“)
+{
+  const runsDoc = existsSync(path.join(DATA, 'runs.json')) ? JSON.parse(await readFile(path.join(DATA, 'runs.json'), 'utf8')) : null;
+  const sd = SS.statusDoc({ at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, phases: PH.list(true), counts: latest.counts, byStatus: statusCounts, runs: runsDoc?.runs || null });
+  await writeFile(path.join(DATA, 'status.json'), JSON.stringify(sd));
+  if (process.env.RUNTIME_FILE) await writeFile(process.env.RUNTIME_FILE, SS.runtimeLine(sd));
+  log(`Laufzeit ${(sd.runMs / 1000).toFixed(0)} s (${sd.level}) · längste Phasen: ${sd.phases.slice().sort((x, y) => y[1] - x[1]).slice(0, 4).map(([n, ms]) => `${n} ${(ms / 1000).toFixed(1)} s`).join(', ')}${sd.trend?.ratio != null ? ` · Trend ${sd.trend.ratio}×` : ''}`);
 }
 log(`fertig in ${((Date.now() - now) / 1000).toFixed(1)} s · Status:`, JSON.stringify(statusCounts));

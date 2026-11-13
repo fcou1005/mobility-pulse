@@ -7,6 +7,8 @@ name: Sammler
 #    meldet per Mail, wenn gar kein Lauf mehr pingt – das einzige, was auch einen ganz abgerissenen Ketten-Neustart bemerkt.
 #  - Anstoßen prüft nach 60 s, ob der neue Lauf wirklich startet; bei „Startup failure“ (11.11.2026 21:22–22:00 Uhr: GitHub-Fehler, beide
 #    Ketten abgerissen) neuer Versuch, bis zu 10-mal.
+# Neu in Sprint 3 (S3.2, 13.11.2026): RUNTIME_FILE und Schritt „Laufzeit melden“ – liegt der Median der letzten 6 Läufe über dem
+#    1,5-Fachen des 7-Tage-Medians, öffnet der Lauf ein Issue mit Label „laufzeit“ (wieder normal → geschlossen). Phasenzeiten in status.json.
 # Neu in Sprint 0 (S0.1, 13.11.2026): Schutz vor dem Überschreiben des Datenstands
 #  - „Bisherigen Datenstand holen“ ruft scripts/data-fetch.sh: nur ein fehlender Branch gilt als „noch kein Datenstand“, ein gescheiterter
 #    Abruf bricht nach 3 Versuchen ab (vorher lief der Sammler dann auf leerem Stand, und der Force-Push hätte archive/ und train/ gelöscht)
@@ -102,6 +104,7 @@ jobs:
           SOURCES_FILE: data/sources.json
           HISTORY_DAYS: '30'
           HEALTH_FILE: health.txt
+          RUNTIME_FILE: runtime.txt
           DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
           DB_API_KEY: ${{ secrets.DB_API_KEY }}
         run: |
@@ -144,6 +147,22 @@ jobs:
                 -b "$grund"$'\n\n'"Lauf: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} · schließt sich, sobald ein Lauf wieder normal ist." || true
             else gh issue comment "$offen" -R "$GITHUB_REPOSITORY" -b "weiter: $grund ($(TZ=Europe/Berlin date '+%H:%M'))" >/dev/null 2>&1 || true; fi
             echo "::error::Teilausfall: $grund"; exit 1
+          elif [ -n "$offen" ]; then gh issue close "$offen" -R "$GITHUB_REPOSITORY" -c "Wieder normal: $grund" || true; fi
+      - name: Laufzeit melden (Issue „laufzeit“, S3.2)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -s runtime.txt ] || { echo "keine Laufzeit-Angabe"; exit 0; }
+          st=$(head -1 runtime.txt); grund=$(tail -1 runtime.txt); echo "Laufzeit: $st – $grund"
+          offen=$(gh issue list -R "$GITHUB_REPOSITORY" -l laufzeit -s open --json number -q '.[0].number' 2>/dev/null || true)
+          if [ "$st" = alarm ]; then
+            if [ -z "$offen" ]; then
+              gh label create laufzeit -R "$GITHUB_REPOSITORY" -c FBCA04 -d "Sammler deutlich langsamer als üblich (automatisch)" 2>/dev/null || true
+              gh issue create -R "$GITHUB_REPOSITORY" -l laufzeit -t "Sammler: Laufzeit $(TZ=Europe/Berlin date '+%d.%m. %H:%M')" \
+                -b "$grund"$'\n\n'"Lauf: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} · Phasen in status.json, Ansicht #status · schließt sich, sobald die Laufzeit wieder normal ist." || true
+            else gh issue comment "$offen" -R "$GITHUB_REPOSITORY" -b "weiter: $grund" >/dev/null 2>&1 || true; fi
+            echo "::warning::$grund"
           elif [ -n "$offen" ]; then gh issue close "$offen" -R "$GITHUB_REPOSITORY" -c "Wieder normal: $grund" || true; fi
       - name: Verfolgungszustand im privaten Cache sichern
         if: ${{ always() && hashFiles('track-state/**') != '' }}

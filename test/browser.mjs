@@ -31,6 +31,7 @@ const CHECKS = {
   'prognose-basis': [['Selbstkontrollen', /Selbstkontrollen/], ['Parameter', /Parameter/]],
   sources: [['letzter Lauf', /Letzter Lauf \d\d:\d\d/], ['Quellen aktuell', /\d+ von \d+ Quellen aktuell/]],
   signals: [['Kopf', /Signale je Anbieter und Gemeinde/], ['Stationshinweis', /Abstellzonen ohne Fahrzeug/]],
+  status: [['letzter Lauf', /LETZTER LAUF\s*\d\d:\d\d/i], ['Laufzeit mit Stufe', /LAUFZEIT\s*\d+ s/i], ['Verlauf', /Laufzeit der letzten 7 Tage/]],
 };
 const VIEWS = Object.keys(CHECKS).filter(v => !ONLY || ONLY.includes(v));
 const BAD_TEXT = /nicht ladbar|konnte nicht geladen|Fehler beim Laden/i;

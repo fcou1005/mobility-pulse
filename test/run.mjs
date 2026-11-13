@@ -69,7 +69,7 @@ await writeFile(path.join(tmp, 's4i.json'), JSON.stringify({ ...cat, auth_source
 await writeFile(path.join(tmp, 'ref.json'), JSON.stringify({ obergrenzen: [{ ags: '08416041', ort: 'Tübingen (Test)', type: 'scooter', gesamt: 1, jeAnbieter: 5, quelle: 'Test', url: 'https://example.org' }] }));
 // Städte laut Anbieter (Abdeckung): Bolt nennt Tübingen und Stuttgart, Dott „Tubingen“ (englische Umschrift)
 await writeFile(path.join(tmp, 'cities.json'), JSON.stringify({ erstellt: '2026-11-01', anbieter: [{ name: 'Bolt', quelle: 'https://example.org/bolt', staedte: [{ ort: 'Tübingen' }, { ort: 'Stuttgart' }] }, { name: 'Dott', quelle: 'https://example.org/dott', staedte: [{ ort: 'Tubingen' }] }] }));
-const env3 = { TRACK_DIR, HEALTH_FILE: path.join(tmp, 'health.txt'), REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'), ZONES_FILE: '',
+const env3 = { TRACK_DIR, HEALTH_FILE: path.join(tmp, 'health.txt'), RUNTIME_FILE: path.join(tmp, 'runtime.txt'), REFRESH_STATIC: '1', MP_TEST_KEY: 'geheim-123', FETCH_TIMEOUT: '1500', MAX_BYTES: '200000', REFERENCE_FILE: path.join(tmp, 'ref.json'), OPERATOR_CITIES_FILE: path.join(tmp, 'cities.json'), ZONES_FILE: '',
   ZONE_WATCH: JSON.stringify({ type: 'Feature', properties: { name: 'Testzone', limits: { scooter: { maximum: 777 } } }, geometry: { type: 'Polygon', coordinates: [[[8.9, 48.4], [9.3, 48.4], [9.3, 48.9], [8.9, 48.9], [8.9, 48.4]]] } }) };
 const t3 = Date.now();
 await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's3.json') });
@@ -435,6 +435,10 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
   const lic = await readFile('test/out/DATA-LICENSE.md', 'utf8');
   const hl = (await readFile(path.join(tmp, 'health.txt'), 'utf8')).split('\n');
   assert(['ok', 'fail'].includes(hl[0]) && /Quellen aktuell\/verzögert/.test(hl[1]), `Ausfall-Wächter: HEALTH_FILE mit Status und Grund (${hl.join(' | ').trim()})`);
+  // S3.2: status.json v2 mit Phasen und Budget, RUNTIME_FILE für das Issue „laufzeit“
+  const stj = JSON.parse(await readFile('test/out/status.json', 'utf8')), rl = (await readFile(path.join(tmp, 'runtime.txt'), 'utf8')).split('\n');
+  assert(stj.schemaVersion === '2.0' && stj.complete === true && stj.level === 'ok' && stj.phases.length >= 10 && stj.phases.some(([n]) => n === 'verfolgung') && stj.budget.warnS === 360 && stj.trend && rl[0] === 'ok' && /Laufzeit \d+ s/.test(rl[1]),
+    `status.json v2: ${stj.phases.length} Phasen (${stj.phases.slice().sort((x, y) => y[1] - x[1]).slice(0, 3).map(([n, ms]) => `${n} ${ms} ms`).join(', ')}), Stufe ${stj.level}, Laufzeit-Zeile „${rl[0]}“`);
   assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
 }
 // Goldene Tage (P3): Rohstände nur privat im Cache, je Lauf eine Zeile, gesalzene Kennungen

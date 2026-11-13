@@ -1,19 +1,20 @@
-import * as C from './pulse-core.js?v=mwf5mnur';
-import * as Ops from './ops.js?v=mwf5mnur';
-import * as E from './pulse-econ.js?v=mwf5mnur';
-import * as K from './pulse-calib.js?v=mwf5mnur';
-import * as Rp from './report.js?v=mwf5mnur';
-import * as R from './pulse-report.js?v=mwf5mnur';
-import * as Fl from './flows.js?v=mwf5mnur';
-import * as Cov from './coverage.js?v=mwf5mnur';
-import * as Cmp from './compare.js?v=mwf5mnur';
-import * as Sp from './spots.js?v=mwf5mnur';
-import * as Fv from './forecast.js?v=mwf5mnur';
-import { mapKeys } from './mapkeys.js?v=mwf5mnur';
-import { weatherFor } from './weather.js?v=mwf5mnur';
-import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwf5mnur';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwf5mnur';
-import { idleClassText } from './pulse-ops.js?v=mwf5mnur';
+import * as C from './pulse-core.js?v=mwf6frp1';
+import * as Ops from './ops.js?v=mwf6frp1';
+import * as E from './pulse-econ.js?v=mwf6frp1';
+import * as K from './pulse-calib.js?v=mwf6frp1';
+import * as Rp from './report.js?v=mwf6frp1';
+import * as R from './pulse-report.js?v=mwf6frp1';
+import * as Fl from './flows.js?v=mwf6frp1';
+import * as Cov from './coverage.js?v=mwf6frp1';
+import * as Cmp from './compare.js?v=mwf6frp1';
+import * as Sp from './spots.js?v=mwf6frp1';
+import * as Fv from './forecast.js?v=mwf6frp1';
+import { renderStatus } from './status.js?v=mwf6frp1';
+import { mapKeys } from './mapkeys.js?v=mwf6frp1';
+import { weatherFor } from './weather.js?v=mwf6frp1';
+import { GROUP_MIN, GROUP_M } from './pulse-track.js?v=mwf6frp1';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js?v=mwf6frp1';
+import { idleClassText } from './pulse-ops.js?v=mwf6frp1';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
 
@@ -523,19 +524,19 @@ function snapshotToSystem(snap, rec) {
 // ---------- Rendering ----------
 // Vier Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
 // „Städte“: die bundesweiten Vergleiche (Gebietsvergleich, Verfügbarkeit je Stadt, Rangliste, Dichte) aus „Leistung“ ausgelagert
-const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources'];
+const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources', 'status'];
 const GROUPS_DEF = () => [
   { id: 'markt', label: t('app.marketView'), segs: [['live', t('app.overview')], ['lab', t('app.performance')], ['staedte', t('app.citiesSeg')], ['usage', t('app.usage')], ['coverage', t('app.coverageSeg')], ['vergleich', t('app.compare')], ['bericht', t('app.report')]] },
   { id: 'prognose', label: t('app.forecast'), segs: [['prognose', t('fv.segVerlauf')], ['prognose-spots', t('fv.segSpots')], ['prognose-basis', t('fv.segBasis')]] },
   { id: 'ops', label: t('app.operations'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')]] },
-  { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')]] },
+  { id: 'vertrauen', label: t('app.dataTrust'), segs: [['sources', t('app.sources2')], ['signals', t('app.signals')], ['status', t('app.statusSeg')]] },
 ];
 const VIEW_ALIAS = { cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources', datenqualität: 'sources', datenqualitaet: 'sources', qualitaet: 'sources' };
-const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals', 'prognose-basis']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
+const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals', 'prognose-basis', 'status']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 let currentView = 'live', urlReady = false;
 const resolveView = (h) => { try { h = decodeURIComponent(h); } catch { /* Hash nicht dekodierbar: roh verwenden */ } let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 // Welche Filter der Leiste in welcher Ansicht wirken; die übrigen werden ausgeblendet (Disposition und Vergleich haben eigene Auswahl im Panel)
-const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op type', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode' };
+const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op type', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode', status: 'none' };
 let viewShown = false;
 function setView(name) {
   name = resolveView(name);
@@ -568,7 +569,7 @@ function setView(name) {
 // ---------- Ansichten zeichnen: nur die sichtbare ----------
 // Hook für weitere Module (z. B. web/report.js): VIEW_RENDER[name] = [fn, …] ergänzen; renderAll() markiert alle Ansichten als veraltet
 // und zeichnet die aktive, setView() zeichnet eine veraltete Ansicht beim Öffnen.
-const VIEW_RENDER = { live: [() => renderLive()], lab: [() => renderLab(), () => renderPricing(), () => renderShareChart()], usage: [() => renderUsage()], ops: [() => renderOps()], signals: [() => renderSignals()], coverage: [() => renderCoverage()], sources: [() => renderSources()] };
+const VIEW_RENDER = { live: [() => renderLive()], lab: [() => renderLab(), () => renderPricing(), () => renderShareChart()], usage: [() => renderUsage()], ops: [() => renderOps()], signals: [() => renderSignals()], coverage: [() => renderCoverage()], sources: [() => renderSources()], status: [() => renderStatus($('#st-panel'), { state, CFG, esc, fmt, getJson: getJsonShared })] };
 const dirty = new Set(VIEWS); let dataReady = false;
 // Ein fehlerhaftes Panel darf die übrigen nicht mitreißen
 const safe = (f) => { try { const r = f(); if (r?.catch) r.catch(e => console.error(f.name, e)); } catch (e) { console.error(f.name, e); } };
@@ -2621,6 +2622,7 @@ function renderFilterSum() {
   const fs = (FILTERS[currentView] || 'scope op type mode').split(' ');
   const parts = [fs.includes('scope') ? scopeLabel() : null, fs.includes('op') ? (state.operator === 'all' ? t('app.allOperatorsOnSite') : state.operator) : null, fs.includes('type') ? (state.type === 'all' ? t('html.allVehicleTypes') : TYPE[state.type] || state.type) : null].filter(Boolean);
   b.textContent = parts.join(' · ');
+  b.hidden = !parts.length; // Ansicht ohne Filter (#status): keine leere Zusammenfassung
 }
 async function init() {
   try { const tq = localStorage.getItem('mp-theme'); if (tq) document.documentElement.dataset.theme = tq; } catch {}
