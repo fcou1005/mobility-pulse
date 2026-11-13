@@ -1,0 +1,36 @@
+# Nur über die GitHub-Weboberfläche unter fcou1005 ändern (Vorlage scripts/backup-workflow.yml, siehe CLAUDE.md).
+# Wochensicherung (Sprint 0, S0.2): Der Branch data hat nur einen Commit, weil jeder Sammler-Lauf ihn neu schreibt. Diese Sicherung legt jeden
+# Sonntag die Teile ab, die sich nicht neu rechnen lassen (archive/, groups/, train/, train-cells/ und die Logs), als Asset einer Vorabversion
+# „datenstand-JJJJ-MM-TT“. Die 12 neuesten bleiben (drei Monate). Wiederherstellen: scripts/data-backup.sh restore.
+name: Wochensicherung
+on:
+  schedule:
+    - cron: '17 3 * * 0'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Datenstand holen
+        run: bash scripts/data-fetch.sh out
+      - name: Packen und Vollständigkeit prüfen
+        run: bash scripts/data-backup.sh pack out backup.tar.gz
+      - name: Als Vorabversion ablegen, ältere als die 12 neuesten löschen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="datenstand-$(date -u +%F)"
+          gh release delete "$TAG" -R "$GITHUB_REPOSITORY" -y --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" backup.tar.gz -R "$GITHUB_REPOSITORY" --prerelease --title "Datenstand $(date -u +%F)" \
+            --notes "Wochensicherung des Datenstands: archive/, groups/, train/, train-cells/ und Logs aus dem Branch data. Wiederherstellen mit scripts/data-backup.sh restore."
+          gh release list -R "$GITHUB_REPOSITORY" -L 100 --json tagName -q '.[].tagName' | grep '^datenstand-' | sort -r | tail -n +13 \
+            | while read -r t; do gh release delete "$t" -R "$GITHUB_REPOSITORY" -y --cleanup-tag; done
