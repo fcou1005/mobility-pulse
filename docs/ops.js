@@ -1,9 +1,9 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mwexvlu5';
-import { parseJsonSafe } from './pulse-core.js?v=mwexvlu5';
-import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mwexvlu5';
-import { mapKeys } from './mapkeys.js?v=mwexvlu5';
-import { mbBadge, mbBase } from './report.js?v=mwexvlu5';
+import * as O from './pulse-ops.js?v=mweyo7ue';
+import { parseJsonSafe } from './pulse-core.js?v=mweyo7ue';
+import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mweyo7ue';
+import { mapKeys } from './mapkeys.js?v=mweyo7ue';
+import { mbBadge, mbBase } from './report.js?v=mweyo7ue';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -30,6 +30,12 @@ const HOUR_BERLIN = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: 
 const BAND_NOW = () => O.bandOf(+HOUR_BERLIN.format(new Date()) % 24);
 const num = (id, d) => { const v = +$(id)?.value; return Number.isFinite(v) && v > 0 ? v : d; };
 // Regler „Priorität ↔ Strecke“: Stufe 0–4 (O.PRIO_LEVELS → λ), in der URL als ?prio= (Standardstufe ohne Parameter; app.js syncUrl lässt ihn stehen)
+// S2.12: Depot je Gemeinde in der URL (?depot=Breite,Länge), damit ein gesetztes Depot einen Neuladen übersteht und sich teilen lässt
+function urlDepot() { try { const m = /^(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)$/.exec(new URLSearchParams(location.search).get('depot') || ''); return m ? { lat: +m[1], lon: +m[2] } : null; } catch { return null; } }
+function syncDepotUrl(d) {
+  try { const q = new URLSearchParams(location.search); if (d) q.set('depot', `${d.lat.toFixed(5)},${d.lon.toFixed(5)}`); else q.delete('depot');
+    const s = q.toString().replace(/%2F/g, '/').replace(/%2C/g, ','); history.replaceState(history.state, '', `${location.pathname}${s ? `?${s}` : ''}${location.hash}`); } catch { /* file:// o. Ä. */ }
+}
 function urlPrio() { try { const v = new URLSearchParams(location.search).get('prio'), n = v == null || v === '' ? NaN : +v; return Number.isInteger(n) && n >= 0 && n < O.PRIO_LEVELS.length ? n : O.PRIO_LEVEL_DEFAULT; } catch { return O.PRIO_LEVEL_DEFAULT; } }
 function syncPrioUrl() {
   try { const q = new URLSearchParams(location.search); if (S.prioLevel === O.PRIO_LEVEL_DEFAULT) q.delete('prio'); else q.set('prio', String(S.prioLevel));
@@ -76,6 +82,8 @@ export function initOps(ctx) {
   $('#ops-op').addEventListener('change', (e) => { S.op = e.target.value; computePlan(); });
   $('#ops-type').addEventListener('change', () => { applyTypePreset(); computePlan(); });
   ['#ops-band', '#ops-days'].forEach(id => $(id).addEventListener('change', () => computePlan()));
+  // S2.12: Straßenrouting (OSRM-Demo-Server) nur auf ausdrücklichen Wunsch: Seitenaufruf löst keine Anfrage aus
+  $('#ops-route').addEventListener('change', (e) => { if (e.target.checked && S.plan) routeRuns(); else renderTiles(); });
   $('#ops-depot').addEventListener('click', () => { S.pickDepot = !S.pickDepot; $('#ops-depot').classList.toggle('primary', S.pickDepot); status(S.pickDepot ? t('ops.clickOnMapToSetDepot') : ''); });
   // „Zu den Touren“: Textlink im Kopf der Plan-Karte (springt zur Tourliste, ohne die Ansicht zu wechseln)
   document.addEventListener('click', (e) => { const j = e.target.closest('[data-ops-jump]'); if (!j) return; e.preventDefault(); const el = $(`#${j.dataset.opsJump}`)?.closest('.panel') || $(`#${j.dataset.opsJump}`); if (!el) return; el.tabIndex = -1; el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'start' }); });
@@ -146,7 +154,7 @@ function ensureMap() {
   for (const k of ['demand', 'fleet', 'runs']) S.canvas[k] = L.canvas({ padding: 0.5 });
   for (const k of ['demand', 'official', 'fleet', 'spots', 'groups', 'collect', ...RUN_KINDS, 'depot']) S.layers[k] = L.featureGroup().addTo(S.map);
   for (const k of ['demand', 'fleet']) S.layers[k].on('click', openShared); // Klicks der Canvas-Marker steigen zur Gruppe auf
-  S.map.on('click', (e) => { if (!S.pickDepot || !S.plan) return; S.depot[S.plan.ags] = { lat: e.latlng.lat, lon: e.latlng.lng }; S.pickDepot = false; $('#ops-depot').classList.remove('primary'); computePlan(); });
+  S.map.on('click', (e) => { if (!S.pickDepot || !S.plan) return; S.depot[S.plan.ags] = { lat: e.latlng.lat, lon: e.latlng.lng }; syncDepotUrl(S.depot[S.plan.ags]); S.pickDepot = false; $('#ops-depot').classList.remove('primary'); computePlan(); });
   // Tastatur (web/mapkeys.js): N/P zeigt auch das gemeinsame Popup der Canvas-Ebenen; im Depot-Modus setzt Enter das Depot in die Kartenmitte
   mapKeys(S.map, { open: (l, ll) => (POP.has(l) ? (openShared({ layer: l, latlng: ll }), true) : false), centerClick: () => (S.pickDepot && S.plan ? t('maps.depotPlaced') : null), hintExtra: () => t('maps.hintDepot') });
 }
@@ -351,9 +359,7 @@ async function computePlan() {
     // Energie und Werkstatt (Audit 11.11.2026, UXP-01; vorher z. B. 73 Auto-Umsetzungen für stationsgebundenes Carsharing)
     const noDemand = type === 'car' || type === 'moped' || (vehicles.length > 0 && vehicles.every(v => v.type === 'car' || v.type === 'moped'));
     const stations = stInMuni.filter(s => s.operator === op);
-    const marketAvail = inMuni.filter(v => O.isAvailable(v) && (type === 'all' || v.type === type)).length;
-    const opAvail = vehicles.filter(O.isAvailable).length;
-    const share = marketAvail ? opAvail / marketAvail : 1;
+    const share = O.operatorShare(fleet, ags, op, { type }) ?? 1; // S2.10: derselbe Anteil wie Spot-Abgleich und Prognose-Spots (Markt ohne Autos)
     collectFor(ags, op, type, vehicles, fleet); // Einsammelliste (Abstellverbot): unabhängig von Nachfrage und Plan, im Hintergrund
     // Nachfrage
     const bandSel = $('#ops-band').value; let band = bandSel === 'auto' ? BAND_NOW() : bandSel === 'day' ? 'day' : +bandSel;
@@ -382,6 +388,7 @@ async function computePlan() {
     // Overpass im Hintergrund: danach nur Spots und Umsetzen neu (rescoreSpots), nicht der ganze Plan
     if (useOsm && !osm && pre.spots.length) overpassBackground(ags, pre.spots, () => rescoreSpots(ags));
     renderWarn(ags, osm, np, official, groupRes);
+    if (!S.depot[ags] && !S.depotUrlUsed) { const u = urlDepot(); S.depotUrlUsed = true; if (u && (!b || (u.lon >= b[0] - 0.2 && u.lon <= b[2] + 0.2 && u.lat >= b[1] - 0.2 && u.lat <= b[3] + 0.2))) S.depot[ags] = u; } // nur einmal, nur in der Nähe der Gemeinde
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
     const params = { topN, spacing, share, horizonH, van: num('#ops-van', 20), common: { depot, maxRuns: num('#ops-maxruns', 6), horizonH, maxRunMin: Math.round(num('#ops-maxh', 4) * 60), prioLambda: prioLambda() }, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
     const plan = { ags, op, type, noDemand, band, bandNote, model, share, depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
@@ -686,7 +693,7 @@ function renderRuns() {
     const body = runs.length ? runs.map(r => {
       const pts = [p.depot, ...r.stops, p.depot]; const links = O.mapsLinks(pts);
       return `<div class="card ops-run${S.focus === r.id ? ' focus' : ''}" data-run="${r.id}" title="${t('ops.showOnlyThisRunOnMap')}" style="border-left:3px solid ${RUN_COLOR[kind]}">${t('ops.vehStops', { id: r.id, vehicles: f(r.vehicles), length: f(r.stops.length), v3: r.kind === 'rebalance' && r.prio ? ` · ${t('ops.shortfallUpTo', { prio: f(r.prio) })}` : '' })}
-        <p>${t('ops.kmMinDrivingMinOnSiteMin', { km: f(r.km, 1), driveMin: f(r.driveMin), handleMin: f(r.handleMin), totalMin: f(r.totalMin), v4: S.routed[r.id] ? ` · ${t('ops.road')}` : '', v5: limit && r.totalMin > limit ? ` · <span class="warn-text">${t('ops.byRoadOver', { hText })}</span>` : '' })}</p>
+        <p>${t('ops.kmMinDrivingMinOnSiteMin', { km: f(r.km, 1), driveMin: f(r.driveMin), handleMin: f(r.handleMin), totalMin: f(r.totalMin), v4: S.routed[r.id] ? ` · ${t('ops.road')}` : '', v5: (limit && r.totalMin > limit ? ` · <span class="warn-text">${t('ops.byRoadOver', { hText })}</span>` : '') + (r.trimmed ? ` · <span class="warn-text">${t('ops.trimmedByLimit', { n: f(r.trimmed), hText })}</span>` : '') })}</p>
         ${seqLine(r)}
         <details${open.has(r.id) ? ' open' : ''}><summary>${t('ops.stopList')}</summary><ol class="small">${r.stops.map(s => stopItem(s, r)).join('')}</ol></details>
         <div class="foot"><button class="chip" data-fit="${r.id}">${t('ops.onMap')}</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener" title="${t('ops.googleMapsAllowsAtMost10')}">${links.length > 1 ? t('ops.routePartOf', { v0: i + 1, length: links.length }) : t('ops.route')} ↗</a>`).join(' · ')}</div></div>`;
@@ -937,7 +944,19 @@ async function roadOptimize(r, p) {
   const mx = await roadMatrix([p.depot, ...r.stops]); if (!mx || S.plan !== p) return false; // Plan inzwischen ersetzt: nichts in die alte Tour schreiben
   const sq = O.sequenceRun(O.runGroups(r.stops), { depot: p.depot, cost: O.matrixCost([p.depot, ...r.stops], mx.D), lambda: p.params.common.prioLambda });
   Object.assign(r, { stops: sq.stops, km: sq.km, kmSeq: sq.km, kmMin: sq.kmMin, kmNN: sq.kmNN, kmPrio: sq.kmPrio, reachKm: sq.reachKm, reachKmMin: sq.reachKmMin, obj: sq.obj, road: true, roadMissing: mx.missing });
-  const seq = [p.depot, ...r.stops, p.depot], dur = roadDur(seq); if (dur != null) r.driveMin = Math.round(dur / 60);
+  let seq = [p.depot, ...r.stops, p.depot], dur = roadDur(seq); if (dur != null) r.driveMin = Math.round(dur / 60);
+  // S2.12: nach der Straßenzeit die Einsatzgrenze neu anwenden (niedrigste Priorität fällt weg, Rest neu geordnet)
+  const limit = p.params.common.maxRunMin;
+  if (limit && r.driveMin + r.handleMin > limit) {
+    const cost = O.matrixCost([p.depot, ...r.stops], mx.D), D = O.DEFAULTS;
+    const minOf = (sq) => { const d = roadDur(sq); if (d != null) return d / 60; let m = 0; for (let i = 0; i < sq.length - 1; i++) m += cost(sq[i], sq[i + 1]); return m / 1000 / D.speedKmh * 60; };
+    const tr = O.trimRun(r, { depot: p.depot, cost, minOf, limitMin: limit, lambda: p.params.common.prioLambda });
+    if (tr.removed) {
+      Object.assign(r, { stops: tr.stops, vehicles: tr.vehicles, driveMin: tr.driveMin, handleMin: tr.handleMin, trimmed: (r.trimmed || 0) + tr.removed });
+      const plan = { rebalance: p.rebalance, swap: p.swaps, workshop: p.workshop, station: p.station }[r.kind]; if (plan) plan.unplanned = (plan.unplanned || 0) + tr.removed;
+      seq = [p.depot, ...r.stops, p.depot];
+    }
+  }
   const rt = await roadRoute(seq); if (S.plan !== p) return false;
   if (rt) { r.km = rt.km; r.driveMin = rt.min; }
   S.routed[r.id] = { coords: rt?.coords || null }; r.totalMin = r.driveMin + r.handleMin;

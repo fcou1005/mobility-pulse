@@ -27,6 +27,7 @@ const fleet = {
   vehicles: [
     vh('Voi', 48.78002, 9.18), vh('Voi', 48.76002, 9.10002), vh('Voi', 48.76003, 9.09998), vh('Voi', 48.75998, 9.10001, { disabled: true }),
     vh('Bolt', 48.7900, 9.20002), vh('Bolt', 48.7500, 9.1500), vh('Lime', 48.7700, 9.1700), vh('Lime', 48.7800, 9.1802),
+    { ...vh('Dott', 48.7000, 9.0001), ags: '08115003' }, // Dott hier ohne Fahrzeuge: Familie aus dem Land (E-Scooter)
   ],
 };
 const quota = { at: 1, days: 7, fields: ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns', 'virtual'], stations: [
@@ -59,7 +60,7 @@ assert(byName(sp, 'Marktplatz').emptyShare === 0.1 && byName(sp, '48.76000,9.160
 // ---------- Übersicht je Anbieter ----------
 const r = S.analyzeSpots(fleet, { ags: A, radiusM: 50, quota, demand, zones });
 const row = (op) => r.rows.find(x => x.op === op);
-assert(r.own === 'Voi' && r.operators.join() === 'Voi,Bolt,Dott,Lime', 'Standard-Perspektive: Anbieter mit den meisten Spots (Voi); Lime ohne Spots wählbar');
+assert(r.own === 'Voi' && r.family === 'scooter' && r.operators.join() === 'Voi,Bolt,Lime,Dott', 'Standard-Perspektive: größte E-Scooter-Flotte mit Spots (Voi); Reihenfolge nach Flotte (A18), Lime ohne Spots wählbar, Dott ohne Fahrzeuge hier zuletzt');
 const voi = row('Voi'), bolt = row('Bolt');
 assert(voi.spots === 5 && voi.virtual === 5 && voi.physical === 0 && voi.diff === null && bolt.diff === -2 && row('Dott').diff === -3, 'Spots je Anbieter und Differenz zum eigenen');
 assert(voi.dupExtra === 1 && voi.quotaKnown === 3 && voi.permEmpty === 1, 'Dubletten (überzählig) und dauerhaft leer (≥ 90 % bei ≥ 36 Läufen; Schlossplatz mit 20 Läufen zählt nicht)');
@@ -71,15 +72,25 @@ const m = r.missing;
 assert(m.length === 3 && m.every(x => x.members.every(y => y.operator !== 'Voi')), 'Fehlt bei mir: 3 Orte, nur fremde Spots ohne eigenen im Umkreis (Marktplatz B hat Voi in 44 m)');
 const bf = m[0];
 assert(bf.rank === 1 && bf.nOps === 2 && bf.ops.join() === 'Bolt,Dott' && bf.members.length === 2 && bf.spread === 13 && bf.label === 'Bahnhof', 'Bündelung: Bolt „Bahnhof“ und Dott „Bahnhof (Hub)“ 13 m auseinander = ein Ort mit 2 Anbietern, Rang 1');
-assert(Math.abs(bf.score - 3) < 1e-9 && bf.reasons.some(x => x.k === 'demand' && x.v === 2) && bf.reasons.some(x => x.k === 'otherEmpty') && bf.export.deploymentVehicles >= 2,
-  'Punkte = 2 Anbieter + Nachfrage 1 (2,0 Starts/h über dem 95. Perzentil); fremde Spots dort meist leer; Vorschlag Fahrzeuge aus der Nachfrage');
+assert(Math.abs(bf.score - 2) < 1e-9 && bf.reasons.some(x => x.k === 'demand' && x.v === 2) && bf.reasons.some(x => x.k === 'otherEmpty') && bf.export.deploymentVehicles >= 2,
+  'Punkte (A18) = 2 × Nachfrage 1 (2,0 Starts/h über dem 95. Perzentil), Anbieterzahl nur bei Gleichstand; fremde Spots dort meist leer; Vorschlag Fahrzeuge aus der Nachfrage');
 const uni = m[1];
-assert(uni.label === 'Uni' && uni.ownVehicles === 3 && Math.abs(uni.score - (1 + 0.2 + 0.75)) < 1e-9 && uni.reasons.some(x => x.k === 'veh' && x.n === 3), 'Rang 2: ein Anbieter, wenig Nachfrage, 3 eigene Fahrzeuge ohne Spot (auch gesperrte zählen)');
+assert(uni.label === 'Uni' && uni.ownVehicles === 3 && Math.abs(uni.score - (2 * 0.2 + 0.75)) < 1e-9 && uni.reasons.some(x => x.k === 'veh' && x.n === 3), 'Rang 2: ein Anbieter, wenig Nachfrage, 3 eigene Fahrzeuge ohne Spot (auch gesperrte zählen)');
 assert(m[2].reasons.some(x => x.k === 'noDemand') && m[2].export.deploymentVehicles === 0 && m[2].nearestOwn.d > 1000, 'Rang 3: ohne Nachfrage in der Zelle; nächster eigener Spot mit Abstand');
 const r25 = S.analyzeSpots(fleet, { ags: A, radiusM: 25, quota, demand });
 assert(r25.missing.some(x => x.label === 'Marktplatz B') && r25.missing.length === 4, 'Umkreis 25 m: Marktplatz B (33 m zum nächsten Voi-Spot) fehlt jetzt bei Voi');
-const rAll = S.analyzeSpots(fleet, { ags: A, radiusM: 50, quota, demand, kind: 'all' });
-assert(rAll.missing.find(x => x.label === 'Uni').ops.join() === 'Bolt,RegioRad' && rAll.rows.find(x => x.op === 'RegioRad').physical === 1, 'alle Stationen: Dock-Station RegioRad bündelt mit Bolt „Uni“');
+const rAll = S.analyzeSpots(fleet, { ags: A, radiusM: 50, quota, demand, kind: 'all', family: 'all' });
+assert(rAll.missing.find(x => x.label === 'Uni').ops.join() === 'Bolt,RegioRad' && rAll.rows.find(x => x.op === 'RegioRad').physical === 1, 'alle Stationen, alle Arten: Dock-Station RegioRad bündelt mit Bolt „Uni“');
+const rFam = S.analyzeSpots(fleet, { ags: A, radiusM: 50, quota, demand, kind: 'all' });
+assert(rFam.family === 'scooter' && !rFam.rows.some(x => x.op === 'RegioRad') && rFam.excluded.some(x => x.op === 'RegioRad' && x.family === null) && rFam.missing.find(x => x.label === 'Uni').ops.join() === 'Bolt',
+  'S2.9: gleiche Familie – Station ohne Fahrzeuge der Familie (RegioRad) nicht im Abgleich, als ausgenommen genannt');
+{ // S2.9/A18: Carsharing-Stationen nie gegen E-Scooter; eigener Anbieter nach der Flotte der Familie, nicht nach Spots
+  const f2 = { at: 1, stations: [st('Voi', 'Hbf', 48.80, 9.20), ...[0, 1, 2, 3, 4].map(i => st('stadtmobil', `Auto ${i}`, 48.81 + i * 0.001, 9.21)), st('RegioRad', 'Rad', 48.83, 9.22, { docks: 5 })],
+    vehicles: [vh('Voi', 48.80, 9.2001), vh('Voi', 48.801, 9.2), ...[0, 1, 2].map(i => vh('stadtmobil', 48.81 + i * 0.001, 9.2101, { type: 'car' })), vh('stadtmobil', 48.81, 9.211, { type: 'cargo' }), vh('RegioRad', 48.83, 9.2201, { type: 'bike' })] };
+  const a = S.analyzeSpots(f2, { ags: A, kind: 'all' }), c = S.analyzeSpots(f2, { ags: A, own: 'stadtmobil', kind: 'all' }), b = S.analyzeSpots(f2, { ags: A, kind: 'all', family: 'bike' });
+  assert(a.own === 'Voi' && a.family === 'scooter' && a.missing.length === 0 && a.excluded.map(x => x.op).join() === 'RegioRad,stadtmobil' && c.family === 'car' && c.operators.join() === 'stadtmobil'
+    && b.own === 'RegioRad' && b.operators.join() === 'RegioRad', 'S2.9: Voi sieht keine Carsharing- oder Radstationen; stadtmobil (meist Autos, 1 Lastenrad) zählt zur Familie Auto; Familie Rad: RegioRad');
+}
 const rb = S.analyzeSpots(fleet, { ags: A, own: 'Bolt', radiusM: 50, quota });
 assert(rb.own === 'Bolt' && !rb.missing.some(x => x.members.some(y => y.label === 'Bahnhof (Hub)')) && rb.missing.some(x => x.label === 'Schlossplatz') && rb.demand === null && rb.missing.every(x => !x.reasons.some(y => y.k === 'demand' || y.k === 'noDemand')),
   'Perspektive Bolt: Dott-Hub neben dem eigenen Bahnhof fehlt nicht; ohne Tagesdateien keine Nachfrage-Begründung');

@@ -368,7 +368,7 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   // Priorität, Rang und Grund je Stopp (wie die Stoppliste der Disposition), auch im GeoJSON
   const dropLine = rc.split('\n').find(l => l.includes('Fehlmenge 6)'));
   const st0 = two.runs[0].stops.find(s => s.type === 'drop');
-  assert(rc.split('\n')[0].endsWith(';prioritaet;prio_rang;grund') && dropLine.endsWith(`;${st0.prio};${st0.rank};${O.stopReason(st0)}`) && /Fehlmenge 6|Spot leer/.test(O.stopReason(st0)), 'Touren-CSV: Priorität, Rang und Grund je Stopp');
+  assert(rc.split('\n')[0].endsWith(';prioritaet;prio_rang;grund') && dropLine.endsWith(`;${O.csvCell(st0.prio)};${st0.rank};${O.stopReason(st0)}`) && /Fehlmenge 6|Spot leer/.test(O.stopReason(st0)), 'Touren-CSV: Priorität, Rang und Grund je Stopp');
   const gjr = O.planGeoJson([], two.runs, D2).features.find(f => f.properties.kind === 'stop' && f.properties.type === 'drop');
   assert(gjr.properties.priority === st0.prio && gjr.properties.priorityRank === st0.rank && gjr.properties.reason === O.stopReason(st0), 'GeoJSON: Priorität, Rang und Grund je Stopp');
   assert(O.stopReason({ type: 'swap', why: { battery: 12, idleH: 30 } }, 'en') === 'battery 12 %, idle 1–2 days' && O.stopReason({ type: 'pickup', station: 'X', why: { full: true } }) === 'Station voll', 'Grundtext: Akku und Standzeit, volle Station');
@@ -378,14 +378,14 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const csvA = O.spotsAnalysisCsv(sp.spots, plan.needs).split('\n');
   const head = csvA[0].split(';'), row = csvA[1].split(';'), at = (k) => row[head.indexOf(k)];
   assert(head.join() === O.SPOTS_ANALYSIS_FIELDS.join() && head.includes('netto_abfluss_je_h_anbieter') && head.includes('fehlmenge') && !head.includes('f_unterversorgung'), 'Analyse-CSV: Netto-Abfluss, Bedarf, Fehlmenge statt Unterversorgung');
-  assert(at('starts_markt') === '12' && at('enden_markt') === '10' && at('messstunden') === '3' && at('bedarf_fzg') === '2' && at('grundbestand') === '2' && at('abfluss_im_horizont') === '0' && at('ausgleich_k') === String(sp.spots[0].balanceK) && at('netto_abfluss_untergrenze_je_h') === '0' && at('bootstrap_anteil') === String(sp.spots[0].bootShare), 'Analyse-CSV: Zahlen von Spot 1 (gezählte Enden, Ausgleich k, Untergrenze, Bootstrap-Anteil)');
+  assert(at('starts_markt') === '12' && at('enden_markt') === '10' && at('messstunden') === '3' && at('bedarf_fzg') === '2' && at('grundbestand') === '2' && at('abfluss_im_horizont') === '0' && at('ausgleich_k') === String(sp.spots[0].balanceK).replace('.', ',') && at('netto_abfluss_untergrenze_je_h') === '0' && at('bootstrap_anteil') === String(sp.spots[0].bootShare).replace('.', ','), 'Analyse-CSV: Zahlen von Spot 1 (gezählte Enden, Ausgleich k, Untergrenze, Bootstrap-Anteil)');
   const en = O.spotsAnalysisCsv(sp.spots, plan.needs, { lang: 'en' }).split('\n'), hE = en[0].split(','), rE = en[1].split(','), atE = (k) => rE[hE.indexOf(k)];
   assert(hE.length === head.length && hE.includes('net_outflow_per_h_operator') && hE.includes('shortfall') && hE.includes('balance_k') && hE.includes('bootstrap_share') && atE('starts_market') === '12' && atE('need_veh') === '2' && ['stable', 'medium', 'uncertain'].includes(atE('stability')), 'Analyse-CSV englisch: Spaltennamen, gleiche Zahlen, Stabilität übersetzt');
 }
 // --- CSV-Formelschutz
 {
   assert(O.csvCell('=HYPERLINK("x")') === `"'=HYPERLINK(""x"")"` && O.csvCell('@SUM(A1)') === "'@SUM(A1)" && O.csvCell('+1+2') === "'+1+2" && O.csvCell('-2+3') === "'-2+3", 'Formel-Schutz: = @ + - am Anfang bekommen ein führendes Hochkomma');
-  assert(O.csvCell('-0.123456') === '-0.123456' && O.csvCell(-3) === '-3' && O.csvCell('a;b') === '"a;b"' && O.csvCell(null) === '' && O.csvCell('Zeile\nzwei') === '"Zeile\nzwei"', 'Zahlen bleiben, Trennzeichen/Zeilenumbruch gequotet');
+  assert(O.csvCell('-0.123456') === '-0,123456' && O.csvCell('-0.123456', ',') === '-0.123456' && O.csvCell(1.5) === '1,5' && O.csvCell(1.5, ',') === '1.5' && O.csvCell('1.2.3') === '1.2.3' && O.csvCell(-3) === '-3' && O.csvCell('a;b') === '"a;b"' && O.csvCell(null) === '' && O.csvCell('Zeile\nzwei') === '"Zeile\nzwei"', 'Zahlen bleiben Zahlen (S2.13: mit Semikolon Dezimalkomma, mit Komma Punkt), Trennzeichen/Zeilenumbruch gequotet');
   assert(O.spotsAnalysisCsv([{ ...sp.spots[0], park: { cat: 'escooter', name: '=cmd|calc' } }]).split('\n')[1].endsWith(";escooter =cmd|calc"), 'Abstellflächen-Name mitten im Feld bleibt Text');
 }
 // --- Vermutete Deploy-Spots: Orte aus Gruppen-Ereignissen (Monatsdateien), Filter, Sortierung, CSV
@@ -544,8 +544,11 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const X = cellAt(0, 0), Y = cellAt(0, 2), Z = cellAt(2, 0), W = cellAt(-2, 0);
   const m16 = O.buildDemandModel([mk([[X, 3, 1], [Y, 40, 42], [Z, 30, 0], [W, 0, 30]], { min: 960 })], AGS, 2); // Σ 73 / 73 → k = 1
   const s16 = O.scoreSpots(m16, { topN: 3, minSpacingM: 100 }), sx = s16.spots.find(s => s.cell === X), sz = s16.spots.find(s => s.cell === Z);
-  assert(m16.balance.k === 1 && sx.outPerHour === 0.13 && sx.outSe === 0.13 && sx.outLow === 0 && sx.factors.outflow === 0 && sx.outLoOp < 0, `Untergrenze: 3 Starts / 1 Ende in 16 h → Netto ${sx.outPerHour} ± ${sx.outSe} /h, max(0, Netto − 2·SE) = 0 → Faktor 0 (ohne Untergrenze wäre er > 0)`);
-  assert(sz.outLow > 1 && sz.factors.outflow === 1 && sz.rank === 1, `Untergrenze: 30 Starts ohne Rückkehr in 16 h → ${sz.outPerHour} − 2 · ${sz.outSe} = ${sz.outLow} /h, Faktor 1, Rang 1`);
+  // S2.10: Shrinkage statt Untergrenze – X (0,125 ± 0,125/h) wird zur 0 gezogen, aber nicht abgeschnitten; Faktor = Abfluss × share × Horizont (Fahrzeuge)
+  const sy = s16.spots.find(s => s.cell === Y);
+  assert(m16.balance.k === 1 && sx.outPerHour === 0.13 && sx.outSe === 0.13 && sx.outLow === 0 && sx.outShr > 0 && sx.outShr < 0.13 && Math.abs(sx.factors.outflow - Math.min(1, sx.outShr * 3)) < 0.02 && sx.outLoOp < 0 && sy.factors.outflow === 0,
+    `S2.10: 3 Starts / 1 Ende in 16 h → Netto ${sx.outPerHour} ± ${sx.outSe} /h, geschrumpft ${sx.outShr} → Faktor ${sx.factors.outflow} (× 3 h, vorher 0); Zufluss (Y) Faktor 0`);
+  assert(sz.outLow > 1 && sz.factors.outflow === 1 && sz.rank === 1, `S2.10: 30 Starts ohne Rückkehr in 16 h → ${sz.outShr} /h × 3 h ≥ 1 Fahrzeug: Faktor 1, Rang 1`);
   // 4) Poisson-Ziehung: Mittel und Varianz (Inversion λ < 10, PTRS λ ≥ 10)
   for (const lam of [3, 50, 400]) { const r = O.rng32(7); let s = 0, s2 = 0; const N = 20000; for (let i = 0; i < N; i++) { const x = O.poisson(lam, r); s += x; s2 += x * x; } const mu = s / N, va = s2 / N - mu * mu;
     assert(Math.abs(mu - lam) < 4 * Math.sqrt(lam / N) && Math.abs(va / lam - 1) < 0.05, `Poisson(${lam}): Mittel ${mu.toFixed(2)}, Varianz ${va.toFixed(1)}`); }
@@ -557,8 +560,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const weak = b1.spots.filter(s => s.bootShare < O.BOOT.minShare);
   assert(b1.boot.draws === 200 && b1.boot.seed === O.BOOT.seed && JSON.stringify(b1.spots.map(s => [s.cell, s.bootShare])) === JSON.stringify(b2.spots.map(s => [s.cell, s.bootShare])),
     `Bootstrap deterministisch (200 Ziehungen, fester Startwert): Anteile ${b1.spots.map(s => s.bootShare).join(' / ')} in beiden Läufen gleich`);
-  assert(b1.spots[0].starts === 400 && b1.spots[0].bootShare === 1 && b1.spots[0].stabilityLabel === 'stabil', 'Bootstrap: Zelle mit 400 Starts in allen Ziehungen vorn → stabil');
-  assert(weak.length >= 1 && weak.every(s => s.stabilityWeights === 1 && s.stabilityLabel === 'unsicher') && b1.uncertain === weak.length,
+  assert(b1.spots[0].starts === 400 && b1.spots[0].bootShare >= 0.95 && b1.spots[0].stabilityLabel === 'stabil' && b1.boot.mode === 'poisson' && b1.boot.dirichlet === O.DIRICHLET_A, `Bootstrap (ein Tag: Poisson × Dirichlet-Gewichte): Zelle mit 400 Starts in ${b1.spots[0].bootShare * 100} % der Ziehungen vorn → stabil`);
+  assert(weak.length >= 1 && weak.every(s => s.stabilityWeights === 1 && s.stabilityLabel !== 'stabil') && b1.uncertain === weak.filter(s => s.bootShare < 0.5).length,
     `unsicherer Spot wird nicht „stabil“: ${weak.map(s => `Rang ${s.rank} (${s.starts} Starts) in ${Math.round(s.bootShare * 100)} % der Ziehungen`).join(', ')} → unsicher, obwohl ±20 % Gewichte stabil`);
   const nob = O.scoreSpots(mf, { topN: 3, minSpacingM: 100, bootDraws: 0 });
   assert(nob.boot === null && nob.spots.every(s => s.bootShare === null && s.stabilityLabel === 'stabil'), 'ohne Bootstrap (bootDraws 0, Vorauswahl im Browser) nur die Gewichts-Sensitivität');
@@ -673,4 +676,42 @@ assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('ca
     `gesperrt unter der Betriebsgrenze (${floor.rangeKm} km) = Akkutausch (${sw.below}), gesperrt mit 40 km = Werkstatt (${ws.disabled})`);
   const few = O.disableFloor(fleet.slice(0, 10).concat(fleet.slice(40)));
   assert(few.rangeKm === null && !O.lockedForEnergy(fleet[40], few), 'unter 20 verfügbaren mit Angabe keine Betriebsgrenze: gesperrte bleiben Werkstatt');
+}
+{ // S2.12: Einsatzgrenze nach dem Straßenrouting neu anwenden
+  const depot = { lat: 48.78, lon: 9.18 }, P = (lat, lon, o) => ({ lat, lon, ...o });
+  const pick = [P(48.79, 9.18, { type: 'pickup', count: 2, prio: 5 }), P(48.80, 9.18, { type: 'pickup', count: 1, prio: 1 })];
+  const drop = [P(48.785, 9.19, { type: 'drop', count: 2, prio: 4 }), P(48.82, 9.25, { type: 'drop', count: 1, prio: 1 })];
+  const r = { kind: 'rebalance', vehicles: 3, handleMin: 8, stops: [...pick, ...drop] };
+  const cost = O.makeCost(), minOf = (sq) => { let m = 0; for (let i = 0; i < sq.length - 1; i++) m += cost(sq[i], sq[i + 1]); return m / 1000 / 18 * 60; };
+  const full = minOf([depot, ...r.stops, depot]) + 8;
+  const tr = O.trimRun(r, { depot, cost, minOf, limitMin: full - 1 });
+  const cnt = (t) => tr.stops.filter(s => s.type === t).reduce((a, s) => a + s.count, 0);
+  assert(tr.removed === 1 && tr.vehicles === 2 && cnt('pickup') === 2 && cnt('drop') === 2 && !tr.stops.some(s => s.prio === 1) && tr.totalMin <= full - 1,
+    `S2.12: über der Grenze fällt die Ausbringung mit der niedrigsten Priorität samt einer Abholung (niedrigste Priorität) weg (${Math.round(full)} → ${tr.totalMin} min)`);
+  const ok = O.trimRun(r, { depot, cost, minOf, limitMin: full + 1 });
+  assert(ok.removed === 0 && ok.stops.length === 4, 'S2.12: unter der Grenze bleibt die Tour unverändert');
+  const sw = O.trimRun({ kind: 'swap', vehicles: 3, handleMin: 7.5, stops: [P(48.79, 9.18, { count: 1, prio: 3 }), P(48.9, 9.4, { count: 1, prio: 0.5 }), P(48.791, 9.181, { count: 1, prio: 2 })] }, { depot, cost, minOf, limitMin: 20 });
+  assert(sw.removed >= 1 && !sw.stops.some(s => s.prio === 0.5) && sw.totalMin <= 20, 'S2.12: Akkutausch – der Stopp mit der niedrigsten Priorität (weit draußen) fällt zuerst weg');
+}
+
+{ // S2.11: Bootstrap über ganze Tage, Dirichlet-Gewichte; jedes Fahrzeug nur am nächsten Spot; S2.10 Lagerfläche
+  const mk = (day, cells) => { const munis = { [AGS]: {} }; for (const [cell, st, en, rl = 0] of cells) { const c = new Array(22).fill(0); c[4 + 2] = st; c[16 + 2] = en; c[10 + 2] = 9; c[0] = st; c[1] = en; c[3] = rl; munis[AGS][cell] = c; } return { day, bandMin: [0, 0, 180, 0, 0, 0], bandRuns: [0, 0, 9, 0, 0, 0], munis }; };
+  const A1 = cellAt(0, 0), B1 = cellAt(0, 3), C1 = cellAt(3, 0), L1 = cellAt(-3, 0);
+  // B1 schwankt stark zwischen den Tagen (an einem Tag 60 Starts, sonst 5), A1 gleichmäßig 30; L1: Lager (Umsetzungen ≥ halbe Starts)
+  const docs = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05'].map((d, i) => mk(d, [[A1, 30, 20], [B1, i === 0 ? 60 : 5, i === 0 ? 10 : 5], [C1, 20, 20], [L1, 40, 0, 30]]));
+  const m = O.buildDemandModel(docs, AGS, 2);
+  assert(m.dayH.length === 5 && m.cells.get(B1).dS[0] === 60 && m.cells.get(B1).dS[1] === 5 && m.cells.get(L1).startsDay === 200, 'S2.11: Modell trägt Zählungen je Tag (Bootstrap über ganze Tage)');
+  const r = O.scoreSpots(m, { topN: 2, minSpacingM: 100 });
+  const sA = r.spots.find(s => s.cell === A1), sB = r.spots.find(s => s.cell === B1);
+  assert(r.boot.mode === 'days' && !r.spots.some(s => s.cell === L1) && r.excludedBy.storage === 1 && sA && sA.bootShare > (sB?.bootShare ?? 0),
+    `S2.10/S2.11: Lagerfläche (40 Starts, 30 Umsetzungen je Tag) ausgeschlossen; gleichmäßige Zelle stabiler als die eines Ausreißertags (${sA?.bootShare} vs. ${sB?.bootShare ?? '–'})`);
+  const rnd = O.rng32(3); let s1 = 0; const N = 4000, w = [0.5, 0.3, 0.2]; const acc = [0, 0, 0];
+  for (let i = 0; i < N; i++) { const d = O.dirichlet(w, rnd); s1 += Math.abs(d.reduce((a, b) => a + b, 0) - 1); d.forEach((x, j) => { acc[j] += x; }); }
+  assert(s1 < 1e-9 && acc.every((x, j) => Math.abs(x / N - w[j]) < 0.01), `Dirichlet: Summe 1, Mittel ${acc.map(x => (x / N).toFixed(3)).join('/')} ≈ Gewichte`);
+  // zwei Spots 200 m auseinander (Umkreis 150 m): ein Fahrzeug dazwischen zählt nur am nächsten, wird nicht zweimal umgesetzt
+  const sp = [{ cell: 'a', rank: 1, lat: 48.78, lon: 9.18, target: 1, score: 1 }, { cell: 'b', rank: 2, lat: 48.7818, lon: 9.18, target: 1, score: 0.9 }];
+  const veh = [{ id: 1, lat: 48.7808, lon: 9.18, battery: 80, idleMin: 30 }, { id: 2, lat: 48.7811, lon: 9.18, battery: 80, idleMin: 40 }, { id: 3, lat: 48.7900, lon: 9.20, battery: 90, idleMin: 3000 }];
+  const pr = O.planRebalance({ spots: sp, vehicles: veh, model: { cells: new Map() }, depot: { lat: 48.78, lon: 9.17 } });
+  const ids = pr.runs.flatMap(r => r.stops).length >= 0 ? pr.needs.map(n => n.have) : [];
+  assert(pr.needs.find(n => n.rank === 1).have + pr.needs.find(n => n.rank === 2).have === 2, `S2.11: zwei Fahrzeuge zwischen zwei Spots zählen je einmal (Bestand ${ids.join(' + ')})`);
 }

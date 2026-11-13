@@ -2,9 +2,9 @@
 // Stationen) je Anbieter gegeneinander, aus Sicht eines eigenen Anbieters: was bei mir fehlt, was nur ich habe, was gepflegt werden muss.
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlagen: ops/<Land>.json (decodeFleet), stations-quota.json (Leerquote bis 7 Tage),
 // optional das Nachfragemodell aus cells/<Tag>/<Land>.json (buildDemandModel) und die GBFS-Zonen des eigenen Anbieters (zones/*.json).
-import { RADII, DEFAULT_RADIUS, distM, gridIndex, compareOperators } from './pulse-compare.js?v=mwexvlu5';
-import { cellOf, csvCell, needOf, operatorShare, geomContains, isAvailable, DEFAULTS, GROUP_MIN } from './pulse-ops.js?v=mwexvlu5';
-import { STATION_NEAR_M } from './pulse-core.js?v=mwexvlu5';
+import { RADII, DEFAULT_RADIUS, distM, gridIndex, compareOperators } from './pulse-compare.js?v=mweyo7ue';
+import { cellOf, csvCell, needOf, operatorShare, geomContains, isAvailable, DEFAULTS, GROUP_MIN } from './pulse-ops.js?v=mweyo7ue';
+import { STATION_NEAR_M } from './pulse-core.js?v=mweyo7ue';
 
 export { RADII, DEFAULT_RADIUS, STATION_NEAR_M };
 export const DUP_M = 25;          // eigene Spots näher als 25 m = Dublette
@@ -15,6 +15,21 @@ export const DEPLOY_RADIUS = 15;  // deploymentRadius im Backend-Export, wie die
 export const SPOTS_CSV_FIELDS = ['name', 'lat', 'lng', 'deploymentStatus', 'parkingStatus', 'deploymentRadius', 'deploymentVehicles'];
 const QUOTA_FIELDS = ['ags', 'operator', 'name', 'lat', 'lon', 'runs', 'emptyRuns', 'fullRuns', 'virtual'];
 
+// S2.9/A18: Fahrzeugfamilien für den Abgleich (Stationen tragen keine Art; die Familie eines Anbieters ist die seiner meisten Fahrzeuge in der Gemeinde)
+export const FAMILY = { scooter: 'scooter', bike: 'bike', ebike: 'bike', cargo: 'bike', moped: 'moped', car: 'car' };
+export const FAMILIES = ['scooter', 'bike', 'moped', 'car'];
+/**
+ * Familie je Anbieter (meiste Fahrzeuge in der Gemeinde; ohne Fahrzeuge dort: meiste im ganzen Land; Gleichstand: Reihenfolge FAMILIES) und
+ * Fahrzeuge je Anbieter und Familie in der Gemeinde (n). Anbieter ganz ohne Fahrzeuge (z. B. reine Stationsfeeds) haben keine Familie.
+ */
+export function operatorFamilies(fleet, ags) {
+  const n = new Map(), all = new Map(), add = (M, op, f) => { const m = M.get(op) || M.set(op, new Map()).get(op); m.set(f, (m.get(f) || 0) + 1); };
+  for (const v of fleet?.vehicles || []) { const f = FAMILY[v.type]; if (!f || !v.operator) continue; add(all, v.operator, f); if (v.ags === ags) add(n, v.operator, f); }
+  const top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1] || FAMILIES.indexOf(a[0]) - FAMILIES.indexOf(b[0]))[0][0];
+  const fam = new Map(); for (const [op, m] of all) fam.set(op, top(n.get(op) || m));
+  for (const op of n.keys()) if (!fam.has(op)) fam.set(op, top(n.get(op)));
+  return { fam, n };
+}
 const quantile = (sorted, q) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1))))] : null);
 const COORD_NAME = /^\s*-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\s*$/;
 /** Anzeigename: Steuerzeichen (Tab im Feed) und Mehrfach-Leerzeichen weg; reine Koordinaten zählen als „ohne Namen“ ('') */
@@ -99,23 +114,33 @@ const nearestAny = (p, list) => { let best = null; for (const q of list) { if (q
 const pick = (s) => ({ id: s.id, operator: s.operator, name: s.name, label: s.label, lat: s.lat, lon: s.lon, bookable: s.bookable, runs: s.runs, emptyShare: s.emptyShare, virtual: s.virtual });
 
 /**
- * Abgleich in der Gemeinde ags aus Sicht des Anbieters own (Standard: meiste Spots), Umkreis radiusM (25/50/100 m).
+ * Abgleich in der Gemeinde ags aus Sicht des Anbieters own, Umkreis radiusM (25/50/100 m). family (S2.9/A18): 'auto' = Familie des eigenen Anbieters
+ * (ohne own: E-Scooter, sonst die größte Familie), 'all' = alle Anbieter, sonst eine aus FAMILIES; verglichen werden nur Anbieter, deren meiste Fahrzeuge
+ * in der Gemeinde zu dieser Familie gehören (Carsharing-Stationen nie gegen E-Scooter). Standard für own: größte Flotte der Familie mit Spots.
  * rows: je Anbieter Spots (virtuell/physisch), je km² belegter Fläche und je 1.000 Fahrzeuge, Anteil der Fahrzeuge an einem eigenen Spot (≤ Umkreis),
  *   dauerhaft leer (≥ emptyShare der Läufe, ≥ minRuns), Dubletten (< dupM, überzählige Spots), Differenz zum eigenen Anbieter,
  *   matched/unmatched (andere: mit/ohne eigenen Spot im Umkreis; eigener: mit/ohne fremden Spot im Umkreis).
  * missing („Fehlt bei mir“): fremde Spots ohne eigenen im Umkreis, zu Orten gebündelt (Mittelpunkt ≤ Umkreis; dichteste Orte zuerst),
- *   Punkte = Anbieter dort (je 1) + Nachfrage (Fahrtbeginne/h der Zelle ÷ 95. Perzentil, ≤ 1) + eigene Fahrzeuge ohne Spot (÷ GROUP_MIN, ≤ 1).
+ *   Punkte (A18) = Nachfrage (Fahrtbeginne/h der Zelle ÷ 95. Perzentil, ≤ 1) × 2 + eigene Fahrzeuge ohne Spot (÷ GROUP_MIN, ≤ 1); die Zahl der Anbieter
+ *   dort entscheidet nur bei Gleichstand (ohne Nachfragemodell zählt sie wie bisher je 1).
  * onlyMine („Nur bei mir“): eigene Spots ohne fremden im Umkreis. care („Pflegebedarf“): Durchfahrt verboten (eigene Zone), Dublette, dauerhaft leer.
  * Jeder Eintrag trägt export = { deploymentStatus, parkingStatus, deploymentVehicles } für die Backend-CSV.
  */
-export function analyzeSpots(fleet, { ags, own = null, radiusM = DEFAULT_RADIUS, kind = 'virtual', quota = null, demand = null, zones = null, dupM = DUP_M, emptyShare = EMPTY_SHARE, minRuns = MIN_RUNS } = {}) {
-  const spots = spotsOf(fleet, { ags, quota, kind });
+export function analyzeSpots(fleet, { ags, own = null, family = 'auto', radiusM = DEFAULT_RADIUS, kind = 'virtual', quota = null, demand = null, zones = null, dupM = DUP_M, emptyShare = EMPTY_SHARE, minRuns = MIN_RUNS } = {}) {
+  const OF = operatorFamilies(fleet, ags), famOps = new Map(); for (const [op, f] of OF.fam) famOps.set(f, (famOps.get(f) || 0) + [...(OF.n.get(op)?.values() || [])].reduce((a, b) => a + b, 0));
+  if (family === 'auto') family = (own && OF.fam.get(own)) || (famOps.has('scooter') ? 'scooter' : [...famOps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]) || 'all';
+  if (family !== 'all' && !FAMILIES.includes(family)) family = 'all';
+  const inFam = (op) => family === 'all' || OF.fam.get(op) === family, typeOk = (v) => family === 'all' || FAMILY[v.type] === family;
+  const allSpots = spotsOf(fleet, { ags, quota, kind }), spots = allSpots.filter(s => inFam(s.operator));
   const cmp = compareOperators(fleet, { ags, radiusM });
-  const veh = cmp.vehicles;
+  const veh = cmp.vehicles.filter(v => inFam(v.operator) && typeOk(v));
   const nSpots = new Map(); for (const s of spots) nSpots.set(s.operator, (nSpots.get(s.operator) || 0) + 1);
-  const nVeh = new Map(cmp.rows.filter(r => r.vehicles > 0).map(r => [r.op, r.vehicles])); // ohne Spots dieser Art und ohne Fahrzeuge: nicht dabei
-  const operators = [...new Set([...nSpots.keys(), ...nVeh.keys()])].sort((a, b) => (nSpots.get(b) || 0) - (nSpots.get(a) || 0) || (nVeh.get(b) || 0) - (nVeh.get(a) || 0) || a.localeCompare(b, 'de'));
+  const nVeh = new Map(); for (const v of veh) nVeh.set(v.operator, (nVeh.get(v.operator) || 0) + 1); // ohne Spots dieser Art und ohne Fahrzeuge: nicht dabei
+  // A18: Reihenfolge und Standard nach der Flotte der Familie (vorher: meiste Spots – in Stuttgart stadtmobil mit 230 Autostationen)
+  const operators = [...new Set([...nSpots.keys(), ...nVeh.keys()])].sort((a, b) => (nVeh.get(b) || 0) - (nVeh.get(a) || 0) || (nSpots.get(b) || 0) - (nSpots.get(a) || 0) || a.localeCompare(b, 'de'));
   if (!own || !operators.includes(own)) own = operators.find(o => nSpots.get(o)) ?? operators[0] ?? null;
+  const families = FAMILIES.filter(f => allSpots.some(s => OF.fam.get(s.operator) === f));
+  const excluded = [...new Set(allSpots.filter(s => !inFam(s.operator)).map(s => s.operator))].sort((a, b) => a.localeCompare(b, 'de')).map(op => ({ op, family: OF.fam.get(op) ?? null }));
   const D = demandStats(demand);
   const share = own ? operatorShare(fleet, ags, own) : null;
   const target = (p) => { const d = demandAt(D, p); return d?.cell && d.startsPerHour > 0 && share ? needOf(d.cell, share).target : 0; }; // ohne gemessene Fahrtbeginne kein Vorschlag
@@ -172,7 +197,7 @@ export function analyzeSpots(fleet, { ags, own = null, radiusM = DEFAULT_RADIUS,
     let spread = 0; for (const a of members) for (const b of members) spread = Math.max(spread, distM(a, b));
     const p = { lat: pl.lat, lon: pl.lon }, dem = demandAt(D, p), vehN = ownVehNoSpot(p), near = nearestAny(p, ownSpots);
     const qk = members.filter(m => m.runs >= minRuns), otherEmpty = qk.length ? qk.reduce((x, m) => x + m.emptyShare, 0) / qk.length : null;
-    const score = ops.length + (dem?.factor ?? 0) + Math.min(1, vehN / GROUP_MIN);
+    const score = D ? 2 * (dem?.factor ?? 0) + Math.min(1, vehN / GROUP_MIN) : ops.length + Math.min(1, vehN / GROUP_MIN); // A18: Nachfrage vor Anbieterzahl
     const reasons = [{ k: 'ops', ops, n: members.length, spread: Math.round(spread) }];
     if (dem) reasons.push(dem.startsPerHour > 0 ? { k: 'demand', v: dem.startsPerHour, pct: dem.pct } : { k: 'noDemand' });
     if (vehN) reasons.push({ k: 'veh', n: vehN });
@@ -181,7 +206,7 @@ export function analyzeSpots(fleet, { ags, own = null, radiusM = DEFAULT_RADIUS,
     return { lat: +p.lat.toFixed(6), lon: +p.lon.toFixed(6), label: members.map(m => m.label).find(Boolean) || '', ops, byOp: Object.fromEntries(byOp), nOps: ops.length, members: members.map(pick), spread: Math.round(spread),
       demand: dem ? { startsPerHour: dem.startsPerHour, starts: dem.starts, factor: dem.factor, pct: dem.pct } : null, ownVehicles: vehN, otherEmpty, nearestOwn: near ? { d: Math.round(near.d), label: near.p.label, id: near.p.id } : null,
       score: +score.toFixed(3), reasons, export: { deploymentStatus: 'disabled', parkingStatus: 'enabled', deploymentVehicles: target(p) } };
-  }).sort((a, b) => b.score - a.score || b.members.length - a.members.length || a.lat - b.lat || a.lon - b.lon);
+  }).sort((a, b) => b.score - a.score || b.nOps - a.nOps || b.members.length - a.members.length || a.lat - b.lat || a.lon - b.lon);
   missing.forEach((x, i) => { x.rank = i + 1; });
 
   // b) Nur bei mir
@@ -219,7 +244,7 @@ export function analyzeSpots(fleet, { ags, own = null, radiusM = DEFAULT_RADIUS,
 
   const maxRuns = spots.reduce((m, s) => Math.max(m, s.runs), 0);
   return {
-    ags, own, radiusM, kind, dupM, emptyShare, minRuns, at: fleet?.at ?? null, operators, rows, spots, vehicles: veh,
+    ags, own, family, families, excluded, radiusM, kind, dupM, emptyShare, minRuns, at: fleet?.at ?? null, operators, rows, spots, vehicles: veh,
     total: { spots: spots.length, virtual: spots.filter(s => s.virtual).length, quotaMatched: spots.filter(s => s.runs > 0).length, maxRuns, share },
     demand: D ? { hours: D.hours, days: D.days, cells: D.cells, p50: D.p50, p95: D.p95 } : null,
     zones: Z ? { files: Z.files, noThrough: Z.noThrough.length, noFree: Z.noFree.length, inNoFree } : null,

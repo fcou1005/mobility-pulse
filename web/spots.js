@@ -10,7 +10,7 @@ import { mapKeys } from './mapkeys.js';
 const LISTS = ['missing', 'onlyMine', 'care'], ISSUES = ['zone', 'dup', 'empty'], DEMAND_DAYS = 7, LIMIT = 100, RANK_LABELS = 30;
 const CACHE = new Map();
 const S = new WeakMap();
-const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, own: null, radius: SP.DEFAULT_RADIUS, kind: null, list: 'missing', minOps: 1, hide: new Set(), only: 'all', issues: new Set(ISSUES), q: '', limit: LIMIT }; S.set(el, s); } return s; };
+const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, own: null, family: 'auto', radius: SP.DEFAULT_RADIUS, kind: null, list: 'missing', minOps: 1, hide: new Set(), only: 'all', issues: new Set(ISSUES), q: '', limit: LIMIT }; S.set(el, s); } return s; };
 /** Zwischenspeicher leeren (neuer Sammler-Lauf) */
 export function resetSpotsCache() { CACHE.clear(); }
 
@@ -180,6 +180,7 @@ function controls(ctx, res, s) {
   const esc = ctx.esc, opt = (v, l, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`;
   const nS = new Map(res.rows.map(r => [r.op, r.spots]));
   return `<div class="sp-ctl rp-noprint"><label>${t('spots.own')} <select data-sp="own">${res.operators.map(o => opt(o, nS.get(o) ? t('spots.ownOpt', { op: o, n: ctx.fmt(nS.get(o)) }) : t('spots.ownOptNone', { op: o }), res.own)).join('')}</select></label>
+    <label>${t('spots.family')} <select data-sp="family">${['auto', ...SP.FAMILIES.filter(f => res.families?.includes(f)), 'all'].map(f => opt(f, f === 'auto' ? t('spots.famAuto', { fam: t(`spots.fam.${res.family}`) }) : t(`spots.fam.${f}`), s.family)).join('')}</select></label>
     <label>${t('spots.radius')} <select data-sp="radius">${SP.RADII.map(r => opt(r, `${r} m`, s.radius)).join('')}</select></label>
     <div class="sp-tog" role="group" aria-label="${t('spots.kind')}"><button type="button" data-sp-kind="virtual" aria-pressed="${s.kind === 'virtual'}">${t('spots.kindVirtual')}</button><button type="button" data-sp-kind="all" aria-pressed="${s.kind === 'all'}">${t('spots.kindAll', { n: ctx.fmt(s.allCount ?? 0) })}</button></div></div>`;
 }
@@ -245,6 +246,7 @@ function table(ctx, res, s, items) {
 function notes(ctx, res, s) {
   const D = res.demand, z = s.zres?.state, out = [];
   out.push(t(`spots.export.${s.list}`));
+  if (res.family !== 'all' && res.excluded?.length) out.push(t('spots.excludedNote', { fam: t(`spots.fam.${res.family}`), list: ctx.esc(listFmt().format(res.excluded.map(x => x.family ? `${x.op} (${t(`spots.fam.${x.family}`)})` : x.op))) }));
   out.push(D ? t('spots.method', { r: s.radius, days: ctx.fmt(D.days), h: ctx.fmt(D.hours), p95: ctx.fmt(D.p95, 2), g: GROUP_MIN, d: res.dupM }) : `${t('spots.methodBase', { r: s.radius, g: GROUP_MIN, d: res.dupM })} ${t('spots.noDemandData')}`);
   if (z === 'loading') out.push(t('spots.zonesLoading'));
   else if (z === 'failed') out.push(t('spots.zonesFail'));
@@ -345,9 +347,9 @@ function pickMunicipality(el, ctx) {
 }
 function analysis(s) {
   const z = zonesFor(s.el, s);
-  const key = [s.ags, s.own, s.radius, s.kind, z.state].join('|');
+  const key = [s.ags, s.own, s.family, s.radius, s.kind, z.state].join('|');
   if (s.resKey !== key || !s.res) {
-    s.res = SP.analyzeSpots(s.fleet, { ags: s.ags, own: s.own, radiusM: s.radius, kind: s.kind, quota: s.quota, demand: s.demand, zones: z.state === 'ok' || z.state === 'none' ? (z.fcs || []) : null });
+    s.res = SP.analyzeSpots(s.fleet, { ags: s.ags, own: s.own, family: s.family, radiusM: s.radius, kind: s.kind, quota: s.quota, demand: s.demand, zones: z.state === 'ok' || z.state === 'none' ? (z.fcs || []) : null });
     if (s.res.own !== s.own) { s.own = s.res.own; return analysis(s); }
     s.resKey = key;
   }
@@ -397,7 +399,8 @@ export async function renderSpots(el, ctx) {
     s.bound = true;
     el.addEventListener('change', (e) => {
       const k = e.target.dataset?.sp; if (!k || !s.fleet) return;
-      if (k === 'radius') s.radius = +e.target.value; else if (k === 'own') { s.own = e.target.value; s.hide.clear(); s.fitKey = null; }
+      if (k === 'radius') s.radius = +e.target.value; else if (k === 'own') { s.own = e.target.value; s.family = 'auto'; s.hide.clear(); s.fitKey = null; }
+      else if (k === 'family') { s.family = e.target.value; s.hide.clear(); s.fitKey = null; } // S2.9: eigener Anbieter folgt der Familie (größte Flotte, falls der bisherige nicht dazugehört)
       s.limit = LIMIT; draw(el, s.ctx, s); refocus(el, `select[data-sp="${k}"]`);
     });
     let qT = null;
@@ -422,7 +425,7 @@ export async function renderSpots(el, ctx) {
   if (!ags) { s.fleet = null; s.res = null; s.map?.remove(); s.map = null; pickMunicipality(el, ctx); return; }
   const land = ctx.state.latest?.municipalities?.[ags]?.state;
   if (!land) { s.fleet = null; s.res = null; el.innerHTML = `<div class="panel-head"><div><h2>${t('spots.title')}</h2></div></div><div class="empty">${t('spots.none')}</div>`; return; }
-  if (s.ags !== ags) { s.own = null; s.kind = null; s.hide.clear(); s.fitKey = null; s.q = ''; s.limit = LIMIT; s.zkey = null; }
+  if (s.ags !== ags) { s.own = null; s.family = 'auto'; s.kind = null; s.hide.clear(); s.fitKey = null; s.q = ''; s.limit = LIMIT; s.zkey = null; }
   if (!s.fleet || s.ags !== ags) { s.map?.remove(); s.map = null; el.innerHTML = `<div class="panel-head"><div><h2>${t('spots.title')}</h2></div></div><div class="empty">${t('spots.loading')}</div>`; }
   const [fleet, quota, dem] = await Promise.all([loadFleet(ctx, land), Promise.resolve(ctx.loadOnce?.('quota', 'stations-quota.json')).catch(() => null), loadDemand(ctx, land, ags)]);
   if (tok !== s.tok) return;

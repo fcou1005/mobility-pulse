@@ -2,8 +2,8 @@
 // Reine Rechenfunktionen ohne DOM (Browser und Node). Grundlage: ops/<Land>.json, dekodiert mit pulse-ops.js decodeFleet
 // ({ vehicles: [{ lat, lon, operator, type, reserved, disabled, battery, rangeKm, idleMin, ags }], stations: [{ lat, lon, operator, name, bookable, docks, capacity, ags, physical, virtual }] }).
 // physical ist der physische Bestand an der Station (physicalAvailable, Fahrzeuge), kein Merkmal der Station; virtuell/physisch: isVirtualStation.
-import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mwexvlu5';
-import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mwexvlu5';
+import { CELL_LAT, CELL_LON } from './pulse-track.js?v=mweyo7ue';
+import { energyLow, RANGE_ONLY_OPS } from './pulse-report.js?v=mweyo7ue';
 
 export const RADII = [25, 50, 100];          // Meter: Station gilt als geteilt, wenn eine Station eines anderen Anbieters so nah liegt
 export const DEFAULT_RADIUS = 50;
@@ -21,7 +21,7 @@ const R_EARTH = 6371000, rad = Math.PI / 180;
 /** Abstand in Metern (gleichwinklige Näherung, genau genug unter 1 km) */
 export const distM = (a, b) => { const x = (b.lon - a.lon) * rad * Math.cos((a.lat + b.lat) / 2 * rad), y = (b.lat - a.lat) * rad; return Math.sqrt(x * x + y * y) * R_EARTH; };
 const median = (xs) => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b); if (!s.length) return null; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-export const cellOf = (p) => `${Math.floor(p.lat / CELL_LAT)}:${Math.floor(p.lon / CELL_LON)}`;
+export const cellOf = (p) => `${Math.round(p.lat / CELL_LAT)}:${Math.round(p.lon / CELL_LON)}`; // A18: dasselbe Raster wie lib/pulse-track.js cellOf (gerundet), sonst halbe Zelle versetzt
 /** Fläche einer Zelle in km² bei Breite lat */
 export const cellAreaKm2 = (lat) => (CELL_LAT * rad * R_EARTH) * (CELL_LON * rad * R_EARTH * Math.cos(lat * rad)) / 1e6;
 
