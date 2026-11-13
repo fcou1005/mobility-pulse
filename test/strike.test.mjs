@@ -59,7 +59,10 @@ const swegBahn = S.strikeFromItem(it({ date: '2026-10-28T16:27:00+01:00', title:
   content: [{ type: 'text', value: 'Hintergrund ist die bundesweite Tarifrunde zum Eisenbahntarifvertrag.' }] }), P);
 assert(swegBahn?.art === 'streik-bahn' && swegBahn.gebiet === null && swegBahn.tage.join() === '2026-10-29', 'SWEG-Bahn: Bahn, „bundesweite Tarifrunde“ ist kein bundesweiter Streik');
 const land = S.strikeFromItem(it({ date: '2026-11-08T12:00:00+01:00', title: 'Warnstreik im Nahverkehr', firstSentence: 'Ver.di ruft am Montag landesweit die Beschäftigten der kommunalen Verkehrsbetriebe zum Ausstand auf.', regionIds: [10] }), P);
-assert(land?.gebiet?.laender?.join() === 'NW' && land.sicher && land.tage.join() === '2026-11-09', 'landesweit + Region der Meldung → Land');
+assert(!land?.gebiet?.laender && land.grund.includes('landesweit NW') && land.gebiet.ags.includes('05315000') && land.gebiet.ags.includes('05111000') && land.gebiet.ags.every(a => a.startsWith('05')) && land.sicher && land.tage.join() === '2026-11-09',
+  `A14: landesweit + Region der Meldung → nur Gemeinden bekannter Stadtverkehrsbetriebe im Land (${land?.gebiet?.ags?.join(', ')}), nicht das ganze Land`);
+const landX = S.strikeFromItem(it({ date: '2026-11-08T12:00:00+01:00', title: 'Warnstreik im Nahverkehr', firstSentence: 'Ver.di ruft am Montag landesweit die Beschäftigten der kommunalen Verkehrsbetriebe zum Ausstand auf.', regionIds: [12] }), S.strikePlaces(feats, { betriebe: {} }));
+assert(landX && !landX.sicher && landX.ungenau && S.mergeStrikes(null, [landX]).erkannt.every(x => !x.sicher), 'A14: landesweit ohne bekannten Betrieb im Land → Hinweis (nicht im Modell)');
 // Absage
 const off = S.strikeFromItem(it({ date: '2026-11-08T20:00:00+01:00', title: 'Warnstreik bei der VGF abgesagt', firstSentence: 'Die U-Bahnen in Frankfurt fahren am Dienstag doch.', shareURL: 'https://www.hr.de/off' }), P);
 assert(off?.aus && !off.sicher, 'Absage erkannt');

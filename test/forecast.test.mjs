@@ -7,7 +7,7 @@ const norm = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * 
 const pois = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Math.round(l + Math.sqrt(l) * norm())); let k = 0, p = 1; const L = Math.exp(-l); do { k++; p *= rnd(); } while (p > L); return k - 1; };
 
 // ---------- kleine Bausteine
-assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
+assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
 assert(F.localToUtcMs('2026-11-04', 0) === Date.parse('2026-11-03T23:00:00Z') && F.localToUtcMs('2026-07-01', 12) === Date.parse('2026-07-01T10:00:00Z'), 'Ortszeit → UTC: Winterzeit +1, Sommerzeit +2');
 {
   const d = [{ rule: 'a' }, { rule: 'a' }, { rule: 'b' }, { rule: 'b' }, { rule: 'c' }]; F.assignEras(d);
@@ -70,7 +70,9 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
 {
   const ds = F.assignEras(docs.map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds, F.wxLookup(WX)), all = Array.from({ length: R.n }, (_, i) => i);
   const m = F.fitPooled(R, all, { weather: true }), e = F.wxEffects(m);
-  assert(Math.abs(e.cold - TRUE.cold) < 0.1 && Math.abs(e.warm - TRUE.warm) < 0.1 && Math.abs(Math.log(e.rain) - TRUE.rain) < 0.1, `Wetterwirkung gelernt: kalt ${e.cold.toFixed(2)} (0,3), warm ${e.warm.toFixed(2)} (0,2), Regen ×${e.rain.toFixed(2)} (×${Math.exp(TRUE.rain).toFixed(2)})`);
+  // A13: die synthetische Welt regnet immer mit genau 1 mm/h – Stufe „≥ 0,1“ und „≥ 1“ fallen zusammen, zählt also ihre Summe
+  assert(Math.abs(e.cold - TRUE.cold) < 0.1 && Math.abs(e.warm - TRUE.warm) < 0.1 && Math.abs(Math.log(e.rain) + Math.log(e.rain1) - TRUE.rain) < 0.1 && Math.abs(Math.log(e.rain4)) < 0.05 && Math.abs(Math.log(e.rainPrev)) < 0.1,
+    `Wetterwirkung gelernt: kalt ${e.cold.toFixed(2)} (0,3), warm ${e.warm.toFixed(2)} (0,2), Regen bei 1 mm/h ×${(e.rain * e.rain1).toFixed(2)} (×${Math.exp(TRUE.rain).toFixed(2)}), Vorstunde ×${e.rainPrev.toFixed(2)} (×1)`);
   const g = F.weatherGate(R, all);
   assert(g.ok && g.tempRangeK >= 5 && g.rainDays >= 2 && g.dryDays >= 2, `Wetter-Gate offen bei ${NDAY} Tagen mit Spanne ${g.tempRangeK} K, ${g.rainDays} Regen- und ${g.dryDays} Trockentagen`);
   const R1 = F.buildRows(ds.slice(0, 1), F.wxLookup(WX)), g1 = F.weatherGate(R1, Array.from({ length: R1.n }, (_, i) => i));
@@ -559,7 +561,7 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   // Volksfest als eigenes Merkmal fest (hinten in CTX_KEYS), geprüft wie Veranstaltungen; Gedächtnis älterer Fassungen wird aufgefüllt
   { const fe = [{ art: 'volksfest', von: '2027-09-25T11:00', bis: '2027-09-25T23:30', gebiet: { ags: ['08111000'] }, titel: 'Cannstatter Volksfest', quelle: 'https://x.example' }];
     const iF = CX.CTX_KEYS.indexOf('fest'), iE = CX.CTX_KEYS.indexOf('event'), cx = CX.ctxLookup([], CX.checkCurated({ ereignisse: fe }).ok);
-    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-2).join() === 'fest,sport' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
+    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-3).join() === 'rain1,rain4,rainPrev' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
       'Volksfest: eigenes Merkmal fest (hinten in CTX_KEYS/EFFECTS, danach sport), nicht event, nur in den Öffnungsstunden');
     const NE = F.EFFECTS.length, k = NE - 2, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
     const d = mem.days['2026-11-02'];
@@ -730,7 +732,7 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const m = F.fitPooled(R, all, { weather: true }), P = F.portableModel(m, R, { family: 'micro', now: Date.parse('2026-11-11T21:00:00Z'), trainDays: 9 });
   const CL = ['W', 'F', 'S', 'H'], mu = F.predictPooled(m, R, all); let maxRel = 0;
   for (let i = 0; i < R.n; i += 97) { if (R.era[i] > 0 || !(R.e[i] > 0)) continue; const ty = String(R.keys[R.g[i]]).split('|')[2], T = P.types[ty] || Object.values(P.types).find(x => x.also.includes(ty));
-    const eta = m.a[R.g[i]] + P.hour[R.hr[i]] + P.dayType[CL[R.cl[i]]][R.hr[i]] + T.hour[R.hr[i]] + P.weather.cold * R.w[0][i] + P.weather.warm * R.w[1][i] + P.weather.rain * R.w[2][i];
+    const eta = m.a[R.g[i]] + P.hour[R.hr[i]] + P.dayType[CL[R.cl[i]]][R.hr[i]] + T.hour[R.hr[i]] + P.weather.cold * R.w[0][i] + P.weather.warm * R.w[1][i] + P.weather.rain * R.w[2][i] + P.weather.rain1 * R.w[3][i] + P.weather.rain4 * R.w[4][i] + P.weather.rainPrev * R.w[5][i];
     maxRel = Math.max(maxRel, Math.abs(R.e[i] * Math.exp(eta) / mu[i] - 1)); }
   const op = Object.keys(P.operators)[0];
   assert(P.kind === 'mobility-pulse/portable-model' && maxRel < 0.002 && op && Number.isFinite(P.operators[op]) && Object.values(P.types).every(x => x.level.p25 <= x.level.p50 && x.level.p50 <= x.level.p75) && Object.keys(P.city).length > 0 && JSON.stringify(P).length < 60000,
@@ -813,4 +815,17 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const NOW = Date.parse(`${addDays(DAY0, NDAY - 1)}T08:00:00Z`), k0 = groups[0][0];
   const rb = F.runForecast({ docs: docs.slice(0, NDAY - 1), calendar: null, weather: [], prevLog: null, now: NOW, breaks: { [k0]: addDays(DAY0, 6) } });
   assert(rb.latest.breaks === 6 && rb.latest.groups[k0] && rb.latest.biasCorr !== undefined, `S2.8: Gruppe mit Strukturbruch lernt erst ab dem Bruchtag (${rb.latest.breaks} Gruppe-Tage ausgelassen), Prognose bleibt`);
+}
+{ // A13: Autobahn nicht mehr als Merkmal, Standardfehler nach Tagen geclustert
+  const ds = F.assignEras(docs.map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds, F.wxLookup(WX)), all = Array.from({ length: R.n }, (_, i) => i);
+  const iR = F.CTX_KEYS.indexOf('road'); for (let i = 0; i < R.n; i++) R.c[iR][i] = 1;
+  const m = F.fitPooled(R, all, { weather: true }), se = F.daySE(m, R);
+  assert(!F.ctxActive(R, all).includes(iR) && se.cold > 0 && se.rain > 0 && Object.keys(se).includes('rainPrev'), `A13: Autobahn bleibt aus, obwohl jede Zeile sie trägt; Standardfehler je Tag geclustert (kalt ${se.cold}, Regen ${se.rain})`);
+}
+{ // A14: Veranstaltungen mit „abgesagt“ oder „VVK“ irgendwo im Titel fallen weg
+  const CX = await import('../lib/pulse-context.js');
+  const venues = [{ id: 'v1', ags: '08111000', cap: 10000, name: 'Halle' }], t = Date.parse('2026-11-20T19:00:00Z');
+  const rows = [['e1', 'Konzert X – abgesagt', t, 'v1', 'Konzert', null, 'https://x.example', 0], ['e2', 'Show Y (VVK läuft)', t, 'v1', 'Show', null, 'https://x.example', 0], ['e3', 'Konzert Z', t, 'v1', 'Konzert', null, 'https://x.example', 0]];
+  const out = CX.venueEntries(rows, venues, { now: t - 86400e3 });
+  assert(out.length === 1 && out[0].id === 'e3', `A14: abgesagte und VVK-Einträge verworfen (${out.map(x => x.id).join(', ')})`);
 }
