@@ -10,7 +10,6 @@
    "required": [
     "schemaVersion",
     "generatedAt",
-    "license",
     "states"
    ],
    "properties": {
@@ -53,7 +52,6 @@
     "schemaVersion",
     "type",
     "state",
-    "license",
     "features"
    ],
    "properties": {

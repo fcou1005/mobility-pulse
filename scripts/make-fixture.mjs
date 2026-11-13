@@ -78,6 +78,7 @@ for (const f of (await readdir(path.join(SRC, 'groups')).catch(() => [])).filter
 for (const d of DAYS) {
   for (const dir of ['events', 'history', 'flows', 'flows-est', 'incidents']) if (has(`${dir}/${d}.json`)) await put(`${dir}/${d}.json`, trim(await rd(`${dir}/${d}.json`)));
   for (const st of states) if (has(`cells/${d}/${st}.json`)) await put(`cells/${d}/${st}.json`, trim(await rd(`cells/${d}/${st}.json`)));
+  for (const st of states) if (has(`events/${d}/${st}.json`)) await put(`events/${d}/${st}.json`, trim(await rd(`events/${d}/${st}.json`))); // S3.8
 }
 const wxDays = (await readdir(path.join(SRC, 'weather')).catch(() => [])).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).filter(d => d >= DAYS[0]);
 for (const d of wxDays) await put(`weather/${d}.json`, trim(await rd(`weather/${d}.json`)));
@@ -87,6 +88,12 @@ if (has('archive/index.json')) { const a = await rd('archive/index.json'); const
   for (const m of a.months) if (has(`archive/${m}.json`)) await put(`archive/${m}.json`, trim(await rd(`archive/${m}.json`))); }
 
 // 3. Sonderfälle
+// S3.8: Stundensummen und Tagessummen nur für die Tage des Fixtures (Zeilen der Tagessummen passend zu days), ops-input der Gemeinden
+if (has('events/hour-totals.json')) { const h = await rd('events/hour-totals.json'); await put('events/hour-totals.json', { ...h, days: Object.fromEntries(Object.entries(h.days || {}).filter(([d]) => DSET.has(d))) }); }
+if (has('events/daily-summary.json')) { const ds = await rd('events/daily-summary.json'), ix = ds.days.map((d, i) => (DSET.has(d) ? i : -1)).filter(i => i >= 0);
+  await put('events/daily-summary.json', { ...ds, days: ix.map(i => ds.days[i]), groups: Object.fromEntries(Object.entries(ds.groups || {}).filter(([k]) => KEEP.has(k.slice(0, 8))).map(([k, row]) => [k, ix.map(i => row[i])])) }); }
+if (has('ops-input/index.json')) { const oi = await rd('ops-input/index.json'); await put('ops-input/index.json', { ...oi, cellDays: oi.cellDays.filter(d => DSET.has(d)), ags: oi.ags.filter(a => KEEP.has(a)) });
+  for (const a of KEEP) if (has(`ops-input/${a}.json`)) { const o = await rd(`ops-input/${a}.json`); await put(`ops-input/${a}.json`, { ...o, cellDays: o.cellDays.filter(d => DSET.has(d)), cells: o.cells.filter(c => DSET.has(c.day)) }); } }
 for (const st of states) {
   if (has(`ops/${st}.json`)) { const o = await rd(`ops/${st}.json`); const ok = (i) => KEEP.has(o.munis[i]);
     await put(`ops/${st}.json`, { ...o, vehicles: o.vehicles.filter(r => ok(r[8])), stations: o.stations.filter(r => ok(r[7])) }); }

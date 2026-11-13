@@ -23,7 +23,12 @@ eq(familyOf('history/2026-11-13.json'), { family: 'history', def: 'day' }, 'hist
 eq(familyOf('events/2026-11-13.json'), { family: 'events', def: 'day' }, 'events Tag');
 eq(familyOf('cells/2026-11-12/BW.json'), { family: 'cells', def: null }, 'cells Land');
 eq(familyOf('cells/2026-11-12.json'), null, 'alte Tagesdatei der Zellen gehört nicht dazu');
-eq(familyOf('ops/BW.json'), { family: 'ops', def: null }, 'ops');
+eq(familyOf('ops/BW.json'), { family: 'ops', def: 'state' }, 'ops Land');
+eq(familyOf('ops-input/08111000.json'), { family: 'ops', def: 'input' }, 'ops-input Gemeinde (S3.8)');
+eq(familyOf('ops-input/index.json'), { family: 'ops', def: 'inputIndex' }, 'ops-input index');
+eq(familyOf('events/2026-11-13/BW.json'), { family: 'events', def: 'day' }, 'events je Land (S3.8)');
+eq(familyOf('events/hour-totals.json'), { family: 'events', def: 'hourTotals' }, 'events hour-totals');
+eq(familyOf('events/daily-summary.json'), { family: 'events', def: 'summary' }, 'events daily-summary');
 eq(familyOf('boundaries/index.json'), { family: 'boundaries', def: 'index' }, 'boundaries index');
 eq(familyOf('boundaries/NW.json'), { family: 'boundaries', def: 'state' }, 'boundaries Land');
 eq(familyOf('forecast/series.json'), { family: 'forecast', def: 'series' }, 'forecast series');

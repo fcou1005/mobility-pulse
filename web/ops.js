@@ -214,10 +214,21 @@ async function loadOpsDoc(stCode) {
   if (!(stCode in S.ops)) { const r = await dataJson(`ops/${stCode}.json`, { timeout: 90000 }); if (!r.ok) return { fleet: null, status: r.status, error: r.error }; S.ops[stCode] = O.decodeFleet(r.json); }
   return { fleet: S.ops[stCode] };
 }
-async function loadCellDocs(stCode, days) {
+// S3.8: bis 7 Tage aus ops-input/<AGS>.json (nur die Zellen der Gemeinde, gleiches Nachfragemodell wie aus den Landesdateien,
+// test/split.test.mjs), wenn die Datei zum Datenstand passt; sonst und für 14 Tage die Landesdateien cells/<Tag>/<Land>.json
+async function loadCellDocs(stCode, days, ags = null) {
   const idx = await X.loadUsageIndex();
   const list = (idx.cellDays || []).slice(-days);
+  const inp = ags ? await loadOpsInput(ags, idx) : null;
+  if (inp && list.every(d => inp.cellDays.includes(d))) { S.input = inp; return inp.cells.filter(c => list.includes(c.day)); }
   return (await Promise.all(list.map(d => X.loadCells(d, stCode)))).filter(Boolean);
+}
+async function loadOpsInput(ags, idx) {
+  const oi = await X.loadOnce('opsInputIndex', 'ops-input/index.json', 25000);
+  const want = (idx.cellDays || []).slice(-(oi?.cellDays?.length || 0));
+  if (oi?.version !== 1 || !oi.ags?.includes(ags) || JSON.stringify(oi.cellDays) !== JSON.stringify(want)) return null;
+  const r = await dataJson(`ops-input/${ags}.json`, { timeout: 60000 });
+  return r.ok && r.json?.ags === ags && JSON.stringify(r.json.cellDays) === JSON.stringify(oi.cellDays) ? r.json : null;
 }
 // Gruppen-Ereignisse aller Monate (groups/index.json → groups/<JJJJ-MM>.json); ohne Verzeichnis (älterer Datenstand, 404) groups.json.
 // Fehlgeschlagene Dateien werden nicht gecacht und als Warnung gemeldet.
@@ -333,7 +344,8 @@ async function computePlan() {
     const info = st.latest?.municipalities?.[ags]; const stCode = info?.state;
     if (!stCode) { status(t('ops.municipalityNotKnownIn')); emptyPlan(t('ops.municipalityNotKnownIn')); return; }
     status(t('ops.loadingFleetAndDemand'));
-    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 7)]);
+    S.input = null;
+    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 7, ags)]);
     if (stop()) return;
     const fleet = fleetRes.fleet;
     if (!fleet) {
@@ -370,7 +382,8 @@ async function computePlan() {
     if ((model.hours < 0.5 || thin) && band !== 'day') { const m2 = O.buildDemandModel(cellDocs, ags, 'day'); if (m2.hours > (thin ? model.hours : 0)) { bandNote = thin ? t('ops.autoBandFewHours', { label: bandLabel(band), h: X.fmt(model.hours, 1) }) : t('ops.noMeasurementForYet', { label: bandLabel(band) }); model = m2; band = 'day'; } }
     if (!model.cells.size || model.hours <= 0) { status(t('ops.thereIsNoDemandMeasurement')); emptyPlan(t('ops.noDemandMeasurementForThis')); drawFleetOnly(vehicles, stations); return; }
     // Kontext
-    const b = (await X.loadBoundaries(), st.boundaries?.features.find(f => f.properties.ags === ags)?.bbox) || null;
+    // Begrenzungsrahmen aus ops-input (S3.8), sonst aus den Gemeindegrenzen des Landes
+    const b = (S.input?.ags === ags && S.input.bbox) || (await X.loadBoundaries(), st.boundaries?.features.find(f => f.properties.ags === ags)?.bbox) || null;
     const spacing = num('#ops-spacing', 220), topN = Math.min(60, num('#ops-n', 20)), horizonH = num('#ops-horizon', 3);
     status(t('ops.loadingZonesAndSurroundings'));
     const pre = O.scoreSpots(model, { topN: Math.min(80, topN * 3), minSpacingM: spacing * 0.6, bootDraws: 0 }); // Vorauswahl für Overpass: ohne Bootstrap

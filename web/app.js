@@ -9,12 +9,15 @@ import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn, ensureI18n } from './i18n.js';
 import { idleClassText } from './pulse-idle.js';
 import { checkMajor } from './pulse-schema.js';
+import { totalsDoc } from './pulse-split.js';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 // ---------- Ansichtsmodule bei Bedarf laden (S3.4): Modul und sein Wörterbuchbereich zusammen; M[k] = geladenes Modul ----------
 const LAZY = { ops: [() => import('./ops.js'), 'ops'], rp: [() => import('./report.js'), 'report'], fl: [() => import('./flows.js'), 'flows'], cov: [() => import('./coverage.js'), 'coverage'],
   cmp: [() => import('./compare.js'), 'compare'], sp: [() => import('./spots.js'), 'spots'], fv: [() => import('./forecast.js'), 'forecast'], st: [() => import('./status.js'), 'status'] };
 const M = {}, MP = {};
-const mod = (k) => MP[k] || (MP[k] = Promise.all([LAZY[k][0](), ensureI18n([LAZY[k][1]])]).then(([m]) => { M[k] = m; if (k === 'ops') m.initOps(opsCtx()); return m; }));
+// Teil nicht ladbar (z. B. nach einer neuen Version liegen die Teile unter anderen Namen): Hinweis zum Neuladen, nächster Versuch lädt erneut
+const mod = (k) => MP[k] || (MP[k] = Promise.all([LAZY[k][0](), ensureI18n([LAZY[k][1]])]).then(([m]) => { M[k] = m; if (k === 'ops') m.initOps(opsCtx()); return m; })
+  .catch((e) => { delete MP[k]; notice(() => t('app.chunkReload'), 'warn', 'chunk'); throw e; }));
 const renderOps = () => mod('ops').then(m => m.renderOps());
 const opsFleet = () => M.ops?.opsFleet() || null;
 const applyOpsParams = (p) => { mod('ops').then(m => m.applyOpsParams(p)); };
@@ -1597,6 +1600,8 @@ state.usage = { index: null, day: /^\d{4}-\d{2}-\d{2}$/.test(QS.get('day') || ''
 // Alle Lader über den Promise-Cache: parallele Aufrufer teilen sich einen Download, fehlende Dateien werden nicht je Aufruf neu angefragt
 async function loadUsageIndex() { if (!state.usage.index) { const r = await cached('events/index.json', 25000); state.usage.index = r.json || { days: [], cellDays: [] }; } return state.usage.index; }
 async function loadEvents(day) { if (!(day in state.usage.docs)) { const r = await cached(`events/${day}.json`, 60000); state.usage.docs[day] = r.json || null; } return state.usage.docs[day]; }
+// S3.8: Ereignisse eines Tages nur für ein Land (events/<Tag>/<Land>.json, Kopf wie die Tagesdatei); fehlt die Teilung (älterer Datenstand), die ganze Datei
+async function loadEventsState(day, st) { const c = (state.usage.docsSt ??= {}), k = `${day}/${st}`; if (!(k in c)) { const r = await cached(`events/${day}/${st}.json`, 60000); c[k] = r.json || await loadEvents(day); } return c[k]; }
 async function loadCells(day, st) { const k = `${day}/${st}`; if (!(k in state.usage.cells)) { const r = await cached(`cells/${day}/${st}.json`, 60000); state.usage.cells[k] = r.json || null; } return state.usage.cells[k]; }
 async function loadOnce(name, file, timeout = 60000) { if (state.usage[name] === undefined || state.usage[name] === null) { const r = await cached(file, timeout); state.usage[name] = r.json || null; } return state.usage[name]; }
 const scopeState = () => state.latest?.municipalities?.[state.scope]?.state || null;
@@ -1608,9 +1613,9 @@ const durText = (ms) => ms == null || !Number.isFinite(ms) ? '—' : ms < 3600e3
 // wie Bericht und Tagesgang-Profil), sonst der letzte abgeschlossene Tag. Der laufende Tag (Tag des jüngsten Sammler-Laufs) bleibt wählbar.
 const runningDay = (days) => { const d = days[days.length - 1]; return d && state.latest?.at && BERLIN_DAY.format(state.latest.at) === d ? d : null; };
 const partialHour = () => String(hourOf(state.latest.at)).padStart(2, '0'); // Ereignisse des laufenden Tages reichen bis zum Beginn dieser Stunde
-async function defaultUsageDay(days) {
+async function defaultUsageDay(days, st = null) {
   const run = runningDay(days), cand = days.slice(-7).filter(d => d !== run).reverse();
-  for (const d of cand) { const doc = await loadEvents(d); if (doc && R.hourQuality(doc.runs, doc.gapHours).full) return d; }
+  for (const d of cand) { const doc = st ? await loadEventsState(d, st) : await loadEvents(d); if (doc && R.hourQuality(doc.runs, doc.gapHours).full) return d; }
   return cand[0] || days[days.length - 1];
 }
 async function renderUsage() {
@@ -1739,16 +1744,19 @@ async function econProfile(day) {
   const idx = await loadUsageIndex(); const all = (idx.days || []).slice(0, -1); // abgeschlossene Tage
   const md = state.latest?.measure?.version >= 1 ? state.latest.measure.days || {} : null;
   const pick = md ? all.filter(d => md[d]?.full && E.dayType(d, land, cal) === ty).slice(-7) : all.slice(-7);
-  const prof = E.hourProfile(await Promise.all(pick.map(loadEvents)), { dayType: ty, land, calendar: cal });
+  // S3.8: Stundensummen aller Gruppen (events/hour-totals.json, gleiches Profil wie aus den Tagesdateien) statt bis zu 7 Tagesdateien
+  const ht = await loadOnce('hourTotals', 'events/hour-totals.json', 25000);
+  const fromTotals = ht?.version === 1 && ht.at >= (state.latest?.at ?? Infinity) && pick.every(d => ht.days?.[d]);
+  const prof = E.hourProfile(fromTotals ? pick.map(d => totalsDoc(d, ht.days[d])) : await Promise.all(pick.map(loadEvents)), { dayType: ty, land, calendar: cal });
   P.set(key, prof); return (state.usage.profile = prof);
 }
 // Kennzahlen je Gruppe (Gemeinde|Anbieter|Art) eines Tages; Ergebnis je Schlüssel.
 // Je Gruppe: m = gemessen (Ø Fahrt aus der Kalibrierung: E-Scooter Berliner Quartalswerte, sonst Annahme), cal = × Faktor (pulse-calib factorFor:
 // eigene Korrektur übersteuert, sonst k für E-Scooter), lo/hi = Spanne des Faktors; die Gruppe selbst trägt die Werte des gewählten Modus.
-async function econGroups(day, keep) {
+async function econGroups(day, keep, st = null) {
   // Audit OPS-04: für abgeschlossene Tage reicht das Tagesmittel aus history/daily.json (Ø Bestand als Rückfall), statt je Tag history/<Tag>.json (3–5 MB)
   const histDay = async (d) => { if (d < FC_dayOfNow()) { const dl = await loadDaily(); const h = dl ? R.histFromDaily(dl, d) : null; if (h) return h; } return loadHistory(d); };
-  const [doc, pricing, hist, prof, calib] = await Promise.all([loadEvents(day), loadOnce('pricing', 'pricing.json'), histDay(day), econProfile(day), getCalib()]);
+  const [doc, pricing, hist, prof, calib] = await Promise.all([st ? loadEventsState(day, st) : loadEvents(day), loadOnce('pricing', 'pricing.json'), histDay(day), econProfile(day), getCalib()]);
   if (!doc) return null;
   // Fahrzeugminuten nur nutzen, wenn alle Läufe des Tages sie gezählt haben (Umstellungstag: Ø Bestand aus dem Verlauf)
   // Stunden ohne Messung oder mit Lücken-Lauf (> 45 Min. Pause, Flag 0) fallen aus Beobachtungszeit, Fahrten und Fahrzeugminuten: keine Hochrechnung aus Lücken
@@ -1779,8 +1787,10 @@ async function econGroups(day, keep) {
 }
 // für die Disposition: Kennzahlen eines Anbieters in einer Gemeinde (letzter voller Tag wie die Vorauswahl der Nutzung, Werte des gewählten Modus)
 async function econFor(ags, op, type) {
-  const idx = await loadUsageIndex(); if (!idx.days?.length) return null; const day = await defaultUsageDay(idx.days);
-  const r = await econGroups(day, (k) => { const [a, o, tq] = k.split('|'); return a === ags && o === op && (type === 'all' || tq === type); });
+  const idx = await loadUsageIndex(); if (!idx.days?.length) return null;
+  const st = state.latest?.municipalities?.[ags]?.state || null; // S3.8: nur die Ereignisse des Landes der Gemeinde
+  const day = await defaultUsageDay(idx.days, st);
+  const r = await econGroups(day, (k) => { const [a, o, tq] = k.split('|'); return a === ags && o === op && (type === 'all' || tq === type); }, st);
   return r ? E.combine([...r.out.values()]) : null;
 }
 // Kalibrierung: geteilt mit dem Bericht (report.js loadCalibration), Modus „kalibriert“ / „gemessen“ je Browser gemerkt
@@ -2662,7 +2672,7 @@ async function init() {
   setInterval(async () => {
     const s = await getJson(fresh('status.json')); if (!s.ok || s.json.at === state.status?.at) return;
     const l = await getJson(latestUrl(s.json)); if (!l.ok) return;
-    state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
+    state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.docsSt = {}; state.usage.hourTotals = null; state.usage.opsInputIndex = null; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = [...REQ].filter(([k]) => k.startsWith('boundaries')); resetCache(); if (state.bIndex) for (const [k, p] of keepB) REQ.set(k, p); // Grenzen ändern sich nicht je Lauf
     groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); M.ops?.resetCaches?.(); M.rp?.resetReportCaches?.(); M.cov?.resetCoverageCache?.(); M.cmp?.resetCompareCache?.(); M.fv?.resetForecastCache?.(); M.sp?.resetSpotsCache?.();

@@ -439,6 +439,19 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
   const stj = JSON.parse(await readFile('test/out/status.json', 'utf8')), rl = (await readFile(path.join(tmp, 'runtime.txt'), 'utf8')).split('\n');
   assert(stj.schemaVersion === '2.0' && stj.complete === true && stj.level === 'ok' && stj.phases.length >= 10 && stj.phases.some(([n]) => n === 'verfolgung') && stj.budget.warnS === 360 && stj.trend && rl[0] === 'ok' && /Laufzeit \d+ s/.test(rl[1]),
     `status.json v2: ${stj.phases.length} Phasen (${stj.phases.slice().sort((x, y) => y[1] - x[1]).slice(0, 3).map(([n, ms]) => `${n} ${ms} ms`).join(', ')}), Stufe ${stj.level}, Laufzeit-Zeile „${rl[0]}“`);
+  // S3.7/S3.8: schemaVersion vorn, Daten nach Gebiet neben den bisherigen Dateien
+  {
+    const evI = JSON.parse(await readFile('test/out/events/index.json', 'utf8')), d0 = evI.days.at(-1);
+    const parts = existsSync(`test/out/events/${d0}`) ? (await readdir(`test/out/events/${d0}`)).filter(f => /^[A-Z]{2}\.json$/.test(f)) : [];
+    const full = JSON.parse(await readFile(`test/out/events/${d0}.json`, 'utf8')), nG = (await Promise.all(parts.map(async f => Object.keys(JSON.parse(await readFile(`test/out/events/${d0}/${f}`, 'utf8')).groups).length))).reduce((a, b) => a + b, 0);
+    const ht = JSON.parse(await readFile('test/out/events/hour-totals.json', 'utf8')), ds = JSON.parse(await readFile('test/out/events/daily-summary.json', 'utf8'));
+    const oi = existsSync('test/out/ops-input/index.json') ? JSON.parse(await readFile('test/out/ops-input/index.json', 'utf8')) : null;
+    const one = oi?.ags?.length ? JSON.parse(await readFile(`test/out/ops-input/${oi.ags[0]}.json`, 'utf8')) : null;
+    const lat = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+    assert(lat.schemaVersion === '1.0' && full.schemaVersion === '1.1' && parts.length >= 1 && nG === Object.keys(full.groups).length && ht.days[d0]?.startsH?.length === 24 && ds.days.includes(d0)
+      && oi && one?.schemaVersion === '1.1' && one.cells.every(c => Object.keys(c.munis).length === 1 && c.munis[one.ags]),
+      `S3.7/S3.8: schemaVersion vorn, events/${d0}/ je Land (${parts.join(', ')}, ${nG} Gruppen), hour-totals, daily-summary, ops-input für ${oi?.ags?.length ?? 0} Gemeinde(n)`);
+  }
   assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
 }
 // Goldene Tage (P3): Rohstände nur privat im Cache, je Lauf eine Zeile, gesalzene Kennungen

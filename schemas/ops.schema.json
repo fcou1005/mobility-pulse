@@ -2,91 +2,216 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/ops.schema.json",
  "title": "ops/<Land>.json – Bestand für die Disposition",
- "description": "Je sichtbarem Fahrzeug eine Zeile ohne Kennung (Felder in vehicleFields), Stationen in stationFields; Anbieter und Gemeinden als Index in ops und munis.",
- "x-version": "1.0",
- "type": "object",
- "required": [
-  "schemaVersion",
-  "at",
-  "state",
-  "types",
-  "vehicleFields",
-  "stationFields",
-  "ops",
-  "munis",
-  "vehicles",
-  "stations"
- ],
- "properties": {
-  "schemaVersion": {
-   "type": "string",
-   "pattern": "^1\\.\\d+$",
-   "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
-  },
-  "at": {
-   "type": "integer",
-   "minimum": 1500000000000.0,
-   "maximum": 4100000000000.0
-  },
+ "description": "ops/<Land>.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/<AGS>.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json.",
+ "x-version": "1.1",
+ "$defs": {
   "state": {
-   "type": "string",
-   "pattern": "^[A-Z]{2}$"
-  },
-  "types": {
-   "type": "array",
-   "items": {
-    "type": "string"
-   }
-  },
-  "trackStart": {
-   "anyOf": [
-    {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "at",
+    "state",
+    "types",
+    "vehicleFields",
+    "stationFields",
+    "ops",
+    "munis",
+    "vehicles",
+    "stations"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "at": {
      "type": "integer",
      "minimum": 1500000000000.0,
      "maximum": 4100000000000.0
     },
-    {
-     "type": "null"
-    }
-   ]
-  },
-  "vehicleFields": {
-   "type": "string"
-  },
-  "stationFields": {
-   "type": "string"
-  },
-  "ops": {
-   "type": "array",
-   "items": {
-    "type": "string"
-   }
-  },
-  "munis": {
-   "type": "array",
-   "items": {
-    "type": "string",
-    "pattern": "^\\d{8}$"
-   }
-  },
-  "vehicles": {
-   "type": "array",
-   "items": {
-    "type": "array",
-    "minItems": 4,
-    "items": {
-     "type": [
-      "number",
-      "null"
+    "state": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$"
+    },
+    "types": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "trackStart": {
+     "anyOf": [
+      {
+       "type": "integer",
+       "minimum": 1500000000000.0,
+       "maximum": 4100000000000.0
+      },
+      {
+       "type": "null"
+      }
      ]
+    },
+    "vehicleFields": {
+     "type": "string"
+    },
+    "stationFields": {
+     "type": "string"
+    },
+    "ops": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "munis": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{8}$"
+     }
+    },
+    "vehicles": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+       "type": [
+        "number",
+        "null"
+       ]
+      }
+     }
+    },
+    "stations": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "minItems": 4
+     }
     }
    }
   },
-  "stations": {
-   "type": "array",
-   "items": {
-    "type": "array",
-    "minItems": 4
+  "input": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "ags",
+    "state",
+    "cellDays",
+    "cells"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "state": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$"
+    },
+    "bbox": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "array",
+       "minItems": 4,
+       "maxItems": 4,
+       "items": {
+        "type": "number"
+       }
+      }
+     ]
+    },
+    "cellDays": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "cells": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "day",
+       "state",
+       "munis"
+      ],
+      "properties": {
+       "day": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+       },
+       "state": {
+        "type": "string",
+        "pattern": "^[A-Z]{2}$"
+       },
+       "munis": {
+        "type": "object",
+        "maxProperties": 1,
+        "additionalProperties": {
+         "type": "object"
+        }
+       },
+       "below": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "inputIndex": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "cellDays",
+    "ags"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    },
+    "cellDays": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "ags": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{8}$"
+     }
+    }
    }
   }
  }

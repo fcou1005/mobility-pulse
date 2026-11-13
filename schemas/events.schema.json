@@ -2,8 +2,8 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/events.schema.json",
  "title": "events/ – Ereignisse je Tag",
- "description": "index.json listet Tage mit Ereignissen und Zellen; <Tag>.json hat Läufe und je Gruppe Stundenreihen (Fahrtbeginne, Umsetzungen, …), nur abgeschlossene Stunden.",
- "x-version": "1.0",
+ "description": "index.json listet Tage mit Ereignissen und Zellen; <Tag>.json hat Läufe und je Gruppe Stundenreihen (Fahrtbeginne, Umsetzungen, …), nur abgeschlossene Stunden. Ab 1.1 (S3.8) zusätzlich <Tag>/<Land>.json (nur Gruppen des Landes, Feld state), hour-totals.json und daily-summary.json.",
+ "x-version": "1.1",
  "$defs": {
   "index": {
    "type": "object",
@@ -129,8 +129,140 @@
       }
      },
      "description": "Veröffentlichungsstand; fehlt in Dateien vor dem 2. November 2026"
+    },
+    "state": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$"
     }
    }
+  },
+  "hourTotals": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "days"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    },
+    "latestAt": {
+     "anyOf": [
+      {
+       "type": "integer",
+       "minimum": 1500000000000.0,
+       "maximum": 4100000000000.0
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "days": {
+     "type": "object",
+     "propertyNames": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     },
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "runs",
+       "startsH"
+      ],
+      "properties": {
+       "runs": {
+        "type": "array"
+       },
+       "gapHours": {
+        "type": "array"
+       },
+       "startsH": {
+        "type": "array",
+        "minItems": 24,
+        "maxItems": 24,
+        "items": {
+         "type": "number"
+        }
+       }
+      }
+     }
+    }
+   },
+   "description": "je Tag Läufe und Σ Fahrtbeginne je Stunde über alle Gruppen: das Tagesgang-Profil (lib/pulse-econ.js hourProfile) ohne die Tagesdateien"
+  },
+  "summary": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "days",
+    "fields",
+    "groups"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "groups": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "array",
+      "items": {
+       "anyOf": [
+        {
+         "type": "null"
+        },
+        {
+         "type": "array",
+         "items": {
+          "type": [
+           "number",
+           "null"
+          ]
+         }
+        }
+       ]
+      }
+     }
+    }
+   },
+   "description": "Tagessummen je Gruppe (Gemeinde|Anbieter|Art): groups[key][i] = Summen der Felder fields am Tag days[i] oder null"
   }
  }
 }

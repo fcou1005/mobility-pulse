@@ -36,7 +36,12 @@ const VIEWS = Object.keys(CHECKS).filter(v => !ONLY || ONLY.includes(v));
 const BAD_TEXT = /nicht ladbar|konnte nicht geladen|Fehler beim Laden/i;
 
 const missing = new Set(); // Dateien, die die Seite anfragt und das Fixture nicht hat (Hinweis; optionale Dateien wie incidents/<heute> fehlen erlaubt)
-const server = await startFixtureServer(PORT, { missing });
+// S3.8 Byte-Budget je Ansicht: Daten (gzip, wie Pages ausliefert), die eine frisch geöffnete Ansicht aus dem Datenstand lädt. Grenzen auf dem
+// Fixture (2 Gemeinden, 3 Tage) mit etwa 15 % Luft – wächst eine Ansicht darüber, lädt sie mehr Dateien oder größere als bisher.
+const BYTE_BUDGET_KB = { live: 145, ops: 240, bericht: 245, prognose: 220, sources: 140, usage: 140, staedte: 95 };
+let byteView = null; const viewBytes = {};
+const bytes = { add: (u, n) => { if (byteView && u.startsWith('/d/')) { const v = (viewBytes[byteView] ||= {}); v[u.slice(3)] = (v[u.slice(3)] || 0) + n; } } };
+const server = await startFixtureServer(PORT, { missing, bytes });
 const { chromium } = await import('playwright').catch(() => { console.error('Playwright fehlt: npm ci (devDependencies) und npx playwright install chromium'); process.exit(2); });
 const fx = JSON.parse(await readFile(path.join(FIX, 'FIXTURE.json'), 'utf8'));
 const browser = await chromium.launch();
@@ -72,6 +77,16 @@ try {
     const b = await pass(run, { scope: '08416041', viewport: { width: 390, height: 844 }, checks: false, tag: 'Handy Tübingen' });
     if (run === 0) await pass(run, { scope: '08111000', viewport: { width: 1280, height: 900 }, checks: false, tag: 'Englisch Stuttgart', lang: 'en' });
     runs.push({ a, b });
+  }
+  // S3.8: Datenmenge je frisch geöffneter Ansicht (Desktop Stuttgart)
+  for (const v of Object.keys(BYTE_BUDGET_KB).filter(x => !ONLY || ONLY.includes(x))) {
+    byteView = v;
+    const { page, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1440, height: 900 }, hash: v });
+    await settledText(page, v); await page.waitForTimeout(500); await close(); byteView = null;
+    const files = Object.entries(viewBytes[v] || {}).sort((a, b) => b[1] - a[1]), kb = files.reduce((a, [, n]) => a + n, 0) / 1024, lim = BYTE_BUDGET_KB[v];
+    const top = files.slice(0, 4).map(([f, n]) => `${f} ${(n / 1024).toFixed(0)}`).join(', ');
+    if (lim && kb > lim) fail(`Datenmenge ${v}: ${kb.toFixed(0)} KB gzip über Budget ${lim} KB (${top})`);
+    else console.log(`✓ Datenmenge ${v.padEnd(9)} ${kb.toFixed(0).padStart(4)} KB gzip${lim ? ` (Budget ${lim} KB)` : ' (ohne Budget)'} · ${top}`);
   }
   // S3.7: passt die MAJOR-Version einer Datei nicht zur Seite, erscheint ein Hinweis (hier status.json mit 9.0)
   if (!ONLY) {

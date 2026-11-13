@@ -20,7 +20,8 @@ import * as TR from '../lib/pulse-train.js';
 import * as K from '../lib/pulse-calib.js';
 import * as OE from '../lib/pulse-oepnv.js';
 import * as SS from '../lib/pulse-status.js';
-import * as SV from '../lib/pulse-schema.js'; // S3.7: schemaVersion je Dateifamilie (schemas/<Familie>.schema.json)
+import * as SV from '../lib/pulse-schema.js';
+import * as SP from '../lib/pulse-split.js'; // S3.8: Daten nach Gebiet (events/<Tag>/<Land>.json, ops-input/<AGS>.json) // S3.7: schemaVersion je Dateifamilie (schemas/<Familie>.schema.json)
 import { gzipSync, gunzipSync, inflateRawSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -1076,7 +1077,8 @@ PH.phase('ereignisse');
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
   const evWorkFile = TRACK_DIR ? path.join(TRACK_DIR, 'events-work.json.gz') : null;
   // S1.7: Zwischenstand (complete false) ohne Dauer-/Distanzsummen und Kleinstgruppen (T.publicEventsDoc)
-  const evPublish = async (doc, complete) => { const str = JSON.stringify(SV.withSchema('events', { ...T.publicEventsDoc(doc, complete), published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } })); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
+  const evChanged = new Set(); // S3.8: Tage, deren events/<Tag>.json in diesem Lauf geschrieben wurde (Teilung je Land danach neu)
+  const evPublish = async (doc, complete) => { evChanged.add(doc.day); const str = JSON.stringify(SV.withSchema('events', { ...T.publicEventsDoc(doc, complete), published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } })); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
   let evWork = null, evPub = null, evFinal = null; // evPub: veröffentlichter Stand des laufenden Tags, evFinal: in diesem Lauf abgeschlossener Vortag
   if (evWorkFile) {
     evWork = await readState(evWorkFile);
@@ -1088,7 +1090,7 @@ PH.phase('ereignisse');
   // Carsharing ohne sichtbare Buchungen (tr.carTrips.unmeasurable): auch frühere Läufe des Tags aus der Tagesdatei nehmen (keine Nullen als Messung)
   { const mut = new Set(tr.carTrips?.unmeasurable || []); if (mut.size) for (const k of Object.keys(evDoc.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) delete evDoc.groups[k]; } }
   if (evWorkFile) await writeFile(evWorkFile, gzipSync(JSON.stringify(evDoc)));
-  else { await writeFile(evFile, JSON.stringify(SV.withSchema('events', evDoc))); evPub = evDoc; }
+  else { await writeFile(evFile, JSON.stringify(SV.withSchema('events', evDoc))); evPub = evDoc; evChanged.add(evDoc.day); }
   if (!evPub && existsSync(evFile)) evPub = JSON.parse(await readFile(evFile, 'utf8')); // in dieser Stunde schon veröffentlichter Stand
   // Gruppen-Ereignisse (≥ T.GROUP_MIN = 4 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt): dauerhaft je Monat in
   // groups/<JJJJ-MM>.json (Monat nach Europe/Berlin, nie gekürzt) mit Verzeichnis groups/index.json; groups.json (30 Tage) bleibt als
@@ -1376,6 +1378,48 @@ PH.phase('ereignisse');
   for (const f of cellDays.filter(f => !f.endsWith('.json')).slice(0, -14)) await rm(path.join(cellsDir, f), { recursive: true, force: true });
   for (const f of cellDays.filter(f => f.endsWith('.json')).slice(0, -3)) await rm(path.join(cellsDir, f));
   await writeFile(path.join(DATA, 'events', 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.events, days: (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), cellDays: (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort(), updatedAt: now, first: tr.first }));
+  // S3.8 Daten nach Gebiet (lib/pulse-split.js), neben den bisherigen Dateien (die laufen bis mindestens 27.11.2026 parallel):
+  // events/<Tag>/<Land>.json, events/hour-totals.json (Tagesgang ohne 14 Tagesdateien), events/daily-summary.json (Tagessummen je Gruppe).
+  // Neu geteilt werden nur Tage, die dieser Lauf geschrieben hat oder denen die Teilung fehlt; Summen früherer Tage kommen aus dem Vorlauf.
+  try {
+    const t0 = Date.now(), evDir = path.join(DATA, 'events');
+    const evDays = (await readdir(evDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort();
+    const stateOf = (ags) => latest.municipalities?.[ags]?.state;
+    const htFile = path.join(evDir, 'hour-totals.json'), dsFile = path.join(evDir, 'daily-summary.json');
+    const ht0 = existsSync(htFile) ? JSON.parse(await readFile(htFile, 'utf8')) : null, ds0 = existsSync(dsFile) ? JSON.parse(await readFile(dsFile, 'utf8')) : null;
+    const dsOld = ds0?.version === SP.SPLIT_VERSION && JSON.stringify(ds0.fields) === JSON.stringify(SP.SUMMARY_FIELDS) ? ds0 : null;
+    const oldSums = (d) => { const i = dsOld?.days?.indexOf(d) ?? -1; if (i < 0) return null; const o = {}; for (const [k, row] of Object.entries(dsOld.groups || {})) if (row[i]) o[k] = row[i]; return o; };
+    const htDays = {}, sums = {}; let nSplit = 0;
+    for (const d of evDays) {
+      const dir = path.join(evDir, d), prevT = ht0?.version === SP.SPLIT_VERSION ? ht0.days?.[d] : null, prevS = oldSums(d);
+      if (!evChanged.has(d) && existsSync(dir) && prevT && prevS) { htDays[d] = prevT; sums[d] = prevS; continue; }
+      const doc = JSON.parse(await readFile(path.join(evDir, `${d}.json`), 'utf8'));
+      await rm(dir, { recursive: true, force: true }); await mkdir(dir, { recursive: true });
+      for (const [st, part] of SP.eventsByState(doc, stateOf)) await writeFile(path.join(dir, `${st}.json`), JSON.stringify(SV.withSchema('events', part)));
+      htDays[d] = SP.hourTotals(doc); sums[d] = SP.groupDaySums(doc); nSplit++;
+    }
+    for (const f of await readdir(evDir, { withFileTypes: true })) if (f.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(f.name) && !evDays.includes(f.name)) await rm(path.join(evDir, f.name), { recursive: true, force: true });
+    await writeFile(htFile, JSON.stringify({ schemaVersion: SV.SCHEMA.events, version: SP.SPLIT_VERSION, at: now, latestAt: latest.at, days: htDays }));
+    await writeFile(dsFile, JSON.stringify({ schemaVersion: SV.SCHEMA.events, version: SP.SPLIT_VERSION, at: now, ...SP.dailySummary(sums) }));
+    if (nSplit) log(`Daten nach Gebiet: ${nSplit} Ereignistag(e) je Land geteilt (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  } catch (e) { log(`Daten nach Gebiet (Ereignisse): ${e.message}`); }
+  // ops-input/<AGS>.json: Nachfrage-Eingabe der Disposition (Zellen der letzten 7 Zellen-Tage nur dieser Gemeinde, Begrenzungsrahmen) –
+  // statt 7 Landesdateien. Ändert sich nur, wenn ein Tageszeit-Band neu veröffentlicht wird (git speichert unveränderte Dateien nicht neu).
+  try {
+    const t0 = Date.now(), dir = path.join(DATA, 'ops-input');
+    const days = (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort().slice(-SP.OPS_INPUT_DAYS);
+    const byDay = []; // je Zellen-Tag: Land → Landesdatei
+    for (const d of days) { const m = new Map(); for (const f of (await readdir(path.join(cellsDir, d))).filter(f => /^[A-Z]{2}\.json$/.test(f))) m.set(f.slice(0, 2), JSON.parse(await readFile(path.join(cellsDir, d, f), 'utf8'))); byDay.push(m); }
+    const byAgs = new Map(); // ags → Land (Gemeinden mit Zellen an mindestens einem der Tage)
+    for (const m of byDay) for (const [st, doc] of m) for (const ags of Object.keys(doc.munis || {})) if (!byAgs.has(ags)) byAgs.set(ags, st);
+    const bbox = new Map(); for (const ft of boundaries?.features || []) if (ft.properties?.ags) bbox.set(ft.properties.ags, C.geomBounds(ft.geometry));
+    await mkdir(dir, { recursive: true });
+    for (const f of (await readdir(dir)).filter(f => /^\d{8}\.json$/.test(f) && !byAgs.has(f.slice(0, 8)))) await rm(path.join(dir, f));
+    // je Tag die Landesdatei der Gemeinde (fehlt sie, fehlt der Tag – wie beim Laden der Landesdateien); Tage ohne Zellen der Gemeinde bleiben leer drin
+    for (const [ags, st] of byAgs) await writeFile(path.join(dir, `${ags}.json`), JSON.stringify({ schemaVersion: SV.SCHEMA.ops, version: SP.SPLIT_VERSION, ags, state: st, bbox: bbox.get(ags) || null, cellDays: days, cells: SP.cellsSlice(byDay.map(m => m.get(st)), ags) }));
+    await writeFile(path.join(dir, 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.ops, version: SP.SPLIT_VERSION, at: now, cellDays: days, ags: [...byAgs.keys()].sort() }));
+    log(`Daten nach Gebiet: ops-input für ${byAgs.size} Gemeinden (${days.length} Zellen-Tage, ${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  } catch (e) { log(`Daten nach Gebiet (ops-input): ${e.message}`); }
   const ev = [...tr.hourly.values()].reduce((a, h) => { a.start += h.start.reduce((x, y) => x + y, 0); a.end += h.end.reduce((x, y) => x + y, 0); a.reloc += h.reloc.reduce((x, y) => x + y, 0); a.swap += h.swap.reduce((x, y) => x + y, 0); return a; }, { start: 0, end: 0, reloc: 0, swap: 0 });
   log(`Verfolgung: ${Object.keys(tr.state.v).length} Kennungen im Zustand${tr.first ? ' (erster Lauf)' : ` · Fahrten begonnen ${ev.start}, beendet ${ev.end}, Umsetzungen ${ev.reloc}, Akkutausch ${ev.swap}`} · lange Standzeiten ${tr.idleLong.length}`);
 }
@@ -1722,7 +1766,7 @@ PH.phase('abschluss');
     `Stand: ${new Date(now).toISOString()} · erzeugt vom Sammler (scripts/collect.mjs) bei jedem Lauf.`, '',
     'Dieser Datenzweig enthält aus offenen Quellen abgeleitete Daten: Bestände, Ereignisse (Fahrten, Umsetzungen, Akkutausch), Zellen, Archiv und Momentaufnahmen. Die Lizenzangaben stammen aus den Feeds (GBFS `system_information`: `license_id`, `license_url`, `attribution_organization_name`) bzw. aus den Verzeichnissen; maßgeblich sind die Bedingungen der jeweiligen Quelle. Je Quelle stehen sie auch in `latest.json` → `sources[]` (`licenseId`, `licenseUrl`, `attribution`, `attributionUrl`).', '',
     '## Veröffentlichung von Ereignissen und Zellen', '',
-    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Läge dort weniger als 3 (also womöglich eine einzelne Zelle), fällt zusätzlich die kleinste veröffentlichte Zelle des Bands in `below` (`suppress: 2`). Start-Ziel-Ströme (`flows/<Tag>.json`) erscheinen erst nach Tagesende und nur für Zellenpaare mit mindestens ' + T.FLOW_MIN + ' Fahrten am Tag; Wochensummen (`flows-week/<Montag>.json`, 500-m-Zellen) erst nach Ende der Kalenderwoche, ebenfalls ab ' + T.FLOW_MIN + ' Fahrten je Zeile; geschätzte Ströme (`flows-est/`) ab ' + FE.EST_MIN + ' erwarteten Fahrten aus mindestens ' + FE.EST_SUPPORT + ' Fahrtbeginnen. Fahrzeugkennungen werden nicht veröffentlicht; sie bleiben privat (HMAC mit privatem Salt).', '',
+    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Läge dort weniger als 3 (also womöglich eine einzelne Zelle), fällt zusätzlich die kleinste veröffentlichte Zelle des Bands in `below` (`suppress: 2`). Start-Ziel-Ströme (`flows/<Tag>.json`) erscheinen erst nach Tagesende und nur für Zellenpaare mit mindestens ' + T.FLOW_MIN + ' Fahrten am Tag; Wochensummen (`flows-week/<Montag>.json`, 500-m-Zellen) erst nach Ende der Kalenderwoche, ebenfalls ab ' + T.FLOW_MIN + ' Fahrten je Zeile; geschätzte Ströme (`flows-est/`) ab ' + FE.EST_MIN + ' erwarteten Fahrten aus mindestens ' + FE.EST_SUPPORT + ' Fahrtbeginnen. Fahrzeugkennungen werden nicht veröffentlicht; sie bleiben privat (HMAC mit privatem Salt). Dieselben Ereignisse stehen je Land unter `events/<Tag>/<Land>.json`, als Tagessummen je Gruppe in `events/daily-summary.json` und als Stundensummen in `events/hour-totals.json`; die Zellen einer Gemeinde der letzten 7 Tage für die Disposition unter `ops-input/<AGS>.json` (gleiche Unterdrückung wie die Landesdateien).', '',
     '## Live-Bestand und Momentaufnahmen', '',
     'Veröffentlicht wird der jeweils letzte Bestand ohne Kennung: `ops/<Land>.json` (je sichtbarem Fahrzeug Position, Anbieter, Art, Ladestand, Reichweite, Standzeit-Klasse) und `snapshot/<Quelle>.json` (Bestand von Quellen, die der Browser nicht selbst lesen kann). Reichweite in ganzen km (Quellen mit eigener Reichweiten-Skala: 0,1 km). Die Standzeit erscheint nur als Klasse: unter 6 h, 6–24 h, danach ganze Tage (auch `idle-long.json`). Eine minutengenaue Standzeit zeigte, wann an einer Adresse die letzte Fahrt endete. Frühere Bestände bleiben nicht im Datenzweig (ein Commit je Lauf ohne Vorgänger).', '',
     '## Grundlagen', '',
