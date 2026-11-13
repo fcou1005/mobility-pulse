@@ -304,6 +304,27 @@ assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
   const old2 = JSON.parse(JSON.stringify(pub)); old2.flows.push(['A1', '9:9', '9:8', 'Lime', 'scooter', 1, 6, 60, 600]); old2.munis.A1.trips += 6; old2.munis.A1.shown += 6; old2.total.trips += 6; old2.total.shown += 6;
   assert(T.tightenFlows(old2) && old2.min === 5 && old2.flows.length === 1 && old2.flows[0][6] === 6 && old2.munis.A1.shown === 6 && old2.munis.A1.below === 9 && old2.total.trips === old2.total.shown + old2.total.below + old2.total.cut && !T.tightenFlows(old2), 'tightenFlows: Zeilen unter 5 entfallen, Fahrten in below, einmalig');
 }
+// A10: Wochenströme auf 500-m-Zellen (Kalenderwoche Mo–So, einmal nach Wochenende)
+{
+  const F = (entries) => new Map(entries.map(([k, pairs]) => [k, new Map(pairs.map(([p, n, dur, dist]) => [p, { count: n, durSum: dur, distSum: dist }]))]));
+  assert(T.weekStart('2026-11-13') === '2026-11-09' && T.weekStart('2026-11-09') === '2026-11-09' && T.weekStart('2026-11-15') === '2026-11-09' && T.weekStart('2026-11-16') === '2026-11-16', 'weekStart: Montag der Kalenderwoche (Fr, Mo, So, nächster Mo)');
+  assert(T.coarseCell('19401:2587') === '9701:1294' && T.coarseCell('19400:2586') === '9700:1293', 'coarseCell: 250 m → 500 m wie flows-est');
+  let store = null;
+  // jeden Tag 2 Fahrten je feinem Paar, vier feine Paare fallen in ein grobes: täglich unter 5 (nicht im Tag), in der Woche 7 × 8 = 56
+  for (let i = 0; i < 9; i++) {
+    const day = `2026-11-${String(9 + i).padStart(2, '0')}`;
+    const raw = T.mergeFlows(null, F([['A1|Lime|scooter|2', [['99:99>109:109', 2, 600e3, 4000], ['100:99>109:110', 2, 600e3, 4000], ['99:100>110:109', 2, 600e3, 4000], ['100:100>110:110', 2, 600e3, 4000]]]]), { day, stable: { A1: ['Lime'] } });
+    if (!i) assert(T.publishFlows(raw).flows.length === 0, 'Tagesdatei (250 m, ≥ 5): keine Zeile bei 2 Fahrten je Paar');
+    store = T.mergeWeekFlows(store, raw);
+  }
+  assert(Object.keys(store.days).length === 9 && store.days['2026-11-10'].rows['A1|Lime|scooter|2']['50:50>55:55'][0] === 8, `Wochenspeicher: vergröbert (4 feine Paare → 1, ${store.days['2026-11-10'].rows['A1|Lime|scooter|2']['50:50>55:55']?.[0]} Fahrten am Tag)`);
+  const wk = T.publishWeekFlows(store, '2026-11-09', { at: 1 });
+  assert(wk.flows.length === 1 && wk.flows[0][6] === 56 && wk.flows[0][1] === '50:50' && wk.week.complete && wk.week.days.length === 7 && wk.week.to === '2026-11-15' && wk.cell[0] === 2 * T.CELL_LAT && wk.total.shown === 56 && wk.stable.A1[0] === 'Lime', `Woche 09.–15.11.: eine Zeile mit ${wk.flows[0]?.[6]} Fahrten, Zellen 500 m, vollständig`);
+  const part = T.publishWeekFlows(store, '2026-11-16', { at: 1 });
+  assert(!part.week.complete && part.week.days.length === 2 && part.flows[0][6] === 16, 'angefangene Woche: Tage gezählt, als unvollständig markiert');
+  let s2 = store; for (let i = 0; i < 10; i++) s2 = T.mergeWeekFlows(s2, { day: `2026-12-${String(1 + i).padStart(2, '0')}`, runs: 1, rows: {} });
+  assert(Object.keys(s2.days).length === T.WEEK_KEEP && !s2.days['2026-11-09'], 'Wochenspeicher: nur die letzten 14 Tage');
+}
 // Zeitumstellung: Tagesdatei trägt Minuten je Ortsstunde
 {
   const doc = T.mergeHourly(null, new Map(), { day: '2026-10-25', at: Date.parse('2026-10-25T01:30:00Z'), dt: 20 * 60e3, srcModes: {} });

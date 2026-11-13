@@ -1,9 +1,9 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
-import * as O from './pulse-ops.js?v=mwf2rwoa';
-import { parseJsonSafe } from './pulse-core.js?v=mwf2rwoa';
-import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mwf2rwoa';
-import { mapKeys } from './mapkeys.js?v=mwf2rwoa';
-import { mbBadge, mbBase } from './report.js?v=mwf2rwoa';
+import * as O from './pulse-ops.js?v=mwf3jh04';
+import { parseJsonSafe } from './pulse-core.js?v=mwf3jh04';
+import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js?v=mwf3jh04';
+import { mapKeys } from './mapkeys.js?v=mwf3jh04';
+import { mbBadge, mbBase } from './report.js?v=mwf3jh04';
 
 let X; // Kontext aus app.js: state, CFG, getJson, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE
 const $ = (s, el = document) => el.querySelector(s);
@@ -333,7 +333,7 @@ async function computePlan() {
     const info = st.latest?.municipalities?.[ags]; const stCode = info?.state;
     if (!stCode) { status(t('ops.municipalityNotKnownIn')); emptyPlan(t('ops.municipalityNotKnownIn')); return; }
     status(t('ops.loadingFleetAndDemand'));
-    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 3)]);
+    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 7)]);
     if (stop()) return;
     const fleet = fleetRes.fleet;
     if (!fleet) {

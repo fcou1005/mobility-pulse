@@ -1,7 +1,7 @@
 // Mobility Pulse — Disposition: Nachfragemodell, Deploy-Spots, Rebalancing-, Swap- und Werkstatt-Touren.
 // Reine Funktionen für Browser und Node. Entfernungen in Metern, Zeiten in Minuten.
-import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mwf2rwoa';
-import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mwf2rwoa';
+import { haversineM, RANGE_LIMIT } from './pulse-core.js?v=mwf3jh04';
+import { BANDS, bandOf, CELL_LAT, CELL_LON, cellOf, cellCenter, dayOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, FLOW_FIELDS } from './pulse-track.js?v=mwf3jh04';
 
 export { BANDS, bandOf, GROUP_MIN, GROUP_M, GROUP_FIELDS, RANGE_LIMIT };
 
@@ -246,6 +246,10 @@ export const BOOT = { z: 2, draws: 200, seed: 20261102, minShare: 0.8 };
  *   outPerHour = (S − k·E) ÷ h, outSe = √(S + k²·E) ÷ h (Poisson, k fest; die Unsicherheit von k steckt im Bootstrap),
  *   outLow = max(0, outPerHour − z·outSe) (vorsichtige Untergrenze, Faktor der MCDA), outPerHourRaw = (S − E) ÷ h (ohne Ausgleich),
  *   endsPerHour = E ÷ h (gezählt), endsPerHourBal = k·E ÷ h. model.balance = { starts, ends, belowStarts, belowEnds, totalStarts, totalEnds, k }.
+ * A15 (13.11.2026, cells/ 31.10.–12.11., 8 Großstädte, Vorhersage der Starts je Zelle am Folgetag): 7 Tage statt 3 senken die Poisson-Devianz
+ * um 26 % (Tag) bzw. 29–33 % (je Band), Top-25-Treffer 63,6 → 67,7 %. Starts/h als Gamma-Poisson-Posterior (Empirical Bayes, Momentenmethode),
+ * Exposition nur bei Präsenz (Zensierung) und Verteilung der unterdrückten Starts auf Zellen ohne Wert brachten nichts (Devianz gleich bis
+ * höher, Top 25 ±0,5 Punkte) – die Rangfolge hängt an Zellen mit vielen Starts, wo die Schrumpfung nichts ändert. Daher: Rate wie bisher, 7 Tage.
  */
 export function buildDemandModel(cellDocs, ags, band = 'day') {
   const bands = band === 'day' ? BANDS.map(b => b.id) : [band];

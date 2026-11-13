@@ -96,6 +96,10 @@ const TYPE = tMap('type', VEHICLE_TYPE_LABEL);
 const ymd = (d) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), 12));
 const dmy = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(ymd(d)) : '–');
 const dm = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(ymd(d)) : '–');
+// Wochenströme (flows-week/, A10): Datei je Montag; Beschriftung „09.11.–15.11.2026“
+const plusDays = (d, n) => { const x = ymd(d); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+const mondayOf = (d) => (d ? plusDays(d, -((ymd(d).getUTCDay() + 6) % 7)) : null);
+const wkLabel = (d) => (d ? `${dm(d)}–${dmy(plusDays(d, 6))}` : '–');
 const typeLabel = (tq) => (tq == null ? t('flows.severalTypes') : TYPE[tq] || tq);
 const bandLabel = (S, b) => { const x = S.bands[b]; return x ? t('flows.bandRange', { label: t(`band.${b}`), from: x.from, to: x.to }) : String(b); };
 function durText(ctx, sec) { if (sec == null || !Number.isFinite(sec)) return '—'; return sec < 3600 ? t('flows.min', { v0: ctx.fmt(sec / 60) }) : t('flows.h', { v0: ctx.fmt(sec / 3600, 1) }); }
@@ -135,7 +139,7 @@ function skeleton(S) {
   el.classList.add('fl-root');
   el.innerHTML = `<div class="panel-head"><div><h2>${t('flows.presumedTripRoutes')}</h2><div class="sub" data-fl="sub">${t('flows.originDestinationFlows')}</div></div>
     <div class="inline-form fl-ctl">
-      <div class="fl-tog" role="group" aria-label="${t('flows.source')}" data-fl="srcbox"><button type="button" data-fl-src="measured" aria-pressed="true" title="${t('flows.measuredTip')}">${t('flows.measured')}</button><button type="button" data-fl-src="est" aria-pressed="false" title="${t('flows.estimatedTip')}">${t('flows.estimated')}</button></div>
+      <div class="fl-tog" role="group" aria-label="${t('flows.source')}" data-fl="srcbox"><button type="button" data-fl-src="measured" aria-pressed="true" title="${t('flows.measuredTip')}">${t('flows.measured')}</button><button type="button" data-fl-src="week" aria-pressed="false" title="${t('flows.weekTip')}">${t('flows.week')}</button><button type="button" data-fl-src="est" aria-pressed="false" title="${t('flows.estimatedTip')}">${t('flows.estimated')}</button></div>
       <label data-fl="ags-l" hidden>${t('flows.municipality')} <select data-fl="ags" title="${t('flows.municipalitiesWithPublished')}"></select></label>
       <label>${t('flows.day')} <select data-fl="day"></select></label>
       <label>${t('flows.operator')} <select data-fl="op"></select></label>
@@ -203,22 +207,25 @@ async function update(S) {
   const gen = ++S.gen; stopRouting(S);
   const { ctx, sel, q } = S;
   const esc = ctx.esc;
-  S.est = S.src === 'est';
-  const dir = S.est ? 'flows-est/' : 'flows/';
+  S.est = S.src === 'est'; S.week = S.src === 'week';
+  const dir = S.est ? 'flows-est/' : S.week ? 'flows-week/' : 'flows/';
+  const lbl = (d) => (S.week ? wkLabel(d) : dmy(d));
   S.el.querySelectorAll('[data-fl-src]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.flSrc === S.src)));
   const idxR = await ctx.getJson(`${ctx.CFG.DATA}${dir}index.json`, { timeout: 25000 });
   if (gen !== S.gen) return;
   const idx = idxR?.ok ? idxR.json : null;
   const days = (Array.isArray(idx?.days) ? idx.days : []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
   // Tag: Wahl im Panel, sonst der Tag des Nutzungs-Tabs (wenn veröffentlicht), sonst der letzte abgeschlossene
-  if (!sel.day || !days.includes(sel.day)) sel.day = days.includes(sel.fromUsage) ? sel.fromUsage : days[days.length - 1] || null;
-  q('day').innerHTML = days.length ? [...days].reverse().map(d => `<option value="${esc(d)}">${esc(dmy(d))}</option>`).join('') : '<option value="">–</option>';
+  const want = S.week ? mondayOf(sel.fromUsage) : sel.fromUsage;
+  if (!sel.day || !days.includes(sel.day)) sel.day = days.includes(want) ? want : days[days.length - 1] || null;
+  q('day').innerHTML = days.length ? [...days].reverse().map(d => `<option value="${esc(d)}">${esc(lbl(d))}</option>`).join('') : '<option value="">–</option>';
   q('day').value = sel.day || '';
   const collecting = typeof idx?.collecting === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(idx.collecting) ? idx.collecting : null;
   const minN = Number.isFinite(idx?.min) ? idx.min : S.est ? 2 : 5; // Mindestschwelle je Zeile (gemessen 5, geschätzt 2 erwartete Fahrten)
-  const howNote = S.est ? `${t('flows.estHow')} ${qualityText(S, idx?.quality)}` : t('flows.routeMostLikelyCycleRoute', { min: minN });
-  const privacy = S.est ? t('flows.estPrivacy', { min: minN }) : t('flows.mobilityPulseLinksStartAnd', { min: minN });
+  const howNote = S.est ? `${t('flows.estHow')} ${qualityText(S, idx?.quality)}` : S.week ? t('flows.weekHow', { min: minN }) : t('flows.routeMostLikelyCycleRoute', { min: minN });
+  const privacy = S.est ? t('flows.estPrivacy', { min: minN }) : S.week ? t('flows.weekPrivacy', { min: minN }) : t('flows.mobilityPulseLinksStartAnd', { min: minN });
   if (!days.length) {
+    if (S.week) return empty(S, idxR?.status === 404 || !idx ? t('flows.weekNoFiles') : t('flows.weekNoWeek'), `${collecting ? `${t('flows.weekCollecting', { wk: esc(wkLabel(collecting)) })} ` : ''}${privacy}`, howNote);
     if (S.est) return empty(S, idxR?.status === 404 || !idx ? t('flows.estNoFiles') : t('flows.estNoDay'), `${collecting ? `${t('flows.collectorIsCurrently', { dmy: esc(dmy(collecting)) })} ` : ''}${privacy}`, howNote);
     return empty(S, idxR?.status === 404 || !idx ? t('flows.noFlowFilesInDataSnapshotYet') : t('flows.noCompletedDayWithFlowsYet'),
       `${collecting ? `${t('flows.collectorIsCurrently', { dmy: esc(dmy(collecting)) })} ` : ''}${privacy}`, howNote);
@@ -231,7 +238,7 @@ async function update(S) {
     if (gen !== S.gen) return;
     doc = r?.ok && r.json && Array.isArray(r.json.flows) ? r.json : null; S.docs.set(dk, doc);
   }
-  if (!doc) return empty(S, t('flows.flowFileForNotLoadable', { dmy: esc(dmy(sel.day)) }), t('flows.chooseAnotherDayOrReload'), howNote);
+  if (!doc) return empty(S, t('flows.flowFileForNotLoadable', { dmy: esc(lbl(sel.day)) }), t('flows.chooseAnotherDayOrReload'), howNote);
   S.cellDim = Array.isArray(doc.cell) && doc.cell.length === 2 && doc.cell.every(x => Number.isFinite(x) && x > 0 && x < 0.1) ? doc.cell : CELL_FALLBACK;
   S.bands = Array.isArray(doc.bands) && doc.bands.length === 6 && doc.bands.every(b => b && typeof b.label === 'string') ? doc.bands : BANDS_FALLBACK_DEF();
   S.doc = doc; S.rows = validRows(doc);
@@ -245,9 +252,12 @@ async function update(S) {
   if (de) { q('ags').innerHTML = withFlows.map(([a, m]) => `<option value="${esc(a)}">${esc(name(a))} (${esc(nf(S, m.shown))})</option>`).join('') || '<option value="">–</option>'; q('ags').value = sel.ags || ''; }
   const others = withFlows.filter(([a]) => a !== sel.ags).slice(0, 6).map(([a, m]) => `${esc(name(a))} (${esc(nf(S, m.shown))})`).join(', ');
   const m = sel.ags ? munis[sel.ags] : null, stable = (sel.ags && Array.isArray(doc.stable?.[sel.ags]) ? doc.stable[sel.ags] : []).filter(x => typeof x === 'string');
-  q('sub').textContent = t(S.est ? 'flows.originDestinationFlowsEst' : 'flows.originDestinationFlows2', { v0: sel.ags ? name(sel.ags) : t('flows.germany'), v1: dmy(sel.day) });
+  q('sub').textContent = t(S.est ? 'flows.originDestinationFlowsEst' : S.week ? 'flows.originDestinationFlowsWeek' : 'flows.originDestinationFlows2', { v0: sel.ags ? name(sel.ags) : t('flows.germany'), v1: lbl(sel.day) })
+    + (S.week && doc.week && doc.week.complete === false ? ` · ${t('flows.weekPartial', { n: Array.isArray(doc.week.days) ? doc.week.days.length : '?' })}` : '');
   if (!sel.ags || !(m?.shown > 0)) {
     const place = sel.ags ? esc(name(sel.ags)) : t('flows.germany');
+    if (S.week) return empty(S, !sel.ags ? t('flows.weekNone', { wk: esc(lbl(sel.day)) }) : t('flows.weekNoPair', { place, wk: esc(lbl(sel.day)), min: Number.isFinite(doc.min) ? doc.min : minN }),
+      `${others ? `${t('flows.weekOthers', { others })} ` : ''}${privacy}`, howNote);
     if (S.est) return empty(S, !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : t('flows.estNoPair', { place: sel.ags ? esc(name(sel.ags)) : t('flows.germany'), dmy: esc(dmy(sel.day)) }),
       `${others ? `${t('flows.onThisDayThereAreFlowsIn', { others })} ` : ''}${privacy}`, howNote);
     const head = !sel.ags ? t('flows.noPublishedFlowsOn', { dmy: esc(dmy(sel.day)) }) : !stable.length && !(m?.trips > 0) ? t('flows.inNoOperatorReportsStable', { place, dmy: esc(dmy(sel.day)) }) : t('flows.noCellPairWithAtLeast2Trips', { place, dmy: esc(dmy(sel.day)), min: Number.isFinite(doc.min) ? doc.min : minN });
@@ -267,7 +277,7 @@ async function update(S) {
   const by = new Map();
   for (const r of rows) {
     const k = `${r[1]}>${r[2]}`; let f = by.get(k);
-    if (!f) by.set(k, f = { key: (S.est ? 'e' : '') + k, from: r[1], to: r[2], n: 0, dur: 0, dist: 0, ops: new Map(), types: new Set(), bands: new Set() }); // Routen-Cache: 500-m-Zellen getrennt
+    if (!f) by.set(k, f = { key: (S.est || S.week ? 'e' : '') + k, from: r[1], to: r[2], n: 0, dur: 0, dist: 0, ops: new Map(), types: new Set(), bands: new Set() }); // Routen-Cache: 500-m-Zellen getrennt
     f.n += r[6]; f.dur = r[7] == null || f.dur == null ? null : f.dur + r[7]; f.dist += r[8]; f.ops.set(r[3], (f.ops.get(r[3]) || 0) + r[6]); f.types.add(r[4]); f.bands.add(r[5]);
   }
   const flows = [...by.values()].sort((a, b) => b.n - a.n || b.dist - a.dist || a.key.localeCompare(b.key));
@@ -451,7 +461,7 @@ function exportCsv(S) {
   const { ctx, sel } = S; if (!S.filtered?.length) return;
   const head = [t('flows.day'), t('flows.municipalityKey'), t('flows.municipality'), t('flows.startCell'), t('flows.startLatitude'), t('flows.startLongitude'), t('flows.destinationCell'), t('flows.destinationLatitude'), t('flows.destinationLongitude'), t('flows.operator'), t('flows.vehicleType'), t('flows.timeOfDay'), t('flows.trips'), t('flows.avgDurationMin'), t('flows.avgStraightLineKm'), t('flows.bikeRouteKmOsrmNotMeasured')];
   const rows = [...S.filtered].sort((a, b) => b[6] - a[6]).map(r => {
-    const [a1, o1] = cellCenter(S, r[1]), [a2, o2] = cellCenter(S, r[2]), rt = r[1] !== r[2] ? cacheGet(`${S.est ? 'e' : ''}${r[1]}>${r[2]}`) : null;
+    const [a1, o1] = cellCenter(S, r[1]), [a2, o2] = cellCenter(S, r[2]), rt = r[1] !== r[2] ? cacheGet(`${S.est || S.week ? 'e' : ''}${r[1]}>${r[2]}`) : null;
     return [S.doc.day || sel.day, r[0], ctx.muniName(r[0]), r[1], [a1, 5], [o1, 5], r[2], [a2, 5], [o2, 5], r[3] ?? t('flows.merged'), r[4] == null ? t('flows.merged') : typeLabel(r[4]), r[5] == null ? t('flows.merged') : bandLabel(S, r[5]), r[6], r[7] == null ? null : [r[7] / r[6] / 60, 1], [r[8] / r[6] / 1000, 2], rt && !rt.fail ? [rt.d / 1000, 2] : null];
   });
   download(`${t('file.flows')}_${String(sel.ags).replace(/[^\w-]/g, '')}_${String(S.doc.day || sel.day).replace(/[^\d-]/g, '')}.csv`, toCsv([head, ...rows]));

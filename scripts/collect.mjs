@@ -1223,6 +1223,24 @@ try {
     // ältere Tagesdateien mit niedrigerer Schwelle (bis 6.11.2026: 2) einmalig nachziehen: Zeilen unter T.FLOW_MIN entfallen
     for (const f of flDays.slice(-HISTORY_DAYS)) { try { const fp = path.join(flDir, f), doc = JSON.parse(await readFile(fp, 'utf8')); if (T.tightenFlows(doc)) { await writeFile(fp, JSON.stringify(doc)); log(`Ströme ${f.slice(0, 10)}: auf ≥ ${T.FLOW_MIN} Fahrten je Zeile nachgezogen (${doc.flows.length} Zeilen)`); } } catch (e) { log(`Ströme ${f}: ${e.message}`); } }
     await writeFile(path.join(flDir, 'index.json'), JSON.stringify({ days: flDays.slice(-HISTORY_DAYS).map(f => f.slice(0, 10)), collecting: raw.day, min: T.FLOW_MIN, top: T.FLOW_TOP, fields: T.FLOW_FIELDS, updatedAt: now }));
+    // Wochenströme (A10): vergröberte Tagessumme (500 m) in den privaten Wochenspeicher (flows-week-raw.json.gz, 14 Tage); nach dem Ende einer
+    // Kalenderwoche einmal flows-week/<Montag>.json (≥ T.FLOW_MIN Fahrten je Zeile, Top 300 je Gemeinde) + flows-week/index.json, 8 Wochen
+    try {
+      const wDir = path.join(DATA, 'flows-week'), wRawFile = path.join(TRACK_DIR, 'flows-week-raw.json.gz'), wIdxFile = path.join(wDir, 'index.json');
+      await mkdir(wDir, { recursive: true });
+      const roll = raw0?.day && raw0.day < tr.day;
+      if (roll) {
+        const wk = T.mergeWeekFlows(await readState(wRawFile), raw0);
+        await writeFile(wRawFile, gzipSync(JSON.stringify(wk)));
+        const mon = T.weekStart(raw0.day);
+        if (T.weekStart(tr.day) > mon) { const doc = T.publishWeekFlows(wk, mon, { at: now }); await writeFile(path.join(wDir, `${mon}.json`), JSON.stringify(doc)); log(`Wochenströme ${mon}: ${doc.flows.length} Zeilen, ${doc.total.shown} von ${doc.total.trips} Fahrten sichtbar (${doc.total.trips ? (doc.total.shown / doc.total.trips * 100).toFixed(1) : 0} %), ${doc.week.days.length}/7 Tage`); }
+      }
+      if (roll || !existsSync(wIdxFile)) {
+        const wDays = (await readdir(wDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+        for (const f of wDays.slice(0, -8)) await rm(path.join(wDir, f));
+        await writeFile(wIdxFile, JSON.stringify({ weekly: true, days: wDays.slice(-8).map(f => f.slice(0, 10)), collecting: T.weekStart(tr.day), min: T.FLOW_MIN, top: T.FLOW_TOP, fields: T.FLOW_FIELDS, factor: T.WEEK_FACTOR, updatedAt: now }));
+      }
+    } catch (e) { log(`Wochenströme: ${e.message}`); }
     // Geschätzte Ströme für rotierende Kennungen (lib/pulse-flowest.js): je Lauf nur Zählungen je Zelle, privat in TRACK_DIR
     // (flows-est-raw.json.gz, keine Paare); Schätzung erst nach Tagesende → flows-est/<Tag>.json (estimated: true, ≥ FE.EST_MIN = 2 erwartete Fahrten,
     // Top 300 je Gemeinde, 500-m-Zellen, Gütekennzahl aus der Validierung an stabilen Kennungen) + flows-est/index.json, 30 Tage
@@ -1660,7 +1678,7 @@ if (boundaries) {
     `Stand: ${new Date(now).toISOString()} · erzeugt vom Sammler (scripts/collect.mjs) bei jedem Lauf.`, '',
     'Dieser Datenzweig enthält aus offenen Quellen abgeleitete Daten: Bestände, Ereignisse (Fahrten, Umsetzungen, Akkutausch), Zellen, Archiv und Momentaufnahmen. Die Lizenzangaben stammen aus den Feeds (GBFS `system_information`: `license_id`, `license_url`, `attribution_organization_name`) bzw. aus den Verzeichnissen; maßgeblich sind die Bedingungen der jeweiligen Quelle. Je Quelle stehen sie auch in `latest.json` → `sources[]` (`licenseId`, `licenseUrl`, `attribution`, `attributionUrl`).', '',
     '## Veröffentlichung von Ereignissen und Zellen', '',
-    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Läge dort weniger als 3 (also womöglich eine einzelne Zelle), fällt zusätzlich die kleinste veröffentlichte Zelle des Bands in `below` (`suppress: 2`). Start-Ziel-Ströme (`flows/<Tag>.json`) erscheinen erst nach Tagesende und nur für Zellenpaare mit mindestens ' + T.FLOW_MIN + ' Fahrten am Tag; geschätzte Ströme (`flows-est/`) ab ' + FE.EST_MIN + ' erwarteten Fahrten. Fahrzeugkennungen werden nicht veröffentlicht; sie bleiben privat (HMAC mit privatem Salt).', '',
+    'Ereignisse (`events/<Tag>.json`) erscheinen für den laufenden Tag erst nach Stundenende und enthalten nur abgeschlossene Stunden. Zellen (`cells/<Tag>/<Land>.json`) erscheinen erst nach dem Ende eines Tageszeit-Bands und enthalten nur abgeschlossene Bänder. Nach Tagesende folgen beide vollständig (`published.complete`). In Zellendateien ist jede Zelle × Band mit weniger als 3 Ereignissen (Fahrtbeginne + Fahrtenden) unterdrückt; diese Summen stehen je Gemeinde in `below`. Läge dort weniger als 3 (also womöglich eine einzelne Zelle), fällt zusätzlich die kleinste veröffentlichte Zelle des Bands in `below` (`suppress: 2`). Start-Ziel-Ströme (`flows/<Tag>.json`) erscheinen erst nach Tagesende und nur für Zellenpaare mit mindestens ' + T.FLOW_MIN + ' Fahrten am Tag; Wochensummen (`flows-week/<Montag>.json`, 500-m-Zellen) erst nach Ende der Kalenderwoche, ebenfalls ab ' + T.FLOW_MIN + ' Fahrten je Zeile; geschätzte Ströme (`flows-est/`) ab ' + FE.EST_MIN + ' erwarteten Fahrten aus mindestens ' + FE.EST_SUPPORT + ' Fahrtbeginnen. Fahrzeugkennungen werden nicht veröffentlicht; sie bleiben privat (HMAC mit privatem Salt).', '',
     '## Live-Bestand und Momentaufnahmen', '',
     'Veröffentlicht wird der jeweils letzte Bestand ohne Kennung: `ops/<Land>.json` (je sichtbarem Fahrzeug Position, Anbieter, Art, Ladestand, Reichweite, Standzeit-Klasse) und `snapshot/<Quelle>.json` (Bestand von Quellen, die der Browser nicht selbst lesen kann). Reichweite in ganzen km (Quellen mit eigener Reichweiten-Skala: 0,1 km). Die Standzeit erscheint nur als Klasse: unter 6 h, 6–24 h, danach ganze Tage (auch `idle-long.json`). Eine minutengenaue Standzeit zeigte, wann an einer Adresse die letzte Fahrt endete. Frühere Bestände bleiben nicht im Datenzweig (ein Commit je Lauf ohne Vorgänger).', '',
     '## Grundlagen', '',

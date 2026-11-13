@@ -103,32 +103,41 @@ const pairsOf = (rows) => { const m = new Map(); for (const [k, r] of Object.ent
   const t = Date.parse('2026-11-03T06:00:00Z'), m20 = 20 * 60e3, X = `${AGS}|${cellC(0, 0)}`, Y = `${AGS}|${cellC(0, 6)}`;
   const raw = mk([{ at: t, dt: m20, s: { 'Bolt|scooter': { [X]: 1 } } }, { at: t + m20, dt: m20, e: { 'Bolt|scooter': { [Y]: 1 } } }]);
   const w = FE.lagWeights(m20, 7.9 * 60e3, 2);
-  const withC = FE.estimateDay(raw, { Lmap: { scooter: 900 }, tauMap: { scooter: 7.9 }, factor: 1 }), noC = FE.estimateDay(raw, { Lmap: { scooter: 900 }, factor: 1, carry: false });
+  const withC = FE.estimateDay(raw, { Lmap: { scooter: 900 }, tauMap: { scooter: 7.9 }, factor: 1, carry: true }), noC = FE.estimateDay(raw, { Lmap: { scooter: 900 }, factor: 1, carry: false });
   const v = Object.values(withC.rows)[0]?.[`${cellC(0, 0)}>${cellC(0, 6)}`]?.[0];
   assert(Math.abs(v - w[1]) < 1e-9 && !Object.keys(noC.rows).length, `Beginn in Lauf k, Ende in Lauf k+1: erwartet w1 = ${w[1].toFixed(3)} mit Übertrag, ohne Übertrag nichts`);
   const gapRaw = mk([{ at: t, dt: m20, s: { 'Bolt|scooter': { [X]: 1 } } }, { at: t + 3 * 3600e3, dt: 3 * 3600e3, gap: true }, { at: t + 3 * 3600e3 + m20, dt: m20, e: { 'Bolt|scooter': { [Y]: 1 } } }]);
-  assert(!Object.keys(FE.estimateDay(gapRaw, { Lmap: { scooter: 900 }, factor: 1 }).rows).length, 'Lücke dazwischen: kein Übertrag über die Lücke');
+  assert(!Object.keys(FE.estimateDay(gapRaw, { Lmap: { scooter: 900 }, factor: 1, carry: true }).rows).length, 'Lücke dazwischen: kein Übertrag über die Lücke');
   const holeRaw = mk([{ at: t, dt: m20, s: { 'Bolt|scooter': { [X]: 1 } } }, { at: t + 2 * m20, dt: m20, e: { 'Bolt|scooter': { [Y]: 1 } } }]);
-  assert(!Object.keys(FE.estimateDay(holeRaw, { Lmap: { scooter: 900 }, factor: 1 }).rows).length, 'Lauf fehlt in der Tagessumme (Abstand ≠ dt): Kette unterbrochen');
+  assert(!Object.keys(FE.estimateDay(holeRaw, { Lmap: { scooter: 900 }, factor: 1, carry: true }).rows).length, 'Lauf fehlt in der Tagessumme (Abstand ≠ dt): Kette unterbrochen');
   const longRaw = mk([{ at: t, dt: m20, s: { 'Bolt|scooter': { [X]: 1 } } }, { at: t + 2 * m20, dt: 2 * m20, e: { 'Bolt|scooter': { [Y]: 1 } } }]);
-  assert(Object.keys(FE.estimateDay(longRaw, { Lmap: { scooter: 900 }, factor: 1 }).rows).length === 1, 'längeres Intervall (dt 40 Min.): Kette bleibt');
+  assert(Object.keys(FE.estimateDay(longRaw, { Lmap: { scooter: 900 }, factor: 1, carry: true }).rows).length === 1, 'längeres Intervall (dt 40 Min.): Kette bleibt');
   const lag2 = mk([{ at: t, dt: m20, s: { 'Bolt|scooter': { [X]: 1 } } }, { at: t + m20, dt: m20 }, { at: t + 2 * m20, dt: m20, e: { 'Bolt|scooter': { [Y]: 1 } } }]);
-  const v2 = Object.values(FE.estimateDay(lag2, { Lmap: { scooter: 900 }, tauMap: { scooter: 7.9 }, factor: 1 }).rows)[0]?.[`${cellC(0, 0)}>${cellC(0, 6)}`]?.[0];
+  const v2 = Object.values(FE.estimateDay(lag2, { Lmap: { scooter: 900 }, tauMap: { scooter: 7.9 }, factor: 1, carry: true }).rows)[0]?.[`${cellC(0, 0)}>${cellC(0, 6)}`]?.[0];
   assert(Math.abs(v2 - w[2]) < 1e-9, `zwei Läufe später: Anteil w2 = ${w[2].toFixed(3)}`);
   // Tageswechsel: letzte Läufe des Vortags als tail (nur Beginne), Lernwerte bleiben
   const d1 = mk([{ at: Date.parse('2026-11-03T22:40:00Z'), dt: m20, s: { 'Bolt|scooter': { [X]: 2 } } }]); d1.learn = { scooter: { km: 1.8, min: 8, days: 1 } };
   const d2 = FE.mergeEstCounts(d1, { ...FE.emptyEst(), e: { 'Bolt|scooter': { [Y]: 1 } } }, { day: '2026-11-04', at: Date.parse('2026-11-03T23:00:00Z'), dt: m20, band: 0 });
   assert(d2.day === '2026-11-04' && d2.tail.length === 1 && d2.runs.length === 1 && d2.learn.scooter.km === 1.8 && !Object.keys(d2.tail[0].e).length, 'Tageswechsel: Vortag als tail (Beginne), Lernwerte übernommen');
-  assert(Object.keys(FE.estimateDay(d2, { Lmap: { scooter: 900 }, factor: 1 }).rows).length === 1, 'Fahrt über Mitternacht: Beginn aus dem Vortag, Ende heute');
+  assert(Object.keys(FE.estimateDay(d2, { Lmap: { scooter: 900 }, factor: 1, carry: true }).rows).length === 1, 'Fahrt über Mitternacht: Beginn aus dem Vortag, Ende heute');
 }
 {
   // Zeitmodell auf gezogenen Läufen: ≈ 35 % der Fahrten enden einen Lauf später (τ 8 Min.) – mit Übertrag näher an der bekannten Matrix
   const { raw, expected, meanKm } = synthDay({ tauMin: 8, perRun: 60 });
-  const L = FE.calibrateL(raw, { targetKm: { scooter: meanKm }, tauMap: { scooter: 8 }, factor: 1 }).L;
-  const c = FE.compareFlows(pairsOf(FE.estimateDay(raw, { Lmap: L, tauMap: { scooter: 8 }, factor: 1 }).rows), expected, { factor: 1 });
+  const L = FE.calibrateL(raw, { targetKm: { scooter: meanKm }, tauMap: { scooter: 8 }, factor: 1, carry: true }).L;
+  const c = FE.compareFlows(pairsOf(FE.estimateDay(raw, { Lmap: L, tauMap: { scooter: 8 }, factor: 1, carry: true }).rows), expected, { factor: 1, carry: true });
   const Ln = FE.calibrateL(raw, { targetKm: { scooter: meanKm }, factor: 1, carry: false }).L;
   const cn = FE.compareFlows(pairsOf(FE.estimateDay(raw, { Lmap: Ln, factor: 1, carry: false }).rows), expected, { factor: 1 });
   assert(c.cpc > cn.cpc && c.r > cn.r, `Fahrten über Laufgrenzen: mit Übertrag CPC ${c.cpc} / r ${c.r}, ohne ${cn.cpc} / ${cn.r} (gegen die bekannte Matrix)`);
+}
+// ---------- A10: keine Zeile aus einzelnen 1×1-Komponenten (≥ 5 beitragende Fahrtbeginne) ----------
+{
+  const t = Date.parse('2026-11-03T06:00:00Z'), m20 = 20 * 60e3, X = `${AGS}|${cellC(0, 0)}`, Y = `${AGS}|${cellC(0, 8)}`;
+  const day = (k) => { let raw = null; for (let i = 0; i < k; i++) raw = FE.mergeEstCounts(raw, { ...FE.emptyEst(), s: { 'Bolt|scooter': { [X]: 1 } }, e: { 'Bolt|scooter': { [Y]: 1 } } }, { day: '2026-11-03', at: t + i * 3 * m20, dt: m20, band: 2 }); return raw; };
+  const p3 = FE.publishEstimate(day(3), null, { reference: { fahrt: [] } }).doc, p6 = FE.publishEstimate(day(6), null, { reference: { fahrt: [] } }).doc;
+  assert(p3.flows.length === 0 && p3.total.below === 3 && p6.flows.length === 1 && p6.flows[0][6] === 6 && p6.method.minSupport === 5, `drei einzelne Fahrten X→Y (je Lauf 1 Beginn, 1 Ende): keine Zeile (${p3.flows.length}, ${p3.total.below} unter Schwelle); sechs: eine Zeile mit ${p6.flows[0]?.[6]}`);
+  const p0 = FE.publishEstimate(day(3), null, { reference: { fahrt: [] }, minSupport: 0 }).doc;
+  assert(p0.flows.length === 1 && p0.flows[0][6] === 3, 'ohne Mindestzahl Beginne (minSupport 0): die drei Fahrten erschienen als Zeile (vorher)');
 }
 // ---------- trackRun liefert nur Zählungen: rotierend → s/e, stabil → vs/ve, Gruppen und Abholungen nicht ----------
 {
@@ -180,10 +189,21 @@ const pairsOf = (rows) => { const m = new Map(); for (const [k, r] of Object.ent
   const measured = { version: 1, day: '2026-11-03', runs: 60, rows: {}, stable: { [AGS]: ['Lime'] } };
   for (const [k, n] of val.truth) { const i = k.lastIndexOf('|'); const [ags, op, ty] = k.slice(0, i).split('|'); ((measured.rows[`${ags}|${op}|${ty}|2`] ??= {})[k.slice(i + 1)] = [n, n * 600e3, n * 1500]); }
   const v = FE.validateDay(raw, measured, { targetKm: { scooter: val.meanKm }, tauMap: { scooter: 8 } });
-  assert(v && v.cpc > v.cpcBase && v.r > 0.3 && v.topRatio > 0.5 && v.grid.length === 2 && v.byType.scooter.measured > 200 && v.byType.scooter.w0 > 0.5 && v.byType.scooter.w0 < 0.75, `Validierung blind an stabiler Quelle: CPC ${v.cpc} (ohne Zerfall ${v.cpcBase}, ohne Übertrag ${v.cpcNoCarry}), r ${v.r}, Top-50 ${v.topShare}/${v.topOracle}, Ø km ${v.meanKmEst}/${v.meanKmMeas}, w0 ${v.byType.scooter.w0}`);
+  assert(v && v.cpc > v.cpcBase && v.r > 0.3 && v.topRatio > 0.5 && v.grid.length === 2 && v.byType.scooter.measured > 200 && v.byType.scooter.w0 > 0.5 && v.byType.scooter.w0 < 0.75, `Validierung blind an stabiler Quelle: CPC ${v.cpc} (ohne Zerfall ${v.cpcBase}, mit Übertrag ${v.cpcCarry}), r ${v.r}, Top-50 ${v.topShare}/${v.topOracle}, Ø km ${v.meanKmEst}/${v.meanKmMeas}, w0 ${v.byType.scooter.w0}`);
   const learn = FE.updateLearn({}, v, { dtMs: 20 * 60e3, base: FE.paramsFor({}, ref) });
   assert(learn.scooter?.days === 1 && learn.scooter.km > 0 && Math.abs(learn.scooter.min - 8) < 2, `Nachführung: Zielwert ${learn.scooter.km} km, Dauer ${learn.scooter.min} Min. (wahr 8) aus der Validierung`);
   assert(FE.updateLearn({}, { byType: { scooter: { measured: 50, bestFactor: 1.25, w0: 0.6 } } }, {}).scooter === undefined, 'Nachführung erst ab 200 gemessenen Fahrten je Art');
+  // A9: Zielwert = gemessene Luftlinie (nach Fahrten gewichtet, 7 Tage), keine Ratsche über bestFactor
+  {
+    const vd = (km, n, g = 0.8) => ({ byType: { scooter: { measured: n, bestFactor: g, w0: 0.6, meanKmMeas: km } } });
+    let l = {}; for (let d = 1; d <= 10; d++) l = FE.updateLearn(l, vd(1.5, 1000), { day: `2026-11-${String(d).padStart(2, '0')}` });
+    assert(l.scooter.km === 1.5 && l.scooter.kmDays.length === FE.LEARN_DAYS, `keine Ratsche: 10 Tage mit bestem Gitterfaktor 0,8 und Luftlinie 1,5 km → Ziel ${l.scooter.km} km (vorher 1,5 × 0,8^… ≈ ${(1.5 * Math.pow(0.8, 0.3 * 10)).toFixed(2)} km)`);
+    const l2 = FE.updateLearn(FE.updateLearn({}, vd(1.4, 1000), { day: 'a' }), vd(1.7, 3000), { day: 'b' });
+    const l3 = FE.updateLearn(l2, vd(1.7, 3000), { day: 'b' });
+    assert(Math.abs(l2.scooter.km - 1.625) < 1e-9 && l3.scooter.kmDays.length === 2, `gewichtet nach Fahrten (1,4 km × 1000, 1,7 km × 3000 → ${l2.scooter.km}), derselbe Tag ersetzt statt doppelt`);
+    const v1 = FE.validateDay(raw, measured, { targetKm: { scooter: FE.updateLearn({}, v, { day: 'x' }).scooter.km }, tauMap: { scooter: 8 } });
+    assert(Math.abs(v1.byType.scooter.distDev) <= 0.05, `Abnahme A9: mit gelerntem Ziel ${v1.byType.scooter.targetKm} km weicht die geschätzte Luftlinie ${v1.byType.scooter.meanKmEst} km um ${(v1.byType.scooter.distDev * 100).toFixed(1)} % von der gemessenen ${v1.byType.scooter.meanKmMeas} km ab (≤ 5 %)`);
+  }
   const { doc, learn: l2 } = FE.publishEstimate(raw, measured, { at: 1, reference: ref });
   assert(doc.estimated === true && doc.method.name === 'sinkhorn-gravity' && doc.method.factor === 2 && Math.abs(doc.cell[0] - 2 * T.CELL_LAT) < 1e-12 && doc.fields.join() === T.FLOW_FIELDS.join(), 'flows-est: estimated, Methode, Zellmaß 500 m, Felder wie flows/');
   assert(doc.flows.length > 0 && doc.flows.every(r => r[6] >= 2 && r[7] === null && Number.isInteger(r[8]) && r[3] !== 'Lime'), `nur Zeilen ≥ 2 erwartete Fahrten (${doc.flows.length}), dauer_s null, keine Zeile für die stabile Quelle`);

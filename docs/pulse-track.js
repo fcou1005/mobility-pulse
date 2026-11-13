@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mwf2rwoa';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mwf3jh04';
 
 export const TRACK_VERSION = 2;
 // Regelstand der Ereigniszählung (M-19): ändert sich mit jeder Regeländerung; je Lauf in events/<Tag>.json → runs[k][3] und runs.json
@@ -960,7 +960,8 @@ const FLOW_LEVELS = [[1, 1, 1], [1, 1, 0], [0, 1, 1], [0, 1, 0], [0, 0, 0]];
  * anzahl, dauer_s (Summe), luftlinie_m (Summe)]; null = über mehrere zusammengefasst (einzeln unter der Mindestschwelle).
  * munis[ags] = { trips, shown, below, cut, ops: {Anbieter: Fahrten} }: trips = shown + below + cut.
  */
-export function publishFlows(raw, { min = FLOW_MIN, top = FLOW_TOP, at = null } = {}) {
+// minSupport (geschätzte Ströme, A10): eine Zeile braucht zusätzlich so viele beitragende Fahrtbeginne (a[3]); gemessene Zeilen haben kein a[3]
+export function publishFlows(raw, { min = FLOW_MIN, top = FLOW_TOP, at = null, minSupport = 0 } = {}) {
   const pairs = new Map(), munis = {};
   const M = (ags) => (munis[ags] ??= { trips: 0, shown: 0, below: 0, cut: 0, ops: {} });
   for (const [k, r] of Object.entries(raw?.rows || {})) {
@@ -968,7 +969,7 @@ export function publishFlows(raw, { min = FLOW_MIN, top = FLOW_TOP, at = null } 
     for (const [p, a] of Object.entries(r)) {
       if (!(a[0] > 0)) continue;
       const pk = `${ags}|${p}`; if (!pairs.has(pk)) pairs.set(pk, []);
-      pairs.get(pk).push({ op, ty, band: +b, n: a[0], dur: a[1], dist: a[2] });
+      pairs.get(pk).push({ op, ty, band: +b, n: a[0], dur: a[1], dist: a[2], sup: a[3] ?? Infinity });
       const m = M(ags); m.trips += a[0]; m.ops[op] = (m.ops[op] || 0) + a[0];
     }
   }
@@ -983,7 +984,7 @@ export function publishFlows(raw, { min = FLOW_MIN, top = FLOW_TOP, at = null } 
       rest = [];
       for (const list of g.values()) {
         const n = list.reduce((s, u) => s + u.n, 0);
-        if (n < min) { rest.push(...list); continue; }
+        if (n < min || (minSupport > 0 && list.reduce((s, u) => s + u.sup, 0) < minSupport)) { rest.push(...list); continue; }
         const u0 = list[0];
         const row = [ags, from, to, kOp ? u0.op : null, kTy ? u0.ty : null, kBand ? u0.band : null, n, Math.round(list.reduce((s, u) => s + u.dur, 0) / 1000), Math.round(list.reduce((s, u) => s + u.dist, 0))];
         if (!byAgs.has(ags)) byAgs.set(ags, []); byAgs.get(ags).push(row);
@@ -1019,6 +1020,41 @@ export function tightenFlows(doc, min = FLOW_MIN) {
   for (const m of Object.values(doc.munis || {})) for (const f of Object.keys(doc.total)) doc.total[f] += m[f] || 0;
   for (const f of Object.keys(doc.total)) doc.total[f] = r1(doc.total[f]);
   return true;
+}
+// ---------- Wochenströme (A10, seit 13.11.2026) ----------
+// Tagesdateien (250 m, ≥ 5 Fahrten je Tag) zeigten 0–2,4 % der gemessenen Fahrten (1.–12.11.2026). Dazu: Kalenderwoche Mo–So auf 500-m-Zellen,
+// dieselbe Schwelle FLOW_MIN je Zeile, veröffentlicht einmal nach Wochenende (keine gleitende Woche: zwei überlappende Summen ergäben im Vergleich
+// die Fahrten einzelner Tage). Privat (TRACK_DIR) liegen die vergröberten Tagessummen der letzten WEEK_KEEP Tage.
+export const WEEK_FACTOR = 2, WEEK_KEEP = 14;
+export const coarseCell = (cell, f = WEEK_FACTOR) => { if (f === 1) return cell; const [a, b] = cell.split(':').map(Number); return `${Math.round(a / f)}:${Math.round(b / f)}`; };
+/** Montag der Kalenderwoche (UTC-Datum 'YYYY-MM-DD') */
+export const weekStart = (day) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+const addDays = (day, n) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+/** Tagessumme (mergeFlows) vergröbert in den privaten Wochenspeicher { version, days: { Tag: { runs, rows, stable } } } übernehmen */
+export function mergeWeekFlows(store, dayRaw, { f = WEEK_FACTOR, keep = WEEK_KEEP } = {}) {
+  const doc = store?.version === FLOW_VERSION && store.days ? store : { version: FLOW_VERSION, f, days: {} };
+  if (dayRaw?.day) {
+    const rows = {};
+    for (const [k, r] of Object.entries(dayRaw.rows || {})) {
+      const out = (rows[k] ??= {});
+      for (const [p, a] of Object.entries(r)) { const [x, y] = p.split('>'); const q = `${coarseCell(x, f)}>${coarseCell(y, f)}`; const b = (out[q] ??= [0, 0, 0]); b[0] += a[0]; b[1] += a[1]; b[2] += a[2]; }
+    }
+    doc.days[dayRaw.day] = { runs: dayRaw.runs || 0, rows, stable: dayRaw.stable || {} };
+  }
+  for (const d of Object.keys(doc.days).sort().slice(0, -keep)) delete doc.days[d];
+  return doc;
+}
+/** Veröffentlichte Wochendatei flows-week/<Montag>.json: Summe Mo–So, Zeilen wie flows/<Tag>.json (Zellen 500 m), week = { from, to, days, complete } */
+export function publishWeekFlows(store, monday, { min = FLOW_MIN, top = FLOW_TOP, at = null } = {}) {
+  const f = store?.f || WEEK_FACTOR, days = [], rows = {}, stable = {}; let runs = 0;
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(monday, i), d = store?.days?.[day]; if (!d) continue;
+    days.push(day); runs += d.runs || 0;
+    for (const [k, r] of Object.entries(d.rows || {})) { const out = (rows[k] ??= {}); for (const [p, a] of Object.entries(r)) { const b = (out[p] ??= [0, 0, 0]); b[0] += a[0]; b[1] += a[1]; b[2] += a[2]; } }
+    for (const [ags, ops] of Object.entries(d.stable || {})) { const a = (stable[ags] ??= []); for (const op of ops) if (!a.includes(op)) a.push(op); a.sort(); }
+  }
+  const doc = publishFlows({ day: monday, runs, rows, stable }, { min, top, at });
+  return { ...doc, cell: [CELL_LAT * f, CELL_LON * f], factor: f, week: { from: monday, to: addDays(monday, 6), days, complete: days.length === 7 } };
 }
 export function stationQuota(state) {
   const out = [];

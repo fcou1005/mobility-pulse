@@ -333,7 +333,7 @@ async function computePlan() {
     const info = st.latest?.municipalities?.[ags]; const stCode = info?.state;
     if (!stCode) { status(t('ops.municipalityNotKnownIn')); emptyPlan(t('ops.municipalityNotKnownIn')); return; }
     status(t('ops.loadingFleetAndDemand'));
-    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 3)]);
+    const [fleetRes, cellDocs] = await Promise.all([loadOpsDoc(stCode), loadCellDocs(stCode, +$('#ops-days').value || 7)]);
     if (stop()) return;
     const fleet = fleetRes.fleet;
     if (!fleet) {

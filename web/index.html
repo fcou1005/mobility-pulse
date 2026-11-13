@@ -477,7 +477,7 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
       </div>
       <details class="ops-params"><summary data-i18n="html.parameters">Parameter</summary>
         <div class="ops-form">
-          <label><span data-i18n="html.demandFrom">Nachfrage aus</span><select id="ops-days"><option data-i18n="html.today" value="1">heute</option><option data-i18n="html.n3Days" value="3" selected>3 Tagen</option><option data-i18n="html.n7Days" value="7">7 Tagen</option><option data-i18n="html.n14Days" value="14">14 Tagen</option></select></label>
+          <label><span data-i18n="html.demandFrom">Nachfrage aus</span><select id="ops-days" data-i18n-title="html.demandDaysTip" title="Nachfrage je Zelle aus den letzten 7 abgeschlossenen Tagen: am Folgetag 26 % kleinere Abweichung je Zelle als aus 3 Tagen, Top 25 zu 68 statt 64 % getroffen (13.11.2026)"><option data-i18n="html.today" value="1">heute</option><option data-i18n="html.n3Days" value="3">3 Tagen</option><option data-i18n="html.n7Days" value="7" selected>7 Tagen</option><option data-i18n="html.n14Days" value="14">14 Tagen</option></select></label>
           <label>Spots<input type="number" id="ops-n" value="20" min="3" max="60"></label>
           <label><span data-i18n="html.spacingM">Abstand (m)</span><input type="number" id="ops-spacing" value="220" min="80" max="1500" step="10"></label>
           <label><span data-i18n="html.horizonH">Horizont (h)</span><input type="number" id="ops-horizon" value="3" min="1" max="12"></label>
