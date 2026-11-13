@@ -1,0 +1,8 @@
+{
+  // S3.10: README und Handbuch. Lange Zeilen sind erlaubt (Fließtext aus dem früheren README, Tabellen).
+  "config": {
+    "default": true,
+    "MD013": false
+  },
+  "globs": ["README.md", "handbuch/*.md"]
+}

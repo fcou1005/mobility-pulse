@@ -1,0 +1,25 @@
+# Quellen
+
+## Verzeichnisse und Feeds
+
+| Verzeichnis | Inhalt | Zugang |
+|---|---|---|
+| [MobilityData systems.csv](https://github.com/MobilityData/gbfs/blob/master/systems.csv) | alle DE-Systeme des GBFS-Katalogs | offen |
+| [MobiData BW](https://api.mobidata-bw.de/sharing/gbfs) | Landesfeeds Baden-Württemberg (bevorzugt) | offen |
+| [MOBIDROM NRW](https://www.mobilitaetsdaten.nrw/api/ckan/organization/angemeldet) | Landesfeeds NRW (konflationiert) | OAuth-Dienstzugang laut Datensatzbeschreibung, wird zur Laufzeit gelesen |
+| [CityBikes](https://api.citybik.es/v2/networks) | Ergänzung (Stationszähler) | offen; Abrufe nacheinander im Abstand von 1,2 s (`CB_GAP_MS`), bei HTTP 429/Fehler gilt der letzte gute Abruf bis 45 Min. weiter (privat in `TRACK_DIR`, Hinweis in der Feed-Prüfung) |
+| Direktfeeds Dott, Lime, Zeus, Bird | `data/sources-manual.json` → `direct_candidates` | offen, Kandidaten werden je Lauf geprüft |
+| [DB API Marketplace](https://developers.deutschebahn.com/db-api-marketplace/apis/) | Call a Bike, StadtRAD Hamburg (GBFS) | kostenlose Registrierung, Secrets `DB_CLIENT_ID`/`DB_API_KEY` |
+
+Seit 08.11.2026 auch Carsharing und E-Roller: alle offenen deutschen Feeds der Verzeichnisse (u. a. stadtmobil, teilAuto, Flinkster, Getaround, deer, MIKAR, swu2go, Ford Carsharing, stella; MOBIDROM-Datensätze mit Schlagwort Carsharing); ausgeschlossen bleiben nur Systeme außerhalb Deutschlands (`data/sources-manual.json` → `exclude_patterns`). SHARE NOW, MILES und SIXT share haben keine offenen Feeds. Gemeindezuordnung über BKG VG250 (dl-de/by-2-0), vereinfacht ca. 30 m.
+
+## Fahrzeugarten E-Roller und Carsharing
+
+- Art aus GBFS `form_factor`: `car` → `car` (Carsharing), `moped` → `moped` (E-Roller); ohne Angabe am Namen der Quelle (`C.classifyVehicleType`). Bis 07.11.2026 liefen beide unter `other`. Die neuen Arten stehen am Ende von `C.VEHICLE_TYPES` (Index in `ops/<Land>.json` → `types` bleibt für die bisherigen Arten gleich).
+- Stationsgebundene Autos melden die Station statt eigener Koordinaten; sie stehen an der Stationsposition und zählen wie Räder an Stationen. Ist die Fahrzeugliste vorhanden, aber leer, während die Stationen Autos bzw. E-Roller melden (deer), zählen die Stationen den Bestand (`vehicleListEmpty`). Quellen nur mit Stationszählern (cambio über MOBIDROM, ZEO, Car-Ship, deer) liefern Bestand und Verfügbarkeit, aber keine Fahrten (keine Kennungen) und damit keine Prognose; die cambio-Feeds bei MOBIDROM sind seit Ende Oktober 2026 nicht mehr aktualisiert (veraltet, zählen nicht).
+- Energie niedrig: Ladestand bzw. Tank < 20 % und Reichweite unter 50 km (Auto) bzw. 10 km (E-Roller) statt 5 km (`C.TYPE_RANGE_LOW_KM`, `latest.thresholds.rangeByType`).
+- Verfolgung (`lib/pulse-track.js` → `TYPE_RULES`, Mikromobilität unverändert, Regelstand bleibt `2026-11-02a`): E-Roller bis 60 km/h Luftlinie je Laufintervall, Umsetzung „ohne Energieverlust“ erst ab 5 km. Autos: Fahrten bis 72 h, verschwundene Kennungen 7 Tage behalten, bis 120 km/h; kein Akkutausch und keine Abholung bei wenig Energie (ein Auto mit 10 % Tank, das verschwindet, ist eine Ausleihe), kein Sammeltransport, keine Ausbring-/Einsammelgruppen, keine Umsetzungsregel „≥ 2 km ohne Energieverlust“; Rückgabe an derselben Stelle (stationsgebunden) zählt mit ihrer Dauer in Ø Dauer, ohne Distanz.
+- Fahrten bei Carsharing (seit 9.11.2026; der erste Tag zählte 2 Fahrtbeginne bei 4.696 Autos): Stationsgebundene Autos bleiben während der Buchung im Feed und kehren an dieselbe Station zurück. Gezählt wird deshalb (`lib/pulse-track.js` → `resTrips`, `CAR_TRIPS`): frei → reserviert = Fahrtbeginn, reserviert → frei = Fahrtende mit Buchungsdauer (Distanz nur, wenn das Auto woanders steht); bei Quellen ohne Fahrzeugliste (deer, ZEO, Car-Ship) weniger buchbare Autos an einer Station = Fahrtbeginne, mehr = Fahrtenden, Fahrzeugminuten = buchbare Autos × Laufintervall; beides mit Massenregel je Quelle. Viele Feeds melden jedes Auto immer als verfügbar (stadtmobil, teilAuto, naturenergie, Grüne Flotte, Getaround, swu2go …) – Buchungen sind dort unsichtbar. Ein Anbieter gilt erst als messbar, wenn er in 7 Tagen ≥ 3 Fahrtbeginne und ≥ 0,05 je Auto und Tag hat; sonst fallen seine Autos aus Ereignissen, Standzeiten, Strömen und Prognose (nur Bestand), `latest.json` → `carTrips` (`measurable`, `unmeasurable`, `perOp`). Autos zählen nicht in den Zellen (Nachfrage-Modell der Disposition).
+- Umsatz: Annahmen bis zur Messung Carsharing 180 Min./40 km, E-Roller 18 Min./5 km je Fahrt (`E.DEFAULT_RIDE`); geschätzte Ströme mit eigenen Familien (`FE.TYPE_FALLBACK`).
+- Disposition: Voreinstellung je Art (`O.TYPE_PRESETS`): Autos setzt ein Fahrer einzeln um (Transporter = 1), „Tausch“ = Tanken/Laden, Schwelle 25 % und 50 km; E-Roller acht je Transporter, Reichweite 10 km.
+- Prognose: je Familie ein eigenes Modell – Mikromobilität (`forecast/`, unverändert), E-Roller (`forecast/moped/`), Carsharing (`forecast/car/`); Umschalter in der Kopfleiste der Prognose, die Familie folgt auch der Fahrzeugart-Auswahl.

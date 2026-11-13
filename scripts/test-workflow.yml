@@ -48,6 +48,8 @@ jobs:
           node scripts/typecheck.mjs
       - name: Build mit Größenbudget (Start ≤ 180 KB, Disposition ≤ 270 KB gzip)
         run: node scripts/build-web.mjs --budget
+      - name: README und Handbuch (markdownlint; Verweise und Datenformate prüft test/handbuch.test.mjs im Job unit)
+        run: npx --yes markdownlint-cli2@0.18.1
       - name: Datenverträge (schemas/*.schema.json) für Fixture und letzten Datenstand aus dem Branch data
         run: |
           node test/schema.mjs
