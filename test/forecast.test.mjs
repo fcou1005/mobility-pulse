@@ -217,7 +217,7 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   const lev = (d) => 0.94 ** Math.round((Date.parse(`${d}T12:00:00Z`) - Date.parse(`${DAY0}T12:00:00Z`)) / 86400e3);
   const errOf = (L) => { let e = 0, t = 0; L.horizon.local.forEach(([d, h], i) => { const tru = groups.reduce((a, g) => a + trueMu(g, d, h, lev(d)), 0); e += Math.abs(L.totals[i] - tru); t += tru; }); return e / t; };
   const E = { hybrid: errOf(runAs('hybrid')), pooled: errOf(runAs('pooled')), profile: errOf(runAs('profile')) };
-  assert(E.hybrid < Math.min(E.pooled, E.profile) * 0.8, `Live im Saisonabfall: Stundensummen ${(E.hybrid * 100).toFixed(1)} % neben der Wahrheit (gepoolt ${(E.pooled * 100).toFixed(1)} %, Profil ${(E.profile * 100).toFixed(1)} %)`);
+  assert(E.hybrid < Math.min(E.pooled, E.profile), `Live im Saisonabfall (gepoolt und Profil seit S2.8 mit Korrektur der Verzerrung je Art): Stundensummen ${(E.hybrid * 100).toFixed(1)} % neben der Wahrheit (gepoolt ${(E.pooled * 100).toFixed(1)} %, Profil ${(E.profile * 100).toFixed(1)} %)`);
 }
 
 // ---------- Selbstprüfung ohne Vorwissen: Exposition der Vortage wie im Betrieb (Regression Orakel, bis 6.11.2026)
@@ -777,4 +777,40 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const R = F.buildRows(days), sel = Array.from({ length: R.n }, (_, i) => i), m = F.fitPooled(R, sel, {});
   const fut = [{ day: '2026-11-15', h: 8, cls: days[4].cls }], Fu = F.buildFuture(R, fut, () => 100, () => null, null), mu = F.predictPooled(m, Fu, [0])[0], pr = F.predictProfile(R, sel, [0], Fu, NaN)[0];
   assert(mu < 25 && pr < 15, `S2.5: Sonntag 8 Uhr ohne Sonntagsdaten wie Samstag (Modell ${mu.toFixed(1)}, Profil ${pr.toFixed(1)} Starts je 100 Fahrzeuge; Werktag 100, Samstag 10)`);
+}
+{ // S2.6: Mindestvolumen für E-Roller und Carsharing – darunter die Vorwoche (oder nichts)
+  const ds = days12.map(d => makeDoc(d, { level: 0.05 })), NOW = Date.parse(`${addDays(DAY0, NDAY - 1)}T08:00:00Z`);
+  const vol = F.volumeOf(ds.map(d => F.dayFromDoc(d, null)));
+  const r = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW, family: 'moped' }), rm = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: null, now: NOW });
+  const r6 = F.runForecast({ docs: ds.slice(0, 5), calendar: null, weather: [], prevLog: null, now: Date.parse(`${addDays(DAY0, 5)}T08:00:00Z`), family: 'car' });
+  assert(vol < 500 && r.latest.status === 'small' && r.latest.active === 'week' && r.latest.totals?.every(Number.isFinite) && rm.latest.status !== 'small' && r6.latest.status === 'small' && r6.latest.active === null && !r6.latest.totals,
+    `S2.6: ${Math.round(vol)} Fahrtbeginne je Tag < 500 → E-Roller veröffentlicht die Vorwoche (${r.latest.reason}); ohne Vorwoche keine Prognose; micro ohne Grenze`);
+}
+{ // S2.4: Selbstprüfung ohne beobachtetes Wetter des Prüftags – nur die damals gesicherte Vorhersage
+  const ds = F.assignEras(docs.slice(0, 8).map(d => F.dayFromDoc(d, null))), wx = F.wxLookup(WX), R = F.buildRows(ds, wx), d = 7;
+  const fcDoc = JSON.parse(JSON.stringify(WX.find(w => w.day === ds[d].day))); for (const c of Object.values(fcDoc.cells)) { c.t = c.t.map(() => 99); c.p = c.p.map(() => 0); } // „Vorhersage“ erkennbar falsch
+  const seen = []; const spy = (ags, day, h) => { seen.push(day); return F.wxLookup([fcDoc])(ags, day, h); };
+  const before = Float64Array.from(R.w[1]);
+  const ev = F.evaluateDays(R, [d], { dayName: (i) => ds[i].day, days: ds, wxTest: spy });
+  const test = []; for (let i = 0; i < R.n; i++) if (R.day[i] === d) test.push(i);
+  assert(ev[d] && seen.length && seen.every(x => x === ds[d].day) && R.w[1].every((x, i) => x === before[i]) && ev[d].wxFc >= 0,
+    `S2.4: Prüftag ${ds[d].day} nimmt das Wetter nur aus der gesicherten Vorhersage (${seen.length} Abfragen, Anteil ${ev[d].wxFc}), das beobachtete Wetter der Zeilen ist danach unverändert`);
+  const back = F.swapTestWeather(R, test, () => null);
+  assert(test.every(i => R.hasW[i] === 0 && R.w[2][i] === 0) && back.share === 0, 'S2.4: ohne gesicherte Vorhersage geht der Prüftag ohne Wetter in die Prüfung (kein Orakel)'); back();
+  assert(test.some(i => R.hasW[i] === 1), 'S2.4: danach wieder wie vorher');
+}
+{ // S2.7: konformes Band je Tageszeit – bei zu vielen Fehlern wird es breiter, bei zu wenigen schmaler
+  let c = F.emptyConformal(); for (let i = 0; i < 20; i++) c = F.conformalUpdate(c, F.CONFORMAL.bands.map((_, b) => (b === 1 ? [5, 10] : b === 3 ? [0, 10] : [2, 10])));
+  const [lo, hi] = F.bandOf80(100, 1, c.k[1]);
+  assert(c.k[1] > 1.5 && c.k[3] < 0.7 && Math.abs(c.k[0] - 1) < 0.01 && c.n[1] === 20 && lo < 100 - 1.28 * 10 && hi > 100 + 1.28 * 10,
+    `S2.7: Fehlquote 50 % (Morgen) → k ${c.k[1]}, 0 % (Mittag) → k ${c.k[3]}, 20 % bleibt k ${c.k[0]}`);
+}
+{ // S2.8: Verzerrung je Art aus der Selbstprüfung, Strukturbrüche je Gruppe
+  const ev = Object.fromEntries(['2026-11-05', '2026-11-06', '2026-11-07'].map(d => [d, { trainDays: 5, models: { hybrid: { byType: { scooter: [0.1, 0.2, 10000, 11000], bike: [0.1, 0.2, 1000, 900], cargo: [0.1, 0.2, 5, 9] } } } }]));
+  const tf = F.typeFactors(ev, 'hybrid');
+  assert(Math.abs(tf.scooter - (30000 + 500) / (33000 + 500)) < 1e-3 && tf.bike > 1.05 && Math.abs(tf.cargo - (15 + 500) / (27 + 500)) < 1e-3 && Object.keys(F.typeFactors(ev, 'pooled')).length === 0,
+    `S2.8: Faktor je Art = (Σ Ist + 500) ÷ (Σ Prognose + 500): E-Scooter ${tf.scooter}, Rad ${tf.bike}, Lastenrad (wenig Daten) ${tf.cargo}`);
+  const NOW = Date.parse(`${addDays(DAY0, NDAY - 1)}T08:00:00Z`), k0 = groups[0][0];
+  const rb = F.runForecast({ docs: docs.slice(0, NDAY - 1), calendar: null, weather: [], prevLog: null, now: NOW, breaks: { [k0]: addDays(DAY0, 6) } });
+  assert(rb.latest.breaks === 6 && rb.latest.groups[k0] && rb.latest.biasCorr !== undefined, `S2.8: Gruppe mit Strukturbruch lernt erst ab dem Bruchtag (${rb.latest.breaks} Gruppe-Tage ausgelassen), Prognose bleibt`);
 }

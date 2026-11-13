@@ -1493,6 +1493,10 @@ if (process.env.FORECAST !== '0') {
       const list = async (d, n) => (existsSync(d) ? (await readdir(d)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(-n).map(f => path.join(d, f)) : []);
       const docs = []; for (const f of await list(path.join(DATA, 'events'), 21)) docs.push(JSON.parse(await readFile(f, 'utf8')));
       const weather = []; for (const f of await list(path.join(DATA, 'weather'), 30)) weather.push(JSON.parse(await readFile(f, 'utf8')));
+      // S2.4: Selbstprüfung mit der damals gesicherten Vorhersage (weather-fc/), nicht mit dem beobachteten Wetter des Prüftags
+      // S2.8: Strukturbrüche je Gruppe aus calib.json (letzter Stand) – Tage davor lernen für die Gruppe nicht mit
+      let calibBreaks = null; try { const cj = path.join(DATA, 'calib.json'); if (existsSync(cj)) calibBreaks = JSON.parse(await readFile(cj, 'utf8'))?.breaks || null; } catch { calibBreaks = null; }
+      const weatherFc = []; for (const f of await list(path.join(DATA, 'weather-fc'), 30)) { try { weatherFc.push(JSON.parse(await readFile(f, 'utf8'))); } catch { /* defekte Datei: Tag ohne Wetter */ } }
       const red = new Set(Object.entries(latest.eventChecks?.groups || {}).filter(([, g]) => g?.level === 'bad').map(([k]) => k)); // rote Ampel: nicht plausibel gezählt
       // Carsharing ohne sichtbare Buchungen: auch ältere Tagesdateien (vor 9.11.2026 noch mit Nullen) nicht ins Modell
       { const mut = new Set(latest.carTrips?.unmeasurable || []); if (mut.size) for (const d of docs) for (const k of Object.keys(d.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) red.add(k); } }
@@ -1526,7 +1530,7 @@ if (process.env.FORECAST !== '0') {
         try {
           const fdocs = FC.familyDocs(docs, fam); if (fam !== 'micro' && !FC.familyHasData(fdocs)) continue;
           const fdir = path.join(DATA, FC.FAMILY_DIR[fam]), fL = path.join(fdir, 'latest.json'), fG = path.join(fdir, 'log.json'), fS = path.join(fdir, 'series.json');
-          const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam });
+          const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, weatherFc, breaks: calibBreaks, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam });
           if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
           if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
           await mkdir(fdir, { recursive: true });

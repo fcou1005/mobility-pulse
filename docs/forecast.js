@@ -7,16 +7,16 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mwf111h1';
-import * as CX from './pulse-context.js?v=mwf111h1';
-import * as SP from './pulse-spots.js?v=mwf111h1';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwf111h1';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwf111h1';
-import { toCsv } from './pulse-report.js?v=mwf111h1';
-import { dayType } from './pulse-econ.js?v=mwf111h1';
-import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwf111h1';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwf111h1';
-import { mapKeys } from './mapkeys.js?v=mwf111h1';
+import * as FC from './pulse-forecast.js?v=mwf1y0cc';
+import * as CX from './pulse-context.js?v=mwf1y0cc';
+import * as SP from './pulse-spots.js?v=mwf1y0cc';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mwf1y0cc';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mwf1y0cc';
+import { toCsv } from './pulse-report.js?v=mwf1y0cc';
+import { dayType } from './pulse-econ.js?v=mwf1y0cc';
+import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mwf1y0cc';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mwf1y0cc';
+import { mapKeys } from './mapkeys.js?v=mwf1y0cc';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -242,7 +242,9 @@ function learnPanel(ctx, L, G) {
   const gates = L.gates || {}, wg = L.weather?.gate || {}, minT = gates.minTrainDays ?? 2, minE = gates.minEvalDays ?? 3, wk = gates.wxTempRangeK ?? 5, wd = gates.wxRainDays ?? 2;
   const row = (label, have, need, unit, sub) => { const ok = have >= need; return `<li class="${ok ? 'ok' : ''}"><span class="gl">${label}</span><span class="gv">${unit === 'K' ? n1(have) : n0(have)} / ${n0(need)}${unit ? ` ${unit}` : ''} ${ok ? '✓' : ''}</span><span class="gm"><span style="width:${Math.min(100, Math.round(have / need * 100))}%"></span></span>${sub ? `<span class="gs">${sub}</span>` : ''}</li>`; };
   const status = L.status === 'active' ? badge('ok', '✓', ctx.esc(t('fv.stActive', { model: t(`fc.model.${L.active}`) })))
-    : L.status === 'learning' ? badge('near', '!', ctx.esc(t('fv.stLearning', { n: L.evalDays || 0, min: minE }))) : badge('none', '–', ctx.esc(t('fv.stInsufficient', { n: L.trainDays || 0, min: minT })));
+    : L.status === 'learning' ? badge('near', '!', ctx.esc(t('fv.stLearning', { n: L.evalDays || 0, min: minE })))
+    : L.status === 'small' ? badge('near', '!', ctx.esc(t(L.active ? 'fv.stSmallWeek' : 'fv.stSmall', { n: Math.round(L.volume ?? 0), min: L.minVolume ?? FC.MIN_VOLUME.moped }))) // S2.6
+    : badge('none', '–', ctx.esc(t('fv.stInsufficient', { n: L.trainDays || 0, min: minT })));
   const need = Math.max(0, minE - (L.evalDays || 0)), until = L.status === 'learning' && need > 0 && L.generatedAt ? dayTxt(addDays(L.generatedAt.slice(0, 10), need), { day: 'numeric', month: 'long' }) : null;
   const wxOn = L.weather?.used;
   return `<div class="panel">${head(t('fv.learnTitle'), t('fv.learnSub'), allTag(ctx))}<p style="margin:0">${status}</p>${until ? `<p class="fv-sub">${t('fv.activeFrom', { date: ctx.esc(until) })}</p>` : ''}`
@@ -294,7 +296,7 @@ function accuracyPanel(ctx, S0, sel, G, L) {
   const table = rows.length ? `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.accTitle'))}"><table><thead><tr><th>${t('fv.colDay')}</th><th class="n mh">${t('fv.colIst')}</th><th class="n mh">${t('fv.colPlan')}</th><th class="n mh">${t('fv.colBias')}</th><th class="n">${t('fv.colErr')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh" title="${ctx.esc(t('fv.colChronosTip'))}">${t('fv.chronos')}</th><th class="n mh">${t('fv.colSkill')}</th><th class="n mh">${t('fv.colTrain')}</th></tr></thead><tbody>${body}</tbody></table></div>`
     : `<div class="empty"><b>${t('fv.accNone')}</b>${t('fv.accNoneHint')}</div>`;
   const live = (L?.live || []).slice(-6).reverse(), pk1 = (x) => (x?.peak?.hit1 == null ? '–' : pc(x.peak.hit1)), mdl = (x) => (x.model ? ctx.esc(modelName(x.model)) : '–');
-  const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}${bandFreq(live)}</div>` : '';
+  const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:14px">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh" title="${ctx.esc(t('fv.colPinballTip'))}">${t('fv.colPinball')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.pinball == null ? '–' : pc(x.pinball)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}${bandFreq(live)}</div>` : '';
   return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}${decisionHtml(ctx, L, G)}</div>`;
 }
 
