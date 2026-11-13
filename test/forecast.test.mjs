@@ -816,6 +816,25 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const rb = F.runForecast({ docs: docs.slice(0, NDAY - 1), calendar: null, weather: [], prevLog: null, now: NOW, breaks: { [k0]: addDays(DAY0, 6) } });
   assert(rb.latest.breaks === 6 && rb.latest.groups[k0] && rb.latest.biasCorr !== undefined, `S2.8: Gruppe mit Strukturbruch lernt erst ab dem Bruchtag (${rb.latest.breaks} Gruppe-Tage ausgelassen), Prognose bleibt`);
 }
+{ // S2.8 je Gemeinde: geschrumpft zum Faktor der Art; kleine Gemeinden behalten den der Art
+  const ev = Object.fromEntries(['2026-11-05', '2026-11-06', '2026-11-07'].map(d => [d, { trainDays: 5, models: { pooled: { byType: { scooter: [0.1, 0.2, 2000, 2000] },
+    byAgsType: { '08111000|scooter': [1000, 800], '08416041|scooter': [30, 60] } } } }]));
+  const tf = F.typeFactors(ev, 'pooled'), af = F.agsFactors(ev, 'pooled', tf);
+  assert(tf.scooter === 1 && Math.abs(af['08111000|scooter'] - (3000 + 500) / (2400 + 500)) < 1e-3 && Math.abs(af['08416041|scooter'] - (90 + 500) / (180 + 500)) < 1e-3,
+    `S2.8: Stuttgart ${af['08111000|scooter']} (Σ 3000 Ist / 2400 Prognose), Tübingen ${af['08416041|scooter']} (wenig Fahrten, nah an der Art)`);
+  assert(F.biasFactorOf('08111000|Voi|scooter', tf, af) === af['08111000|scooter'] && F.biasFactorOf('09162000|Voi|scooter', tf, af) === 1 && F.biasFactorOf('09162000|Voi|bike', tf, af) === 1, 'S2.8: Faktor je Gruppe: Gemeinde und Art vor Art vor 1');
+  const R = { keys: ['08111000|Voi|scooter', '08111000|Bolt|scooter', '08416041|Voi|scooter'], y: [12, 8, 1], g: [0, 1, 2], hr: [8, 8, 8] };
+  const sd = F.scoreDay(R, [0, 1, 2], Float64Array.from([10, 10, 2]), 1, { split: true, byAgs: true });
+  assert(JSON.stringify(sd.byAgsType) === JSON.stringify({ '08111000|scooter': [20, 20] }) && !F.scoreDay(R, [0, 1, 2], Float64Array.from([10, 10, 2]), 1, { split: true }).byAgsType, 'S2.8: scoreDay sammelt je Gemeinde und Art erst ab 20 Fahrtbeginnen und nur auf Wunsch');
+}
+{ // S2.7: Band aus Chronos-Quantilen (aktiv Chronos/Mischung) – Wurzel der Quadratsumme je Anbieter, konformes k wie beim Poisson-Band
+  const from = Date.parse('2026-11-13T07:00:00Z'), doc = { version: 1, at: '2026-11-13T06:30:00Z', from, hours: 2, groups: { 'A|Voi|scooter': { m: [10, 12], q10: [7, 9], q90: [14, 16] }, 'B|Voi|scooter': { m: [5, 5], q10: [1, 2], q90: [8, 8] }, 'C|Voi|bike': { m: [3, 3] } } };
+  const CH = await import('../lib/pulse-chronos.js'), ext = CH.chronosLookup(doc);
+  assert(JSON.stringify(ext.quant('A|Voi|scooter', from)) === '[3,4]' && ext.quant('C|Voi|bike', from) === null && ext.quant('A|Voi|scooter', from + 5 * 3600e3) === null, 'S2.7: chronosLookup.quant liefert halbe Breiten [m − q10, q90 − m], ohne Quantile null');
+  const keys = Object.keys(doc.groups), bq = F.quantileBands(keys, [[0, 0, from], [1, 0, from], [2, 0, from], [0, 1, from + 3600e3]], ext.quant, 2);
+  assert(bq.Voi[0][0] === +Math.hypot(3, 4).toFixed(1) && bq.Voi[0][1] === +Math.hypot(4, 3).toFixed(1) && bq.Voi[1][0] === 3, `S2.7: Breite je Anbieter und Stunde = √Σ w² (${JSON.stringify(bq.Voi)})`);
+  assert(JSON.stringify(F.bandOfQ(15, [5, 5], 1.2)) === '[9,21]' && F.bandOfQ(2, [5, 1], 1)[0] === 0, 'S2.7: bandOfQ skaliert mit k und schneidet bei 0');
+}
 { // A13: Autobahn nicht mehr als Merkmal, Standardfehler nach Tagen geclustert
   const ds = F.assignEras(docs.map(d => F.dayFromDoc(d, null))), R = F.buildRows(ds, F.wxLookup(WX)), all = Array.from({ length: R.n }, (_, i) => i);
   const iR = F.CTX_KEYS.indexOf('road'); for (let i = 0; i < R.n; i++) R.c[iR][i] = 1;

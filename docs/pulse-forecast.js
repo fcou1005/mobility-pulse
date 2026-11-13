@@ -11,10 +11,10 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mwf3jh04';
-import { hourOf, dayOf } from './pulse-track.js?v=mwf3jh04';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwf3jh04';
-import { familyOf, FAMILIES } from './pulse-core.js?v=mwf3jh04';
+import * as E from './pulse-econ.js?v=mwf5mnur';
+import { hourOf, dayOf } from './pulse-track.js?v=mwf5mnur';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mwf5mnur';
+import { familyOf, FAMILIES } from './pulse-core.js?v=mwf5mnur';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 // Je Fahrzeugfamilie ein eigenes Modell (seit 08.11.2026): micro (E-Scooter, Räder, Lastenräder, Sonstige) wie bisher in forecast/, E-Roller in
@@ -91,6 +91,16 @@ export function conformalUpdate(cf, miss) {
   c.k = c.k.map(x => +x.toFixed(4)); return c;
 }
 const pinball = (q, y, yq) => (y >= yq ? q * (y - yq) : (1 - q) * (yq - y));
+// S2.7: Ist Chronos oder die Mischung aktiv, kommt die Breite des Bands aus den Chronos-Quantilen (10/90 %) statt aus √(φ·μ): je Anbieter und Stunde
+// Wurzel aus der Quadratsumme der Gruppenbreiten (Gruppen unabhängig), skaliert mit demselben konformen k. Ohne Quantile: Poisson-Band.
+export const QBAND_MODELS = ['chronos', 'blend'];
+export const bandOfQ = (f, w, k = 1) => [Math.max(0, f - k * w[0]), f + k * w[1]];
+export function quantileBands(keys, rows, quant, horizon) {
+  const acc = new Map();
+  for (const [g, fi, t] of rows) { if (fi >= horizon) continue; const q = quant(keys[g], t); if (!q) continue; const op = String(keys[g]).split('|')[1];
+    let a = acc.get(op); if (!a) acc.set(op, a = Array.from({ length: horizon }, () => [0, 0])); a[fi][0] += q[0] * q[0]; a[fi][1] += q[1] * q[1]; }
+  return acc.size ? Object.fromEntries([...acc].map(([op, a]) => [op, a.map(([l, h]) => [+Math.sqrt(l).toFixed(1), +Math.sqrt(h).toFixed(1)])])) : null;
+}
 const sum = (a) => a.reduce((s, x) => s + x, 0);
 
 /** Wetter-Merkmale aus Temperatur (°C), Niederschlag (mm/h) und Niederschlag der Vorstunde: [kalt, warm, Regen ≥ 0,1, ≥ 1, ≥ 4, Vorstunde ≥ 0,1]
@@ -285,7 +295,7 @@ export function learnSummary(fb, fbw = feedbackWeights(fb)) {
 
 /** Kennzahlen eines Tages: WAPE je Gruppe-Stunde und Gruppe-Tag, Verzerrung (Σ erwartet ÷ Σ real − 1), Abdeckung des 80-%-Bandes */
 export const SIZE_CLASSES = [['S', 20], ['M', 200], ['L', Infinity]]; // Gruppengröße nach Fahrtbeginnen des Prüftags: < 20, < 200, ab 200
-export function scoreDay(R, sel, mu, phi = 1, { split = false, mask = null } = {}) {
+export function scoreDay(R, sel, mu, phi = 1, { split = false, mask = null, byAgs = false } = {}) {
   let sy = 0, sabs = 0, smu = 0, inside = 0, n = 0; const gd = new Map();
   sel.forEach((i, j) => {
     const y = R.y[i], m = mu[j]; sy += y; smu += m; sabs += Math.abs(y - m); n++;
@@ -310,6 +320,9 @@ export function scoreDay(R, sel, mu, phi = 1, { split = false, mask = null } = {
     // [Abweichung Gruppe-Tag, Abweichung Gruppe-Stunde, Fahrtbeginne, erwartete Fahrtbeginne] – das vierte Feld seit S2.8 (Verzerrung je Art)
     const fin = (m) => Object.fromEntries(Object.entries(m).map(([k, a]) => [k, [a[2] > 0 ? q(a[0] / a[2]) : null, a[2] > 0 ? q(a[1] / a[2]) : null, Math.round(a[2]), Math.round(a[3])]]));
     out.byType = fin(ty); out.bySize = fin(sz);
+    // S2.8: Σ Ist und Σ Prognose je Gemeinde und Art (nur Modelle mit Verzerrungskorrektur; ab BIAS.agsMin Fahrtbeginnen am Tag, sonst nur die Art)
+    if (byAgs) { const ga = {}; for (const [g, t] of gd) { const [ags, , tyk] = String(R.keys[g]).split('|'); const x = ga[`${ags}|${tyk}`] || (ga[`${ags}|${tyk}`] = [0, 0]); x[0] += t[0]; x[1] += t[1]; }
+      out.byAgsType = Object.fromEntries(Object.entries(ga).filter(([, x]) => Math.max(x[0], x[1]) >= BIAS.agsMin).map(([k, x]) => [k, [Math.round(x[0]), Math.round(x[1])]])); }
     // Spitzen: Deutschland-Summe und je Anbieter (Stundenreihe über die beobachteten Stunden)
     const de = { a: new Map(), f: new Map() }, ops = new Map();
     sel.forEach((i, j) => { const h = R.hr[i], op = String(R.keys[R.g[i]]).split('|')[1]; let o = ops.get(op); if (!o) ops.set(op, o = { a: new Map(), f: new Map() });
@@ -513,17 +526,17 @@ export function evaluateDays(R, evalIdx, { weatherEnabled = true, fb = null, day
     const sc = (mu) => Float64Array.from(mu, (x, j) => (Number.isFinite(x) ? x * scale[j] : x));
     if (last) { let se = 0, sa = 0; test.forEach((i, j) => { se += R.e[i]; sa += Math.abs(R.e[i] * scale[j] - R.e[i]); }); res.expoErr = se > 0 ? +(sa / se).toFixed(4) : null; }
     const muP = sc(predictProfile(R, train, test, R, NaN));
-    res.models.profile = scoreDay(R, test, muP.map(x => (Number.isFinite(x) ? x : 0)), 1, { split: true, mask });
-    const m1 = fitPooled(R, train, { weather: false }), mu1 = sc(predictPooled(m1, R, test)); res.models.pooled = scoreDay(R, test, mu1, m1.phi, { split: true, mask });
+    res.models.profile = scoreDay(R, test, muP.map(x => (Number.isFinite(x) ? x : 0)), 1, { split: true, mask, byAgs: true });
+    const m1 = fitPooled(R, train, { weather: false }), mu1 = sc(predictPooled(m1, R, test)); res.models.pooled = scoreDay(R, test, mu1, m1.phi, { split: true, mask, byAgs: true });
     // Modell mit Umgebung (Wetter, wenn das Gate offen ist; Umgebungsmerkmale mit genug Ereignissen; Wirkungen mit Gedächtnis als Prior)
     const env = weatherEnabled ? envOf(R, train, mem, prior) : { weather: false, ctx: [], on: false };
     let muQ = mu1;
-    if (env.on) { const m2 = fitPooled(R, train, { weather: env.weather, ctx: env.ctx, prior }); muQ = sc(predictPooled(m2, R, test)); res.models.pooledWx = scoreDay(R, test, muQ, m2.phi, { split: true, mask }); }
+    if (env.on) { const m2 = fitPooled(R, train, { weather: env.weather, ctx: env.ctx, prior }); muQ = sc(predictPooled(m2, R, test)); res.models.pooledWx = scoreDay(R, test, muQ, m2.phi, { split: true, mask, byAgs: true }); }
     res.wxGate = env.weather ? true : false; if (env.ctx.length) res.env = env.ctx.map(k => CTX_KEYS[k]);
     // lernendes Modell: Lernstand nur aus Tagen vor d (kein Vorgriff), danach mit d fortschreiben
     const day = dayName(d);
     if (fb && !(fb.upto && fb.upto >= day)) {
-      res.models.adaptive = scoreDay(R, test, predictAdaptive(muP, muQ, (j) => R.keys[R.g[test[j]]], feedbackWeights(fb)), m1.phi, { split: true, mask });
+      res.models.adaptive = scoreDay(R, test, predictAdaptive(muP, muQ, (j) => R.keys[R.g[test[j]]], feedbackWeights(fb)), m1.phi, { split: true, mask, byAgs: true });
       feedbackUpdate(fb, day, R, test, muP, muQ);
     }
     // Hybrid (Niveau des Bezugstags, Tagesgang aus profile/pooled) und Vergleich der Flottenannahmen (nur mitgeschrieben)
@@ -579,12 +592,23 @@ export function volumeOf(days, n = 7) {
 // Fahrtbeginnen, begrenzt auf [0,8; 1,25]) – angewandt auf Veröffentlichung und Schattenprognosen; Prüfung bleibt unkorrigiert (kein Vorgriff).
 // Nur Modelle ohne eigenes Tagesniveau: hybrid, blend und chronos übernehmen das Niveau des letzten Tags – eine 7-Tage-Korrektur liefe dort einem
 // Trend hinterher (synthetischer Saisonabfall: hybrid 10,3 → 11,0 %, gepoolt 14,1 → 10,8 %).
-export const BIAS = { days: 7, k: 500, min: 0.8, max: 1.25, models: ['profile', 'pooled', 'pooledWx', 'adaptive'] };
+export const BIAS = { days: 7, k: 500, min: 0.8, max: 1.25, models: ['profile', 'pooled', 'pooledWx', 'adaptive'], agsMin: 20, kAgs: 500 };
 export function typeFactors(evals, model, { before = null } = {}) {
   const ds = Object.keys(evals || {}).sort().filter(d => (!before || d < before) && !(evals[d]?.trainDays < GATES.minEvalTrainDays) && evals[d]?.models?.[model]?.byType).slice(-BIAS.days);
   const acc = {}; for (const d of ds) for (const [t, a] of Object.entries(evals[d].models[model].byType)) { if (!(a?.length >= 4)) continue; const x = acc[t] || (acc[t] = [0, 0]); x[0] += a[2]; x[1] += a[3]; }
   return Object.fromEntries(Object.entries(acc).filter(([, x]) => x[1] > 0).map(([t, [y, m]]) => [t, +Math.min(BIAS.max, Math.max(BIAS.min, (y + BIAS.k) / (m + BIAS.k))).toFixed(4)]));
 }
+// S2.8 je Gemeinde: Σ Ist ÷ Σ Prognose je Gemeinde und Art über dieselben Tage, geschrumpft zum Faktor der Art (kAgs Fahrtbeginne):
+// f = (Y + kAgs · f_Art) ÷ (M + kAgs), begrenzt wie oben. Gemeinden unter agsMin Fahrtbeginnen am Tag fehlen in byAgsType und behalten f_Art.
+export function agsFactors(evals, model, tf, { before = null } = {}) {
+  const ds = Object.keys(evals || {}).sort().filter(d => (!before || d < before) && !(evals[d]?.trainDays < GATES.minEvalTrainDays) && evals[d]?.models?.[model]?.byType).slice(-BIAS.days);
+  const acc = {}; for (const d of ds) for (const [k, a] of Object.entries(evals[d].models[model].byAgsType || {})) { const x = acc[k] || (acc[k] = [0, 0]); x[0] += a[0]; x[1] += a[1]; }
+  const out = {};
+  for (const [k, [y, m]] of Object.entries(acc)) { const ft = tf?.[k.split('|')[1]] ?? 1, f = Math.min(BIAS.max, Math.max(BIAS.min, (y + BIAS.kAgs * ft) / (m + BIAS.kAgs))); if (Math.abs(f - ft) >= 0.005) out[k] = +f.toFixed(4); }
+  return out;
+}
+/** Faktor je Gruppe 'ags|op|ty': Gemeinde und Art, sonst Art, sonst 1 */
+export const biasFactorOf = (key, tf, af) => { const [ags, , ty] = String(key).split('|'); return af?.[`${ags}|${ty}`] ?? tf?.[ty] ?? 1; };
 export const DECIDE = { liveMin: 6, liveK: 6, halfLifeDays: 3, switchGain: 0.02, baseMin: 12, minSwitchDays: 7, holdOverride: 0.10 };
 // ---------- S2.2/S2.3 (A11): Maßstab = bessere Basis, Summenverhältnis; Chronos und Mischung erst nach geprüftem Vorsprung ----------
 // Maßstab je Kandidat: Σ Abweichung ÷ min(Σ Abweichung „wie gestern“, Σ Abweichung „Vorwoche“) über dieselben Tage bzw. Live-Prognosen (vorher Mittel der
@@ -980,9 +1004,12 @@ export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem 
   // Chronos für den Plan: Vortagsprognose des Tags, sonst der Lauf, der den Tag abdeckt
   const tH = Array.from({ length: 24 }, (_, h) => localToUtcMs(day, h)), useBack = !!ext?.hasBack(day);
   const chronosOf = ext ? (i) => { const t = tH[F.hr[i]], k = R.keys[F.g[i]]; return useBack ? ext.back(k, t) : ext.live(k, t); } : null;
-  const mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC }).mu.get(model);
+  let mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC }).mu.get(model);
+  // S2.8: Plan mit derselben Verzerrungskorrektur wie die Veröffentlichung, aus den Prüfungen vor dem Tag
+  let bias = null;
+  if (BIAS.models.includes(model) && mu) { const tf = typeFactors(prior, model); if (Object.keys(tf).length) { const af = agsFactors(prior, model, tf); bias = { ...tf, ...(Object.keys(af).length ? { ags: af } : {}) }; mu = Float64Array.from(mu, (x, j) => x * biasFactorOf(R.keys[F.g[sel[j]]], tf, af)); } }
   const scopes = new Map(); for (const [sc, d] of aggregateFuture(R, F, mu, fut)) scopes.set(sc, d[day]);
-  return { day, model, trainDays, scopes };
+  return { day, model, trainDays, scopes, ...(bias ? { bias } : {}) };
 }
 /**
  * Reihen des Dashboards. plans: Map Ortstag → planDay-Ergebnis (nur neu gerechnete), live: Map Gebiet → { [Ortstag]: number[24] } (Prognose ab der nächsten
@@ -1073,6 +1100,8 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     log.evals[days[+di].day] = { trainDays: e.trainDays, wxGate: e.wxGate, ...(e.wxFc != null ? { wxFc: e.wxFc } : {}), ...(e.env ? { env: e.env } : {}), ...(e.expoErr != null ? { expoErr: e.expoErr } : {}), ...(e.expoErrAlt ? { expoErrAlt: e.expoErrAlt } : {}), models: e.models };
   }
   for (const d of Object.keys(log.evals).sort().slice(0, -21)) delete log.evals[d];
+  // je Gemeinde nur so lange, wie die Korrektur sie liest (log.json bleibt klein)
+  for (const d of Object.keys(log.evals).sort().slice(0, -(BIAS.days + 3))) for (const r of Object.values(log.evals[d]?.models || {})) delete r.byAgsType;
   log.feedback = compactFeedback(fb); log.feedbackC = compactFeedback(fbC);
   const all = Array.from({ length: R.n }, (_, i) => i);
   // neue vollständige Tage ins Gedächtnis (Beiträge aus einem Fenstermodell mit allen Wirkungen, die Daten haben; nur Zeilen mit Wetter, sofern vorhanden)
@@ -1105,7 +1134,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
       const wv = actualOp(shiftDay(day, -7), h) || nv;
       let tot = 0, totM = 0;
       for (const op of ops) { const y = a.get(op) || 0, f = rec.byOp[op][i]; rows.push([y, f]); tot += y; totM += f;
-        const b = bandIx(h), [lo, hi] = bandOf80(f, rec.phi || 1, kB[b] ?? 1); nBand++; const ok = y >= lo && y <= hi; if (ok) inside++; miss[b][0] += ok ? 0 : 1; miss[b][1]++;
+        const b = bandIx(h), wq = rec.bandQ?.[op]?.[i], [lo, hi] = wq ? bandOfQ(f, wq, kB[b] ?? 1) : bandOf80(f, rec.phi || 1, kB[b] ?? 1); nBand++; const ok = y >= lo && y <= hi; if (ok) inside++; miss[b][0] += ok ? 0 : 1; miss[b][1]++;
         pin += pinball(0.1, y, lo) + pinball(0.9, y, hi); pinY += y; }
       rowsTot.push([tot, totM]); lead.push(tot > 0 ? +(Math.abs(tot - totM) / tot).toFixed(3) : null);
       if (!nv) continue;
@@ -1154,7 +1183,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     volume: volume == null ? null : Math.round(volume), ...(small ? { minVolume: MIN_VOLUME[family] } : {}),
     excluded: exclude?.size || 0, gates: { ...GATES }, weather: { gate, used: useWx, source: weather.length ? weather[0].source ?? null : null },
     env: { keys: CTX_KEYS, ready: env.ctx.map(k => CTX_KEYS[k]), active: usesEnv ? env.ctx.map(k => CTX_KEYS[k]) : [], support, sources: incSum, ...(pending?.length && pendingFrom ? { pendingFrom } : {}) }, memory: null,
-    band: { level: CONFORMAL.target, z: Z80, k: conf.k, bands: CONFORMAL.bands, n: conf.n }, // S2.7: Band je Stunde = k[Band(h)] · z · √(φ·μ) + 0,5
+    band: { level: CONFORMAL.target, z: Z80, k: conf.k, bands: CONFORMAL.bands, n: conf.n, source: 'poisson' }, // S2.7: Band je Stunde = k[Band(h)] · z · √(φ·μ) + 0,5; bei Chronos/Mischung aus den Quantilen (source 'chronos')
     decision: { rule: { ...DECIDE, dm: { ...DM } }, live: choice.live || null, combined: choice.combined || null, why: choice.why || null, dm: choice.dm || null },
     learn: fb.upto ? learnSummary(fb, fbw) : null,
     blend: { activeFrom: new Date(BLEND.activeFrom).toISOString(), chronos: ext ? { at: ext.at, model: ext.model, backDays: ext.backDays } : null, learn: fbC.upto ? learnSummary(fbC, feedbackWeights(fbC)) : null },
@@ -1182,8 +1211,9 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     try { portable = portableModel(PA.fitted(), R, { family: family || 'micro', now, trainDays: out.trainDays, active: out.active, days: days.map(d => d.day) }); } catch { portable = null; }
     // S2.8: Verzerrung je Art korrigieren (je Modell aus dessen Selbstprüfung; Vergleichswerte bleiben roh)
     const biasCorr = {};
-    for (const [m, arr] of PA.mu) { if (!BIAS.models.includes(m)) continue; const tf = typeFactors(log.evals, m); if (!Object.keys(tf).length) continue; biasCorr[m] = tf;
-      PA.mu.set(m, Float64Array.from(arr, (x, j) => x * (tf[String(R.keys[F.g[sel[j]]]).split('|')[2]] ?? 1))); }
+    for (const [m, arr] of PA.mu) { if (!BIAS.models.includes(m)) continue; const tf = typeFactors(log.evals, m); if (!Object.keys(tf).length) continue; const af = agsFactors(log.evals, m, tf);
+      biasCorr[m] = { ...tf, ...(Object.keys(af).length ? { ags: af } : {}) };
+      PA.mu.set(m, Float64Array.from(arr, (x, j) => x * biasFactorOf(R.keys[F.g[sel[j]]], tf, af))); }
     out.biasCorr = Object.keys(biasCorr).length ? biasCorr : null; out.breaks = broken;
     let mu = PA.mu.get(out.active), phi = PA.phi(out.active);
     out.phi = +phi.toFixed(2);
@@ -1206,7 +1236,9 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
       // Chronos-Meta: Stand des Laufs, Alter bei Ausgabe, Anteil der Fahrten (aktives Modell) in Gruppen mit Chronos-Wert
       let extMeta = null;
       if (chronosOn) { let cov = 0, tot = 0; sel.forEach((i, j) => { if (F.fh[i] >= horizon) return; tot += mu[j]; if (Number.isFinite(chronosOf(i))) cov += mu[j]; }); extMeta = { chronos: { at: ext.at, ageH: +((t0 - Date.parse(ext.at)) / 3600e3).toFixed(1), cover: tot > 0 ? +(cov / tot).toFixed(3) : 0 } }; }
-      log.issued[now] = { v: 2, model: out.active, from: t0, phi: +phi.toFixed(2), kBand: [...conf.k], local: out.horizon.local, total: out.totals, byOp: Object.fromEntries([...byOp].map(([k, a]) => [k, a.slice(0, horizon).map(x => Math.round(x * 10) / 10)])), shadow, ...(extMeta ? { ext: extMeta } : {}) };
+      const bandQ = chronosOn && QBAND_MODELS.includes(out.active) && typeof ext.quant === 'function' ? quantileBands(R.keys, sel.map(i => [F.g[i], F.fh[i], fut[F.fh[i]].t]), ext.quant, horizon) : null;
+      if (bandQ) out.band.source = 'chronos';
+      log.issued[now] = { v: 2, model: out.active, from: t0, phi: +phi.toFixed(2), kBand: [...conf.k], ...(bandQ ? { bandQ } : {}), local: out.horizon.local, total: out.totals, byOp: Object.fromEntries([...byOp].map(([k, a]) => [k, a.slice(0, horizon).map(x => Math.round(x * 10) / 10)])), shadow, ...(extMeta ? { ext: extMeta } : {}) };
     }
     log.history.push({ at: out.generatedAt, active: out.active, status: out.status, reason: out.reason });
     log.activeSince = prev?.activeSince?.model === out.active ? prev.activeSince : { model: out.active, at: out.generatedAt };
