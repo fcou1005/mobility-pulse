@@ -697,7 +697,8 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
 
 // ---------- Prognose-Ansicht: Gruppen der gewählten Stadt bzw. des Anbieters (11.11.2026)
 {
-  const { scopeGroups } = await import('../docs/forecast.js') /* gebaute Fassung: importiert lib/ als ./pulse-*.js */;
+  const { register } = await import('node:module'); register('./web-loader.mjs', import.meta.url); // web/ importiert lib/ als ./pulse-*.js
+  const { scopeGroups } = await import('../web/forecast.js');
   const fbRow = (y, eP, eQ) => [y, 0, 0, eP * y, eQ * y];
   const G = { feedback: { groups: { '08416041|Voi|scooter': fbRow(3200, 0.37, 0.34), '08416041|Bolt|scooter': fbRow(2400, 0.34, 0.36), '08416041|Dott|scooter': fbRow(1, 0.5, 0.5), '08111000|Voi|scooter': fbRow(16000, 0.24, 0.24) } } };
   const L = { groups: { '08416041|Voi|scooter': { start: [300, 288], perVeh: 2.9 }, '08416041|Bolt|scooter': { start: [200, 216], perVeh: 2.8 }, '08111000|Voi|scooter': { start: [3054], perVeh: 2.2 } } };

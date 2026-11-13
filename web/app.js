@@ -1,22 +1,22 @@
 import * as C from './pulse-core.js';
-import * as Ops from './ops.js';
 import * as E from './pulse-econ.js';
 import * as K from './pulse-calib.js';
-import * as Rp from './report.js';
+import * as UI from './ui-shared.js';
 import * as R from './pulse-report.js';
-import * as Fl from './flows.js';
-import * as Cov from './coverage.js';
-import * as Cmp from './compare.js';
-import * as Sp from './spots.js';
-import * as Fv from './forecast.js';
-import { renderStatus } from './status.js';
 import { mapKeys } from './mapkeys.js';
 import { weatherFor } from './weather.js';
 import { GROUP_MIN, GROUP_M } from './pulse-track.js';
-import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js';
+import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn, ensureI18n } from './i18n.js';
 import { idleClassText } from './pulse-ops.js';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
-const { initOps, renderOps, opsFleet, applyOpsParams } = Ops;
+// ---------- Ansichtsmodule bei Bedarf laden (S3.4): Modul und sein Wörterbuchbereich zusammen; M[k] = geladenes Modul ----------
+const LAZY = { ops: [() => import('./ops.js'), 'ops'], rp: [() => import('./report.js'), 'report'], fl: [() => import('./flows.js'), 'flows'], cov: [() => import('./coverage.js'), 'coverage'],
+  cmp: [() => import('./compare.js'), 'compare'], sp: [() => import('./spots.js'), 'spots'], fv: [() => import('./forecast.js'), 'forecast'], st: [() => import('./status.js'), 'status'] };
+const M = {}, MP = {};
+const mod = (k) => MP[k] || (MP[k] = Promise.all([LAZY[k][0](), ensureI18n([LAZY[k][1]])]).then(([m]) => { M[k] = m; if (k === 'ops') m.initOps(opsCtx()); return m; }));
+const renderOps = () => mod('ops').then(m => m.renderOps());
+const opsFleet = () => M.ops?.opsFleet() || null;
+const applyOpsParams = (p) => { mod('ops').then(m => m.applyOpsParams(p)); };
 
 const QS = new URLSearchParams(location.search);
 const DEMO = QS.get('demo') === '1'; // eingefrorener Demo-Stand (Branch demo), ohne Live-Abruf und ohne Nachladen
@@ -540,7 +540,7 @@ const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte
 let viewShown = false;
 function setView(name) {
   name = resolveView(name);
-  if (name !== 'usage') { const fl = document.getElementById('fl-panel'); if (fl) Fl.abortFlows?.(fl); }
+  if (name !== 'usage') { const fl = document.getElementById('fl-panel'); if (fl) M.fl?.abortFlows?.(fl); }
   const group = GROUPS_DEF().find(g => g.segs.some(([v]) => v === name));
   const changed = viewShown && name !== currentView; viewShown = true;
   currentView = name;
@@ -569,7 +569,7 @@ function setView(name) {
 // ---------- Ansichten zeichnen: nur die sichtbare ----------
 // Hook für weitere Module (z. B. web/report.js): VIEW_RENDER[name] = [fn, …] ergänzen; renderAll() markiert alle Ansichten als veraltet
 // und zeichnet die aktive, setView() zeichnet eine veraltete Ansicht beim Öffnen.
-const VIEW_RENDER = { live: [() => renderLive()], lab: [() => renderLab(), () => renderPricing(), () => renderShareChart()], usage: [() => renderUsage()], ops: [() => renderOps()], signals: [() => renderSignals()], coverage: [() => renderCoverage()], sources: [() => renderSources()], status: [() => renderStatus($('#st-panel'), { state, CFG, esc, fmt, getJson: getJsonShared })] };
+const VIEW_RENDER = { live: [() => renderLive()], lab: [() => renderLab(), () => renderPricing(), () => renderShareChart()], usage: [() => renderUsage()], ops: [() => renderOps()], signals: [() => renderSignals()], coverage: [() => renderCoverage()], sources: [() => renderSources()], status: [() => mod('st').then(m => m.renderStatus($('#st-panel'), { state, CFG, esc, fmt, getJson: getJsonShared }))] };
 const dirty = new Set(VIEWS); let dataReady = false;
 // Ein fehlerhaftes Panel darf die übrigen nicht mitreißen
 const safe = (f) => { try { const r = f(); if (r?.catch) r.catch(e => console.error(f.name, e)); } catch (e) { console.error(f.name, e); } };
@@ -709,6 +709,9 @@ function bindLangSwitch() {
 function renderLangHint() {
   const sug = suggestLang();
   if (!sug) { clearNotice('lang'); return; }
+  ensureI18n(['core'], sug).then(() => renderLangHint2(sug));
+}
+function renderLangHint2(sug) {
   const el = notice(() => `<span lang="${sug}">${tIn(sug, 'common.langHint')}</span> <button type="button" class="chip" data-lang-yes="${sug}" lang="${sug}">${tIn(sug, 'common.langSwitch')}</button> <button type="button" class="chip" data-lang-no lang="${sug}">${tIn(sug, 'common.langKeep')}</button>`, '', 'lang');
   el.onclick = (e) => { const y = e.target.closest('[data-lang-yes]'); if (y) { clearNotice('lang'); setLang(y.dataset.langYes); renderLangSwitch(); } else if (e.target.closest('[data-lang-no]')) { dismissSuggestion(); clearNotice('lang'); } };
 }
@@ -719,7 +722,7 @@ function onLanguage() {
   renderLangSwitch(); clearNotice('lang'); refreshNotices();
   if (state.map && state.tiles) { const prev = state.tiles.options.attribution, next = t('app.openstreetmapContributors'); if (prev !== next) { state.tiles.options.attribution = next; state.map.attributionControl?.removeAttribution(prev).addAttribution(next); } }
   if (state.latest) { populateScope(); populateOperators(); }
-  safe(() => Ops.relabelOps?.()); safe(() => Fl.relabelFlows?.()); safe(() => Cmp.relabelCompare?.(document.getElementById('cmp-panel'))); safe(() => Sp.relabelSpots?.(document.getElementById('spots-panel'))); // Disposition behält den Plan, Fahrtrouten bauen ihr Gerüst neu
+  safe(() => M.ops?.relabelOps?.()); safe(() => M.fl?.relabelFlows?.()); safe(() => M.cmp?.relabelCompare?.(document.getElementById('cmp-panel'))); safe(() => M.sp?.relabelSpots?.(document.getElementById('spots-panel'))); // Disposition behält den Plan, Fahrtrouten bauen ihr Gerüst neu
   if (dataReady) { safe(renderHeader); for (const v of VIEWS) dirty.add(v); }
   setView(currentView); // Kopf, Seitentitel, Segmente; zeichnet die aktive Ansicht neu
 }
@@ -730,17 +733,21 @@ const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache
   // einzelnen Filter der Leiste setzen (kind: scope | op | type) bzw. alle zurücksetzen; wirkt wie die Auswahl in der Leiste
   setFilter: (kind, v) => { const sel = $(kind === 'scope' ? '#sel-scope' : kind === 'op' ? '#sel-operator' : '#sel-type'); if (!sel || sel.value === v || ![...sel.options].some(o => o.value === v)) return; sel.value = v; sel.dispatchEvent(new Event('change')); },
   resetFilters: () => { for (const [id, v] of [['#sel-type', 'all'], ['#sel-operator', 'all'], ['#sel-scope', 'DE']]) { const sel = $(id); if (sel && sel.value !== v && [...sel.options].some(o => o.value === v)) { sel.value = v; sel.dispatchEvent(new Event('change')); } } } });
-const rp = (fn, id) => () => { const el = document.getElementById(id); if (el) return fn(el, rpCtx()); };
-VIEW_RENDER.bericht = [rp(Rp.renderReport, 'rp-report'), rp(Rp.renderForecast, 'rp-fc'), rp(Rp.renderRegulationProfile, 'rp-reg'), rp(Rp.renderCaps, 'rp-caps'), rp(Rp.renderZoneWatch, 'rp-zones'), rp(Rp.renderFeeCalculator, 'rp-fees'), rp(Rp.renderWeekHeatmap, 'rp-week'), rp(Rp.renderHotspotStability, 'rp-hot')];
-VIEW_RENDER.staedte = [() => renderCities(), rp(Rp.renderAvailability, 'rp-avail'), rp(Rp.renderCityRanking, 'rp-rank'), rp(Rp.renderDensityScatter, 'rp-scatter')];
-VIEW_RENDER.usage.push(rp(Fl.renderFlows, 'fl-panel'));
-VIEW_RENDER.vergleich = [rp(Cmp.renderCompare, 'cmp-panel')];
+// Disposition: Helfer und Lader der Seite; getJsonShared lädt ops/<Land>.json, Zonen, Zellen usw. über denselben Cache wie die Übersichtskarte
+function opsCtx() { return { state, CFG, getJson: getJsonShared, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE, econFor, syncUrl }; }
+// rp(k, Funktion, Element): Modul k laden (S3.4), dann Funktion(Element, Kontext)
+const rp = (k, fn, id) => () => { const el = document.getElementById(id); if (el) return mod(k).then(m => m[fn](el, rpCtx())); };
+VIEW_RENDER.bericht = [rp('rp', 'renderReport', 'rp-report'), rp('rp', 'renderForecast', 'rp-fc'), rp('rp', 'renderRegulationProfile', 'rp-reg'), rp('rp', 'renderCaps', 'rp-caps'), rp('rp', 'renderZoneWatch', 'rp-zones'), rp('rp', 'renderFeeCalculator', 'rp-fees'), rp('rp', 'renderWeekHeatmap', 'rp-week'), rp('rp', 'renderHotspotStability', 'rp-hot')];
+VIEW_RENDER.staedte = [() => renderCities(), rp('rp', 'renderAvailability', 'rp-avail'), rp('rp', 'renderCityRanking', 'rp-rank'), rp('rp', 'renderDensityScatter', 'rp-scatter')];
+VIEW_RENDER.usage.push(rp('fl', 'renderFlows', 'fl-panel'));
+VIEW_RENDER.vergleich = [rp('cmp', 'renderCompare', 'cmp-panel')];
 const fvCtx = () => ({ ...rpCtx(), loadOnce });
-VIEW_RENDER.prognose = [() => { const el = document.getElementById('fv-panel'); if (el) return Fv.renderForecastView(el, fvCtx(), { part: 'verlauf' }); }];
-VIEW_RENDER['prognose-spots'] = [() => { const el = document.getElementById('fv-spots-panel'); if (el) return Fv.renderForecastView(el, fvCtx(), { part: 'spots' }); }];
-VIEW_RENDER['prognose-basis'] = [() => { const el = document.getElementById('fv-basis-panel'); if (el) return Fv.renderForecastView(el, fvCtx(), { part: 'basis' }); }];
-VIEW_RENDER.spots = [() => { const el = document.getElementById('spots-panel'); if (el) return Sp.renderSpots(el, { ...rpCtx(), loadOnce }); }]; // Spot-Abgleich braucht dazu stations-quota und Zonen-Index
-VIEW_RENDER.sources.push(rp(Cov.renderCoverage, 'cov-panel'), rp(Rp.renderFeedChecks, 'rp-feedchecks'), rp(Rp.renderPriceLog, 'rp-pricelog'), () => renderCalibPanel());
+const fv = (part, id) => () => { const el = document.getElementById(id); if (el) return mod('fv').then(m => m.renderForecastView(el, fvCtx(), { part })); };
+VIEW_RENDER.prognose = [fv('verlauf', 'fv-panel')];
+VIEW_RENDER['prognose-spots'] = [fv('spots', 'fv-spots-panel')];
+VIEW_RENDER['prognose-basis'] = [fv('basis', 'fv-basis-panel')];
+VIEW_RENDER.spots = [() => { const el = document.getElementById('spots-panel'); if (el) return mod('sp').then(m => m.renderSpots(el, { ...rpCtx(), loadOnce })); }]; // Spot-Abgleich braucht dazu stations-quota und Zonen-Index
+VIEW_RENDER.sources.push(rp('cov', 'renderCoverage', 'cov-panel'), rp('rp', 'renderFeedChecks', 'rp-feedchecks'), rp('rp', 'renderPriceLog', 'rp-pricelog'), () => renderCalibPanel());
 function renderAll() {
   dataReady = true;
   safe(renderHeader);
@@ -1343,7 +1350,7 @@ function computeSignalsNow() {
   for (const [k, v] of Object.entries(state.latest?.eventChecks?.groups || {})) {
     if (v?.level !== 'warn' && v?.level !== 'bad' || !groupInScope(k)) continue; const [ags, op, ty] = k.split('|');
     out.push({ cat: 'data', sev: v.level, w: v.checks?.rides || 1, n: null, icon: true, short: t('mb.sigShort', { op, ags: place(ags) }), title: t('mb.sigTitle', { op, ty: TYPE[ty] || ty, ags: place(ags), lv: v.level === 'bad' ? t('mb.red') : t('mb.yellow') }),
-      text: `${Rp.mbChecksText(v.checks)}. ${v.level === 'bad' ? t('mb.sigRed') : t('mb.sigYellow')}`, foot: t('mb.sigFoot', { day: state.latest.eventChecks.day || '–' }) });
+      text: `${UI.mbChecksText(v.checks)}. ${v.level === 'bad' ? t('mb.sigRed') : t('mb.sigYellow')}`, foot: t('mb.sigFoot', { day: state.latest.eventChecks.day || '–' }) });
   }
   out.push(...groupSignals());
   const sevW = { bad: 3, warn: 2, info: 1 };
@@ -1767,7 +1774,7 @@ async function econFor(ags, op, type) {
   return r ? E.combine([...r.out.values()]) : null;
 }
 // Kalibrierung: geteilt mit dem Bericht (report.js loadCalibration), Modus „kalibriert“ / „gemessen“ je Browser gemerkt
-const getCalib = () => Rp.loadCalibration(rpCtx());
+const getCalib = () => mod('rp').then(m => m.loadCalibration(rpCtx()));
 const MODE_KEY = 'mp-calib-mode';
 function calibMode() { try { return localStorage.getItem(MODE_KEY) === 'mess' ? 'mess' : 'kal'; } catch { return 'kal'; } }
 function setCalibMode(m) { try { localStorage.setItem(MODE_KEY, m === 'mess' ? 'mess' : 'kal'); } catch { /* privates Fenster: Standard „kalibriert“ */ } }
@@ -1840,7 +1847,7 @@ async function renderEcon(day) {
     tile(t('app.revenueVehDay'), pF.main, tsub(pF, t('app.perTrip', { v0: euro(tot.perRide, 2) }))),
   ].join('') : `<div class="empty" style="grid-column:1/-1">${t('app.noReliableRowInFilterAllRows')}</div>`;
   // Reifegrad an den Hochrechnungen (Fahrten/Tag, je Fahrzeug, Auslastung, Umsatz): Tagtyp des gewählten Tags, Tagesgang dieses Typs
-  { const land = state.scope === 'DE' ? null : scopeState(); Rp.mbTiles($('#econ-tiles'), Rp.mbBadge(Rp.mbBase(state, { land }), 'full3', { dayType: E.dayType(day, land, state.calendar), curve: t('mb.curve', { v: `${esc(tx(r.profile.source))} (${Rp.mbTypeName(r.profile.dayType || 'W')})` }) })); }
+  { const land = state.scope === 'DE' ? null : scopeState(); UI.mbTiles($('#econ-tiles'), UI.mbBadge(UI.mbBase(state, { land }), 'full3', { dayType: E.dayType(day, land, state.calendar), curve: t('mb.curve', { v: `${esc(tx(r.profile.source))} (${UI.mbTypeName(r.profile.dayType || 'W')})` }) })); }
   // Unplausible Zeilen sind aus den Summen raus – sichtbar machen
   const bad = [...rows.filter(x => !x.c.plausible), ...rows.flatMap(x => (x.dropped || []).map(d => ({ ...x, c: d.m, where: muniName(d.ags) })))]; const names = bad.map(x => `${x.op} ${TYPE[x.ty] || x.ty}${x.where ? ` ${x.where}` : ''}`);
   const ex = $('#econ-excl'); ex.innerHTML = bad.length ? `${t('app.totalsWithout', { join: esc(names.slice(0, 4).join(', ')), v1: names.length > 4 ? ` ${t('app.andMore', { v0: names.length - 4 })}` : '' })} <span class="muted">${t('app.notReliable')}</span>` : '';
@@ -1903,25 +1910,25 @@ async function renderCalibPanel() {
   if (kr) rows.push([`${t('app.tripsPerVehAndDayEScooter')}<div class="sub-line">${t('app.berlin', { v0: esc(k?.applied ? `${k.quarter} (${k.rule})` : kr.zeitraum) })}</div>`, `<b>${f2(kr.wert)}</b>${k?.refMin != null ? `<div class="sub-line">${t('app.quarters', { v0: f2(k.refMin), v1: f2(k.refMax) })}</div>` : ''}`, src(kr),
     k?.measured?.rvd ? `${f2(k.measured.rvd)}<div class="sub-line">${t('app.ofHoursObserved', { v0: esc(k.source || ''), v1: dd(k.measured.from), v2: dd(k.measured.to), days: k.measured.days, v4: k.measured.days === 1 ? t('app.day2') : t('app.days2'), v5: fmt(k.obsShare * 100) })}</div>${(k.measured.excluded || []).length ? `<div class="sub-line">${t('app.excludedOvercount', { join: esc(k.measured.excluded.map(x => `${x.op} ${f2(x.rvd)}`).join(', ')) })}</div>` : ''}` : '—',
     k?.applied ? `k = <b>${f2(k.k)}</b><div class="sub-line">${f2(k.kLow)}–${f2(k.kHigh)}</div>` : '—',
-    k?.applied ? t('app.eScooterTripsNationwide', { v0: f2(k.k), calibLabel: esc(Rp.calibLabel(k)), v2: f2(calib.limits?.scooter), v3: k.prelim ? `<div class="sub-line">${t('app.preliminary2', { join: esc(k.prelimWhy.join(', ')) })}</div>` : '', v4: (k.single ? `<div class="sub-line">${t('app.limitation', { single: esc(k.single) })}</div>` : '') + `<div class="sub-line">${esc(k.statusText || '')}${k.onlyKind ? ` · ${esc(k.onlyKind)}` : ''}</div>` }) : t('app.noCalibration', { v0: esc(k?.reason || '') })]);
+    k?.applied ? t('app.eScooterTripsNationwide', { v0: f2(k.k), calibLabel: esc(UI.calibLabel(k)), v2: f2(calib.limits?.scooter), v3: k.prelim ? `<div class="sub-line">${t('app.preliminary2', { join: esc(k.prelimWhy.join(', ')) })}</div>` : '', v4: (k.single ? `<div class="sub-line">${t('app.limitation', { single: esc(k.single) })}</div>` : '') + `<div class="sub-line">${esc(k.statusText || '')}${k.onlyKind ? ` · ${esc(k.onlyKind)}` : ''}</div>` }) : t('app.noCalibration', { v0: esc(k?.reason || '') })]);
   // 3. Abdeckung (+ Hochrechnung nur hier)
   for (const c of calib.coverage || []) {
     // k nur bei angewandtem k und Kennungsart der Stadt wie die Referenz, höchstens bis zur Grenze (K.calibratedRvd); sonst gemessen mit Hinweis
     const ob = calib.own?.byAgs?.[c.ags]; const cr = K.calibratedRvd(ob?.rvd, k, { kind: ob?.kind ?? null, limit: calib.limits?.scooter ?? null }); const rvdCal = cr.rvd;
-    const crNote = cr.skip === 'op' ? `<div class="sub-line">${esc(t('cal.notOp', { ops: (cr.ops || []).join(', ') }))}</div>` : cr.skip === 'kind' ? `<div class="sub-line">${esc(t('cal.notKind', { v0: K.kindText(cr.kind, lang()) }))}</div>` : cr.skip === 'suspended' ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : cr.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '';
+    const crNote = cr.skip === 'op' ? `<div class="sub-line">${esc(t('cal.notOp', { ops: (cr.ops || []).join(', ') }))}</div>` : cr.skip === 'kind' ? `<div class="sub-line">${esc(t('cal.notKind', { v0: K.kindText(cr.kind, lang()) }))}</div>` : cr.skip === 'suspended' ? `<div class="sub-line warn-text">${esc(tx(UI.SUSPENDED_TXT))}</div>` : cr.capped ? `<div class="sub-line">${t('rep.cappedAtLimit')}</div>` : '';
     rows.push([`${t('app.eScooters', { v0: esc(c.label[0].toUpperCase() + c.label.slice(1)) })}<div class="sub-line">${esc(c.ort)}, ${c.stand ? t('app.asOf3', { v0: dd(c.stand) }) : ''}</div>`, `<b>${c.art === 'aktiv' ? `${t('app.approx')} ` : ''}${fmt(c.official)}</b><div class="sub-line">${esc(c.label)}</div>`, src(c), `${fmt(c.ours)}<div class="sub-line">${t('app.inOpenFeeds', { v0: c.operators.length ? ` (${esc(c.operators.map(o => o.op).join(', '))})` : '' })}</div>`, `<b>${fmt(c.share * 100, 1)} %</b>`,
       `${esc(c.shareLabel)}${rvdCal != null ? `<div class="sub-line">${t('app.extrapolationOnlyHereTrips', { rvdCal: f2(rvdCal), official: fmt(c.official), sig2: fmt(sig2(rvdCal * c.official)), v3: c.art === 'genehmigt' ? ` ${t('app.ofLicensedFleetHenceUpper')}` : ` ${t('app.ofActiveFleet')}` })}</div>` : ''}${crNote}`]);
   }
   // 4. Prüfwerte ohne Faktor
   for (const x of checks) {
     const u = x.unit === '€' ? ' €' : '';
-    const mv = x.measured == null ? '—' : `${f2(x.measured)}${u}${x.calibrated != null ? `<div class="sub-line">${t('app.calibrated5', { v0: f2(x.calibrated), u })}</div>` : x.suspended ? `<div class="sub-line warn-text">${esc(tx(Rp.SUSPENDED_TXT))}</div>` : x.notOp?.length ? `<div class="sub-line">${esc(t('cal.notOp', { ops: x.notOp.join(', ') }))}</div>` : ''}<div class="sub-line">${esc(x.kind === 'Untergrenze' ? t('app.openFeeds', { ort: tx(x.ref.ort) }) : x.scope || '')}${x.unit === '€' && voi ? `, ${voi.days} ${voi.days === 1 ? t('app.day2') : t('app.days2')}` : ''}</div>`;
+    const mv = x.measured == null ? '—' : `${f2(x.measured)}${u}${x.calibrated != null ? `<div class="sub-line">${t('app.calibrated5', { v0: f2(x.calibrated), u })}</div>` : x.suspended ? `<div class="sub-line warn-text">${esc(tx(UI.SUSPENDED_TXT))}</div>` : x.notOp?.length ? `<div class="sub-line">${esc(t('cal.notOp', { ops: x.notOp.join(', ') }))}</div>` : ''}<div class="sub-line">${esc(x.kind === 'Untergrenze' ? t('app.openFeeds', { ort: tx(x.ref.ort) }) : x.scope || '')}${x.unit === '€' && voi ? `, ${voi.days} ${voi.days === 1 ? t('app.day2') : t('app.days2')}` : ''}</div>`;
     const ratio = x.ratioCal ?? x.ratio;
     rows.push([`${esc(tx(x.label.replace(/: .*/, '')))}<div class="sub-line">${esc(x.label.replace(/^[^:]*: /, ''))} · ${esc(x.ref.zeitraum || '')}</div>`, `<b>${x.kind === 'Untergrenze' ? '≥ ' : ''}${f2(x.refValue)}${u}</b>${x.how ? `<div class="sub-line">${esc(t('app.mTripsFleetCap', { v0: fmt(x.trips / 1e6, 2), v1: x.year % 4 ? 365 : 366, limit: fmt(x.limit) }))}</div>` : x.ref.hinweis ? `<div class="sub-line"><span translate="no">${esc(x.ref.hinweis)}</span></div>` : ''}`, `${src(x.ref)}${x.cap && x.cap.url !== x.ref.url ? ` · ${src(x.cap)}` : ''}`, mv,
       ratio == null ? '—' : `${f2(ratio)}<div class="sub-line">${t('app.reference', { v0: x.ratioCal != null ? t('app.calibrated6') : t('app.measured3') })}</div>`, x.suspended ? t('app.measurementAbove15Largest', { v0: f2(calib.limits?.scooter) }) : x.kind === 'Untergrenze' ? t('app.checkNoFactorLowerBound') : t('app.comparisonNoFactor')]);
   }
   const rules = `<ol class="calib-rules small"><li>${t('app.tripDurationAvgEScooterTrip', { v0: a?.calibrated ? ` (${fmt(a.min, 1)} Min., ${f2(a.km)} km)` : '' })}</li>
-    <li>${t('cal.methodFactorK', { CALIB_DAYS: Rp.CALIB_DAYS, minDays: K.CALIB.minDays })}</li>
+    <li>${t('cal.methodFactorK', { CALIB_DAYS: UI.CALIB_DAYS, minDays: K.CALIB.minDays })}</li>
     <li>${t('app.plausibilityIfOperatorS', { v0: calib.limits?.scooter ? f2(calib.limits.scooter) : '–', overFactor: fmt(K.CALIB.overFactor, 1), v2: k?.source ? ` (${esc(k.source)})` : '', v3: k?.single ? t('app.onlyOneOperatorOthersMay') : '' })}</li>
     <li>${t('app.preliminaryBelowMeasurement', { minDays: K.CALIB.minDays, v1: K.CALIB.minObsShare * 100, kMin: fmt(K.CALIB.kMin, 1), kMax: fmt(K.CALIB.kMax) })}</li>
     <li>${t('cal.ruleRelease', { minDays: K.CALIB.minDays, v1: esc(k?.statusText || '–'), v2: esc(k?.refKindText || K.kindText('unknown', lang())) })}</li>
@@ -2033,14 +2040,14 @@ function schoolNote(day) {
 function renderMbMatrix() {
   let box = $('#mb-matrix');
   if (!box) { const lg = $('#usage-legend'); if (!lg) return; lg.insertAdjacentHTML('afterend', '<div id="mb-matrix" class="mb-matrix"></div>'); box = $('#mb-matrix'); }
-  const land = state.scope === 'DE' ? null : scopeState(), b = Rp.mbBase(state, { land });
+  const land = state.scope === 'DE' ? null : scopeState(), b = UI.mbBase(state, { land });
   const lvl = (m) => (m <= 0 ? 0 : m < 50 ? 1 : m < 120 ? 2 : m < 240 ? 3 : 4), hh = (h) => String(h).padStart(2, '0');
   const head = `<tr><th scope="col"><span class="vh">${t('mb.dayType')}</span></th>${Array.from({ length: 24 }, (_, h) => `<th scope="col" class="mb-hh">${h % 3 === 0 ? hh(h) : `<span class="vh">${hh(h)}</span>`}</th>`).join('')}<th scope="col" class="n">${t('mb.sum')}</th></tr>`;
-  const rows = E.DAY_TYPES.map(k => `<tr><th scope="row" title="${esc(Rp.mbTypeName(k))}">${k}<span class="vh"> ${esc(Rp.mbTypeName(k))}</span></th>${b.matrix[k].map((m, h) => `<td class="mb-c mb-l${lvl(m)}" title="${esc(t('mb.cellTitle', { type: Rp.mbTypeName(k), h: hh(h), h2: hh((h + 1) % 24), m: fmt(m) }))}">${m > 0 ? `<span class="vh">${fmt(m)}</span>` : '<span aria-hidden="true">·</span><span class="vh">0</span>'}</td>`).join('')}<td class="n mono">${fmt(b.byType[k], 1)}&nbsp;h<div class="sub-line">${t(b.days[k] === 1 ? 'mb.nDay' : 'mb.nDays', { n: b.days[k] })}</div></td></tr>`).join('');
+  const rows = E.DAY_TYPES.map(k => `<tr><th scope="row" title="${esc(UI.mbTypeName(k))}">${k}<span class="vh"> ${esc(UI.mbTypeName(k))}</span></th>${b.matrix[k].map((m, h) => `<td class="mb-c mb-l${lvl(m)}" title="${esc(t('mb.cellTitle', { type: UI.mbTypeName(k), h: hh(h), h2: hh((h + 1) % 24), m: fmt(m) }))}">${m > 0 ? `<span class="vh">${fmt(m)}</span>` : '<span aria-hidden="true">·</span><span class="vh">0</span>'}</td>`).join('')}<td class="n mono">${fmt(b.byType[k], 1)}&nbsp;h<div class="sub-line">${t(b.days[k] === 1 ? 'mb.nDay' : 'mb.nDays', { n: b.days[k] })}</div></td></tr>`).join('');
   const never = Array.from({ length: 24 }, (_, h) => h).filter(h => E.DAY_TYPES.every(k => !b.matrix[k][h]));
   box.innerHTML = `<div class="mb-mh"><b>${t('mb.matrixTitle')}</b> <span class="muted">${t('mb.matrixSub', { h: fmt(b.hours, 1), never: never.length ? never.map(hh).join(', ') : '–' })}</span></div>
     <div class="tbl" tabindex="0" role="region" aria-label="${t('mb.matrixAria')}"><table class="mb-mx"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
-    <div class="legend mb-leg"><span>${E.DAY_TYPES.map(k => `${k} ${esc(Rp.mbTypeName(k))}`).join(' · ')}</span><span><span aria-hidden="true">·</span> ${t('mb.lv0')}</span>${[1, 2, 3, 4].map(l => `<span><i class="sq mb-c mb-l${l}"></i>${t(`mb.lv${l}`)}</span>`).join('')}</div>`;
+    <div class="legend mb-leg"><span>${E.DAY_TYPES.map(k => `${k} ${esc(UI.mbTypeName(k))}`).join(' · ')}</span><span><span aria-hidden="true">·</span> ${t('mb.lv0')}</span>${[1, 2, 3, 4].map(l => `<span><i class="sq mb-c mb-l${l}"></i>${t(`mb.lv${l}`)}</span>`).join('')}</div>`;
 }
 // Text für den gewählten Tag und das Gebiet: Feiertag im Land der Gemeinde, deutschlandweit mit Zahl der Länder; sonst Sonntag
 function dayNote(day) { const a = dayNoteHol(day), f = /^\d{4}-\d{2}-\d{2}$/.test(day || '') ? schoolNote(day) : null; return a && f ? `${a} · ${f}` : a || f; }
@@ -2630,8 +2637,7 @@ async function init() {
   if (QS.get('kunde') === '1') { document.body.classList.add('mode-client'); $('#btn-client').setAttribute('aria-pressed', 'true'); $('#btn-share').textContent = t('app.copyClientLink'); }
   if (DEMO) document.body.classList.add('mode-demo');
   initMap(); bind(); enhanceUi();
-  // getJsonShared: ops.js lädt ops/<Land>.json, Zonen, Zellen usw. über denselben Promise-Cache wie die Übersichtskarte
-  initOps({ state, CFG, getJson: getJsonShared, esc, fmt, opColor, muniName, notice, clearNotice, loadBoundaries, loadUsageIndex, loadCells, loadOnce, loadGroups, TYPE, econFor, syncUrl });
+  // Disposition (web/ops.js) wird erst beim ersten Öffnen geladen und dann mit opsCtx() eingerichtet (S3.4)
   $$('abbr[data-gloss]').forEach(a => { a.title = gl(a.dataset.gloss); }); // Glossar-Tooltips aus einer Quelle
   // Platzhalter-Kacheln in der späteren Anzahl: die Seite springt nicht, wenn die Zahlen kommen (CLS)
   for (const [id, n] of [['#live-tiles', 5], ['#lab-tiles', 4], ['#usage-tiles', 5], ['#econ-tiles', 5], ['#cov-tiles', isClient() ? 3 : 4], ['#src-tiles', 4]]) { const el = $(id); if (el && !el.children.length) el.innerHTML = '<div class="tile skel" aria-hidden="true"><div class="l">&nbsp;</div><div class="v">–</div><div class="s">&nbsp;</div></div>'.repeat(n); }
@@ -2649,7 +2655,7 @@ async function init() {
     state.status = s.json; state.latest = l.json; state.hist = {}; state.usage.docs = {}; state.usage.index = null; state.usage.cells = {}; state.usage.profile = null; state.usage.archiveDays = null; state.usage.zones = {};
     for (const k of ['idle', 'idleLong', 'quota', 'reliability', 'consistency', 'zonesIndex', 'pricing', 'runs', 'archiveIndex', 'groups']) state.usage[k] = null;
     const keepB = [...REQ].filter(([k]) => k.startsWith('boundaries')); resetCache(); if (state.bIndex) for (const [k, p] of keepB) REQ.set(k, p); // Grenzen ändern sich nicht je Lauf
-    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); Ops.resetCaches?.(); Rp.resetReportCaches?.(); Cov.resetCoverageCache?.(); Cmp.resetCompareCache?.(); Fv.resetForecastCache?.(); Sp.resetSpotsCache?.();
+    groupsReq = null; dailyReq = null; dailyLoaded = false; state.daily = null; state.fleet.clear(); ENERGY.clear(); M.ops?.resetCaches?.(); M.rp?.resetReportCaches?.(); M.cov?.resetCoverageCache?.(); M.cmp?.resetCompareCache?.(); M.fv?.resetForecastCache?.(); M.sp?.resetSpotsCache?.();
     const hi = await cached('history/index.json', 25000); if (hi.ok) state.histIndex = hi.json;
     populateScope(); populateOperators(); clearNotice('stale'); renderAll();
   }, 2 * 60e3);

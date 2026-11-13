@@ -27,6 +27,7 @@
   "include": [
     "lib/*.js",
     "web/*.js",
+    "web/*.d.ts",
     "scripts/*.mjs",
     "test/*.mjs"
   ],

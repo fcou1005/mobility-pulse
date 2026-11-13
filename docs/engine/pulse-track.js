@@ -1,7 +1,7 @@
 // @ts-check
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mwf6w7ds';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js';
 
 export const TRACK_VERSION = 2;
 // Regelstand der Ereigniszählung (M-19): ändert sich mit jeder Regeländerung; je Lauf in events/<Tag>.json → runs[k][3] und runs.json

@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
 const read = (f) => readFileSync(f, 'utf8');
 
-const dsg = read('web/datenschutz.html'), index = read('web/index.html'), app = read('web/app.js'), i18n = read('web/i18n.js');
+const dsg = read('web/datenschutz.html'), index = read('web/index.html'), app = read('web/app.js'), i18n = read('web/i18n-dict.js');
 assert(!/<script/i.test(dsg) && !dsg.includes('impressum.html'), 'Datenschutzerklärung kommt ohne JavaScript aus und verweist nicht auf ein Impressum, das es noch nicht gibt');
 assert(/href="datenschutz\.html"/.test(index), 'Seitenleiste verlinkt die Datenschutzerklärung (auch ohne JavaScript)');
 assert(app.includes("t('app.legalLinks')") && (i18n.match(/"app\.legalLinks": "/g) || []).length === 2 && (i18n.match(/"html\.legalLinks": "/g) || []).length === 2, 'Fußzeile jeder Ansicht verlinkt die Datenschutzerklärung, Deutsch und Englisch');

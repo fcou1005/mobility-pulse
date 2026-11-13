@@ -45,6 +45,8 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           node scripts/typecheck.mjs
+      - name: Build mit Größenbudget (Start ≤ 180 KB, Disposition ≤ 270 KB gzip)
+        run: node scripts/build-web.mjs --budget
 
   browser:
     runs-on: ubuntu-24.04

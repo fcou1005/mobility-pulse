@@ -544,7 +544,7 @@ function bindDl(el, ctx, S0, L, G, sel) {
   el.querySelectorAll('[data-fv-dl="code"]').forEach(b => b.addEventListener('click', async () => {
     const f = b.dataset.f; if (!ENGINE_FILES.includes(f)) return;
     try {
-      const r = await fetch(new URL(`./${f}`, import.meta.url), { cache: 'no-store' }); if (!r.ok) throw new Error(String(r.status));
+      const r = await fetch(new URL(`engine/${f}`, document.baseURI), { cache: 'no-store' }); // unverändert kopiert (scripts/build-web.mjs, S3.4) if (!r.ok) throw new Error(String(r.status));
       saveText(f, (await r.text()).replace(/(from '\.\/[\w-]+\.js)\?v=[\w]+'/g, "$1'"), 'text/javascript;charset=utf-8'); // Versionsanhang des Builds entfernen = Datei wie im Repo
     } catch { window.open(`${ctx.CFG?.REPO || ''}/blob/main/lib/${f}`, '_blank', 'noopener'); }
   }));

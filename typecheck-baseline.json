@@ -1,8 +1,7 @@
 {
   "note": "Fehler je Datei aus scripts/typecheck.mjs; darf nur sinken. lib/ fehlerfrei.",
-  "total": 410,
+  "total": 393,
   "files": {
-    "docs/forecast.js": 17,
     "scripts/build-catalog.mjs": 1,
     "scripts/collect.mjs": 17,
     "scripts/smoke.mjs": 2,

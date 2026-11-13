@@ -20,6 +20,17 @@ for (const f of readdirSync(new URL('../web/', import.meta.url)).filter(f => f.e
 for (const m of readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) used.add(m[1]);
 const missing = [...used].filter(k => !(k in DICT.de));
 assert(used.size > 1900 && !missing.length, `${used.size} verwendete Schlüssel vorhanden${missing.length ? ' – fehlen: ' + missing.slice(0, 5).join(', ') : ''}`);
+// S3.5: Wörterbuch nach Bereichen – jedes Ansichtsmodul benutzt nur Schlüssel aus „core“ oder seinem eigenen Bereich (sonst fehlt der Text,
+// wenn die Ansicht allein geladen ist); „core“ = alles außerhalb von AREAS plus wörtlich in Startmodulen benutzte Schlüssel (wie im Build)
+{
+  const { AREAS, areaOfKey } = await import('../web/i18n-areas.js');
+  const keysOf = (f) => [...readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8').matchAll(/\bt(?:In)?\(\s*(?:[a-z]+\s*,\s*)?['"`]([a-zA-Z][\w$-]*(?:\.[\p{L}\w$-]+)+)['"`]/gu)].map(m => m[1]);
+  const core = new Set(['app.js', 'ui-shared.js', 'i18n.js', 'mapkeys.js', 'weather.js'].flatMap(keysOf));
+  for (const m of readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) core.add(m[1]);
+  const MOD = { 'ops.js': 'ops', 'report.js': 'report', 'forecast.js': 'forecast', 'spots.js': 'spots', 'flows.js': 'flows', 'compare.js': 'compare', 'coverage.js': 'coverage', 'status.js': 'status' };
+  const wrong = []; for (const [f, area] of Object.entries(MOD)) for (const k of keysOf(f)) { const a = core.has(k) ? 'core' : areaOfKey(k); if (a !== 'core' && a !== area) wrong.push(`${f}: ${k} (${a})`); }
+  assert(!wrong.length && Object.keys(AREAS).length === 8, `Bereiche: Ansichtsmodule nutzen nur core und den eigenen Bereich${wrong.length ? ' – ' + wrong.slice(0, 5).join(', ') : ''}`);
+}
 // Glossar: Fachbegriffe der englischen Oberfläche durchgängig
 const enAll = Object.values(DICT.en).join(' \n ');
 assert(I.GLOSSARY.length >= 50 && /trips per vehicle per day/i.test(enAll) && !/\bRVD\b/.test(enAll.replace(/RVD-/g, '')) && /\bTVD\b/.test(enAll) && /no-parking zone/i.test(enAll) && /fleet cap/i.test(enAll) && /ID rotation/.test(enAll) && /net outflow/i.test(enAll) && /shortfall/i.test(enAll),

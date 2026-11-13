@@ -65,14 +65,16 @@ async function settledText(page, v, maxMs = 12000) {
 }
 const mask = (s) => s.replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, 'hh:mm').replace(/vor \d+ (Sek|Min)\.?/g, 'vor x').replace(/\d+[,.]\d+ s\b/g, 'x s');
 
-async function pass(run, { scope, viewport, checks, tag }) {
+const i18nMissing = new Set(); // S3.5: Schlüssel, deren Wörterbuchbereich beim Zeichnen nicht geladen war (Debug-Warnung von web/i18n.js)
+async function pass(run, { scope, viewport, checks, tag, lang = null }) {
   const page = await browser.newPage({ viewport, locale: 'de-DE', timezoneId: 'Europe/Berlin' });
   await page.clock.install({ time: fx.at + 2 * 60e3 });
   await page.route('**/*', (route) => { const u = new URL(route.request().url()); if (u.hostname === '127.0.0.1') return route.continue(); blocked.set(u.hostname, (blocked.get(u.hostname) || 0) + 1); return route.abort(); });
   const errs = []; let cur = 'start';
   page.on('pageerror', e => errs.push(`${cur}: ${e.message}`));
-  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`${cur}: console ${m.text().slice(0, 200)}`); });
-  await page.goto(`http://127.0.0.1:${PORT}/?data=/d/&scope=${scope}#live`, { waitUntil: 'load', timeout: 60000 });
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`${cur}: console ${m.text().slice(0, 200)}`);
+    const w = /\[i18n\] Schlüssel fehlt: (\w+) → (\S+)/.exec(m.text()); if (w) i18nMissing.add(`${w[1]}:${w[2]} (${cur})`); });
+  await page.goto(`http://127.0.0.1:${PORT}/?data=/d/&scope=${scope}${lang ? `&lang=${lang}` : ''}#live`, { waitUntil: 'load', timeout: 60000 });
   const sums = {};
   for (const v of VIEWS) {
     cur = v; await page.evaluate((x) => { location.hash = x; }, v);
@@ -95,12 +97,15 @@ try {
   for (let run = 0; run < RUNS; run++) {
     const a = await pass(run, { scope: '08111000', viewport: { width: 1440, height: 900 }, checks: true, tag: 'Desktop Stuttgart' });
     const b = await pass(run, { scope: '08416041', viewport: { width: 390, height: 844 }, checks: false, tag: 'Handy Tübingen' });
+    if (run === 0) await pass(run, { scope: '08111000', viewport: { width: 1280, height: 900 }, checks: false, tag: 'Englisch Stuttgart', lang: 'en' });
     runs.push({ a, b });
   }
 } finally { await browser.close(); server.close(); }
 if (RUNS > 1) for (let r = 1; r < RUNS; r++) for (const side of ['a', 'b']) for (const v of VIEWS) if (runs[r][side][v] !== runs[0][side][v]) fail(`Lauf ${r + 1} weicht ab: ${side === 'a' ? 'Desktop' : 'Handy'} ${v} (${runs[0][side][v]} ≠ ${runs[r][side][v]})`);
 console.log(`Netz: nur 127.0.0.1 erreicht; abgebrochen ${[...blocked].map(([h, n]) => `${h} ×${n}`).join(', ') || 'nichts'}`);
 if (missing.size) console.log(`Im Fixture nicht vorhanden (404): ${[...missing].sort().join(', ')}`);
+if (i18nMissing.size) fail(`${i18nMissing.size} Texte ohne geladenen Wörterbuchbereich (S3.5): ${[...i18nMissing].slice(0, 12).join(', ')}`);
+else console.log('Wörterbuch: 0 fehlende Schlüssel in Deutsch und Englisch');
 console.log(`Prüfwerte: ${VIEWS.map(v => `${v}=${runs[0].a[v]}`).join(' ')}`);
 console.log(`${bad ? `${bad} Befunde` : 'Browser-Tests grün'} · ${RUNS} Lauf/Läufe · ${((Date.now() - t0) / 1000).toFixed(0)} s · Fixture ${fx.days.join(', ')}`);
 process.exit(bad ? 1 : 0);
