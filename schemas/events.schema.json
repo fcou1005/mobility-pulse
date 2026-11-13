@@ -1,0 +1,136 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/events.schema.json",
+ "title": "events/ – Ereignisse je Tag",
+ "description": "index.json listet Tage mit Ereignissen und Zellen; <Tag>.json hat Läufe und je Gruppe Stundenreihen (Fahrtbeginne, Umsetzungen, …), nur abgeschlossene Stunden.",
+ "x-version": "1.0",
+ "$defs": {
+  "index": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "days",
+    "updatedAt"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "cellDays": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "updatedAt": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    },
+    "first": {
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "day": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "day",
+    "runs",
+    "groups"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "runs": {
+     "type": "array",
+     "items": {
+      "type": "array"
+     }
+    },
+    "groups": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "start",
+       "end"
+      ],
+      "properties": {
+       "start": {
+        "type": "array"
+       },
+       "end": {
+        "type": "array"
+       },
+       "reloc": {
+        "type": "array"
+       },
+       "swap": {
+        "type": "array"
+       }
+      }
+     }
+    },
+    "hourMin": {
+     "type": "array"
+    },
+    "published": {
+     "type": "object",
+     "required": [
+      "at",
+      "complete"
+     ],
+     "properties": {
+      "at": {
+       "type": "integer",
+       "minimum": 1500000000000.0,
+       "maximum": 4100000000000.0
+      },
+      "through": {
+       "anyOf": [
+        {
+         "type": "integer",
+         "minimum": 1500000000000.0,
+         "maximum": 4100000000000.0
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "complete": {
+       "type": "boolean"
+      }
+     },
+     "description": "Veröffentlichungsstand; fehlt in Dateien vor dem 2. November 2026"
+    }
+   }
+  }
+ }
+}

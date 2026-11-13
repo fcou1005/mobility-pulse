@@ -1,0 +1,104 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/history.schema.json",
+ "title": "history/ – Bestandsverlauf je Tag",
+ "description": "index.json listet die Tage; <Tag>.json hat je Gruppe (Gemeinde|Anbieter|Art) Reihen über die Laufzeitpunkte t.",
+ "x-version": "1.0",
+ "$defs": {
+  "index": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "days",
+    "fields",
+    "updatedAt"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "updatedAt": {
+     "type": "integer",
+     "minimum": 1500000000000.0,
+     "maximum": 4100000000000.0
+    }
+   }
+  },
+  "day": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "day",
+    "t",
+    "series",
+    "fields"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "t": {
+     "type": "array",
+     "items": {
+      "type": "integer",
+      "minimum": 1500000000000.0,
+      "maximum": 4100000000000.0
+     }
+    },
+    "f": {
+     "type": "array",
+     "items": {
+      "enum": [
+       0,
+       1,
+       null
+      ]
+     },
+     "description": "je Zeitpunkt 1 = Lauf zählt, 0 = Lauf nach Lücke, null = vor Einführung des Feldes"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "series": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

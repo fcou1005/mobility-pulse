@@ -48,6 +48,13 @@ jobs:
           node scripts/typecheck.mjs
       - name: Build mit Größenbudget (Start ≤ 180 KB, Disposition ≤ 270 KB gzip)
         run: node scripts/build-web.mjs --budget
+      - name: Datenverträge (schemas/*.schema.json) für Fixture und letzten Datenstand aus dem Branch data
+        run: |
+          node test/schema.mjs
+          git fetch --depth 1 --no-tags origin data
+          mkdir -p /tmp/data
+          git archive FETCH_HEAD status.json latest.json sources.json calib.json history events cells ops boundaries forecast | tar -x -C /tmp/data
+          node test/schema.mjs /tmp/data
 
   browser:
     runs-on: ubuntu-24.04

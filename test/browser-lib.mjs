@@ -4,13 +4,15 @@
 /**
  * @param {import('playwright').Browser} browser
  * @param {{ port: number, fx: { at: number }, scope: string, viewport: { width: number, height: number }, lang?: string|null,
- *   blocked?: Map<string, number>, bypassCSP?: boolean, hash?: string, onConsole?: (text: string, cur: string) => void }} o
+ *   blocked?: Map<string, number>, bypassCSP?: boolean, hash?: string, onConsole?: (text: string, cur: string) => void,
+ *   patch?: Record<string, (doc: any) => any> }} o  patch: Fixture-Datei (Pfad unter /d/) → Änderung am JSON vor der Auslieferung
  */
-export async function openFixturePage(browser, { port, fx, scope, viewport, lang = null, blocked = new Map(), bypassCSP = false, hash = 'live', onConsole = null }) {
+export async function openFixturePage(browser, { port, fx, scope, viewport, lang = null, blocked = new Map(), bypassCSP = false, hash = 'live', onConsole = null, patch = null }) {
   const context = await browser.newContext({ viewport, locale: 'de-DE', timezoneId: 'Europe/Berlin', bypassCSP });
   const page = await context.newPage();
   await page.clock.install({ time: fx.at + 2 * 60e3 });
   await page.route('**/*', (route) => { const u = new URL(route.request().url()); if (u.hostname === '127.0.0.1') return route.continue(); blocked.set(u.hostname, (blocked.get(u.hostname) || 0) + 1); return route.abort(); });
+  for (const [file, fn] of Object.entries(patch || {})) await page.route((u) => u.pathname === `/d/${file}`, async (route) => { const r = await route.fetch(); route.fulfill({ response: r, json: fn(await r.json()) }); });
   const errs = []; let cur = 'start';
   page.on('pageerror', e => errs.push(`${cur}: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`${cur}: console ${m.text().slice(0, 200)}`); if (onConsole) onConsole(m.text(), cur); });
@@ -35,6 +37,7 @@ export const mask = (s) => s.replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, 'hh:mm').rep
 /** Zeitangaben im sichtbaren Text der Seite ersetzen, bevor ein Screenshot entsteht (gleiche Regeln wie mask) */
 export async function maskTimesInPage(page) {
   await page.evaluate(() => {
+    /** @type {Array<[RegExp, string]>} */
     const re = [[/\b\d{1,2}:\d{2}(:\d{2})?\b/g, 'hh:mm'], [/vor \d+ (Sek|Min)\.?/g, 'vor x'], [/\b\d+[,.]\d+ s\b/g, 'x s']];
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) { let t = n.nodeValue || ''; for (const [r, s] of re) t = t.replace(r, s); if (t !== n.nodeValue) n.nodeValue = t; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Sammler: ruft alle Quellen ab, normalisiert, ordnet Gemeinden zu, dedupliziert, aggregiert.
 // Schreibt data/latest.json, data/status.json, data/history/YYYY-MM-DD.json, data/snapshot/*.json, data/boundaries-active.json
-import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, rm, open } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as C from '../lib/pulse-core.js';
@@ -20,6 +20,7 @@ import * as TR from '../lib/pulse-train.js';
 import * as K from '../lib/pulse-calib.js';
 import * as OE from '../lib/pulse-oepnv.js';
 import * as SS from '../lib/pulse-status.js';
+import * as SV from '../lib/pulse-schema.js'; // S3.7: schemaVersion je Dateifamilie (schemas/<Familie>.schema.json)
 import { gzipSync, gunzipSync, inflateRawSync } from 'node:zlib';
 import { createHmac, randomBytes } from 'node:crypto';
 
@@ -628,7 +629,7 @@ const failing = FAILING.reduce((a, k) => a + (statusCounts[k] || 0), 0);
 const errorCauses = {};
 for (const r of sourceOut) { if (!FAILING.includes(r.status)) continue; r.errorCause = C.errorCause(r.errors, r.httpStatus); errorCauses[r.errorCause] = (errorCauses[r.errorCause] || 0) + 1; }
 const latest = {
-  at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt, catalogFallback: catalog.catalogFallback || null,
+  schemaVersion: SV.SCHEMA.latest, at: now, generatedAt: new Date(now).toISOString(), runMs: Date.now() - now, catalogGeneratedAt: catalog.generatedAt, catalogFallback: catalog.catalogFallback || null,
   boundaries: boundaries ? { count: boundaries.features.length, attribution: boundaries.attribution, source: boundaries.source } : null,
   counts: { sources: sourceOut.length, byStatus: statusCounts, vehiclesRaw: allVehicles.length, vehicles: dv.vehicles.length, stationsRaw: allStations.length, stations: ds.stations.length, municipalities: munis.size, municipalitiesShown: presence ? Object.values(muniOut).filter(V.muniShown).length : munis.size, groups: groups.size, failing, errorCauses, retired: statusCounts.retired || 0, duplicates: statusCounts.duplicate || 0 },
   dedupe: { ...dv.stats, stationDuplicates: ds.duplicates, sourceDuplicates: dupOf.size, mirrorSources: mirrorInfo.size },
@@ -994,12 +995,12 @@ for (const [key, st] of groups) { if (key.startsWith('DE||')) continue; const se
 for (const key of Object.keys(hist.series)) if (key.startsWith('DE||') && !totals[key.slice(4)]) { const ser = serOf(key); for (const f of FIELDS) ser[f].push(null); }
 for (const ty of Object.keys(totals)) { const ser = serOf(`DE||${ty}`); for (const f of FIELDS) ser[f].push(totals[ty][f]); }
 hist.fields = FIELDS;
-await writeFile(histFile, JSON.stringify(hist));
+await writeFile(histFile, JSON.stringify(SV.withSchema('history', hist)));
 // alte Tage entfernen
 const days = (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
 for (const f of days.slice(0, Math.max(0, days.length - HISTORY_DAYS))) await rm(path.join(DATA, 'history', f));
 const histDays = (await readdir(path.join(DATA, 'history'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort();
-await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ days: histDays, fields: FIELDS, updatedAt: now }));
+await writeFile(path.join(DATA, 'history', 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.history, days: histDays, fields: FIELDS, updatedAt: now }));
 // Tagesmittel über mehrere Tage (Vertrag 6): je Schlüssel und Tag [available, total, disabled, lowBattery, Läufe]; Läufe mit Flag 0 nicht im Mittel.
 // Frühere Tage werden aus der vorhandenen daily.json übernommen, nur der aktuelle Tag (und fehlende) neu gerechnet.
 {
@@ -1075,7 +1076,7 @@ PH.phase('ereignisse');
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
   const evWorkFile = TRACK_DIR ? path.join(TRACK_DIR, 'events-work.json.gz') : null;
   // S1.7: Zwischenstand (complete false) ohne Dauer-/Distanzsummen und Kleinstgruppen (T.publicEventsDoc)
-  const evPublish = async (doc, complete) => { const str = JSON.stringify({ ...T.publicEventsDoc(doc, complete), published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } }); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
+  const evPublish = async (doc, complete) => { const str = JSON.stringify(SV.withSchema('events', { ...T.publicEventsDoc(doc, complete), published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } })); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
   let evWork = null, evPub = null, evFinal = null; // evPub: veröffentlichter Stand des laufenden Tags, evFinal: in diesem Lauf abgeschlossener Vortag
   if (evWorkFile) {
     evWork = await readState(evWorkFile);
@@ -1087,7 +1088,7 @@ PH.phase('ereignisse');
   // Carsharing ohne sichtbare Buchungen (tr.carTrips.unmeasurable): auch frühere Läufe des Tags aus der Tagesdatei nehmen (keine Nullen als Messung)
   { const mut = new Set(tr.carTrips?.unmeasurable || []); if (mut.size) for (const k of Object.keys(evDoc.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) delete evDoc.groups[k]; } }
   if (evWorkFile) await writeFile(evWorkFile, gzipSync(JSON.stringify(evDoc)));
-  else { await writeFile(evFile, JSON.stringify(evDoc)); evPub = evDoc; }
+  else { await writeFile(evFile, JSON.stringify(SV.withSchema('events', evDoc))); evPub = evDoc; }
   if (!evPub && existsSync(evFile)) evPub = JSON.parse(await readFile(evFile, 'utf8')); // in dieser Stunde schon veröffentlichter Stand
   // Gruppen-Ereignisse (≥ T.GROUP_MIN = 4 Fahrzeuge eines Anbieters zusammen ausgebracht/eingesammelt): dauerhaft je Monat in
   // groups/<JJJJ-MM>.json (Monat nach Europe/Berlin, nie gekürzt) mit Verzeichnis groups/index.json; groups.json (30 Tage) bleibt als
@@ -1175,7 +1176,7 @@ PH.phase('ereignisse');
     await mkdir(path.join(cellsDir, doc.day), { recursive: true });
     for (const [st, m] of Object.entries(doc.states || {})) {
       const sp = T.suppressCells(m);
-      await writeFile(path.join(cellsDir, doc.day, `${st}.json`), JSON.stringify({ day: doc.day, state: st, ...cellMeta(doc), fields: CELL_FIELDS, munis: sp.munis, below: sp.below, belowFields: BELOW_FIELDS, minCount: T.CELL_MIN, suppress: T.SUPPRESS_VERSION, published: { at: now, through: doc.lastAt ?? null, complete } }));
+      await writeFile(path.join(cellsDir, doc.day, `${st}.json`), JSON.stringify({ schemaVersion: SV.SCHEMA.cells, day: doc.day, state: st, ...cellMeta(doc), fields: CELL_FIELDS, munis: sp.munis, below: sp.below, belowFields: BELOW_FIELDS, minCount: T.CELL_MIN, suppress: T.SUPPRESS_VERSION, published: { at: now, through: doc.lastAt ?? null, complete } }));
     }
   };
   let cellWork = null;
@@ -1216,7 +1217,7 @@ PH.phase('ereignisse');
         // Sekundärunterdrückung nachträglich (ab 6.11.2026): einzeln unterdrückte Zelle je Gemeinde × Band nicht aus below ablesbar
         else if (perState && !(doc.suppress >= T.SUPPRESS_VERSION)) T.secondarySuppress(doc.munis, doc.below || {}, { min: doc.minCount });
         if (perState) doc.suppress = T.SUPPRESS_VERSION;
-        await writeFile(f, JSON.stringify(doc));
+        await writeFile(f, JSON.stringify(perState ? SV.withSchema('cells', doc) : doc));
       }
     }
   } catch (e) { log(`Zellen-Reparatur: ${e.message}`); }
@@ -1310,7 +1311,7 @@ PH.phase('ereignisse');
       o.stations.push([+s.lat.toFixed(5), +s.lon.toFixed(5), idx(o.ops, s.operator), String(s.name || '').slice(0, 50), s.bookable ?? 0, s.docksAvailable ?? null, s.capacity ?? null, idx(o.munis, s.ags), s.renting === false ? 0 : 1, s.returning === false ? 0 : 1, s.physicalAvailable ?? 0, s.isVirtual === true ? 1 : s.isVirtual === false ? 0 : null]);
     }
     let bytes = 0;
-    for (const [st, o] of byState) { const doc = JSON.stringify({ at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitKlasseMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): standzeitKlasseMin = Untergrenze der Standzeit-Klasse in Minuten (0 = unter 6 h, 360 = 6–24 h, ab 1440 ganze Tage; minutengenau wird nicht veröffentlicht, weil sie zeigt, wann an einer Adresse die letzte Fahrt endete), reichweiteKm ganze km (Quellen mit eigener Reichweiten-Skala, Feld reichweiteSchwelleKm gesetzt: 0,1 km), reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, die Klasse ist ein Mindestwert; standzeitKlasseMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
+    for (const [st, o] of byState) { const doc = JSON.stringify({ schemaVersion: SV.SCHEMA.ops, at: now, state: st, types: TYPES, trackStart: tr.state.trackStart ?? null, vehicleFields: 'lat,lon,op,type,flags(1=reserviert,2=gesperrt),akku%,reichweiteKm,standzeitKlasseMin,gemeinde,reichweiteAbgeleitet,reichweiteSchwelleKm,reichweiteKonstant,standzeitMindestens', vehicleFieldsNote: 'Felder am Zeilenende ohne Wert entfallen (fehlend = null): standzeitKlasseMin = Untergrenze der Standzeit-Klasse in Minuten (0 = unter 6 h, 360 = 6–24 h, ab 1440 ganze Tage; minutengenau wird nicht veröffentlicht, weil sie zeigt, wann an einer Adresse die letzte Fahrt endete), reichweiteKm ganze km (Quellen mit eigener Reichweiten-Skala, Feld reichweiteSchwelleKm gesetzt: 0,1 km), reichweiteSchwelleKm null = Standardschwelle, reichweiteKonstant 1 = Reichweite der Quelle konstant (für Energie und Akkutausch unbekannt), standzeitMindestens 1 = seit Beginn der Verfolgung (trackStart) unbewegt, die Klasse ist ein Mindestwert; standzeitKlasseMin null = unbekannt oder für die Quelle unbrauchbar (sources[].idleUnusable)', stationFields: 'lat,lon,op,name,buchbar,freiePlaetze,kapazitaet,gemeinde,vermietend,rueckgabe,physisch,virtuell', ...o }); bytes += doc.length; await writeFile(path.join(DATA, 'ops', `${st}.json`), doc); }
     log(`Ops-Flotte: ${byState.size} Länder, ${(bytes / 1e6).toFixed(1)} MB`);
   }
   // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
@@ -1374,7 +1375,7 @@ PH.phase('ereignisse');
   }
   for (const f of cellDays.filter(f => !f.endsWith('.json')).slice(0, -14)) await rm(path.join(cellsDir, f), { recursive: true, force: true });
   for (const f of cellDays.filter(f => f.endsWith('.json')).slice(0, -3)) await rm(path.join(cellsDir, f));
-  await writeFile(path.join(DATA, 'events', 'index.json'), JSON.stringify({ days: (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), cellDays: (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort(), updatedAt: now, first: tr.first }));
+  await writeFile(path.join(DATA, 'events', 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.events, days: (await readdir(path.join(DATA, 'events'))).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort(), cellDays: (await readdir(cellsDir)).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort(), updatedAt: now, first: tr.first }));
   const ev = [...tr.hourly.values()].reduce((a, h) => { a.start += h.start.reduce((x, y) => x + y, 0); a.end += h.end.reduce((x, y) => x + y, 0); a.reloc += h.reloc.reduce((x, y) => x + y, 0); a.swap += h.swap.reduce((x, y) => x + y, 0); return a; }, { start: 0, end: 0, reloc: 0, swap: 0 });
   log(`Verfolgung: ${Object.keys(tr.state.v).length} Kennungen im Zustand${tr.first ? ' (erster Lauf)' : ` · Fahrten begonnen ${ev.start}, beendet ${ev.end}, Umsetzungen ${ev.reloc}, Akkutausch ${ev.swap}`} · lange Standzeiten ${tr.idleLong.length}`);
 }
@@ -1574,7 +1575,7 @@ if (process.env.FORECAST !== '0') {
           if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
           if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
           await mkdir(fdir, { recursive: true });
-          await writeFile(fL, JSON.stringify(res.latest)); await writeFile(fG, JSON.stringify(res.log)); await writeFile(fS, JSON.stringify(res.series));
+          await writeFile(fL, JSON.stringify(SV.withSchema('forecast', res.latest))); await writeFile(fG, JSON.stringify(SV.withSchema('forecast', res.log))); await writeFile(fS, JSON.stringify(SV.withSchema('forecast', res.series)));
           if (res.model) await writeFile(path.join(fdir, 'model.json'), JSON.stringify(res.model)); // vortrainiertes Modell zum Mitnehmen (tools/prognose-modell.mjs)
           const l = res.latest;
           log(`Prognose${fam === 'micro' ? '' : ` (${fam})`}: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
@@ -1586,7 +1587,7 @@ if (process.env.FORECAST !== '0') {
       const famSeries = []; for (const fam of FC.FAMILIES) { const f = path.join(DATA, FC.FAMILY_DIR[fam], 'series.json'), ser = await rd(f); if (ser?.version === 1) famSeries.push([fam, f, ser]); }
       if (tsfmUrl && famSeries.length) {
         const r = await fetchJson(tsfmUrl);
-        if (r.ok && r.json?.version === 1 && r.json.groups) for (const [fam, f, ser] of famSeries) if (r.json.at !== ser.chronos?.at || !ser.chronos?.backDays) { CH.chronosSeries(ser, r.json); await writeFile(f, JSON.stringify(ser)); log(`Chronos: Stundenreihen${fam === 'micro' ? '' : ` (${fam})`} auf den Lauf ${r.json.at} gebracht`); }
+        if (r.ok && r.json?.version === 1 && r.json.groups) for (const [fam, f, ser] of famSeries) if (r.json.at !== ser.chronos?.at || !ser.chronos?.backDays) { CH.chronosSeries(ser, r.json); await writeFile(f, JSON.stringify(SV.withSchema('forecast', ser))); log(`Chronos: Stundenreihen${fam === 'micro' ? '' : ` (${fam})`} auf den Lauf ${r.json.at} gebracht`); }
       }
     }
   } catch (e) { log(`Prognose: ${e.message} – alte Dateien bleiben`); }
@@ -1660,7 +1661,7 @@ if (process.env.CALIB !== '0') {
       const breaks = daily?.breaks || null, res = K.calibrationFromDocs({ ref, docs: D, hists: H, latest, breaks, langs: ['de', 'en'] }), langs = res.langs, kinds = res.kinds, own = res.own;
       for (const c of Object.values(langs)) delete c.kinds;
       // Umsatz-Prüfwert Voi (€ je Fahrzeug und Tag) bleibt in der Ansicht (braucht Tarife und Annahmen der Seite)
-      await writeFile(cf, JSON.stringify({ version: 1, at: now, latestAt: latest.at, days: D.map(d => d.day), breaks, kinds, own, langs }));
+      await writeFile(cf, JSON.stringify({ schemaVersion: SV.SCHEMA.calib, version: 1, at: now, latestAt: latest.at, days: D.map(d => d.day), breaks, kinds, own, langs }));
       log(`Kalibrierung vorgerechnet: ${D.length} Tage, k ${langs.de?.k?.applied ? langs.de.k.k.toFixed(2) : 'nicht angewandt'} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
     }
   } catch (e) { log(`Kalibrierung: ${e.message}`); }
@@ -1680,14 +1681,31 @@ if (boundaries) {
     for (const f of await readdir(bDir)) if (/^[A-Z]{2}\.json$/.test(f) && !byState.has(f.slice(0, 2))) await rm(path.join(bDir, f));
     const states = {};
     for (const [st, list] of [...byState].sort((a, b) => a[0].localeCompare(b[0]))) {
-      const doc = JSON.stringify({ type: 'FeatureCollection', state: st, attribution: boundaries.attribution, license: boundaries.license, generatedAt: latest.generatedAt, features: list });
+      const doc = JSON.stringify({ schemaVersion: SV.SCHEMA.boundaries, type: 'FeatureCollection', state: st, attribution: boundaries.attribution, license: boundaries.license, generatedAt: latest.generatedAt, features: list });
       await writeFile(path.join(bDir, `${st}.json`), doc);
       const bb = list.map(f => f.bbox).filter(Boolean);
       states[st] = { features: list.length, bytes: doc.length, bbox: bb.length ? [Math.min(...bb.map(b => b[0])), Math.min(...bb.map(b => b[1])), Math.max(...bb.map(b => b[2])), Math.max(...bb.map(b => b[3]))] : null, ags: list.map(f => f.properties.ags) };
     }
-    await writeFile(path.join(bDir, 'index.json'), JSON.stringify({ version: 1, generatedAt: latest.generatedAt, attribution: boundaries.attribution, license: boundaries.license, bboxFields: 'minLon,minLat,maxLon,maxLat', states }));
+    await writeFile(path.join(bDir, 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.boundaries, version: 1, generatedAt: latest.generatedAt, attribution: boundaries.attribution, license: boundaries.license, bboxFields: 'minLon,minLat,maxLon,maxLat', states }));
   } catch (e) { log(`Grenzen je Land: ${e.message}`); }
   log(`Aktive Gemeinden: ${feats.length}`);
+}
+PH.phase('datenvertraege');
+// S3.7: Dateien der Vertragsfamilien (lib/pulse-schema.js), die noch ohne schemaVersion im Datenzweig liegen (frühere Tage, seltener
+// geschriebene Dateien), einmalig nachstempeln. Danach kostet die Prüfung je Datei 40 gelesene Bytes.
+{
+  let n = 0; const head = Buffer.alloc(40);
+  try {
+    const rels = (await readdir(DATA, { recursive: true })).map(String).filter(f => f.endsWith('.json') && SV.familyOf(f.split(path.sep).join('/')));
+    for (const rel of rels) {
+      const f = path.join(DATA, rel), fh = await open(f); let got = 0;
+      try { ({ bytesRead: got } = await fh.read(head, 0, head.length, 0)); } finally { await fh.close(); }
+      if (/^\{\s*"schemaVersion"/.test(head.toString('utf8', 0, got))) continue;
+      const doc = JSON.parse(await readFile(f, 'utf8')); if (!doc || typeof doc !== 'object' || Array.isArray(doc)) continue;
+      await writeFile(f, JSON.stringify(SV.withSchema(SV.familyOf(rel.split(path.sep).join('/')).family, doc))); n++;
+    }
+    if (n) log(`Datenverträge: ${n} ältere Dateien mit schemaVersion versehen`);
+  } catch (e) { log(`Datenverträge: ${e.message}`); }
 }
 PH.phase('abschluss');
 // Namensnennung und Lizenzen des Datenstands (DATA-LICENSE.md im Datenzweig)

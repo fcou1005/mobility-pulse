@@ -1,0 +1,171 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/status.schema.json",
+ "title": "status.json – Zustand des letzten Sammler-Laufs",
+ "description": "Kleine Datei, die das Dashboard zuerst lädt: Zeitpunkt, Laufzeit, Phasen, Budget und Trend (S3.2).",
+ "x-version": "2.0",
+ "type": "object",
+ "required": [
+  "schemaVersion",
+  "at",
+  "generatedAt",
+  "complete",
+  "phases",
+  "budget"
+ ],
+ "properties": {
+  "schemaVersion": {
+   "type": "string",
+   "pattern": "^2\\.\\d+$",
+   "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+  },
+  "at": {
+   "type": "integer",
+   "minimum": 1500000000000.0,
+   "maximum": 4100000000000.0
+  },
+  "generatedAt": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}"
+  },
+  "complete": {
+   "type": "boolean"
+  },
+  "runMs": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ]
+  },
+  "level": {
+   "enum": [
+    "ok",
+    "warn",
+    "fail",
+    null
+   ]
+  },
+  "phases": {
+   "type": "array",
+   "items": {
+    "type": "array",
+    "prefixItems": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "number",
+      "minimum": 0
+     }
+    ],
+    "minItems": 2,
+    "maxItems": 2
+   }
+  },
+  "budget": {
+   "type": "object",
+   "required": [
+    "warnS",
+    "failS"
+   ],
+   "properties": {
+    "warnS": {
+     "type": "number"
+    },
+    "failS": {
+     "type": "number"
+    },
+    "recentRuns": {
+     "type": "integer"
+    },
+    "baseDays": {
+     "type": "integer"
+    },
+    "factor": {
+     "type": "number"
+    },
+    "staleMin": {
+     "type": "number"
+    }
+   }
+  },
+  "trend": {
+   "anyOf": [
+    {
+     "type": "object",
+     "required": [
+      "alarm"
+     ],
+     "properties": {
+      "recentS": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "baseS": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "ratio": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "alarm": {
+       "type": "boolean"
+      },
+      "n": {
+       "type": "integer"
+      }
+     }
+    },
+    {
+     "type": "null"
+    }
+   ]
+  },
+  "counts": {
+   "anyOf": [
+    {
+     "type": "object"
+    },
+    {
+     "type": "null"
+    }
+   ]
+  },
+  "byStatus": {
+   "anyOf": [
+    {
+     "type": "object",
+     "additionalProperties": {
+      "type": "integer"
+     }
+    },
+    {
+     "type": "null"
+    }
+   ]
+  }
+ }
+}

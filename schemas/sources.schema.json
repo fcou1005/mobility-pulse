@@ -1,0 +1,94 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/sources.schema.json",
+ "title": "sources.json – Quellenkatalog",
+ "description": "Von scripts/build-catalog.mjs aus den Verzeichnissen gebaut; je Quelle Kennung, Anbieter, API und Adresse.",
+ "x-version": "1.0",
+ "type": "object",
+ "required": [
+  "schemaVersion",
+  "generatedAt",
+  "count",
+  "sources"
+ ],
+ "properties": {
+  "schemaVersion": {
+   "type": "string",
+   "pattern": "^1\\.\\d+$",
+   "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+  },
+  "generatedAt": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}"
+  },
+  "count": {
+   "type": "integer"
+  },
+  "directories": {
+   "type": "object"
+  },
+  "sources": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "operator",
+     "api",
+     "url"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "operator": {
+      "type": "string"
+     },
+     "api": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     },
+     "priority": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "location": {
+      "anyOf": [
+       {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "object"
+         }
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

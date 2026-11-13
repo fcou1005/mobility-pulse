@@ -29,7 +29,7 @@ export async function startFixtureServer(port, { missing = new Set(), bytes = nu
       res.writeHead(200, head).end(b);
     } catch { if (u.startsWith('/d/')) missing.add(u.slice(3)); res.writeHead(404).end(); }
   });
-  await new Promise(r => server.listen(port, '127.0.0.1', r));
+  await new Promise(r => server.listen(port, '127.0.0.1', () => r(null)));
   return server;
 }
 

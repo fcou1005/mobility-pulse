@@ -7,7 +7,8 @@ import { mapKeys } from './mapkeys.js';
 import { weatherFor } from './weather.js';
 import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn, ensureI18n } from './i18n.js';
-import { idleClassText } from './pulse-ops.js';
+import { idleClassText } from './pulse-idle.js';
+import { checkMajor } from './pulse-schema.js';
 const flagText = (f) => (f == null ? f : tx(f)); // Flags/Hinweise aus lib/* (deutsche Kennungstexte) in der Sprache der Seite
 // ---------- Ansichtsmodule bei Bedarf laden (S3.4): Modul und sein Wörterbuchbereich zusammen; M[k] = geladenes Modul ----------
 const LAZY = { ops: [() => import('./ops.js'), 'ops'], rp: [() => import('./report.js'), 'report'], fl: [() => import('./flows.js'), 'flows'], cov: [() => import('./coverage.js'), 'coverage'],
@@ -150,12 +151,21 @@ async function getJson(url, { timeout = 25000 } = {}) {
             text += dec.decode();
           } else text = await r.text();
           json = C.parseJsonSafe(text); // Fremdtext ohne HTML-Wirkung (lib/pulse-core.js safeText)
+          if (json && typeof url === 'string' && url.startsWith(CFG.DATA)) schemaHint(url.slice(CFG.DATA.length).split('?')[0], json);
         } catch (e) { error = e.message === t('app.tooLarge') ? t('app.tooLarge') : e.name === 'AbortError' ? 'Timeout' : t('app.notJson'); }
       }
     }
     return { ok: r.ok && !!json, status: r.status, json, error, latencyMs: Math.round(performance.now() - t0) };
   } catch (e) { return { ok: false, status: 0, json: null, error: e.name === 'AbortError' ? 'Timeout' : t('common.netCors'), latencyMs: Math.round(performance.now() - t0) }; }
   finally { clearTimeout(tq); }
+}
+// S3.7 Datenverträge: passt die MAJOR-Version einer Datei nicht (lib/pulse-schema.js), einmal je Familie ein Hinweis – die Seite rechnet
+// trotzdem weiter, aber der Leser weiß, dass Zahlen aus dieser Datei falsch sein können. Dateien ohne schemaVersion gelten als verträglich.
+const SCHEMA_SEEN = new Set();
+function schemaHint(file, json) {
+  const bad = checkMajor(file, json); if (!bad || SCHEMA_SEEN.has(bad.family)) return;
+  SCHEMA_SEEN.add(bad.family); console.warn('[Datenformat]', file, bad);
+  notice(() => t('app.schemaMismatch', { file: esc(file), got: esc(bad.got), expected: esc(bad.expected) }), 'warn', `schema-${bad.family}`);
 }
 // Jede Datei des Datenstands nur einmal laden: das Promise wird sofort gemerkt (parallele Aufrufer teilen sich den Download).
 // Fehlende Dateien (404) bleiben gemerkt bis zum nächsten Datenstand; Netzfehler/Timeouts dürfen nach 30 s erneut versucht werden.

@@ -73,6 +73,13 @@ try {
     if (run === 0) await pass(run, { scope: '08111000', viewport: { width: 1280, height: 900 }, checks: false, tag: 'Englisch Stuttgart', lang: 'en' });
     runs.push({ a, b });
   }
+  // S3.7: passt die MAJOR-Version einer Datei nicht zur Seite, erscheint ein Hinweis (hier status.json mit 9.0)
+  if (!ONLY) {
+    const { page, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, patch: { 'status.json': (d) => ({ ...d, schemaVersion: '9.0' }) } });
+    const ok = await page.waitForFunction(() => /Datenformat passt nicht zur Seite: status\.json hat Version 9\.0/.test(document.getElementById('notice')?.innerText || ''), null, { timeout: 15000 }).then(() => true, () => false);
+    if (ok) console.log('✓ Hinweis bei abweichender Formatversion (status.json 9.0)'); else fail('kein Hinweis bei abweichender Formatversion (status.json 9.0)');
+    await close();
+  }
 } finally { await browser.close(); server.close(); }
 if (RUNS > 1) for (let r = 1; r < RUNS; r++) for (const side of ['a', 'b']) for (const v of VIEWS) if (runs[r][side][v] !== runs[0][side][v]) fail(`Lauf ${r + 1} weicht ab: ${side === 'a' ? 'Desktop' : 'Handy'} ${v} (${runs[0][side][v]} ≠ ${runs[r][side][v]})`);
 console.log(`Netz: nur 127.0.0.1 erreicht; abgebrochen ${[...blocked].map(([h, n]) => `${h} ×${n}`).join(', ') || 'nichts'}`);

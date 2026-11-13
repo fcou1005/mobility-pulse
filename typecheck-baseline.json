@@ -1,6 +1,6 @@
 {
   "note": "Fehler je Datei aus scripts/typecheck.mjs; darf nur sinken. lib/ fehlerfrei.",
-  "total": 393,
+  "total": 392,
   "files": {
     "scripts/build-catalog.mjs": 1,
     "scripts/collect.mjs": 17,
@@ -10,7 +10,6 @@
     "test/bench/bench.mjs": 1,
     "test/bench/check.mjs": 1,
     "test/bench/sim.mjs": 21,
-    "test/browser.mjs": 1,
     "test/core.test.mjs": 11,
     "test/econ.test.mjs": 75,
     "test/fixtures/extra-server.mjs": 2,

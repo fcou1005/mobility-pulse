@@ -1,0 +1,209 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/latest.schema.json",
+ "title": "latest.json – Bestand des letzten Laufs",
+ "description": "Quellen mit Status und Lizenz, Gemeinden, Gruppen je Gemeinde|Anbieter|Art, Summen und Messbasis.",
+ "x-version": "1.0",
+ "type": "object",
+ "required": [
+  "schemaVersion",
+  "at",
+  "generatedAt",
+  "counts",
+  "sources",
+  "municipalities",
+  "groups"
+ ],
+ "properties": {
+  "schemaVersion": {
+   "type": "string",
+   "pattern": "^1\\.\\d+$",
+   "description": "Formatversion MAJOR.MINOR; MAJOR steigt bei unverträglichen Änderungen, MINOR bei neuen Feldern"
+  },
+  "at": {
+   "type": "integer",
+   "minimum": 1500000000000.0,
+   "maximum": 4100000000000.0
+  },
+  "generatedAt": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}"
+  },
+  "runMs": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ]
+  },
+  "counts": {
+   "type": "object",
+   "required": [
+    "sources",
+    "vehicles"
+   ],
+   "properties": {
+    "sources": {
+     "type": "integer"
+    },
+    "vehicles": {
+     "type": "integer"
+    },
+    "stations": {
+     "type": "integer"
+    },
+    "municipalities": {
+     "type": "integer"
+    },
+    "byStatus": {
+     "type": "object"
+    }
+   }
+  },
+  "thresholds": {
+   "type": "object"
+  },
+  "energy": {
+   "type": "object"
+  },
+  "sources": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "operator",
+     "status"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "operator": {
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "api": {
+      "type": "string"
+     },
+     "url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "status": {
+      "type": "string"
+     },
+     "httpStatus": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "latencyMs": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "licenseId": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "attribution": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "municipalities": {
+      "anyOf": [
+       {
+        "type": "object"
+       },
+       {
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "counts": {
+      "anyOf": [
+       {
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "municipalities": {
+   "type": "object",
+   "propertyNames": {
+    "type": "string",
+    "pattern": "^\\d{8}$"
+   },
+   "additionalProperties": {
+    "type": "object"
+   }
+  },
+  "groups": {
+   "type": "object",
+   "propertyNames": {
+    "pattern": "^\\d{8}\\|[^|]+\\|[a-z]+$"
+   },
+   "additionalProperties": {
+    "type": "object"
+   }
+  },
+  "totals": {
+   "type": "object"
+  },
+  "measure": {
+   "type": "object"
+  },
+  "presence": {
+   "type": "object"
+  }
+ }
+}

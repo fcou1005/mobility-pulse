@@ -5,6 +5,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fetchLimited } from '../lib/pulse-core.js';
+import { SCHEMA } from '../lib/pulse-schema.js';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const CACHE = process.env.CATALOG_CACHE || path.join(ROOT, 'data', 'cache');
@@ -222,6 +223,7 @@ for (const dir of ['mobilitydata', 'mobidata_bw', 'mobidrom_nrw', 'citybikes']) 
 }
 const list = [...new Set(sources.values())].sort((a, b) => a.operator.localeCompare(b.operator) || a.id.localeCompare(b.id));
 const out = {
+  schemaVersion: SCHEMA.sources, // S3.7 (schemas/sources.schema.json)
   generatedAt: new Date().toISOString(),
   count: list.length,
   ...(catalogFallback.length ? { catalogFallback } : {}),
