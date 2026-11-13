@@ -804,3 +804,28 @@ const cnt = (o) => Object.values(o).reduce((a, m) => a + Object.values(m).reduce
   const gapDoc = T.mergeHourly(null, new Map([['A|Voi|scooter', T.emptyHourly()]]), { day, at, dt: 50 * 60e3, srcModes: {}, gap: true });
   assert(!gapDoc.obsP && !gapDoc.pVersion, 'Lauf nach Lücke: keine anteiligen Werte');
 }
+{ // S1.6: Moduswechsel einer Quelle im Tagesverlauf; S1.7: Zwischenstand ohne Dauer/Distanz und Kleinstgruppen
+  const day = '2026-11-10', at = Date.parse('2026-11-10T09:00:00Z');
+  let doc = T.mergeHourly(null, new Map(), { day, at, dt: 18 * 60e3, srcModes: { a: 'stable', b: 'unknown' } });
+  doc = T.mergeHourly(doc, new Map(), { day, at: at + 18 * 60e3, dt: 18 * 60e3, srcModes: { a: 'rotating', b: 'stable' } });
+  assert(doc.modeChanges?.length === 1 && doc.modeChanges[0][1] === 'a' && doc.modeChanges[0][2] === 'stable' && doc.modeChanges[0][3] === 'rotating', 'S1.6: Moduswechsel stabil → rotierend protokolliert, „unbekannt“ → stabil nicht');
+  const g = (n) => ({ ...T.emptyHourly(), start: Object.assign(new Array(24).fill(0), { 9: n }), tripDurSum: 600e3 * n, tripDurN: n, tripDistSum: 900 * n, tripDistN: n });
+  const full = { day, runs: [], groups: { 'A|Voi|scooter': g(5), 'A|Bolt|scooter': g(1) } };
+  const mid = T.publicEventsDoc(full, false), fin = T.publicEventsDoc(full, true);
+  assert(!mid.groups['A|Bolt|scooter'] && mid.groups['A|Voi|scooter'].start[9] === 5 && T.PUB_WITHHELD.every(f => !(f in mid.groups['A|Voi|scooter'])) && mid.withheld.groups === 1
+    && fin === full && fin.groups['A|Bolt|scooter'].tripDurN === 1 && full.groups['A|Voi|scooter'].tripDurN === 5,
+    'S1.7: Zwischenstand ohne Dauer-/Distanzsummen und ohne Gruppen unter 3 Fahrtbeginnen; Tagesend-Stand vollständig, Arbeitsstand unverändert');
+  // Differenz zweier Stundenstände: kein Feld, aus dem Dauer oder Distanz einer Einzelfahrt folgt
+  const later = T.publicEventsDoc({ ...full, groups: { ...full.groups, 'A|Voi|scooter': g(6) } }, false);
+  assert(Object.keys(later.groups['A|Voi|scooter']).every(f => !/^trip(Dur|Dist)/.test(f)), 'S1.7: Differenz zweier Zwischenstände verrät keine Dauer oder Distanz einer Fahrt');
+}
+{ // S1.9 (Kandidat): gemessene Dauer nur aus stabilen Kennungen – bei rotierender Quelle zählt die Rückkehr derselben Kennung keine Dauer
+  const N = await import('../lib/pulse-track-next.js'), recs = [{ id: 'rot', status: 'live', latencyMs: 0 }], t0 = Date.parse('2026-11-10T09:00:00Z');
+  const W = (k, extra = []) => [...[...Array(30).keys()].map(i => ({ operator: 'Lime', rawId: `r${k}-${i}`, lat: 48.52 + i * 0.002, lon: 9.05, batteryPct: 40 + i, disabled: false, reserved: false, type: 'scooter', ags: '08416041', sourceId: 'rot' })), ...extra];
+  const X = (lat) => ({ operator: 'Lime', rawId: 'x', lat, lon: 9.2, batteryPct: 99, disabled: false, reserved: false, type: 'scooter', ags: '08416041', sourceId: 'rot' });
+  const plan = [[X(48.6)], [X(48.6)], [X(48.6)], [X(48.6)], [], [X(48.605)]];
+  let a = null, b = null, durA = 0, durB = 0;
+  plan.forEach((x, k) => { const o = { vehicles: W(k, x), stations: [], sourceRecs: recs, now: t0 + k * 18 * 60e3 }; a = T.trackRun(a?.state, o); b = N.trackRun(b?.state, o);
+    for (const h of a.hourly.values()) durA += h.tripDurN; for (const h of b.hourly.values()) durB += h.tripDurN; });
+  assert(a.srcModes.rot !== 'stable' && b.srcModes.rot !== 'stable' && durA === 1 && durB === 0, `S1.9: Quelle mit wechselnden Kennungen (${b.srcModes.rot}) – Rückkehr nach 18 Min. 556 m weiter: geltend ${durA} gemessene Dauer, Kandidat ${durB}`);
+}

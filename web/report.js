@@ -1722,7 +1722,7 @@ export const mbTypeName = (k) => t(`mb.type${k}`);
  * schon geladenen Tagesdateien (state.usage.docs). land: Land des Gebiets (null = Deutschland), days: nur diese Tage, rule: Regelstand.
  */
 export function mbBase(state, { land = null, days = null, rule = undefined } = {}) {
-  let md = state?.latest?.measure?.version === 1 ? state.latest.measure.days || {} : null;
+  let md = state?.latest?.measure?.version >= 1 ? state.latest.measure.days || {} : null;
   if (!md) { md = {}; for (const d of Object.values(state?.usage?.docs || {})) if (d?.day) md[d.day] = mbMeasureDay(d); }
   if (days) { const keep = new Set(days); md = Object.fromEntries(Object.entries(md).filter(([d]) => keep.has(d))); }
   return mbMeasureBase(md, { land, calendar: state?.calendar || null, ...(rule !== undefined ? { rule } : {}) });
@@ -1756,7 +1756,8 @@ export function mbChecksText(c) {
   if (!c) return '';
   const T0 = { pickup: () => t('mb.ck.pickup', { share: mbPct(c.pickupShare), r: mbNum(c.r, 2) }), se: () => t('mb.ck.se', { v: mbNum(c.se, 2) }), swap0: () => t('mb.ck.swap0', { rides: mbNum(c.rides) }),
     hide: () => t('mb.ck.hide', { share: mbPct(c.hideShare) }), idle: () => t('mb.ck.idle', { share: mbPct(c.idleUnusable) }), batteryFloor: () => t('mb.ck.floor', { v: mbNum(c.batteryFloor) }),
-    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }), relHigh: () => t('mb.ck.relHigh', { f: mbNum(c.relHigh, 1), m: mbNum(c.relMedian, 2) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
+    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }), relHigh: () => t('mb.ck.relHigh', { f: mbNum(c.relHigh, 1), m: mbNum(c.relMedian, 2) }),
+    relocTrips: () => t('mb.ck.relocTrips', { share: mbPct(c.relocShare), r: mbNum(c.relocR, 2) }), modeFlip: () => t('mb.ck.modeFlip', { n: mbNum(c.modeChanges) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
   return (c.flags || []).map(f => (T0[f] ? T0[f]() : f)).join(' · ');
 }
 export const mbLevel = (lv) => (lv === 'bad' ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${t('mb.red')}</span>` : lv === 'warn' ? `<span class="rp-status near"><i aria-hidden="true">!</i>${t('mb.yellow')}</span>` : `<span class="rp-status ok"><i aria-hidden="true">✓</i>${t('mb.green')}</span>`);

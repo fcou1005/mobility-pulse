@@ -30,7 +30,7 @@ const TRUE = { cold: 0.3, warm: 0.2, rain: -0.5 };
 const wxOf = (day, h) => { const di = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse('2026-10-26T12:00:00Z')) / 86400e3); const t = 5 + 5 * Math.sin(di * 1.3) + 4 * Math.sin(((h - 15) / 24) * 2 * Math.PI), p = di % 3 === 0 && h >= 8 && h <= 18 ? 1.0 : 0; return [t, p]; };
 const trueMu = (g, day, h, level = 1) => { const [t, p] = wxOf(day, h), f = F.wxFeatures(t, p); return g[1] * g[2] * shape(h, isWe(day)) * level * Math.exp(TRUE.cold * f[0] + TRUE.warm * f[1] + TRUE.rain * f[2]); };
 function makeDoc(day, { rule = 'M1@abc', level = 1, skipHours = [] } = {}) {
-  const runs = []; for (let h = 0; h < 24; h++) { if (skipHours.includes(h)) continue; const t = F.localToUtcMs(day, h); for (let k = 0; k < 4; k++) runs.push([t + k * 900e3 + 120e3, 900e3, 1, rule]); }
+  const runs = []; for (let h = 0; h < 24; h++) { if (skipHours.includes(h)) continue; const t = F.localToUtcMs(day, h); for (let k = 1; k <= 4; k++) runs.push([t + k * 900e3 - (h === 23 && k === 4 ? 1 : 0), 900e3, 1, rule]); } // Fenster genau in der Stunde h (anteilig, S1.1)
   const gr = {}; for (const g of groups) { const start = [], vmin = []; for (let h = 0; h < 24; h++) { start.push(skipHours.includes(h) ? 0 : pois(trueMu(g, day, h, level))); vmin.push(skipHours.includes(h) ? 0 : g[1] * 60); } gr[g[0]] = { start, vmin }; }
   return { day, runs, groups: gr, gapHours: [], published: { complete: true } };
 }
@@ -584,7 +584,7 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const CH = await import('../lib/pulse-chronos.js');
   const NOW = Date.parse(`${addDays(DAY0, NDAY - 2)}T05:20:00Z`), dd = docs.slice(0, NDAY - 1); // laufender Tag bis 6 Uhr Ortszeit beobachtet
   const h3 = F.localToUtcMs(dd.at(-1).day, 3); // laufender Tag: um 3 Uhr kein Lauf (Lücke)
-  dd[dd.length - 1] = { ...dd.at(-1), runs: dd.at(-1).runs.filter(r => r[0] < NOW && !(r[0] >= h3 && r[0] < h3 + 3600e3)) };
+  dd[dd.length - 1] = { ...dd.at(-1), runs: dd.at(-1).runs.filter(r => r[0] < NOW && !(r[0] > h3 && r[0] <= h3 + 3600e3)) }; // Läufe mit Fenster in 3–4 Uhr
   const inp = CH.chronosInput({ docs: dd, calendar: null, weather: WX, now: NOW });
   const g = inp.groups[0], ff = Math.floor(NOW / 3600e3) * 3600e3, big = groups.filter(x => inp.groups.some(y => y.k === x[0])).length;
   assert(inp.futureFrom === ff && inp.from === F.localToUtcMs(DAY0, 0) && inp.n === (ff - inp.from) / 3600e3 && g.y.length === inp.n && g.e.length === inp.n + 48 && inp.lh.length === inp.n + 48

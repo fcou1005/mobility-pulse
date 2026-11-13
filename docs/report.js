@@ -2,16 +2,16 @@
 // Preisänderungs-Log und Feed-Prüfung. Eigenständiges Modul; app.js übergibt
 // ctx = { state, CFG, esc, fmt, getJson, opColor, muniName } und optional loadUsageIndex, loadEvents, loadHistory, loadCells (geteilter Cache).
 // Rechenlogik in pulse-report.js; alle Werte aus Daten gehen durch ctx.esc, Tooltip-Texte über textContent.
-import * as R from './pulse-report.js?v=mweoo1k7';
-import * as K from './pulse-calib.js?v=mweoo1k7';
-import { liveSummary } from './pulse-forecast.js?v=mweoo1k7';
+import * as R from './pulse-report.js?v=mweui1mb';
+import * as K from './pulse-calib.js?v=mweui1mb';
+import { liveSummary } from './pulse-forecast.js?v=mweui1mb';
 const FCL = { liveSummary };
-import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mweoo1k7';
-import { decodeFleet } from './pulse-ops.js?v=mweoo1k7';
-import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mweoo1k7';
-import { mapKeys } from './mapkeys.js?v=mweoo1k7';
-import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mweoo1k7';
-import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mweoo1k7';
+import { VEHICLE_TYPE_LABEL } from './pulse-core.js?v=mweui1mb';
+import { decodeFleet } from './pulse-ops.js?v=mweui1mb';
+import { t, tx, tMap, lang, dateFmt, fmtLocale, fcReason } from './i18n.js?v=mweui1mb';
+import { mapKeys } from './mapkeys.js?v=mweui1mb';
+import { weatherFor, weatherSvg, WX_CSS } from './weather.js?v=mweui1mb';
+import { maturity as mbMaturity, measureBase as mbMeasureBase, measureDay as mbMeasureDay, dayType as mbDayType, DAY_TYPES as MB_TYPES } from './pulse-econ.js?v=mweui1mb';
 
 const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
@@ -1722,7 +1722,7 @@ export const mbTypeName = (k) => t(`mb.type${k}`);
  * schon geladenen Tagesdateien (state.usage.docs). land: Land des Gebiets (null = Deutschland), days: nur diese Tage, rule: Regelstand.
  */
 export function mbBase(state, { land = null, days = null, rule = undefined } = {}) {
-  let md = state?.latest?.measure?.version === 1 ? state.latest.measure.days || {} : null;
+  let md = state?.latest?.measure?.version >= 1 ? state.latest.measure.days || {} : null;
   if (!md) { md = {}; for (const d of Object.values(state?.usage?.docs || {})) if (d?.day) md[d.day] = mbMeasureDay(d); }
   if (days) { const keep = new Set(days); md = Object.fromEntries(Object.entries(md).filter(([d]) => keep.has(d))); }
   return mbMeasureBase(md, { land, calendar: state?.calendar || null, ...(rule !== undefined ? { rule } : {}) });
@@ -1756,7 +1756,8 @@ export function mbChecksText(c) {
   if (!c) return '';
   const T0 = { pickup: () => t('mb.ck.pickup', { share: mbPct(c.pickupShare), r: mbNum(c.r, 2) }), se: () => t('mb.ck.se', { v: mbNum(c.se, 2) }), swap0: () => t('mb.ck.swap0', { rides: mbNum(c.rides) }),
     hide: () => t('mb.ck.hide', { share: mbPct(c.hideShare) }), idle: () => t('mb.ck.idle', { share: mbPct(c.idleUnusable) }), batteryFloor: () => t('mb.ck.floor', { v: mbNum(c.batteryFloor) }),
-    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }), relHigh: () => t('mb.ck.relHigh', { f: mbNum(c.relHigh, 1), m: mbNum(c.relMedian, 2) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
+    oldRule: () => t('mb.ck.oldRule', { rule: mbRules(c.oldRule) }), relHigh: () => t('mb.ck.relHigh', { f: mbNum(c.relHigh, 1), m: mbNum(c.relMedian, 2) }),
+    relocTrips: () => t('mb.ck.relocTrips', { share: mbPct(c.relocShare), r: mbNum(c.relocR, 2) }), modeFlip: () => t('mb.ck.modeFlip', { n: mbNum(c.modeChanges) }) }; // rot nach älterem bzw. gemischtem Regelstand (lib/pulse-econ.js eventChecks ruleNow)
   return (c.flags || []).map(f => (T0[f] ? T0[f]() : f)).join(' · ');
 }
 export const mbLevel = (lv) => (lv === 'bad' ? `<span class="rp-status over"><i aria-hidden="true">✕</i>${t('mb.red')}</span>` : lv === 'warn' ? `<span class="rp-status near"><i aria-hidden="true">!</i>${t('mb.yellow')}</span>` : `<span class="rp-status ok"><i aria-hidden="true">✓</i>${t('mb.green')}</span>`);

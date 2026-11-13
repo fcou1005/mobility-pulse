@@ -39,7 +39,7 @@ const idle = JSON.parse(await readFile('test/out/idle.json', 'utf8'));
 assert(idle.groups['08416041|Bolt|scooter']?.[6] === 1 && idle.version === 2 && idle.buckets.at(-1) === '> 72 h' && Number.isFinite(idle.trackStart) && idle.censored && Array.isArray(idle.unusable), 'Standzeiten aggregiert (6 Klassen mit > 72 h, Summe an Stelle 7, Mindestwerte je Klasse, Verfolgungsbeginn; Z5/Z6)');
 assert(d.municipalities['08416041']?.c?.length === 2 && Math.abs(d.municipalities['08416041'].c[0] - 48.525) < 1e-6, 'Gemeinde-Mittelpunkt c = [lat, lon]');
 assert(d.sources.find(s => s.id === 'bolt_test').checks?.label?.includes('Basisprüfung') && d.sources.find(s => s.id === 'bolt_test').licenseId === 'CC-BY-4.0', 'Quelle mit Basisprüfung und Lizenz-ID');
-assert(!existsSync('test/out/calendar.json') && d.measure?.version === 1 && !d.eventChecks, 'Kalender offline abgeschaltet (CALENDAR_URL leer, keine calendar.json); Messbasis vorhanden, ohne vollständigen Tag keine Ampel');
+assert(!existsSync('test/out/calendar.json') && d.measure?.version === 2 && !d.eventChecks, 'Kalender offline abgeschaltet (CALENDAR_URL leer, keine calendar.json); Messbasis vorhanden, ohne vollständigen Tag keine Ampel');
 
 // ---------- Läufe 3–5: privater Track-Zustand (TRACK_DIR), Zusatzquellen ----------
 const ex = await startExtra();
@@ -245,9 +245,11 @@ if (TR.trainReady(ydM, Date.now())) {
   assert(wDay.length >= 1 && wf.version === 1 && wf.hours.length === 24 && wc && wc.t.length === 24 && wc.t[3] === null && wc.t[4] === 10 && wc.p[5] === 1.2 && Object.keys(wf.ags).length >= 1 && /DWD/.test(wf.source) && !JSON.stringify(wf).includes('999'),
     `Wetter-Cache: weather/<UTC-Tag>.json mit 24 Stunden je Rasterzelle (${wDay.join(', ')}), unplausibler Wert → null, Gemeinde → Zelle`);
   void wd;
-  const tomorrow = new Date(Date.now() + 86400e3).toISOString().slice(0, 10);
+  // P6: Tage aus der Uhr des Sammler-Laufs (last_date = sein UTC-Tag + 2), nicht aus der Testuhr – sonst rot, wenn der Test über Mitternacht (UTC) läuft
+  const wReq = ex.log.filter(x => x.path === '/weather'), lastD = Date.parse(`${wReq[0]?.q?.last_date ?? new Date(Date.now() + 2 * 86400e3).toISOString().slice(0, 10)}T00:00:00Z`);
+  const tomorrow = new Date(lastD - 86400e3).toISOString().slice(0, 10);
   assert(wDay.includes(tomorrow), `Wetter-Cache: auch die Datei für morgen (${tomorrow}, Vorhersage) wird geschrieben`);
-  const before = new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10), wReq = ex.log.filter(x => x.path === '/weather');
+  const before = new Date(lastD - 4 * 86400e3).toISOString().slice(0, 10);
   assert(wDay.includes(before) && wReq.length && wReq.every(x => x.q?.date === before), `Wetter nachgeholt: der UTC-Tag vor dem ältesten Ereignistag (${before}) fehlte und kommt im selben Abruf mit (date=${wReq[0]?.q?.date})`);
   const inc = await readFile(`test/out/incidents/${T.dayOf(Date.now())}.json`, 'utf8').then(JSON.parse).catch(() => null), incT = await readFile(`test/out/incidents/${T.dayOf(Date.now() + 86400e3)}.json`, 'utf8').then(JSON.parse).catch(() => null);
   const warnH = Object.values(inc?.ags || {}).flatMap(a => a.warn || []).filter(v => v === 3).length + Object.values(incT?.ags || {}).flatMap(a => a.warn || []).filter(v => v === 3).length, h = T.hourOf(Date.now());
@@ -291,7 +293,7 @@ if (TR.trainReady(ydM, Date.now())) {
   assert(zi?.idleUnusable === true && zi.idleCheck?.shortShare === 1 && ecZ?.level === 'warn' && ecZ.checks.flags.join() === 'idle' && ecZ.checks.idleUnusable === 1,
     `Ampel nach der Verfolgung: Standzeit unbrauchbar (Zeus, ${zi?.idleCheck?.n} Fahrzeuge) erscheint als gelber Befund idle (vorher nie, eventChecks vor idleUnusable)`);
   assert(l4.eventChecks.ruleNow === T.METHOD_VERSION && l4.eventChecks.ruleCurrent === true && l4.eventChecks.dayRules.join() === T.METHOD_VERSION, 'Ampel: Regelstand des ausgewerteten Tags = aktueller Regelstand → rot schließt aus');
-  assert(mY?.full && mY.complete && mY.rules.join() === T.METHOD_VERSION && l4.measure.version === 1 && l4.measure.days[T.dayOf(Date.now())]?.obs?.length === 24 && !l4.measure.days[T.dayOf(Date.now())].complete,
+  assert(mY?.full && mY.complete && mY.rules.join() === T.METHOD_VERSION && l4.measure.version === 2 && l4.measure.days[T.dayOf(Date.now())]?.obs?.length === 24 && !l4.measure.days[T.dayOf(Date.now())].complete,
     'Messbasis: latest.json → measure.days (Vortag voll und abgeschlossen, Regelstand vor „@“; laufender Tag offen)');
   assert(await readFile('test/out/calendar.json', 'utf8') === calOld && E2.dayType('2026-11-02', 'BW', JSON.parse(calOld)) === 'F' && E2.dayType('2026-11-01', 'BW', null) === 'H',
     'Kalender: Dienst ohne gültige Antwort → alte calendar.json bleibt; dayType mit Kalender bzw. lokaler Rückfall');
@@ -311,7 +313,7 @@ assert(clog.fields.join() === 'at,ags,operator,count,limit,dtMs' && clog.rules.l
     `coverage.json: Bolt Tübingen ${row('bolt', '08416041')?.cat}, Bolt Stuttgart ${row('bolt', '08111000')?.cat}, Dott „Tubingen“ ${row('dott', '08416041')?.cat}`);
 }
 {
-  const zw = JSON.parse(await readFile('test/out/zone-watch.json', 'utf8')), raw = JSON.stringify(zw);
+  const zw = JSON.parse(await readFile('test/out/zone-watch.json', 'utf8')), raw = JSON.stringify(zw).replace(/\b1\d{12}\b/g, 'T'); // P6: Zeitstempel (ms) raus – „…777…“ darin war ein Zufallstreffer
   const inZone = zw.runs.filter(r => r[0] === l4.at).reduce((s, r) => s + r[4], 0);
   assert(zw.zones.length === 1 && zw.zones[0].id === 'testzone' && zw.zones[0].ags && inZone > 0 && zw.daily.length > 0 && !raw.includes('8.9') && !raw.includes('777') && !raw.includes('coordinates'),
     `zone-watch.json: ${inZone} Fahrzeuge in der Testzone im letzten Lauf, Gemeinde ${zw.zones[0].ags}, keine Umrisse und keine Limits veröffentlicht`);
@@ -429,6 +431,14 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
   const hl = (await readFile(path.join(tmp, 'health.txt'), 'utf8')).split('\n');
   assert(['ok', 'fail'].includes(hl[0]) && /Quellen aktuell\/verzögert/.test(hl[1]), `Ausfall-Wächter: HEALTH_FILE mit Status und Grund (${hl.join(' | ').trim()})`);
   assert(!lic.includes('Einzelne Fahrzeuge oder Fahrten werden nicht veröffentlicht') && lic.includes('## Live-Bestand und Momentaufnahmen') && /nicht als gemeinfrei/.test(lic), 'DATA-LICENSE.md: Live-Bestand benannt, Quellen ohne Lizenz nicht als CC0');
+}
+// Schattenbetrieb (Sprint 1, P4): Kandidat mit eigenem privaten Zustand, veröffentlicht nur Tagessummen geltend/Kandidat
+{
+  const sd = (await readdir('test/out/shadow').catch(() => [])).filter(n => /^diff-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort();
+  const doc = sd.length ? JSON.parse(await readFile(`test/out/shadow/${sd.at(-1)}`, 'utf8')) : null;
+  const TN = await import('../lib/pulse-track-next.js'), g = doc ? Object.values(doc.groups) : [];
+  assert(existsSync(path.join(TRACK_DIR, 'shadow-state.json.gz')) && doc?.base === T.METHOD_VERSION && doc.rule === TN.METHOD_VERSION && doc.runs >= 1 && g.length > 0 && g.every(r => r.length === doc.fields.length && r.every(x => x.length === 2))
+    && !JSON.stringify(doc).match(/"(lat|lon|key|rawId)"/), `Schatten: shadow/${sd.at(-1)} mit ${doc?.runs} Läufen, ${g.length} Gruppen, Zustand privat (TRACK_DIR), keine Kennungen oder Koordinaten`);
 }
 ex.close(); srv.kill();
 await rm(tmp, { recursive: true, force: true });

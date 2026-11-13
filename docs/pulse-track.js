@@ -1,6 +1,6 @@
 // Mobility Pulse — Fahrzeug-Verfolgung über Sammler-Läufe hinweg.
 // Reine Funktionen, keine Abhängigkeiten. Speichert nur gehashte Kennungen und gerundete Positionen.
-import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mweoo1k7';
+import { haversineM, normalizeId, hashStr, hourMinutes } from './pulse-core.js?v=mweui1mb';
 
 export const TRACK_VERSION = 2;
 // Regelstand der Ereigniszählung (M-19): ändert sich mit jeder Regeländerung; je Lauf in events/<Tag>.json → runs[k][3] und runs.json
@@ -187,7 +187,18 @@ export const canonSource = (id) => { const m = /^[^:]+:(source-.+)$/.exec(String
  * keine Fahrtenden bzw. -beginne, Kennungen still angelegt bzw. behalten. Quelle ohne Datensatz in sourceRecs = ausgefallen.
  * Ladestand mit unplausibler Skala (v.batteryFp statt v.batteryPct): nur Fingerabdruck (Kennungswechsel, gesunken/gestiegen), keine Schwellen.
  */
-export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Europe/Berlin', hmac = null, noEvents = false }) {
+// Kandidaten-Regeln (Sprint 1, Schattenbetrieb P4): next = NEXT_RULES aus lib/pulse-track-next.js schaltet sie ein; ohne next rechnet trackRun
+// unverändert nach METHOD_VERSION. Abgelöst wird erst nach 7 vollen Tagen im Schatten (shadow/diff-<Tag>.json) und bestandenem Prüfstand.
+//  S1.3 Hysterese: stabil ab Rückkehranteil > stableAbove, rotierend unter rotBelow, dazwischen bleibt der Modus (je Quelle in srcStats.modeH);
+//       Wechsel stehen in result.modeChanges
+//  A1   Taktmaß ohne Paarung: Anteil neuer Kennungen (gepaart oder nicht) an allen Kennungen des Laufs, statt nur gelungener Paarungen
+//  S1.4 Wechsel je Fahrt, Fahrzeuge ohne Ladestand: Kennungswechsel ≤ STRICT_ROT_M (5 m) wird gepaart (bisher nie: Räder ohne Akku → Scheinfahrten)
+//  A23  Modus ab minEvents (8 statt 20) Ereignissen im gedämpften Fenster; bis dahin Mehrheit der Quellen desselben Anbieters, sonst unbekannt
+//  S1.5 Rückkehr einer stabilen Kennung, deren Verschwinden nicht als Fahrtbeginn zählte (Abholung, Ausblendung, Sperre): Wiederaufstellung, kein Fahrtende
+//  S1.9 Dauer und Distanz („gemessen“) nur aus stabilen Kennungen; bei rotierenden Quellen ist eine Rückkehr derselben Kennung keine beobachtete Fahrt
+const F_NOSTART = 32; // nur Kandidaten-Regeln: verschwunden ohne gezählten Fahrtbeginn (Abholung/Ausblendung/gesperrt)
+export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Europe/Berlin', hmac = null, noEvents = false, trace = null, next = null }) {
+  const NX = next || null;
   const state = prev && prev.version === TRACK_VERSION ? prev : emptyState(now);
   if (hmac) state.salted = true;
   const CS = canonSource;
@@ -196,6 +207,8 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   const first = state.at == null;
   const dt = first ? null : now - state.at;
   const gap = (dt != null && dt > GAP_MS) || (!!noEvents && !first);
+  // Prüfstand (P1): optionaler Rückruf je Zählstelle { k, key, now, gap, … }; ändert keine Regel (test/algo-bench.test.mjs)
+  const L = trace ? (k, key, x) => trace({ k, key, now, gap, ...(x || {}) }) : () => {};
   // Beginn der Verfolgung (Z6): erster und zweiter Lauf; ältere Zustände ohne Angabe: kleinste und zweitkleinste erste Sichtung
   if (first) { state.trackStart = now; delete state.trackStart2; }
   else {
@@ -231,8 +244,14 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   const srcRun = {}; // kanonische Quelle → {present, gone, moved, newc, returned, rotated}
   const S = (src) => (srcRun[CS(src)] ??= { present: 0, gone: 0, moved: 0, newc: 0, returned: 0 });
   // Kennungsmodus je Quelle aus bisherigen Läufen: stabil, wenn Kennungen wiederkehren oder sich bewegen
-  const modeOf = (src) => { const st = state.srcStats[CS(src)]; if (!st || st.runs < 2) return 'unknown'; const ret = st.returned + st.moved, gone = st.gone; if (ret + gone < 20) return 'unknown'; return ret / (ret + gone) > 0.25 ? 'stable' : 'rotating'; };
-  const rotRate = (src) => { const st = state.srcStats[CS(src)]; if (!st || st.runs < 3) return null; const base = (st.present || 0) + (st.rotated || 0); return base >= 10 ? (st.rotated || 0) / base : null; };
+  const modeOf0 = (src) => { const st = state.srcStats[CS(src)]; if (!st || st.runs < 2) return 'unknown'; const ret = st.returned + st.moved, gone = st.gone; if (ret + gone < 20) return 'unknown'; return ret / (ret + gone) > 0.25 ? 'stable' : 'rotating'; };
+  // Kandidaten (S1.3, A23): Modus aus dem vorigen Lauf (Hysterese, unten fortgeschrieben), sonst Mehrheit der Quellen desselben Anbieters
+  let opModes = null;
+  const opModeOf = (op) => { if (!opModes) { opModes = new Map(); for (const st of Object.values(state.srcStats)) if (st?.op && st.modeH) { const m = opModes.get(st.op) || { stable: 0, rotating: 0 }; m[st.modeH]++; opModes.set(st.op, m); } } const m = opModes.get(op); return !m ? null : m.stable > m.rotating ? 'stable' : m.rotating > m.stable ? 'rotating' : null; };
+  const modeOf = !NX ? modeOf0 : (src) => { const st = state.srcStats[CS(src)]; return st?.modeH || (st?.op && opModeOf(st.op)) || 'unknown'; };
+  const rotRate = (src) => { const st = state.srcStats[CS(src)]; if (!st || st.runs < 3) return null;
+    if (NX) { const base = (st.present || 0) + (st.newc || 0) + (st.rotated || 0); return base >= 10 ? ((st.newc || 0) + (st.rotated || 0)) / base : null; } // A1: ohne Paarung
+    const base = (st.present || 0) + (st.rotated || 0); return base >= 10 ? (st.rotated || 0) / base : null; };
   const periodic = (src) => { const r = rotRate(src); return r == null || r >= PERIODIC_RATE; };
   const recById = new Map((sourceRecs || []).map(r => [r.id, r]));
   // eigene Stationen je Anbieter (Raster ≈ 55 m): strenge Paarung bei Wechsel je Fahrt (M-7), keine Gruppen an Dockstationen (M-14)
@@ -276,7 +295,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     let flags = (v.disabled ? F_DISABLED : 0) | (v.reserved ? F_RESERVED : 0) | (bat == null && fp != null ? F_BATREL : 0);
     const op = D('op', v.operator), ags = D('ags', v.ags), src = D('src', v.sourceId || ''), ty = v.type || 'unknown', RU = rulesOf(ty);
     const e = state.v[key];
-    const s = S(v.sourceId);
+    const s = S(v.sourceId); if (NX && !s.op) s.op = v.operator;
     const cell = cellOf(v.lat, v.lon);
     const c = CELL(v.ags, cell, ty);
     if (!v.disabled && !v.reserved) {
@@ -303,10 +322,15 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     // „gestiegen“ ist ein Vergleich, keine absolute Schwelle); bis 02.11.2026 zählte der Rückkehr-Zweig hier immer ein Fahrtende
     const retSwap = RU.swap && wasMissing && !silent && dist <= JITTER_M && fp != null && pbat != null && fp >= pbat + (bat == null && !pAbs && relSc ? RETURN_SWAP / 100 * relSc : RETURN_SWAP);
     if (silent) { /* nur Zustand fortschreiben */ }
+    else if (NX && wasMissing && (pflags & F_NOSTART)) {
+      // Kandidat S1.5: Verschwinden zählte nicht als Fahrtbeginn (Abholung, Ausblendung, gesperrt) → Rückkehr = Wiederaufstellung, kein Fahrtende
+      s.returned++; L('redeploy', key, { dist, swap: retSwap });
+      if (retSwap) h.swap[hour]++; else if (dist >= MOVE_M) h.reloc[hour]++;
+    }
     else if (retSwap) {
       // zusätzlich ein Fahrtende: der Fahrtbeginn beim Verschwinden ist schon gezählt (ohne Verknüpfung über Tage nicht zurücknehmbar); so bleiben
       // Beginne ÷ Enden ausgeglichen, die Scheinfahrt bleibt eine bekannte Obergrenze wie vor Z4 (bis 02.11.2026: swap ohne end → Ampel S/E verschoben)
-      s.returned++; h.swap[hour]++; if (lowSince) { h.swapWaitSum += now - lowSince; h.swapWaitN++; if (cens(lowSince, firstSeen)) h.swapWaitCens++; }
+      L('retswap', key, { dist }); s.returned++; h.swap[hour]++; if (lowSince) { h.swapWaitSum += now - lowSince; h.swapWaitN++; if (cens(lowSince, firstSeen)) h.swapWaitCens++; }
       h.end[hour]++; c[1]++; c[16 + band]++; if (!stable) estE.push([null, v.operator, ty, v.ags, cell, v.sourceId]);
     }
     else if (wasMissing) {
@@ -314,8 +338,9 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       s.returned++;
       h.end[hour]++; c[1]++; c[16 + band]++;
       if (!stable) estE.push([null, v.operator, ty, v.ags, cell, v.sourceId]);
-      const dur = now - (missingSince || state.at || now);
-      if (dist >= JITTER_M && dur <= RU.tripMaxMs) { h.tripDistSum += dist; h.tripDistN++; h.tripDurSum += dur; h.tripDurN++; }
+      const dur = now - (missingSince || state.at || now); L('ret', key, { dist, dur, stable });
+      if (NX && !stable) { /* Kandidat S1.9: gemessene Dauer und Distanz nur aus stabilen Kennungen (rotierend: Rückkehr ist keine beobachtete Fahrt) */ }
+      else if (dist >= JITTER_M && dur <= RU.tripMaxMs) { h.tripDistSum += dist; h.tripDistN++; h.tripDurSum += dur; h.tripDurN++; }
       else if (RU.roundTrip && dur <= RU.tripMaxMs && dur > 0) { h.tripDurSum += dur; h.tripDurN++; } // Rundfahrt (Auto zurück an der Station): nur die Dauer
       if (stable && dist >= MOVE_M) landed.push({ op: v.operator, lat: v.lat, lon: v.lon });
       // Strom nur, wenn das Verschwinden als Fahrtbeginn galt (nicht gesperrt, Akku ≥ 15 %) und das Fahrzeug nicht aufgeladen zurückkommt
@@ -331,7 +356,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
         moves.push(m); landed.push(m);
       } else {
         // rotierende Kennungen (Fahrten entfernen das Fahrzeug aus dem Feed) bzw. gesperrt: Umsetzung durch den Betreiber
-        h.reloc[hour]++; c[3]++;
+        L('reloc', key, { dist, why: stable ? 'disabled' : 'nonstable' }); h.reloc[hour]++; c[3]++;
         arrivals.push({ op: v.operator, ty, ags: v.ags, lat: v.lat, lon: v.lon, src: v.sourceId, bat }); // bat: absoluter Ladestand (Gruppen ≥ 85 %, Z7)
       }
     }
@@ -349,7 +374,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     // Akkutausch: deutlicher Sprung nach oben am selben Ort
     let newLowSince = retSwap ? 0 : lowSince;
     if (bat != null) {
-      if (RU.swap && pAbs && pbat < SWAP_FROM && bat >= SWAP_TO && dist < MOVE_M && !wasMissing) { h.swap[hour]++; if (lowSince) { h.swapWaitSum += now - lowSince; h.swapWaitN++; if (cens(lowSince, firstSeen)) h.swapWaitCens++; } newLowSince = 0; }
+      if (RU.swap && pAbs && pbat < SWAP_FROM && bat >= SWAP_TO && dist < MOVE_M && !wasMissing) { L('swap', key); h.swap[hour]++; if (lowSince) { h.swapWaitSum += now - lowSince; h.swapWaitN++; if (cens(lowSince, firstSeen)) h.swapWaitCens++; } newLowSince = 0; }
       else if (bat < LOW_BATTERY) { if (!newLowSince) newLowSince = now; }
       else if (bat >= SWAP_TO) newLowSince = 0;
     }
@@ -363,8 +388,8 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     // Sperren
     let newDisSince = disSince;
     const wasDis = !!(pflags & F_DISABLED);
-    if (v.disabled && !wasDis) { h.disOn[hour]++; newDisSince = now; }
-    else if (!v.disabled && wasDis) { h.disOff[hour]++; if (disSince) { h.disDurSum += now - disSince; h.disDurN++; if (cens(disSince, firstSeen)) h.disDurCens++; } newDisSince = 0; }
+    if (v.disabled && !wasDis) { L('disOn', key); h.disOn[hour]++; newDisSince = now; }
+    else if (!v.disabled && wasDis) { L('disOff', key); h.disOff[hour]++; if (disSince) { h.disDurSum += now - disSince; h.disDurN++; if (cens(disSince, firstSeen)) h.disDurCens++; } newDisSince = 0; }
     else if (v.disabled && !newDisSince) newDisSince = now;
     state.v[key] = [lat, lon, fp ?? pbat, flags | (fp == null && (pflags & F_BATREL) ? F_BATREL : 0), ty, op, ags, firstSeen, newLastMoved, newLowSince, newDisSince, src, RU.resTrips && v.reserved ? resSince || now : 0];
     // Standzeit (nur verfügbare Fahrzeuge); zensiert = seit Beginn der Verfolgung unbewegt (Mindestwert)
@@ -384,13 +409,13 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       const near = nearOf(m), RU = rulesOf(m.ty); // zählt m selbst mit
       const noLoss = m.pbat != null && m.bat != null && m.bat >= m.pbat && m.dist >= RU.noLossM;
       const h = H(m.op, m.ags, m.ty);
-      if (near >= RU.transportMin || noLoss) { h.reloc[hour]++; m.c[3]++; arrivals.push({ op: m.op, ty: m.ty, ags: m.ags, lat: m.lat, lon: m.lon, src: m.src, bat: m.babs }); continue; }
+      if (near >= RU.transportMin || noLoss) { L('reloc', m.key, { dist: m.dist, why: noLoss ? 'noloss' : 'transport' }); h.reloc[hour]++; m.c[3]++; arrivals.push({ op: m.op, ty: m.ty, ags: m.ags, lat: m.lat, lon: m.lon, src: m.src, bat: m.babs }); continue; }
       // Versatz innerhalb eines Laufs: die echte Dauer ist ≤ dt, eine Untergrenze auf Luftlinie ÷ dt verwürfe alle Fahrten unter ≈ 1,2 km (20 Min.).
       // Daher nur die Obergrenze; kurze Versätze (< 500 m) ohne Ladestandverlust bleiben GPS-Sprung (slow). TRIP_MIN_KMH gilt nur für Rückkehrer.
       const v = kmh(m);
-      if (v > RU.tripMaxKmh) { h.fast[hour]++; arrivals.push({ op: m.op, ty: m.ty, ags: m.ags, lat: m.lat, lon: m.lon, src: m.src, bat: m.babs }); continue; }
-      if (m.dist < SHORT_TRIP_M && !(m.pbat != null && m.bat != null && m.bat < m.pbat)) { h.slow[hour]++; continue; }
-      H(m.op, m.agsOld, m.ty).start[hour]++; const co = CELL(m.agsOld, m.cellOld, m.ty); co[0]++; co[4 + band]++;
+      if (v > RU.tripMaxKmh) { L('fast', m.key, { dist: m.dist }); h.fast[hour]++; arrivals.push({ op: m.op, ty: m.ty, ags: m.ags, lat: m.lat, lon: m.lon, src: m.src, bat: m.babs }); continue; }
+      if (m.dist < SHORT_TRIP_M && !(m.pbat != null && m.bat != null && m.bat < m.pbat)) { L('slow', m.key, { dist: m.dist }); h.slow[hour]++; continue; }
+      L('move', m.key, { dist: m.dist, dur: dt }); H(m.op, m.agsOld, m.ty).start[hour]++; const co = CELL(m.agsOld, m.cellOld, m.ty); co[0]++; co[4 + band]++;
       h.end[hour]++; m.c[1]++; m.c[16 + band]++;
       h.tripDistSum += m.dist; h.tripDistN++; h.tripDurSum += dt; h.tripDurN++; // Dauer ≤ dt (Obergrenze)
       FLOW(m.agsOld, m.op, m.ty, m.cellOld, cellOf(m.lat, m.lon), dt, m.dist, m.ags, now);
@@ -424,7 +449,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
       // fehlt der Quellen-Datensatz (Manifest ausgefallen, Quelle aus dem Katalog entfernt), gilt die Quelle als ausgefallen
       const srcUsable = usableCanon.has(CS(srcN));
       // Quelle ausgefallen: nicht als Fahrt werten, Kennung still behalten (Rückkehr zählt kein Fahrtende)
-      if (!srcUsable) { e[3] = flags | F_MISSING | F_SILENT; e[12] = now; continue; }
+      if (!srcUsable) { L('srcdown', key); e[3] = flags | F_MISSING | F_SILENT; e[12] = now; continue; }
       S(srcN).gone++;
       goneList.push({ key, e, opN: dict.op[e[5]], agsN: dict.ags[e[6]], srcN, lat: e[0] / 1e5, lon: e[1] / 1e5 });
     }
@@ -442,7 +467,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
           const a = appeared[ai]; if (a.v.operator !== g.opN || a.ty !== g.e[4]) continue;
           const d = haversineM(g.lat, g.lon, a.v.lat, a.v.lon); if (d > ROTATE_ENERGY_M) continue;
           const kind = pairKind(gb, a.bat, d, gAbs && a.abs, tolRun, !gAbs && !a.abs ? relScale.get(CS(a.v.sourceId)) : null, rulesOf(a.ty).swap); if (!kind) continue;
-          if (strict && kind === 'rot' && !(d <= STRICT_ROT_M && gb != null && a.bat != null && gb === a.bat && !(stn ??= atStation(g.opN, g.lat, g.lon)))) continue;
+          if (strict && kind === 'rot' && !(d <= STRICT_ROT_M && ((gb != null && a.bat != null && gb === a.bat) || (NX && gb == null && a.bat == null)) && !(stn ??= atStation(g.opN, g.lat, g.lon)))) continue;
           pairs.push([kind === 'swap' ? d + 100 : d + (gb != null && a.bat != null ? 10 * Math.abs(gb - a.bat) : 0), gi, ai, kind]);
         }
       });
@@ -454,13 +479,14 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
     for (const g of goneList) { if (g.match) { const k = CS(g.match.a.v.sourceId); rotS[k] = (rotS[k] || 0) + 1; } else { const k = CS(g.srcN); goneU[k] = (goneU[k] || 0) + 1; } }
     for (const a of appeared) if (!a.used) { const k = CS(a.v.sourceId); newU[k] = (newU[k] || 0) + 1; }
     const fleetOf = (src) => (srcRun[src]?.present || 0) + (rotS[src] || 0);
-    for (const [src, n] of Object.entries(newU)) if (n >= MASS_MIN && n > MASS_SHARE * (fleetOf(src) + n)) massNew.add(src);
-    for (const [src, n] of Object.entries(goneU)) if (n >= MASS_MIN && n > MASS_SHARE * (fleetOf(src) + n)) massGone.add(src);
+    const MS = NX?.massShare ?? MASS_SHARE; // Kandidat S1.9: Teilausfall ab 15 % der Flotte (bisher 30 %: 20–29 % fehlende Fahrzeuge zählten als Fahrten)
+    for (const [src, n] of Object.entries(newU)) if (n >= MASS_MIN && n > MS * (fleetOf(src) + n)) massNew.add(src);
+    for (const [src, n] of Object.entries(goneU)) if (n >= MASS_MIN && n > MS * (fleetOf(src) + n)) massGone.add(src);
     for (const g of goneList) {
       const { key, e } = g;
       const [lat, lon, bat, flags, ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src] = e;
       const h = H(g.opN, g.agsN, ty);
-      if (g.match) {
+      if (g.match) { L(g.match.kind, key, { newKey: g.match.a.key });
         // dasselbe Fahrzeug unter neuer Kennung: Standzeit und erste Sichtung übernehmen
         const ne = state.v[g.match.a.key]; const s = S(g.srcN); s.gone--; s.rotated = (s.rotated || 0) + 1; S(g.match.a.v.sourceId).newc--; // Wechsel ist weder neu noch verschwunden
         ne[7] = firstSeen; ne[8] = lastMoved;
@@ -469,24 +495,25 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
         delete state.v[key]; continue;
       }
       // Massenverschwinden einer Quelle (Teilausfall): kein Fahrtbeginn, Kennung still behalten (Rückkehr zählt kein Fahrtende)
-      if (massGone.has(CS(g.srcN))) { S(g.srcN).gone--; state.v[key] = [lat, lon, bat, flags | F_MISSING | F_SILENT, ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now]; continue; }
+      if (massGone.has(CS(g.srcN))) { L('massgone', key); S(g.srcN).gone--; state.v[key] = [lat, lon, bat, flags | F_MISSING | F_SILENT, ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now]; continue; }
       const gcell = cellOf(g.lat, g.lon), c = CELL(g.agsN, gcell, ty);
       const dep = { op: g.opN, ty, ags: g.agsN, lat: g.lat, lon: g.lon, src: g.srcN };
       const absBat = bat != null && !(flags & F_BATREL), fl = floorOf(g.srcN);
       // gebuchtes Auto verschwindet: Fahrtbeginn schon bei „reserviert“ gezählt, Rückkehr zählt das Ende
       if (rulesOf(ty).resTrips && (flags & F_RESERVED)) { state.v[key] = [lat, lon, bat, flags | F_MISSING | (gap ? F_SILENT : 0), ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now]; continue; }
-      if (flags & F_DISABLED) { h.pickup[hour]++; }
+      let noStart = true;
+      if (flags & F_DISABLED) { L('pickup', key, { why: 'disabled' }); h.pickup[hour]++; }
       // Quelle blendet unter fl aus (Z4): Verschwinden bis fl + 5 Punkte = Ausblendung, keine Ausleihe (vor der Abholschwelle, die sonst einen Teil davon nähme)
-      else if (absBat && fl != null && bat <= fl + HIDE_BAND && !(flags & F_RESERVED)) { h.hide[hour]++; }
-      else if (absBat && bat < rulesOf(ty).pickupBattery) { h.pickup[hour]++; }
-      else { h.start[hour]++; c[0]++; c[4 + band]++; if (modeOf(g.srcN) !== 'stable') estS.push([dep, g.opN, ty, g.agsN, gcell, g.srcN]); }
+      else if (absBat && fl != null && bat <= fl + HIDE_BAND && !(flags & F_RESERVED)) { L('hide', key); h.hide[hour]++; }
+      else if (absBat && bat < rulesOf(ty).pickupBattery) { L('pickup', key, { why: 'lowbat' }); h.pickup[hour]++; }
+      else { noStart = false; L('start', key); h.start[hour]++; c[0]++; c[4 + band]++; if (modeOf(g.srcN) !== 'stable') estS.push([dep, g.opN, ty, g.agsN, gcell, g.srcN]); }
       departures.push(dep);
-      state.v[key] = [lat, lon, bat, flags | F_MISSING | (gap ? F_SILENT : 0), ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now];
+      state.v[key] = [lat, lon, bat, flags | F_MISSING | (gap ? F_SILENT : 0) | (NX && noStart ? F_NOSTART : 0), ty, op, ags, firstSeen, lastMoved, lowSince, disSince, src, now];
     }
     // übrige neue Kennungen = Fahrtende bzw. Neuaufstellung
     for (const a of appeared) {
-      if (a.used || massNew.has(CS(a.v.sourceId))) continue; // Massenwechsel: neue Kennungen nur anlegen (Rückkehr nach Ausfall ist kein Fahrtende)
-      H(a.v.operator, a.v.ags, a.ty).end[hour]++; a.c[1]++; a.c[16 + band]++;
+      if (a.used) continue; if (massNew.has(CS(a.v.sourceId))) { L('massnew', a.key); continue; } // Massenwechsel: neue Kennungen nur anlegen (Rückkehr nach Ausfall ist kein Fahrtende)
+      L('new', a.key); H(a.v.operator, a.v.ags, a.ty).end[hour]++; a.c[1]++; a.c[16 + band]++;
       const arr = { op: a.v.operator, ty: a.ty, ags: a.v.ags, lat: a.v.lat, lon: a.v.lon, src: a.v.sourceId, bat: a.abs ? a.bat : null }; arrivals.push(arr);
       if (modeOf(a.v.sourceId) !== 'stable') estE.push([arr, a.v.operator, a.ty, a.v.ags, cellOf(a.v.lat, a.v.lon), a.v.sourceId]);
     }
@@ -495,6 +522,16 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   if (!gap) for (const [src, s] of Object.entries(srcRun)) {
     const st = (state.srcStats[src] ??= { runs: 0, present: 0, gone: 0, moved: 0, newc: 0, returned: 0, rotated: 0 });
     st.runs++; for (const f of ['present', 'gone', 'moved', 'newc', 'returned', 'rotated']) st[f] = Math.round((st[f] || 0) * 0.9 + (s[f] || 0));
+    if (NX && s.op) st.op = s.op;
+  }
+  // Kandidaten S1.3: Modus mit Hysterese je Quelle fortschreiben, Wechsel protokollieren (result.modeChanges: [Quelle, alt, neu, Rückkehranteil])
+  const modeChanges = [];
+  if (NX && !gap) for (const src of Object.keys(srcRun)) {
+    const st = state.srcStats[src]; if (!st || st.runs < 2) continue;
+    const ret = st.returned + st.moved, gone = st.gone; if (ret + gone < (NX.minEvents ?? 20)) continue;
+    const r = ret / (ret + gone), old = st.modeH || null;
+    const nw = r > NX.stableAbove ? 'stable' : r < NX.rotBelow ? 'rotating' : (old || (r > 0.25 ? 'stable' : 'rotating'));
+    if (nw !== old) { st.modeH = nw; if (old) modeChanges.push([src, old, nw, Math.round(r * 1000) / 1000]); }
   }
   const srcModes = {}; for (const src of Object.keys(state.srcStats)) srcModes[src] = modeOf(src);
   for (const r of sourceRecs || []) srcModes[r.id] = modeOf(r.id); // je Quelle (Kopien mit dem Modus ihres Ursprungsfeeds)
@@ -594,7 +631,7 @@ export function trackRun(prev, { vehicles, stations, sourceRecs, now, tz = 'Euro
   const groups = first || gap ? [] : [...clusterGroups(arrivals.filter(a => groupable(a) && ffOk(a, 'deploy')), 'deploy', now), ...clusterGroups(departures.filter(a => groupable(a) && ffOk(a, 'collect')), 'collect', now)];
   // Zählungen für die Schätzung: ohne Gruppenmitglieder (Ausbringen/Einsammeln) und ohne Quellen mit Massenwechsel
   if (!first && !gap) for (const [list, o] of [[estS, est.s], [estE, est.e]]) for (const [ref, op, ty, ags, cell, src] of list) if (!ref?.inGroup && !glitch.has(CS(src))) EST(o, `${op}|${ty}`, `${ags}|${cell}`);
-  return { state, first, dt, gap, hourly, cells, idle, idleCens, idleLong, idleUnusable, srcModes, day, hour, groups, flows, est, carTrips };
+  return { state, first, dt, gap, hourly, cells, idle, idleCens, idleLong, idleUnusable, srcModes, day, hour, groups, flows, est, carTrips, ...(NX ? { modeChanges } : {}) };
 }
 
 // Ab 4 Fahrzeugen (Nutzerwunsch 01.11.2026, bisher 5): kleinere Transporter-Ausbringungen werden sichtbar
@@ -693,8 +730,23 @@ export function mergeHourly(dayDoc, hourly, { day, at, dt, srcModes, gap = false
       for (const f of P_FIELDS) { const tot = (h[f] || []).reduce((x, y) => x + (y || 0), 0); if (!tot) continue; const pf = `${f}P`; g[pf] ??= arr(24); for (let i = 0; i < 24; i++) if (fr[i]) g[pf][i] = rd(g[pf][i] + tot * fr[i], f === 'vmin' ? 1 : 3); } }
     doc.pVersion = 1;
   }
+  // S1.6: Wechsel des Kennungsmodus je Quelle im Lauf des Tages (Ampel „Moduswechsel heute“); unbekannt zählt nicht als Modus
+  const pm = doc.srcModes; if (pm) for (const [src, m] of Object.entries(srcModes || {})) if (pm[src] && pm[src] !== m && pm[src] !== 'unknown' && m !== 'unknown') (doc.modeChanges ??= []).push([at, src, pm[src], m]);
   doc.srcModes = srcModes;
   return doc;
+}
+// Sprint 1, S1.7: Zwischenstand eines Tages (published.complete = false, Veröffentlichung beim Stundenwechsel) ohne Dauer- und Distanzsummen –
+// die Differenz zweier Stundenstände verriete sonst Dauer und Luftlinie einer einzelnen Fahrt – und ohne Kleinstgruppen (bis dahin weniger als
+// PUB_MIN_STARTS Fahrtbeginne). Der Tagesend-Stand (complete) bleibt vollständig; Tagessummen sind keine Einzelfahrt.
+export const PUB_MIN_STARTS = 3, PUB_WITHHELD = ['tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN'];
+export function publicEventsDoc(doc, complete) {
+  if (complete || !doc?.groups) return doc;
+  const groups = {}; let small = 0;
+  for (const [k, g] of Object.entries(doc.groups)) {
+    if ((g.start || []).reduce((a, b) => a + (b || 0), 0) < PUB_MIN_STARTS) { small++; continue; }
+    const o = { ...g }; for (const f of PUB_WITHHELD) delete o[f]; groups[k] = o;
+  }
+  return { ...doc, groups, withheld: { minStarts: PUB_MIN_STARTS, fields: PUB_WITHHELD, groups: small } };
 }
 // ---------- Altläufe in Zellendateien (vor der Lückenregel gezählt) ----------
 // Die Lückenregel steht in events/ nachträglich (Flag 0, gapHours), Zellen sind dagegen Tagessummen ohne Laufbezug: Ein Lauf nach > 45 Min.,

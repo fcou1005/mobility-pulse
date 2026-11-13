@@ -1,0 +1,1021 @@
+{
+ "_regelstand": "2026-11-02a",
+ "_seed": 1,
+ "basis/stable": {
+  "precision": 1,
+  "recall": 0.9491,
+  "countErr": -0.0509,
+  "endRatio": 0.982,
+  "durErr": 1.1959,
+  "distErr": 0.0167,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 13,
+   "kurz ohne Akkuverlust (slow)": 10,
+   "Rückkehr an den Ort (< 150 m)": 6
+  },
+  "fpWhy": {}
+ },
+ "basis/trip": {
+  "precision": 1,
+  "recall": 0.9531,
+  "countErr": -0.0469,
+  "endRatio": 0.9647,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 26
+  },
+  "fpWhy": {}
+ },
+ "basis/run": {
+  "precision": 1,
+  "recall": 0.9504,
+  "countErr": -0.0496,
+  "endRatio": 0.9646,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 26,
+   "als Kennungswechsel gepaart": 2
+  },
+  "fpWhy": {}
+ },
+ "umsetzung/stable": {
+  "precision": 0.9377,
+  "recall": 0.9555,
+  "countErr": 0.0189,
+  "endRatio": 0.9805,
+  "durErr": 1.3237,
+  "distErr": 0.0908,
+  "vanAsTrip": 0.8704,
+  "vminErr": -0.0005,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 11,
+   "als Abholung (Akku < 15 %)": 13,
+   "mehrere Fahrten je Intervall": 4,
+   "Rückkehr an den Ort (< 150 m)": 5
+  },
+  "fpWhy": {
+   "Umsetzung": 47
+  }
+ },
+ "umsetzung/trip": {
+  "precision": 0.9322,
+  "recall": 0.9649,
+  "countErr": 0.0351,
+  "endRatio": 0.9684,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": 0.963,
+  "vminErr": -0.0005,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 22,
+   "mehrere Fahrten je Intervall": 4
+  },
+  "fpWhy": {
+   "Umsetzung": 52
+  }
+ },
+ "umsetzung/run": {
+  "precision": 0.9321,
+  "recall": 0.9636,
+  "countErr": 0.0337,
+  "endRatio": 0.9684,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": 0.963,
+  "vminErr": -0.0005,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 22,
+   "mehrere Fahrten je Intervall": 4,
+   "als Kennungswechsel gepaart": 1
+  },
+  "fpWhy": {
+   "Umsetzung": 52
+  }
+ },
+ "akku/stable": {
+  "precision": 0.9581,
+  "recall": 0.9708,
+  "countErr": 0.0133,
+  "endRatio": 0.9922,
+  "durErr": 1.1811,
+  "distErr": 0.0124,
+  "vanAsTrip": null,
+  "vminErr": 0.0007,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 9,
+   "Rückkehr an den Ort (< 150 m)": 4,
+   "mehrere Fahrten je Intervall": 7,
+   "als Abholung (Akku < 15 %)": 2
+  },
+  "fpWhy": {
+   "Tausch ausgeblendet": 8,
+   "Laden Lager": 24
+  }
+ },
+ "akku/trip": {
+  "precision": 0.9588,
+  "recall": 0.9881,
+  "countErr": 0.0305,
+  "endRatio": 0.9923,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0007,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 7,
+   "als Abholung (Akku < 15 %)": 2
+  },
+  "fpWhy": {
+   "Tausch ausgeblendet": 8,
+   "Laden Lager": 24
+  }
+ },
+ "akku/run": {
+  "precision": 0.9588,
+  "recall": 0.9881,
+  "countErr": 0.0305,
+  "endRatio": 0.9923,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0007,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 7,
+   "als Abholung (Akku < 15 %)": 2
+  },
+  "fpWhy": {
+   "Tausch ausgeblendet": 8,
+   "Laden Lager": 24
+  }
+ },
+ "res-sperre/stable": {
+  "precision": 0.9784,
+  "recall": 0.9565,
+  "countErr": -0.0224,
+  "endRatio": 0.9867,
+  "durErr": 1.152,
+  "distErr": 0.0216,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 10,
+   "mehrere Fahrten je Intervall": 10,
+   "als Abholung (Akku < 15 %)": 10,
+   "Rückkehr an den Ort (< 150 m)": 3
+  },
+  "fpWhy": {
+   "Sperre ausgeblendet": 13,
+   "Reservierung ausgeblendet": 3
+  }
+ },
+ "res-sperre/trip": {
+  "precision": 0.9785,
+  "recall": 0.9617,
+  "countErr": -0.0172,
+  "endRatio": 0.9751,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 10,
+   "als Abholung (Akku < 15 %)": 19
+  },
+  "fpWhy": {
+   "Sperre ausgeblendet": 13,
+   "Reservierung ausgeblendet": 3
+  }
+ },
+ "res-sperre/run": {
+  "precision": 0.9785,
+  "recall": 0.9604,
+  "countErr": -0.0185,
+  "endRatio": 0.9751,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 10,
+   "als Abholung (Akku < 15 %)": 19,
+   "als Kennungswechsel gepaart": 1
+  },
+  "fpWhy": {
+   "Sperre ausgeblendet": 13,
+   "Reservierung ausgeblendet": 3
+  }
+ },
+ "luecken/stable": {
+  "precision": 1,
+  "recall": 0.7931,
+  "countErr": -0.2069,
+  "endRatio": 1.0034,
+  "durErr": 1.28,
+  "distErr": 0.0013,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 2,
+  "fnWhy": {
+   "Lücke": 120,
+   "kurz ohne Akkuverlust (slow)": 7,
+   "Rückkehr an den Ort (< 150 m)": 7,
+   "als Abholung (Akku < 15 %)": 14,
+   "mehrere Fahrten je Intervall": 7
+  },
+  "fpWhy": {}
+ },
+ "luecken/trip": {
+  "precision": 1,
+  "recall": 0.7997,
+  "countErr": -0.2003,
+  "endRatio": 0.9599,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 2,
+  "fnWhy": {
+   "Lücke": 120,
+   "als Abholung (Akku < 15 %)": 23,
+   "mehrere Fahrten je Intervall": 7
+  },
+  "fpWhy": {}
+ },
+ "luecken/run": {
+  "precision": 1,
+  "recall": 0.7957,
+  "countErr": -0.2043,
+  "endRatio": 0.9597,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 2,
+  "fnWhy": {
+   "Lücke": 120,
+   "als Kennungswechsel gepaart": 3,
+   "als Abholung (Akku < 15 %)": 23,
+   "mehrere Fahrten je Intervall": 7
+  },
+  "fpWhy": {}
+ },
+ "gps/stable": {
+  "precision": 1,
+  "recall": 0.9491,
+  "countErr": -0.0509,
+  "endRatio": 0.982,
+  "durErr": 1.1959,
+  "distErr": 0.0167,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 13,
+   "kurz ohne Akkuverlust (slow)": 10,
+   "Rückkehr an den Ort (< 150 m)": 6
+  },
+  "fpWhy": {}
+ },
+ "gps/trip": {
+  "precision": 1,
+  "recall": 0.9531,
+  "countErr": -0.0469,
+  "endRatio": 0.9647,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 26
+  },
+  "fpWhy": {}
+ },
+ "gps/run": {
+  "precision": 0.9972,
+  "recall": 0.9491,
+  "countErr": -0.0483,
+  "endRatio": 0.9647,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Kennungswechsel gepaart": 3,
+   "als Abholung (Akku < 15 %)": 26
+  },
+  "fpWhy": {
+   "Kennung/Rauschen": 2
+  }
+ },
+ "kurz/stable": {
+  "precision": 1,
+  "recall": 0.9388,
+  "countErr": -0.0612,
+  "endRatio": 0.986,
+  "durErr": 2.243,
+  "distErr": 0.0328,
+  "vanAsTrip": null,
+  "vminErr": 0,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 7,
+   "Rückkehr an den Ort (< 150 m)": 6,
+   "mehrere Fahrten je Intervall": 12,
+   "kurz ohne Akkuverlust (slow)": 21
+  },
+  "fpWhy": {}
+ },
+ "kurz/trip": {
+  "precision": 1,
+  "recall": 0.9601,
+  "countErr": -0.0399,
+  "endRatio": 0.9717,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 18,
+   "mehrere Fahrten je Intervall": 12
+  },
+  "fpWhy": {}
+ },
+ "kurz/run": {
+  "precision": 1,
+  "recall": 0.9561,
+  "countErr": -0.0439,
+  "endRatio": 0.9716,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 18,
+   "mehrere Fahrten je Intervall": 12,
+   "als Kennungswechsel gepaart": 3
+  },
+  "fpWhy": {}
+ },
+ "rundfahrt/stable": {
+  "precision": 1,
+  "recall": 0.8623,
+  "countErr": -0.1377,
+  "endRatio": 0.9862,
+  "durErr": 1.1735,
+  "distErr": 0.2794,
+  "vanAsTrip": null,
+  "vminErr": -0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "Rückkehr an den Ort (< 150 m)": 79,
+   "kurz ohne Akkuverlust (slow)": 9,
+   "als Abholung (Akku < 15 %)": 7,
+   "mehrere Fahrten je Intervall": 8
+  },
+  "fpWhy": {}
+ },
+ "rundfahrt/trip": {
+  "precision": 1,
+  "recall": 0.9586,
+  "countErr": -0.0414,
+  "endRatio": 0.9663,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 23,
+   "mehrere Fahrten je Intervall": 8
+  },
+  "fpWhy": {}
+ },
+ "rundfahrt/run": {
+  "precision": 1,
+  "recall": 0.9225,
+  "countErr": -0.0775,
+  "endRatio": 0.965,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0004,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Kennungswechsel gepaart": 27,
+   "als Abholung (Akku < 15 %)": 23,
+   "mehrere Fahrten je Intervall": 8
+  },
+  "fpWhy": {}
+ },
+ "alles/stable": {
+  "precision": 0.8649,
+  "recall": 0.8695,
+  "countErr": 0.0053,
+  "endRatio": 1.0121,
+  "durErr": 1.751,
+  "distErr": 0.2163,
+  "vanAsTrip": 0.8772,
+  "vminErr": 0.0001,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 1,
+  "fnWhy": {
+   "Rückkehr an den Ort (< 150 m)": 17,
+   "Lücke": 56,
+   "kurz ohne Akkuverlust (slow)": 18,
+   "sonst": 1,
+   "mehrere Fahrten je Intervall": 6
+  },
+  "fpWhy": {
+   "Laden Lager": 23,
+   "Umsetzung": 50,
+   "Sperre ausgeblendet": 21,
+   "Tausch ausgeblendet": 5,
+   "Reservierung ausgeblendet": 3
+  }
+ },
+ "alles/trip": {
+  "precision": 0.8643,
+  "recall": 0.9161,
+  "countErr": 0.0599,
+  "endRatio": 1.0063,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": 0.9825,
+  "vminErr": 0.0001,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 1,
+  "fnWhy": {
+   "Lücke": 56,
+   "mehrere Fahrten je Intervall": 6,
+   "als Kennungswechsel gepaart": 1
+  },
+  "fpWhy": {
+   "Laden Lager": 23,
+   "Umsetzung": 56,
+   "Sperre ausgeblendet": 21,
+   "Tausch ausgeblendet": 5,
+   "Reservierung ausgeblendet": 3
+  }
+ },
+ "alles/run": {
+  "precision": 0.8494,
+  "recall": 0.9015,
+  "countErr": 0.0613,
+  "endRatio": 1.005,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": 0.9825,
+  "vminErr": 0.0001,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 1,
+  "fnWhy": {
+   "als Kennungswechsel gepaart": 12,
+   "Lücke": 56,
+   "mehrere Fahrten je Intervall": 6
+  },
+  "fpWhy": {
+   "Laden Lager": 23,
+   "Umsetzung": 56,
+   "Sperre ausgeblendet": 21,
+   "Kennung/Rauschen": 11,
+   "Tausch ausgeblendet": 6,
+   "Reservierung ausgeblendet": 3
+  }
+ },
+ "klein50/stable": {
+  "precision": 1,
+  "recall": 0.6848,
+  "countErr": -0.3152,
+  "endRatio": 0.9692,
+  "durErr": 1.3489,
+  "distErr": 0.1992,
+  "vanAsTrip": null,
+  "vminErr": -0.0014,
+  "modeOk": 0.3165,
+  "modeFlips": 6,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Umsetzung": 23,
+   "als Abholung (Akku < 15 %)": 2,
+   "mehrere Fahrten je Intervall": 3,
+   "Rückkehr an den Ort (< 150 m)": 1
+  },
+  "fpWhy": {}
+ },
+ "klein50/trip": {
+  "precision": 1,
+  "recall": 0.9239,
+  "countErr": -0.0761,
+  "endRatio": 0.9551,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0014,
+  "modeOk": 0,
+  "modeFlips": 0,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 4,
+   "mehrere Fahrten je Intervall": 3
+  },
+  "fpWhy": {}
+ },
+ "klein50/run": {
+  "precision": 1,
+  "recall": 0.9239,
+  "countErr": -0.0761,
+  "endRatio": 0.9551,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0014,
+  "modeOk": 0,
+  "modeFlips": 0,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 4,
+   "mehrere Fahrten je Intervall": 3
+  },
+  "fpWhy": {}
+ },
+ "klein25/stable": {
+  "precision": 1,
+  "recall": 0.5938,
+  "countErr": -0.4062,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0011,
+  "modeOk": 0,
+  "modeFlips": 0,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Umsetzung": 13
+  },
+  "fpWhy": {}
+ },
+ "klein25/trip": {
+  "precision": 1,
+  "recall": 1,
+  "countErr": 0,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0011,
+  "modeOk": 0,
+  "modeFlips": 0,
+  "gapRuns": 0,
+  "fnWhy": {},
+  "fpWhy": {}
+ },
+ "klein25/run": {
+  "precision": 1,
+  "recall": 1,
+  "countErr": 0,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0011,
+  "modeOk": 0,
+  "modeFlips": 0,
+  "gapRuns": 0,
+  "fnWhy": {},
+  "fpWhy": {}
+ },
+ "ausblendung/stable": {
+  "precision": 0.9581,
+  "recall": 0.9708,
+  "countErr": 0.0133,
+  "endRatio": 0.9935,
+  "durErr": 1.1756,
+  "distErr": 0.008,
+  "vanAsTrip": null,
+  "vminErr": 0.0007,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 9,
+   "Rückkehr an den Ort (< 150 m)": 4,
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {
+   "Tausch ausgeblendet": 8,
+   "Laden Lager": 24
+  }
+ },
+ "ausblendung/trip": {
+  "precision": 0.9588,
+  "recall": 0.9881,
+  "countErr": 0.0305,
+  "endRatio": 0.9936,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0007,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {
+   "Tausch ausgeblendet": 8,
+   "Laden Lager": 24
+  }
+ },
+ "ausblendung/run": {
+  "precision": 0.9588,
+  "recall": 0.9881,
+  "countErr": 0.0305,
+  "endRatio": 0.9936,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0007,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {
+   "Tausch ausgeblendet": 8,
+   "Laden Lager": 24
+  }
+ },
+ "ausfall/stable": {
+  "precision": 1,
+  "recall": 0.8928,
+  "countErr": -0.1072,
+  "endRatio": 0.9809,
+  "durErr": 1.2284,
+  "distErr": 0.0181,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 8,
+   "Quellenausfall": 45,
+   "als Abholung (Akku < 15 %)": 13,
+   "kurz ohne Akkuverlust (slow)": 8,
+   "Rückkehr an den Ort (< 150 m)": 6
+  },
+  "fpWhy": {}
+ },
+ "ausfall/trip": {
+  "precision": 1,
+  "recall": 0.8954,
+  "countErr": -0.1046,
+  "endRatio": 0.9064,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 8,
+   "Quellenausfall": 45,
+   "als Abholung (Akku < 15 %)": 25
+  },
+  "fpWhy": {}
+ },
+ "ausfall/run": {
+  "precision": 1,
+  "recall": 0.8928,
+  "countErr": -0.1072,
+  "endRatio": 0.9597,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0002,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 8,
+   "Quellenausfall": 45,
+   "als Abholung (Akku < 15 %)": 25,
+   "als Kennungswechsel gepaart": 2
+  },
+  "fpWhy": {}
+ },
+ "sommerzeit/stable": {
+  "precision": 1,
+  "recall": 0.9642,
+  "countErr": -0.0358,
+  "endRatio": 0.9838,
+  "durErr": 1.1886,
+  "distErr": 0.016,
+  "vanAsTrip": null,
+  "vminErr": 0,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 6,
+   "als Abholung (Akku < 15 %)": 9,
+   "Rückkehr an den Ort (< 150 m)": 4,
+   "mehrere Fahrten je Intervall": 8
+  },
+  "fpWhy": {}
+ },
+ "sommerzeit/trip": {
+  "precision": 1,
+  "recall": 0.9603,
+  "countErr": -0.0397,
+  "endRatio": 0.9667,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 22,
+   "mehrere Fahrten je Intervall": 8
+  },
+  "fpWhy": {}
+ },
+ "sommerzeit/run": {
+  "precision": 1,
+  "recall": 0.9576,
+  "countErr": -0.0424,
+  "endRatio": 0.9666,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "als Abholung (Akku < 15 %)": 22,
+   "mehrere Fahrten je Intervall": 8,
+   "als Kennungswechsel gepaart": 2
+  },
+  "fpWhy": {}
+ },
+ "rad/stable": {
+  "precision": 1,
+  "recall": 0.8673,
+  "countErr": -0.1327,
+  "endRatio": 1,
+  "durErr": 1.1874,
+  "distErr": 0.1031,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 89,
+   "mehrere Fahrten je Intervall": 9,
+   "Rückkehr an den Ort (< 150 m)": 3
+  },
+  "fpWhy": {}
+ },
+ "rad/trip": {
+  "precision": 1,
+  "recall": 0.9882,
+  "countErr": -0.0118,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {}
+ },
+ "rad/run": {
+  "precision": 1,
+  "recall": 0.9869,
+  "countErr": -0.0131,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Kennungswechsel gepaart": 1
+  },
+  "fpWhy": {}
+ },
+ "rad-wechsel/stable": {
+  "precision": 1,
+  "recall": 0.8673,
+  "countErr": -0.1327,
+  "endRatio": 1,
+  "durErr": 1.1874,
+  "distErr": 0.1031,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "kurz ohne Akkuverlust (slow)": 89,
+   "mehrere Fahrten je Intervall": 9,
+   "Rückkehr an den Ort (< 150 m)": 3
+  },
+  "fpWhy": {}
+ },
+ "rad-wechsel/trip": {
+  "precision": 0.1642,
+  "recall": 0.9882,
+  "countErr": 5.0197,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9
+  },
+  "fpWhy": {
+   "Kennungswechsel am Ort": 3829
+  }
+ },
+ "rad-wechsel/run": {
+  "precision": 1,
+  "recall": 0.9869,
+  "countErr": -0.0131,
+  "endRatio": 1,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": 0.0003,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Kennungswechsel gepaart": 1
+  },
+  "fpWhy": {}
+ },
+ "teilausfall/stable": {
+  "precision": 0.8489,
+  "recall": 0.9491,
+  "countErr": 0.118,
+  "endRatio": 0.9812,
+  "durErr": 1.2066,
+  "distErr": 0.0167,
+  "vanAsTrip": null,
+  "vminErr": -0.0037,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 13,
+   "kurz ohne Akkuverlust (slow)": 10,
+   "Rückkehr an den Ort (< 150 m)": 6
+  },
+  "fpWhy": {
+   "Kennung/Rauschen": 126
+  }
+ },
+ "teilausfall/trip": {
+  "precision": 0.8495,
+  "recall": 0.9531,
+  "countErr": 0.122,
+  "endRatio": 0.9665,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0037,
+  "modeOk": 0.8987,
+  "modeFlips": 3,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 26
+  },
+  "fpWhy": {
+   "Kennung/Rauschen": 126
+  }
+ },
+ "teilausfall/run": {
+  "precision": 0.8491,
+  "recall": 0.9504,
+  "countErr": 0.1193,
+  "endRatio": 0.9664,
+  "durErr": null,
+  "distErr": null,
+  "vanAsTrip": null,
+  "vminErr": -0.0037,
+  "modeOk": 1,
+  "modeFlips": 1,
+  "gapRuns": 0,
+  "fnWhy": {
+   "mehrere Fahrten je Intervall": 9,
+   "als Abholung (Akku < 15 %)": 26,
+   "als Kennungswechsel gepaart": 2
+  },
+  "fpWhy": {
+   "Kennung/Rauschen": 126
+  }
+ }
+}

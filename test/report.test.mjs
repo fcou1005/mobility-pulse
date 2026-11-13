@@ -13,7 +13,8 @@ assert(R.isGapRun([T('2026-11-02T10:00:00'), 20 * MIN, 0]) && R.isGapRun([T('202
   'Lücken-Lauf: Flag 0 oder Abstand > 45 Min.; erster Lauf (ohne Fenster) ist keine Lücke');
 assert(R.isTaintedRun([0, 456 * MIN, 1]) && !R.isTaintedRun([0, 456 * MIN, 0]), 'Lücke mit Flag 1 (ältere Datei) = Ereignisse mitgezählt → Stunde verwerfen');
 {
-  const runs = [[T('2026-11-02T09:50:00'), null], [T('2026-11-02T10:10:00'), 20 * MIN, 1], [T('2026-11-02T10:30:00'), 20 * MIN, 1], [T('2026-11-02T10:50:00'), 20 * MIN, 1], [T('2026-11-02T12:40:00'), 110 * MIN, 1], [T('2026-11-02T12:55:00'), 15 * MIN, 1]];
+  // Fenster anteilig je Stunde (S1.1): Läufe um 10:20, 10:40, 11:00 decken 10:00–11:00 ab
+  const runs = [[T('2026-11-02T10:00:00'), null], [T('2026-11-02T10:20:00'), 20 * MIN, 1], [T('2026-11-02T10:40:00'), 20 * MIN, 1], [T('2026-11-02T11:00:00'), 20 * MIN, 1], [T('2026-11-02T12:40:00'), 110 * MIN, 1], [T('2026-11-02T12:55:00'), 15 * MIN, 1]];
   const hq = R.hourQuality(runs);
   assert(hq.obs[10] === 60 && hq.ok[10] && hq.obs[9] === 0 && !hq.ok[9], 'Stunde 10: drei Läufe à 20 Min. = 60 Min.; erster Lauf zählt kein Fenster');
   assert(hq.gap[12] && !hq.ok[12] && hq.obsOk[12] === 0 && hq.gaps.length === 1 && hq.gaps[0].tainted, 'Stunde 12 mit Lücken-Lauf (110 Min.) fällt ganz heraus, auch der saubere Lauf daneben');
@@ -32,7 +33,8 @@ assert(R.weekdayOf('2026-11-01') === 6 && R.weekdayOf('2026-11-02') === 0 && R.w
 
 // ---------- Wochen-Heatmap ----------
 // zwei Montage: 10 Uhr voll gemessen (6 und 10 Starts → Ø 8); 11 Uhr nur 20 Min. (zu dünn); 12 Uhr am zweiten Montag mit Lücken-Lauf
-const fullHourRuns = (day, h) => [0, 20, 40].map(m => [T(`${day}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`), 20 * MIN, 1]);
+// Läufe um h:20, h:40, (h+1):00 decken die Stunde h ab (Fenster anteilig je Stunde, S1.1)
+const fullHourRuns = (day, h) => [20, 40, 60].map(m => [T(`${day}T00:00:00`) + (h * 60 + m) * MIN - (h === 23 && m === 60 ? 1 : 0), 20 * MIN, 1]); // 24:00 → 23:59:59.999
 const docA = { day: '2026-11-02', runs: [[T('2026-11-02T09:55:00'), null], ...fullHourRuns('2026-11-02', 10), [T('2026-11-02T11:20:00'), 20 * MIN, 1], ...fullHourRuns('2026-11-02', 12)],
   groups: { '08111000|Voi|scooter': { start: h24({ 10: 4, 11: 3, 12: 5 }) }, '08111000|Bolt|scooter': { start: h24({ 10: 2 }) }, '11000000|Dott|scooter': { start: h24({ 10: 100 }) } } };
 const docB = { day: '2026-11-09', runs: [...fullHourRuns('2026-11-09', 10), [T('2026-11-09T12:10:00'), 60 * MIN, 1], [T('2026-11-09T12:30:00'), 20 * MIN, 1]],
@@ -670,8 +672,9 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
   const rq = R.municipalReport({ docs: [d01, d02], ags: '1' }).quality;
   assert(rq.mixedRuleDays.length === 1 && rq.mixedRuleDays[0].day === '2026-11-01', 'mixedRuleDays: 01.11. (Lime reloc → slow ohne Kennzeichnung) gemischt, 02.11. mit zwei Commits desselben Regelstands nicht');
   // drei Tage: A alter Stand (Spiegel doppelt, Flotte 200), B Wechsel um 07:00 (davor 200, danach 100), C neuer Stand (100)
-  const runsOf = (day, rule = null, from = 0) => [...Array(72).keys()].map(i => T(`${day}T00:00:00`) + (i * 20 + 10) * MIN).map(at => { const h = R.hourOfMs(at); return rule && h >= from ? [at, 20 * MIN, 1, rule] : [at, 20 * MIN, 1]; });
-  const grp = (f) => ({ start: new Array(24).fill(10), end: new Array(24).fill(10), vminTot: [...Array(24).keys()].map(h => f(h) * 60), vmin: [...Array(24).keys()].map(h => f(h) * 60) });
+  // Läufe 00:10, 00:30 … 23:50 und ein letzter kurz vor Mitternacht: jede Stunde 60 Min. (Fenster anteilig, S1.1)
+  const runsOf = (day, rule = null, from = 0) => [...[...Array(72).keys()].map(i => [T(`${day}T00:00:00`) + (i * 20 + 10) * MIN, 20 * MIN]), [T(`${day}T00:00:00`) + 1440 * MIN - 1, 10 * MIN]].map(([at, dt]) => { const h = R.hourOfMs(at); return rule && h >= from ? [at, dt, 1, rule] : [at, dt, 1]; });
+  const grp = (f) => ({ start: new Array(24).fill(10), end: new Array(24).fill(10), vminTot: [...Array(24).keys()].map(h => f(h) * (h === 23 ? 70 : 60)), vmin: [...Array(24).keys()].map(h => f(h) * (h === 23 ? 70 : 60)) }); // Stunde 23: Läufe 23:10–23:59 = 70 Min. Fenster
   const A = { day: '2026-11-10', runs: runsOf('2026-11-10'), groups: { '1|nb|bike': grp(() => 200), '1|v|scooter': grp(() => 50) } };
   const B = { day: '2026-11-11', runs: runsOf('2026-11-11', 'X@1', 7), groups: { '1|nb|bike': grp(h => (h < 7 ? 200 : 100)), '1|v|scooter': grp(() => 50) } };
   const Cd = { day: '2026-11-12', runs: runsOf('2026-11-12', 'X@2', 0), groups: { '1|nb|bike': grp(() => 100), '1|v|scooter': grp(() => 50) } };

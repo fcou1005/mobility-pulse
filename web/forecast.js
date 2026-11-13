@@ -678,7 +678,8 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   // Zeilen des Diagramms; norm: je volle Stunde (Audit MET-01: der Sammler läuft alle ~18 Min., eine Stunde zählt 3 oder 4 Läufe und damit
   // 50–76 Minuten. Ist × 60 ÷ beobachtete Minuten des Tages; Plan und Live-Prognose × 60 ÷ beobachtete Minuten des Tages, dessen Fahrzeugstunden
   // sie verwenden (zuletzt beobachteter Tag davor, wie lib/pulse-forecast.js lastExposure). Nur Anzeige; Summen und Kacheln bleiben gezählt.
-  const obsOf = (d) => (d === today && fresh?.obs ? fresh.obs : ctx.state.latest?.measure?.days?.[d]?.obs) || null;
+  // Ist zählt je Lauf in der Endstunde: Normierung mit den Minuten der Endstunde (obsEnd, seit 13.11.2026; obs ist seitdem anteilig je Stunde, S1.1)
+  const obsOf = (d) => (d === today && fresh?.obs ? fresh.obs : (ctx.state.latest?.measure?.days?.[d]?.obsEnd ?? ctx.state.latest?.measure?.days?.[d]?.obs)) || null;
   const mDays = [...new Set([...Object.keys(ctx.state.latest?.measure?.days || {}), today])].sort();
   const fA = (d, h) => { const o = obsOf(d)?.[h]; return norm && o >= 30 ? 60 / o : 1; };
   const fP = (d, h) => { if (!norm) return 1; for (let i = mDays.length - 1; i >= 0; i--) { const e = mDays[i]; if (e >= d) continue; const o = obsOf(e)?.[h]; if (o >= FC.GATES.hourMinObserved) return 60 / o; } return 1; };
@@ -1057,6 +1058,6 @@ async function freshActual(ctx, S0, sel, today) {
     const groups = Object.fromEntries(Object.entries(doc.groups).filter(([k]) => !bad.has(k)));
     const D = FC.dayFromDoc({ ...doc, groups }, ctx.state.calendar || null), A = FC.actualOfDay(D), out = new Array(24).fill(null);
     for (const k of sel.keys) { const a = A.get(k); if (!a) continue; a.forEach((v, h) => { if (v != null) out[h] = (out[h] || 0) + v; }); }
-    return out.some(x => x != null) ? { a: out, obs: D.hourMin } : null;
+    return out.some(x => x != null) ? { a: out, obs: D.obsEnd ?? D.hourMin } : null;
   } catch { return null; }
 }

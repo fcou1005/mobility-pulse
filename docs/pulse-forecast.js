@@ -11,10 +11,10 @@
 // pooled (ohne Wetter), pooledWx (mit Wetter). Aktiv ist das mit dem kleinsten mittleren Fehler der letzten Tage; das Wettermodell muss das
 // gepoolte um GATES.wxGain schlagen. Solange zu wenige Tage ausgewertet sind, steht status = 'learning' und die Prognose ist vorläufig.
 // Beim Backtest zählt das beobachtete Wetter des Tages (Orakel); die Prognose selbst nutzt die Wettervorhersage (Bright Sky/MOSMIX).
-import * as E from './pulse-econ.js?v=mweoo1k7';
-import { hourOf, dayOf } from './pulse-track.js?v=mweoo1k7';
-import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mweoo1k7';
-import { familyOf, FAMILIES } from './pulse-core.js?v=mweoo1k7';
+import * as E from './pulse-econ.js?v=mweui1mb';
+import { hourOf, dayOf } from './pulse-track.js?v=mweui1mb';
+import { CTX_KEYS, ctxLookup } from './pulse-context.js?v=mweui1mb';
+import { familyOf, FAMILIES } from './pulse-core.js?v=mweui1mb';
 export { CTX_KEYS };
 export const dayOfLocal = (ms) => dayOf(ms);
 // Je Fahrzeugfamilie ein eigenes Modell (seit 08.11.2026): micro (E-Scooter, Räder, Lastenräder, Sonstige) wie bisher in forecast/, E-Roller in
@@ -681,7 +681,7 @@ export const LAND_OF_AGS = { '01': 'SH', '02': 'HH', '03': 'NI', '04': 'HB', '05
 export function dayFromDoc(doc, calendar = null) {
   const m = E.measureDay(doc), rules = m.rules.filter(Boolean), types = new Map();
   const cls = (ags) => { const land = LAND_OF_AGS[String(ags).slice(0, 2)] ?? null; let c = types.get(land); if (c === undefined) { c = classOf(E.dayType(doc.day, land, calendar)); types.set(land, c); } return c; };
-  return { day: doc.day, cls, rule: rules.length ? rules.join('+') : '', hourMin: m.obs, groups: doc.groups || {}, complete: doc.published?.complete !== false && m.full, full: m.full, era: 0 };
+  return { day: doc.day, cls, rule: rules.length ? rules.join('+') : '', hourMin: m.obs, obsEnd: m.obsEnd, groups: doc.groups || {}, complete: doc.published?.complete !== false && m.full, full: m.full, era: 0 };
 }
 /** Regelstände nach Zeit ordnen: der jüngste ist Era 0 (Grundlinie, für die Prognose gilt der aktuelle Stand), ältere zählen 1, 2 … */
 export function assignEras(days) {

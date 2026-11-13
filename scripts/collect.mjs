@@ -639,7 +639,7 @@ const ampel = () => { if (ecInput) latest.eventChecks = E.eventChecks(ecInput, s
 try {
   const evDir = path.join(DATA, 'events'), today = T.dayOf(now);
   const evDays = existsSync(evDir) ? (await readdir(evDir)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort() : [];
-  const prevM = prev?.measure?.version === 1 ? prev.measure.days || {} : {};
+  const prevM = prev?.measure?.version === 2 ? prev.measure.days || {} : {}; // Version 2 (13.11.2026): obs anteilig je Stunde (S1.1), obsEnd = Endstunde
   const mDays = {}; let ecDoc = null;
   for (const d of evDays) {
     if (prevM[d]?.complete) { mDays[d] = prevM[d]; continue; }
@@ -648,7 +648,7 @@ try {
     mDays[d] = { ...E.measureDay(doc), ...(complete ? { complete: true } : {}) };
     if (complete) ecDoc = doc;
   }
-  latest.measure = { version: 1, fullDay: E.FULL_DAY, fields: 'obs: Minuten je Ortsstunde 0–23 ohne Lücken-Stunden, runs, counted (gezählte Läufe), rules (METHOD_VERSION der gezählten Läufe, "" = ohne), full (≥ 20 h mit ≥ 50 Min.), complete', days: mDays };
+  latest.measure = { version: 2, fullDay: E.FULL_DAY, fields: 'obs: Minuten je Ortsstunde 0–23 ohne Lücken-Stunden (Fenster der Läufe anteilig je Stunde), obsEnd: dieselben Minuten in der Endstunde der Läufe, runs, counted (gezählte Läufe), rules (METHOD_VERSION der gezählten Läufe, "" = ohne), full (≥ 20 h mit ≥ 50 Min.), complete', days: mDays };
   const ecDay = Object.keys(mDays).filter(d => mDays[d].complete).sort().at(-1);
   if (ecDay) { ecInput = ecDoc?.day === ecDay ? ecDoc : JSON.parse(await readFile(path.join(evDir, `${ecDay}.json`), 'utf8')); ampel(); }
 } catch (e) { log(`Messbasis/Ampel: ${e.message}`); }
@@ -893,6 +893,37 @@ if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwin
 // Umzugslauf zählt nichts: verworfene alte Einträge (ohne aktuelle Kennung nicht umschlüsselbar) würden sonst Fahrtenden ohne Beginn erzeugen
 const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs, batteryFloor: r.batteryFloor?.hides ? r.batteryFloor.p005 : null })), now, hmac, noEvents: migrated });
 if (keyId) tr.state.keyId = keyId;
+// Schattenbetrieb (Sprint 1, P4): Kandidat lib/pulse-track-next.js rechnet denselben Lauf mit eigenem Zustand (privat im Cache). Veröffentlicht
+// wird nur shadow/diff-<Tag>.json: Tagessummen je Gemeinde|Anbieter|Art geltend gegen Kandidat, Moduswechsel je Quelle. SHADOW=0 = aus.
+// Abgelöst wird erst nach 7 vollen Tagen im Schatten mit bestandenem Prüfstand (test/algo-next.test.mjs), dann neue METHOD_VERSION.
+if (TRACK_DIR && process.env.SHADOW !== '0') {
+  try {
+    const TN = await import('../lib/pulse-track-next.js'), t0 = Date.now();
+    const sf = path.join(TRACK_DIR, 'shadow-state.json.gz');
+    let sp = await readState(sf); if (sp && (!sp.salted || sp.keyId !== keyId)) sp = null;
+    if (sp?.v) for (const k of ghostKeys) delete sp.v[k];
+    const trN = TN.trackRun(sp, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs, batteryFloor: r.batteryFloor?.hides ? r.batteryFloor.p005 : null })), now, hmac, noEvents: migrated });
+    if (keyId) trN.state.keyId = keyId;
+    await writeFile(sf, gzipSync(JSON.stringify(trN.state)));
+    const SF = ['start', 'end', 'reloc', 'swap', 'pickup', 'hide', 'rot', 'slow', 'fast'], dir = path.join(DATA, 'shadow'), f = path.join(dir, `diff-${tr.day}.json`);
+    await mkdir(dir, { recursive: true });
+    let doc = null; try { doc = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : null; } catch {}
+    if (!doc || doc.rule !== TN.METHOD_VERSION || doc.base !== T.METHOD_VERSION) doc = { version: 1, day: tr.day, base: T.METHOD_VERSION, rule: TN.METHOD_VERSION, fields: SF, note: 'Tagessummen je Gemeinde|Anbieter|Art: [geltend, Kandidat] je Feld; Läufe nur, wenn beide zählten', runs: 0, groups: {}, modeChanges: [] };
+    if (!tr.gap && !trN.gap && !tr.first && !trN.first) {
+      doc.runs++;
+      const add = (hourly, i) => { for (const [k, h] of hourly) { const row = (doc.groups[k] ??= SF.map(() => [0, 0])); SF.forEach((fl, j) => { row[j][i] += (h[fl] || []).reduce((x, y) => x + (y || 0), 0); }); } };
+      add(tr.hourly, 0); add(trN.hourly, 1);
+    }
+    for (const [src, o, n, r] of trN.modeChanges || []) doc.modeChanges.push([now, src, o, n, r]);
+    const diffModes = Object.entries(trN.srcModes || {}).filter(([src, m]) => tr.srcModes?.[src] !== m).map(([src, m]) => [src, tr.srcModes?.[src] ?? null, m]);
+    doc.modes = diffModes; doc.updatedAt = new Date(now).toISOString();
+    await writeFile(f, JSON.stringify(doc));
+    const keep = new Set([...Array(21).keys()].map(i => `diff-${T.dayOf(now - i * 86400e3)}.json`));
+    for (const x of await readdir(dir)) if (/^diff-\d{4}-\d{2}-\d{2}\.json$/.test(x) && !keep.has(x)) await rm(path.join(dir, x), { force: true });
+    const st = (hourly) => [...hourly.values()].reduce((a, h) => a + h.start.reduce((x, y) => x + y, 0), 0);
+    log(`Schatten (${TN.METHOD_VERSION}): ${Date.now() - t0} ms, Fahrtbeginne ${st(tr.hourly)} geltend / ${st(trN.hourly)} Kandidat, ${diffModes.length} Quellen mit anderem Modus, ${(trN.modeChanges || []).length} Moduswechsel`);
+  } catch (e) { log('Schatten fehlgeschlagen (ohne Wirkung auf die Veröffentlichung):', e.message); }
+}
 // Standzeit unbrauchbar (T.IDLE_CHECK, Z5: ≥ 200 Fahrzeuge, > 50 % unter einem Laufintervall – Kennung wechselt je Lauf): sources[].idleUnusable, Befund in
 // der Feed-Prüfung, ops-Feld 8 null; latest.json ist vor der Verfolgung geschrieben und wird dann neu geschrieben
 {
@@ -1003,7 +1034,8 @@ try {
   // (published.complete). Ohne TRACK_DIR wie bisher je Lauf.
   const evFile = path.join(DATA, 'events', `${tr.day}.json`);
   const evWorkFile = TRACK_DIR ? path.join(TRACK_DIR, 'events-work.json.gz') : null;
-  const evPublish = async (doc, complete) => { const str = JSON.stringify({ ...doc, published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } }); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
+  // S1.7: Zwischenstand (complete false) ohne Dauer-/Distanzsummen und Kleinstgruppen (T.publicEventsDoc)
+  const evPublish = async (doc, complete) => { const str = JSON.stringify({ ...T.publicEventsDoc(doc, complete), published: { at: now, through: doc.runs?.at(-1)?.[0] ?? null, complete } }); await writeFile(path.join(DATA, 'events', `${doc.day}.json`), str); return JSON.parse(str); }; // Kopie: der Arbeitsstand wird danach fortgeschrieben
   let evWork = null, evPub = null, evFinal = null; // evPub: veröffentlichter Stand des laufenden Tags, evFinal: in diesem Lauf abgeschlossener Vortag
   if (evWorkFile) {
     evWork = await readState(evWorkFile);
@@ -1057,7 +1089,7 @@ try {
     const AR_FIELDS = ['flotte_avg', 'fahrten', 'fahrtenden', 'kennungswechsel', 'umsetzungen', 'akkutausch', 'abholungen', 'sperren', 'beobachtet_min', 'flotte_verf', 'stunden_voll'];
     const arRows = (doc, h) => {
       // gestörte Stunden (Lauf nach Lücke, auch Altbestand) zählen weder mit Ereignissen noch mit Beobachtungszeit
-      const obsH = E.observedMinutes(doc.runs);
+      const obsH = E.observedMinutesEnd(doc.runs); // Nenner der Fahrzeugminuten (je Lauf in der Endstunde gezählt), nicht die anteiligen Minuten
       const s = (a) => (a || []).reduce((x, y, hh) => x + (obsH[hh] > 0 ? (y || 0) : 0), 0);
       const obsMin = obsH.reduce((a, b) => a + b, 0);
       const vminOk = (doc.runs || []).every(r => r[1] == null || r[2] === 1 || r[2] === 0);

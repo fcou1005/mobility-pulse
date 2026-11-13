@@ -1719,7 +1719,7 @@ async function econProfile(day) {
   const land = state.scope === 'DE' ? null : scopeState(), cal = state.calendar || null, ty = E.dayType(day, land, cal), key = `${ty}|${land}|${state.latest?.at}`;
   const P = (econProfile.cache ??= new Map()); if (P.has(key)) return (state.usage.profile = P.get(key)); // state.usage.profile: zuletzt genutzte Kurve (Disposition)
   const idx = await loadUsageIndex(); const all = (idx.days || []).slice(0, -1); // abgeschlossene Tage
-  const md = state.latest?.measure?.version === 1 ? state.latest.measure.days || {} : null;
+  const md = state.latest?.measure?.version >= 1 ? state.latest.measure.days || {} : null;
   const pick = md ? all.filter(d => md[d]?.full && E.dayType(d, land, cal) === ty).slice(-7) : all.slice(-7);
   const prof = E.hourProfile(await Promise.all(pick.map(loadEvents)), { dayType: ty, land, calendar: cal });
   P.set(key, prof); return (state.usage.profile = prof);
@@ -1737,7 +1737,7 @@ async function econGroups(day, keep) {
   const runs = doc.runs || [], mask = hourMask(runs, doc.gapHours);
   // Fahrzeugminuten gelten, wenn jeder Lauf ein Flag trägt (1 = zählt, 0 = Lücke); ältere Tage ohne Flag: Ø Bestand aus dem Verlauf
   const vminOk = runs.every(r => r[1] == null || r[2] === 1 || r[2] === 0 || isGapRun(r));
-  const obsMin = E.observedMinutes(runs).map((m, h) => mask.ok[h] ? m : 0), obsMinV = vminOk ? obsMin : new Array(24).fill(0); const o = econOpts();
+  const obsMin = E.observedMinutes(runs).map((m, h) => mask.ok[h] ? m : 0), obsMinV = vminOk ? E.observedMinutesEnd(runs).map((m, h) => mask.ok[h] ? m : 0) : new Array(24).fill(0); const o = econOpts(); // S1.1: Abdeckung anteilig, Fahrzeugminuten in der Endstunde
   const maskG = (g) => { const out = { ...g }; for (const f of ['start', 'end', 'rot', 'vmin', 'vminTot']) if (Array.isArray(g[f])) out[f] = g[f].map((v, h) => mask.ok[h] ? (v || 0) : 0); return out; };
   const assume = calib?.assume || null, mode = calibMode();
   const planCache = new Map(); const out = new Map();

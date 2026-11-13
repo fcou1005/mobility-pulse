@@ -16,7 +16,7 @@ const z = () => new Array(24).fill(0), at = (h, v) => { const a = z(); a[h] = v;
 const day = '2026-11-10', t0 = Date.parse('2026-11-09T23:00:00Z');
 const events = {
   day, version: 1, hourMin: new Array(24).fill(60), gapHours: [], srcModes: { s1: 'perTrip' },
-  runs: Array.from({ length: 72 }, (_, i) => [t0 + (i + 1) * 20 * 60e3, 20 * 60e3, 1, '2026-11-02a@x']),
+  runs: Array.from({ length: 72 }, (_, i) => [t0 + (i + 1) * 20 * 60e3 - (i === 71 ? 1 : 0), 20 * 60e3, 1, '2026-11-02a@x']), // letzter Lauf vor Mitternacht (S1.1)
   groups: {
     '08416041|Voi|scooter': { start: at(17, 10), end: at(18, 9), vmin: new Array(24).fill(600.4), vminTot: new Array(24).fill(660), reloc: z(), swap: at(9, 2), pickup: z(), disOn: z(), disOff: z(), rot: z(), tripDurSum: 3600e3, tripDurN: 10 },
     '08415061|Voi|scooter': { start: at(8, 2), end: at(9, 2), vmin: new Array(24).fill(120), vminTot: new Array(24).fill(120), reloc: z(), swap: z(), pickup: z(), disOn: z(), disOff: z(), rot: z() },

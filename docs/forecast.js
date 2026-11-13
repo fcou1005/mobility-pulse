@@ -7,16 +7,16 @@
 // Je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR: forecast/, forecast/moped/, forecast/car/); die Familie folgt der Fahrzeugart-Auswahl
 // oder dem Umschalter in der Kopfleiste.
 // Werte aus Daten gehen durch ctx.esc; Texte im Wörterbuch web/i18n.js (Schlüssel fv.*).
-import * as FC from './pulse-forecast.js?v=mweoo1k7';
-import * as CX from './pulse-context.js?v=mweoo1k7';
-import * as SP from './pulse-spots.js?v=mweoo1k7';
-import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mweoo1k7';
-import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mweoo1k7';
-import { toCsv } from './pulse-report.js?v=mweoo1k7';
-import { dayType } from './pulse-econ.js?v=mweoo1k7';
-import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mweoo1k7';
-import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mweoo1k7';
-import { mapKeys } from './mapkeys.js?v=mweoo1k7';
+import * as FC from './pulse-forecast.js?v=mweui1mb';
+import * as CX from './pulse-context.js?v=mweui1mb';
+import * as SP from './pulse-spots.js?v=mweui1mb';
+import { decodeFleet, buildDemandModel, groupPlaces, DEFAULTS as OPS } from './pulse-ops.js?v=mweui1mb';
+import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js?v=mweui1mb';
+import { toCsv } from './pulse-report.js?v=mweui1mb';
+import { dayType } from './pulse-econ.js?v=mweui1mb';
+import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js?v=mweui1mb';
+import { weatherFor, weatherSvg, WX_CSS, resetWeatherCache } from './weather.js?v=mweui1mb';
+import { mapKeys } from './mapkeys.js?v=mweui1mb';
 
 const TZ = 'Europe/Berlin', DEMAND_DAYS = 7, SPOT_ROWS = 25;
 const CACHE = new Map(), S = new WeakMap();
@@ -678,7 +678,8 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   // Zeilen des Diagramms; norm: je volle Stunde (Audit MET-01: der Sammler läuft alle ~18 Min., eine Stunde zählt 3 oder 4 Läufe und damit
   // 50–76 Minuten. Ist × 60 ÷ beobachtete Minuten des Tages; Plan und Live-Prognose × 60 ÷ beobachtete Minuten des Tages, dessen Fahrzeugstunden
   // sie verwenden (zuletzt beobachteter Tag davor, wie lib/pulse-forecast.js lastExposure). Nur Anzeige; Summen und Kacheln bleiben gezählt.
-  const obsOf = (d) => (d === today && fresh?.obs ? fresh.obs : ctx.state.latest?.measure?.days?.[d]?.obs) || null;
+  // Ist zählt je Lauf in der Endstunde: Normierung mit den Minuten der Endstunde (obsEnd, seit 13.11.2026; obs ist seitdem anteilig je Stunde, S1.1)
+  const obsOf = (d) => (d === today && fresh?.obs ? fresh.obs : (ctx.state.latest?.measure?.days?.[d]?.obsEnd ?? ctx.state.latest?.measure?.days?.[d]?.obs)) || null;
   const mDays = [...new Set([...Object.keys(ctx.state.latest?.measure?.days || {}), today])].sort();
   const fA = (d, h) => { const o = obsOf(d)?.[h]; return norm && o >= 30 ? 60 / o : 1; };
   const fP = (d, h) => { if (!norm) return 1; for (let i = mDays.length - 1; i >= 0; i--) { const e = mDays[i]; if (e >= d) continue; const o = obsOf(e)?.[h]; if (o >= FC.GATES.hourMinObserved) return 60 / o; } return 1; };
@@ -1057,6 +1058,6 @@ async function freshActual(ctx, S0, sel, today) {
     const groups = Object.fromEntries(Object.entries(doc.groups).filter(([k]) => !bad.has(k)));
     const D = FC.dayFromDoc({ ...doc, groups }, ctx.state.calendar || null), A = FC.actualOfDay(D), out = new Array(24).fill(null);
     for (const k of sel.keys) { const a = A.get(k); if (!a) continue; a.forEach((v, h) => { if (v != null) out[h] = (out[h] || 0) + v; }); }
-    return out.some(x => x != null) ? { a: out, obs: D.hourMin } : null;
+    return out.some(x => x != null) ? { a: out, obs: D.obsEnd ?? D.hourMin } : null;
   } catch { return null; }
 }

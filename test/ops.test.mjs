@@ -1,6 +1,10 @@
 import * as O from '../lib/pulse-ops.js';
 import { cellOf, cellCenter } from '../lib/pulse-track.js';
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
+// P6: Laufzeitgrenzen relativ zur Rechnerleistung (Referenzlast ≈ 20 ms auf dem Entwicklungsrechner, Faktor 1–4) und als bestes von 3 Messungen
+const REF_MS = 20, refLoad = () => { const t = performance.now(); const a = new Float64Array(200000); for (let i = 0; i < a.length; i++) a[i] = Math.sin(i) * 1e6; a.sort(); const m = new Map(); for (let i = 0; i < 50000; i++) m.set('k' + (i % 5000), i); return performance.now() - t; };
+const SLOW = Math.min(4, Math.max(1, Math.min(refLoad(), refLoad(), refLoad()) / REF_MS));
+const best = (f, n = 3) => { let ms = Infinity, r; for (let i = 0; i < n; i++) { const t = performance.now(); r = f(); ms = Math.min(ms, performance.now() - t); } return [r, ms]; };
 const AGS = '08416041';
 const base = [48.52, 9.05];
 // Zellen: Raster 6 × 6 um Tübingen, Nachfrage fällt vom Zentrum ab
@@ -138,10 +142,10 @@ assert(ord.map(p => p.k).join() === '0,1,2,3,4,5', 'Punkte auf einer Linie in Re
   assert(okPerm && okStartEnd, 'orderStops: Ergebnis ist Permutation der Stopps (ohne Start/Ende)');
   assert(okSym, 'orderStops: lokal optimal gegenüber vollem Tourpreis (symmetrisch, 20 Instanzen)');
   assert(okAsym, 'orderStops: lokal optimal auch bei asymmetrischen Kosten (20 Instanzen)');
-  const big = inst(50); const t0 = performance.now(); const rb = O.orderStops(big, { start: D0, end: D0 }); const ms = performance.now() - t0;
-  assert(rb.length === 50 && ms < 100, `orderStops: 50 Stopps in ${ms.toFixed(1)} ms (< 100 ms)`);
-  const huge = inst(100); const t1 = performance.now(); O.orderStops(huge, { start: D0, end: D0 }); const ms2 = performance.now() - t1;
-  assert(ms2 < 300, `orderStops: 100 Stopps in ${ms2.toFixed(1)} ms (< 300 ms)`);
+  const big = inst(50); const [rb, ms] = best(() => O.orderStops(big, { start: D0, end: D0 }));
+  assert(rb.length === 50 && ms < 100 * SLOW, `orderStops: 50 Stopps in ${ms.toFixed(1)} ms (< ${(100 * SLOW).toFixed(0)} ms)`);
+  const huge = inst(100); const [, ms2] = best(() => O.orderStops(huge, { start: D0, end: D0 }));
+  assert(ms2 < 300 * SLOW, `orderStops: 100 Stopps in ${ms2.toFixed(1)} ms (< ${(300 * SLOW).toFixed(0)} ms)`);
   // Vergleich mit der bisherigen Fassung (volle Tour je Zug neu gerechnet, Stand vor der Delta-Bewertung): feste Daten (Seed),
   // mit/ohne Start und Ende, symmetrisch und asymmetrisch → Tourlänge nie länger als vorher
   const refOrder = (stops, { start = null, end = null, cost = O.makeCost() } = {}) => {
@@ -413,8 +417,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   // Leistung: 20.000 Ereignisse über 2 km² in < 400 ms
   let seed = 3; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   const big = { fields: F, events: [...Array(20000)].map((_, i) => e(i / 10, rnd() < 0.7 ? 'deploy' : 'collect', rnd() < 0.5 ? 'Dott' : 'Voi', 48.5 + rnd() * 0.012, 9.05 + rnd() * 0.017, 4 + Math.floor(rnd() * 6))) };
-  const t0 = performance.now(); const gb = O.groupPlaces(big, { ags: AGS }); const ms = performance.now() - t0;
-  assert(gb.events.deploy + gb.events.collect === 20000 && ms < 400, `20.000 Ereignisse → ${gb.deploy.length + gb.collect.length} Orte in ${ms.toFixed(0)} ms`);
+  const [gb, ms] = best(() => O.groupPlaces(big, { ags: AGS }));
+  assert(gb.events.deploy + gb.events.collect === 20000 && ms < 400 * SLOW, `20.000 Ereignisse → ${gb.deploy.length + gb.collect.length} Orte in ${ms.toFixed(0)} ms (< ${(400 * SLOW).toFixed(0)} ms)`);
 }
 // --- Reihenfolge nach Kilometern und Priorität (Nutzerwunsch 01.11.2026: kilometeroptimiert, lange Standzeit / niedriger Akku früher)
 {
@@ -506,8 +510,8 @@ assert(sp5.excluded > 0 && sp5.spots.every(s => s.park?.cat === 'station'), 'Zel
   const r1 = sw4.runs[0], s1 = r1.stops[0];
   assert(r1.stops.every((s, i) => s.seq === i + 1 && s.rank >= 1 && s.why && Number.isFinite(s.prio)) && r1.kmNN >= r1.kmMin && r1.kmPrio >= r1.kmMin && s1.atKm > 0, `Tour nennt je Stopp Position, Rang, Priorität, Grund und Strecke bis dahin; Vergleich: kürzeste ${r1.kmMin} · Nächster Nachbar ${r1.kmNN} · reine Prioritätsfolge ${r1.kmPrio} km`);
   // Rechenzeit: 50 Stopps mit Priorität < 150 ms
-  const big = inst(50); const t0 = performance.now(); O.orderTour([big], { start: D0, end: D0, weight: s => s.prio, lambda: 1 }); const ms = performance.now() - t0;
-  assert(ms < 150, `Reihenfolge mit Priorität: 50 Stopps in ${ms.toFixed(0)} ms (< 150 ms)`);
+  const big = inst(50); const [, ms] = best(() => O.orderTour([big], { start: D0, end: D0, weight: s => s.prio, lambda: 1 }));
+  assert(ms < 150 * SLOW, `Reihenfolge mit Priorität: 50 Stopps in ${ms.toFixed(0)} ms (< ${(150 * SLOW).toFixed(0)} ms)`);
 }
 // --- M-10: Netto-Abfluss je Gemeinde ausgeglichen, vorsichtige Untergrenze in der MCDA, Poisson-Bootstrap für „stabil“
 {

@@ -35,7 +35,22 @@ assert(E.planFor(pricing, 'Lime', 'A', 'scooter') === null, 'ohne Tarif: null');
 const at = (h) => Date.parse(`2026-11-01T${String(h - 1).padStart(2, '0')}:30:00Z`); // Berlin = UTC+1
 const runs = [[at(8), null], [at(8) + 20 * 60e3, 20 * 60e3], [at(8) + 40 * 60e3, 20 * 60e3], [at(9) + 0, 20 * 60e3]];
 const obs = E.observedMinutes(runs);
-assert(obs[8] === 20 && obs[9] === 40 && E.observedMinutes([[at(10), 40 * 60e3, 1]])[10] === 40, 'beobachtete Minuten je Stunde');
+// S1.1: Fenster anteilig je Ortsstunde (08:30–08:50 → 8; 08:50–09:10 → je 10 Min. in 8 und 9; 09:10–09:30 → 9), nicht ganz in der Endstunde
+const o10 = E.observedMinutes([[at(10), 40 * 60e3, 1]]);
+assert(obs[8] === 30 && obs[9] === 30 && o10[9] === 10 && o10[10] === 30, `beobachtete Minuten je Stunde anteilig (8: ${obs[8]}, 9: ${obs[9]}; Fenster 09:50–10:30 → 10 + 30)`);
+{ // S1.1 Abnahme: vollständiger Tag im 18–20-Minuten-Takt → jede Stunde 60 ± 1 Minuten (bisher 40–80 je nach Zahl der Läufe); die letzte Stunde
+  // endet mit dem letzten Lauf des Tages, der Rest gehört zum ersten Lauf des Folgetags (fällt dort wie seine Fahrtbeginne weg)
+  let r = 7, t = Date.parse('2026-11-09T22:50:00Z'); const rnd = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
+  let rs = []; const end = Date.parse('2026-11-10T22:59:00Z'); // Läufe der Tagesdatei 10.11. (Ortszeit), der erste reicht über Mitternacht
+  while (t < end) { const dt = Math.min((18 + 2 * rnd()) * 60e3, end - t); t += dt; rs.push([t, dt, 1]); }
+  rs = rs.filter(([a]) => new Date(a + 3600e3).getUTCDate() === 10);
+  const om = E.observedMinutes(rs), old = new Array(24).fill(0); for (const [a, d] of rs) old[(new Date(a).getUTCHours() + 1) % 24] += d / 60e3;
+  assert(om.every(m => Math.abs(m - 60) <= 1), `S1.1: 18–20-Minuten-Takt → jede Stunde 60 ± 1 Min. (${Math.min(...om).toFixed(1)}–${Math.max(...om).toFixed(1)}; Endstunde bisher ${Math.min(...old).toFixed(0)}–${Math.max(...old).toFixed(0)})`);
+  // S1.2: Abdeckung des vollen Tags ≈ 1 → Hochrechnung = Zählung (bisher hob die 60-Minuten-Kappung sie an)
+  const kv = E.kpis({ g: { start: new Array(24).fill(10), end: new Array(24).fill(10), rot: new Array(24).fill(0), vmin: new Array(24).fill(0), vminTot: new Array(24).fill(0) }, obsMin: om, type: 'scooter' });
+  const kOld = E.kpis({ g: { start: new Array(24).fill(10), end: new Array(24).fill(10), rot: new Array(24).fill(0), vmin: new Array(24).fill(0), vminTot: new Array(24).fill(0) }, obsMin: old, type: 'scooter' });
+  assert(Math.abs(kv.ridesDay / kv.rides - 1) < 0.01 && kOld.ridesDay / kOld.rides - 1 > 0.01, `S1.2: Hochrechnung des vollen Tags ${((kv.ridesDay / kv.rides - 1) * 100).toFixed(2)} % neben der Zählung (bisher ${((kOld.ridesDay / kOld.rides - 1) * 100).toFixed(1)} %)`);
+}
 // 100 Fahrzeuge, ganzer Tag beobachtet, 300 Fahrten → RVD 3
 const full = new Array(24).fill(60);
 const g = { start: new Array(24).fill(12.5), end: new Array(24).fill(12.5), rot: new Array(24).fill(0), vmin: new Array(24).fill(90 * 60), vminTot: new Array(24).fill(100 * 60), tripDurSum: 0, tripDurN: 0, tripDistSum: 0, tripDistN: 0 };
@@ -92,6 +107,7 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
 {
   const day = '2026-10-25', hm = C.hourMinutes(day);
   const runsD = []; for (let t = Date.parse('2026-10-24T22:00:00Z'); t < Date.parse('2026-10-25T23:00:00Z'); t += 20 * 60e3) runsD.push([t, 20 * 60e3, 1]); // 25 Ortsstunden
+  runsD.push([Date.parse('2026-10-25T23:00:00Z') - 1, 20 * 60e3 - 1, 1]); // letzter Lauf kurz vor Mitternacht (Fenster anteilig, S1.1; der Lauf um 0 Uhr zählt zum Vortag)
   const om = E.observedMinutes(runsD);
   assert(hm[2] === 120 && om[2] === 120 && om[3] === 60 && om.reduce((a, b) => a + b, 0) === 1500, 'Zeitumstellung: Stunde 2 = 120 Min. beobachtet, Tag 25 h');
   const st = new Array(24).fill(10); st[2] = 20; // je echte Stunde 10 Fahrten
@@ -373,6 +389,21 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
     const k = er.groups['K|nb|bike'];
     assert(k?.level === 'warn' && k.checks.flags.includes('relHigh') && k.checks.relHigh > 3 && !er.groups['B|nb|bike']?.checks?.flags?.includes('relHigh') && !er.groups['X|nb|bike']?.checks?.flags?.includes('relHigh') && !E.ampelRed(er).size,
       `MET-12: nextbike-artige Überzählung (${k?.checks?.relHigh} × Median) gelb markiert; kleine Flotte (< 20) nicht bewertet; nichts rot`);
+  }
+  { // S1.6: Median ohne die geprüfte Gruppe – eine Flotte mit mehr als der Hälfte aller Fahrzeuge war bisher selbst der Median und nie auffällig
+    const g = (st, fleet, extra = {}) => ({ start: H24(() => st), end: H24(() => st), vminTot: H24(() => fleet * 60), vmin: H24(() => fleet * 60), ...extra });
+    const er = E.eventChecks({ day: '2026-11-02', runs: day.runs, groups: { 'K|nb|bike': g(30, 100), 'B|nb|bike': g(2, 30), 'M|nb|bike': g(2, 30), 'L|nb|bike': g(2, 30) } });
+    const k = er.groups['K|nb|bike'];
+    assert(k?.checks?.flags?.includes('relHigh') && near(k.checks.relMedian, 1.6, 0.01) && k.level === 'warn', `S1.6: große Flotte gegen den Median der übrigen (${k?.checks?.relHigh} × ${k?.checks?.relMedian}) gelb`);
+    // „Umsetzung im Fahrtentakt“ und „Moduswechsel heute“
+    const ev2 = { day: '2026-11-02', runs: day.runs, modeChanges: [[1, 'src-voi', 'stable', 'rotating']], groups: {
+      'A|Dott|scooter': { start: H24(h => 10 + h), end: H24(h => 10 + h), reloc: H24(h => 3 + h), swap: H24(() => 1) },
+      'A|Bolt|scooter': { start: H24(h => 10 + h), end: H24(h => 10 + h), reloc: H24(h => (h === 3 ? 40 : 0)), swap: H24(() => 1) },
+      'A|Voi|scooter': { start: H24(() => 10), end: H24(() => 10), swap: H24(() => 1) } } };
+    const e2 = E.eventChecks(ev2, [{ id: 'src-voi', operator: 'Voi', status: 'live', municipalities: ['A'] }]).groups;
+    assert(e2['A|Dott|scooter'].checks.flags.includes('relocTrips') && e2['A|Dott|scooter'].level === 'warn' && !e2['A|Bolt|scooter'].checks.flags.includes('relocTrips')
+      && e2['A|Voi|scooter'].checks.flags.join() === 'modeFlip' && e2['A|Voi|scooter'].checks.modeChanges === 1 && e2['A|Voi|scooter'].level === 'warn',
+      `S1.6: Umsetzungen im Stundentakt der Fahrten gelb (Anteil ${e2['A|Dott|scooter'].checks.relocShare}, r ${e2['A|Dott|scooter'].checks.relocR}), nächtlicher Block nicht; Moduswechsel der Quelle gelb`);
   }
   // Regelstand des ausgewerteten Tags (Teil vor „@“): rot schließt nur aus, wenn er dem aktuellen entspricht; älterer oder gemischter Tag = gelb mit Hinweis
   const evR = (rules) => ({ ...ev, runs: ev.runs.map((r, i) => (rules[i % rules.length] ? [r[0], r[1], 1, rules[i % rules.length]] : [r[0], r[1], 1])) });
