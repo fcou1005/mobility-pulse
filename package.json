@@ -12,9 +12,20 @@
     "web": "node scripts/build-web.mjs",
     "test:all": "node scripts/test-all.mjs",
     "test:unit": "node scripts/test-all.mjs --unit",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "test:browser": "node test/browser.mjs",
+    "fixture": "node scripts/make-fixture.mjs"
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@types/leaflet": "1.9.22",
+    "ajv": "8.20.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0",
+    "typescript": "6.0.3"
+  },
+  "//": "Der Sammler (scripts/collect.mjs) läuft ohne Abhängigkeiten; devDependencies nur für Build, Typprüfung und Tests."
 }
