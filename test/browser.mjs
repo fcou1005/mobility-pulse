@@ -5,15 +5,14 @@
 // über den Text (Zeitangaben maskiert), BROWSER_RUNS=3 vergleicht drei Läufe.
 //   node test/browser.mjs            (Playwright aus node_modules; BROWSER_PORT, Standard 8766 – 8765 gehört test/run.mjs)
 // Exit 1 bei Skriptfehlern, fehlenden Inhalten oder abweichenden Läufen.
-import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { startFixtureServer, FIX } from './fixture-server.mjs';
+import { openFixturePage, settledText, mask } from './browser-lib.mjs';
 
-const ROOT = path.resolve(new URL('..', import.meta.url).pathname), FIX = path.join(ROOT, 'test/fixtures/web-data');
 const PORT = +process.env.BROWSER_PORT || 8766, RUNS = Math.max(1, +process.env.BROWSER_RUNS || 1);
 const ONLY = process.env.VIEWS ? process.env.VIEWS.split(',') : null;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain' };
 
 // Ansicht → Prüfungen am sichtbaren Text (Gebiet Stuttgart, Deutsch). Jede Prüfung: [Beschreibung, RegExp]
 const CHECKS = {
@@ -37,15 +36,7 @@ const VIEWS = Object.keys(CHECKS).filter(v => !ONLY || ONLY.includes(v));
 const BAD_TEXT = /nicht ladbar|konnte nicht geladen|Fehler beim Laden/i;
 
 const missing = new Set(); // Dateien, die die Seite anfragt und das Fixture nicht hat (Hinweis; optionale Dateien wie incidents/<heute> fehlen erlaubt)
-const server = http.createServer(async (req, res) => {
-  const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const base = u.startsWith('/d/') ? FIX : u.startsWith('/data/') ? path.join(ROOT, 'data') : path.join(ROOT, 'docs');
-  const rel = u.startsWith('/d/') ? u.slice(3) : u.startsWith('/data/') ? u.slice(6) : (u.endsWith('/') ? `${u}index.html` : u);
-  const f = path.join(base, rel);
-  if (!f.startsWith(base)) { res.writeHead(403).end(); return; }
-  try { const b = await readFile(f); res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' }).end(b); } catch { if (u.startsWith('/d/')) missing.add(u.slice(3)); res.writeHead(404).end(); }
-});
-await new Promise(r => server.listen(PORT, '127.0.0.1', r));
+const server = await startFixtureServer(PORT, { missing });
 const { chromium } = await import('playwright').catch(() => { console.error('Playwright fehlt: npm ci (devDependencies) und npx playwright install chromium'); process.exit(2); });
 const fx = JSON.parse(await readFile(path.join(FIX, 'FIXTURE.json'), 'utf8'));
 const browser = await chromium.launch();
@@ -53,31 +44,13 @@ let bad = 0;
 const fail = (m) => { bad++; console.log(`✗ ${m}`); };
 const blocked = new Map();
 
-/** Text der Ansicht, sobald er sich 600 ms nicht mehr ändert (höchstens maxMs) */
-async function settledText(page, v, maxMs = 12000) {
-  let last = '', same = 0; const t0 = Date.now();
-  while (Date.now() - t0 < maxMs) {
-    const txt = await page.evaluate((x) => (document.getElementById(`view-${x}`)?.innerText || '').replace(/\s+/g, ' ').trim(), v);
-    if (txt === last && txt.length > 200) { if (++same >= 3) return txt; } else same = 0;
-    last = txt; await page.waitForTimeout(200);
-  }
-  return last;
-}
-const mask = (s) => s.replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, 'hh:mm').replace(/vor \d+ (Sek|Min)\.?/g, 'vor x').replace(/\d+[,.]\d+ s\b/g, 'x s');
-
 const i18nMissing = new Set(); // S3.5: Schlüssel, deren Wörterbuchbereich beim Zeichnen nicht geladen war (Debug-Warnung von web/i18n.js)
 async function pass(run, { scope, viewport, checks, tag, lang = null }) {
-  const page = await browser.newPage({ viewport, locale: 'de-DE', timezoneId: 'Europe/Berlin' });
-  await page.clock.install({ time: fx.at + 2 * 60e3 });
-  await page.route('**/*', (route) => { const u = new URL(route.request().url()); if (u.hostname === '127.0.0.1') return route.continue(); blocked.set(u.hostname, (blocked.get(u.hostname) || 0) + 1); return route.abort(); });
-  const errs = []; let cur = 'start';
-  page.on('pageerror', e => errs.push(`${cur}: ${e.message}`));
-  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`${cur}: console ${m.text().slice(0, 200)}`);
-    const w = /\[i18n\] Schlüssel fehlt: (\w+) → (\S+)/.exec(m.text()); if (w) i18nMissing.add(`${w[1]}:${w[2]} (${cur})`); });
-  await page.goto(`http://127.0.0.1:${PORT}/?data=/d/&scope=${scope}${lang ? `&lang=${lang}` : ''}#live`, { waitUntil: 'load', timeout: 60000 });
+  const { page, errs, setCur } = await openFixturePage(browser, { port: PORT, fx, scope, viewport, lang, blocked,
+    onConsole: (t, cur) => { const w = /\[i18n\] Schlüssel fehlt: (\w+) → (\S+)/.exec(t); if (w) i18nMissing.add(`${w[1]}:${w[2]} (${cur})`); } });
   const sums = {};
   for (const v of VIEWS) {
-    cur = v; await page.evaluate((x) => { location.hash = x; }, v);
+    setCur(v); await page.evaluate((x) => { location.hash = x; }, v);
     const txt = await settledText(page, v);
     sums[v] = createHash('sha1').update(mask(txt)).digest('hex').slice(0, 10);
     const res = [];
@@ -88,7 +61,7 @@ async function pass(run, { scope, viewport, checks, tag, lang = null }) {
     else if (res.length) fail(`${tag} ${v} (Lauf ${run + 1}): ${res.join('; ')}`);
   }
   if (errs.length) { bad += errs.length; console.log(`✗ ${tag}: ${errs.length} Skriptfehler\n  ${errs.slice(0, 10).join('\n  ')}`); }
-  await page.close();
+  await page.context().close();
   return sums;
 }
 

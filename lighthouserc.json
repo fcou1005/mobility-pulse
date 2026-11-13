@@ -1,0 +1,52 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "node test/fixture-server.mjs 8767",
+      "startServerReadyPattern": "bereit",
+      "url": [
+        "http://127.0.0.1:8767/?data=/d/&scope=08111000#live",
+        "http://127.0.0.1:8767/?data=/d/&scope=08111000#ops"
+      ],
+      "numberOfRuns": 1,
+      "settings": {
+        "preset": "desktop",
+        "onlyCategories": [
+          "performance",
+          "accessibility",
+          "best-practices"
+        ],
+        "chromeFlags": "--no-sandbox --headless=new",
+        "blockedUrlPatterns": [
+          "*tile.openstreetmap.org*",
+          "*nominatim.openstreetmap.org*",
+          "*api.mobidata-bw.de*",
+          "*gbfs.*",
+          "*api.citybik.es*",
+          "*router.project-osrm.org*",
+          "*overpass*",
+          "*raw.githubusercontent.com*"
+        ]
+      }
+    },
+    "assert": {
+      "assertions": {
+        "resource-summary:script:size": [
+          "error",
+          {
+            "maxNumericValue": 307200
+          }
+        ],
+        "categories:accessibility": [
+          "error",
+          {
+            "minScore": 0.95
+          }
+        ]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci/berichte"
+    }
+  }
+}

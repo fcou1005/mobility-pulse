@@ -1,7 +1,8 @@
 name: Tests
 # VORLAGE (scripts/test-workflow.yml) – nur über die GitHub-Weboberfläche unter fcou1005 als .github/workflows/test.yml anlegen (Audit OPS-13).
 # Läuft bei jedem Push auf main (außer reinen Daten-/Doku-Änderungen) und von Hand: alle Testdateien wie in CLAUDE.md, danach die
-# Browser-Tests mit festem Datenstand (test/browser.mjs, S3.1: Fixture im Repo, kein Netz, inhaltliche Prüfungen je Ansicht) und ein
+# Browser-Tests mit festem Datenstand (test/browser.mjs, S3.1: Fixture im Repo, kein Netz, inhaltliche Prüfungen je Ansicht), Barrierefreiheit,
+# Screenshots und Lighthouse (S3.6, gleiches Fixture) und ein
 # Browser-Rauchtest aller Ansichten gegen den echten Datenstand aus dem Branch data – rot, wenn eine Ansicht einen Skriptfehler wirft.
 # Liest nur (contents: read); stößt nichts an und schreibt nichts.
 on:
@@ -67,6 +68,38 @@ jobs:
         env:
           BROWSER_RUNS: '3'
         run: node test/browser.mjs
+      - name: Barrierefreiheit (axe, 0 Verstöße auf Live, Disposition, Bericht, Prognose, Quellen) und Referenz-Screenshots
+        run: node test/a11y.mjs
+      - name: Screenshots als Artefakt (Vergleich nur, wenn Chromium und Schriften zur Referenz passen)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: /tmp/mp-shots/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  lighthouse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: unit
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Lighthouse (Skript ≤ 300 KB auf Live und Disposition, Barrierefreiheit ≥ 0,95; Fixture, kein Netz)
+        run: npx --yes @lhci/cli@0.16.1 autorun
+      - name: Lighthouse-Berichte als Artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse
+          path: .lighthouseci/berichte/
+          retention-days: 14
+          if-no-files-found: ignore
 
   smoke:
     runs-on: ubuntu-24.04
