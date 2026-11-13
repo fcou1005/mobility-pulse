@@ -127,6 +127,7 @@ assert(ev3.hourMin?.length === 24 && ev3.hourMin.reduce((a, b) => a + b, 0) >= 1
   assert(rkL?.status === 'duplicate' && rkL.duplicateOf === 'rk_direct' && rkL.duplicateKind === 'rekeyed' && rkL.feedStatus === 'live' && l3.dedupe.mirrorDropped === 30 && l3.mirrors.some(m => m.of === 'rk_direct' && m.source === 'rk_land:source-rk' && m.seen === l3.at),
     `M-1: Spiegelquelle mit umgeschlüsselten Kennungen verworfen (${l3.dedupe.mirrorDropped} Fahrzeuge), Status duplicate (rekeyed), Paar in latest.json → mirrors`);
   const ops3 = JSON.parse(await readFile('test/out/ops/BW.json', 'utf8'));
+  assert(!(await readFile('test/out/ops/BW.json', 'utf8')).includes('<img') && JSON.stringify(ops3).includes('Geschlossen \uFF1Cimg'), 'S0.3: Stationsname mit <img> aus dem Feed kommt entschärft in ops/BW.json an');
   const nbRk = ops3.vehicles.filter(v => ops3.ops[v[2]] === 'nextbike' && Math.abs(v[1] - 9.10) < 1e-6).length;
   assert(nbRk === 30, `M-1: Disposition (ops/BW.json) mit 30 statt 60 Rädern (${nbRk})`);
   assert(kid?.parent === 'mf_test' && kid.batteryScale?.suspect && kid.batteryScale.p99 < 60 && kid.checks.items[0]?.msg?.startsWith('Ladestand-Skala unplausibel') && ops3.vehicles.filter(v => ops3.ops[v[2]] === 'Lime').every(v => v[5] === null),

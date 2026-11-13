@@ -2,13 +2,15 @@
 # das die Datei zuletzt geändert hat; nicht aus einer Sitzung pushen).
 # Schattenkandidat der Prognose (lib/pulse-chronos.js): viermal täglich Chronos-2 (amazon/chronos-2, Apache 2.0) auf CPU,
 # Ergebnis chronos.json im Branch tsfm. Der Sammler liest es und vergleicht es live; veröffentlicht wird weiter das eigene Modell.
+# Token-Härtung (Sprint 0, S0.8, 13.11.2026): Der Rechen-Job installiert fremde Pakete (torch, Chronos) und hat nur Leserechte, kein Token
+# im Checkout. Veröffentlicht wird in einem eigenen Job, der nur chronos.json als Artefakt bekommt.
 name: Chronos-2
 on:
   schedule:
     - cron: '41 2,8,14,20 * * *'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: chronos
   cancel-in-progress: false
@@ -16,8 +18,12 @@ jobs:
   chronos:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -44,6 +50,22 @@ jobs:
           pip install -q -r scripts/chronos-requirements.txt
       - name: Prognose
         run: python scripts/chronos.py chronos-input.json chronos.json
+      - name: Ergebnis an den Veröffentlichen-Job geben
+        uses: actions/upload-artifact@v4
+        with:
+          name: chronos
+          path: chronos.json
+          retention-days: 3
+  veroeffentlichen:
+    needs: chronos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chronos
       - name: Veröffentlichen (Branch tsfm)
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}

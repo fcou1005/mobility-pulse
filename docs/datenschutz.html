@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<!-- Statische Seite ohne JavaScript (S0.5). test/legal.test.mjs prüft, dass jeder Host, den der Browser-Code anfragt, hier genannt ist. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Datenschutzerklärung · Mobility Pulse</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<style>
+body{margin:0;font:16px/1.6 'IBM Plex Sans',system-ui,sans-serif;background:#fff;color:#1a1d21}
+main{max-width:76ch;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:28px;line-height:1.2;margin:16px 0 8px}
+h2{font-size:20px;line-height:1.3;margin:32px 0 8px}
+a{color:#1f6fd1}
+.back,.stand{font-size:14px}
+.stand{color:#5b6573;margin:0 0 24px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45}
+th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid #d8dde3}
+th{font-weight:600}
+code{font:13px 'IBM Plex Mono',ui-monospace,monospace}
+@media (prefers-color-scheme:dark){body{background:#12161b;color:#e6e9ee}a{color:#7fb2ff}.stand{color:#9aa4b1}th,td{border-color:#2a313a}}
+</style>
+</head>
+<body>
+<main>
+<p class="back"><a href="./">← Zurück zu Mobility Pulse</a> · <a href="#en" lang="en">English</a></p>
+<h1>Datenschutzerklärung</h1>
+<p class="stand">Stand: 13. November 2026</p>
+
+<h2>Verantwortlicher</h2>
+<p>Verantwortlich ist der Betreiber des Projekts Mobility Pulse (GitHub-Konto <a href="https://github.com/fcou1005">fcou1005</a>). Kontakt über die <a href="https://github.com/fcou1005/mobility-pulse/issues">Issues des Projekts</a>.</p>
+
+<h2>Kurz gesagt</h2>
+<p>Mobility Pulse setzt keine Cookies, nutzt keine Analyse- oder Werbedienste und hat keine Nutzerkonten. Beim Besuch fallen nur die technischen Verbindungsdaten an, vor allem die IP-Adresse. Sie gehen an die Server, von denen der Browser die Seite, die Daten und die Karten lädt. Diese Server sind unten vollständig aufgeführt.</p>
+
+<h2>Hosting und Datenabruf: GitHub</h2>
+<p>Die Seite liegt auf GitHub Pages, der Datenstand wird von <code>raw.githubusercontent.com</code> geladen. Anbieter ist GitHub, Inc., USA, eine Tochter der Microsoft Corporation. Bei jedem Abruf verarbeitet GitHub IP-Adresse, Zeitpunkt, angefragte Datei und Angaben zum Browser, um die Seite auszuliefern und Missbrauch abzuwehren.</p>
+<p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO: das berechtigte Interesse, die Seite sicher und erreichbar anzubieten. Für die Übermittlung in die USA stützt sich GitHub auf das EU-U.S. Data Privacy Framework und auf Standardvertragsklauseln. Einzelheiten stehen in der <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">Datenschutzerklärung von GitHub</a>.</p>
+
+<h2>Dienste, die Ihr Browser direkt anfragt</h2>
+<p>Für Karten, Wege und Umgebungsdaten fragt Ihr Browser die folgenden Dienste direkt an. Jeder sieht dabei Ihre IP-Adresse und den Inhalt der Anfrage, etwa Kartenausschnitt oder Koordinaten einer Route. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO: Ohne diese Abrufe lassen sich Karten und Routen nicht anzeigen.</p>
+<div class="tbl"><table>
+<thead><tr><th>Zweck</th><th>Host</th><th>Betreiber</th><th>Wann</th></tr></thead>
+<tbody>
+<tr><td>Kartenkacheln</td><td><code>tile.openstreetmap.org</code></td><td>OpenStreetMap Foundation, Vereinigtes Königreich</td><td>bei jeder Karte</td></tr>
+<tr><td>Ortssuche und Adressen</td><td><code>nominatim.openstreetmap.org</code></td><td>OpenStreetMap Foundation, Vereinigtes Königreich</td><td>Disposition und Übersicht, wenn Adressen angezeigt werden</td></tr>
+<tr><td>Wege zu Fuß und mit dem Rad</td><td><code>routing.openstreetmap.de</code></td><td>FOSSGIS e.V., Deutschland</td><td>Fahrtrouten und Disposition</td></tr>
+<tr><td>Gehzeiten</td><td><code>valhalla1.openstreetmap.de</code></td><td>FOSSGIS e.V., Deutschland</td><td>Disposition</td></tr>
+<tr><td>Fahrzeiten für Touren</td><td><code>router.project-osrm.org</code></td><td>FOSSGIS e.V., Deutschland (OSRM-Demoserver)</td><td>Disposition</td></tr>
+<tr><td>Abstellflächen und Haltestellen aus OpenStreetMap</td><td><code>overpass-api.de</code>; nur wenn dieser nicht antwortet: <code>overpass.kumi.systems</code>, <code>overpass.private.coffee</code></td><td>FOSSGIS e.V., Deutschland; die beiden Ersatz-Spiegel betreiben Dritte</td><td>Disposition</td></tr>
+<tr><td>Amtliche Abstellflächen in Baden-Württemberg</td><td><code>api.mobidata-bw.de</code></td><td>MobiData BW der Nahverkehrsgesellschaft Baden-Württemberg (NVBW), Deutschland</td><td>Disposition in Baden-Württemberg</td></tr>
+<tr><td>Live-Bestand</td><td>Feeds der Sharing-Anbieter und der Verzeichnisse, z. B. <code>api.mobidata-bw.de</code>, <code>api.citybik.es</code>, Hosts wie <code>gbfs.*</code></td><td>die jeweiligen Anbieter, teils außerhalb der EU; die aktuelle Liste steht in <a href="https://github.com/fcou1005/mobility-pulse/blob/main/data/sources.json">data/sources.json</a></td><td>nur in der Ansicht „Live“</td></tr>
+</tbody>
+</table></div>
+<p>Darüber hinaus gibt Mobility Pulse keine Daten an Dritte weiter. Schriften und Kartenbibliothek liegen auf dem eigenen Server, ein Abruf bei Google Fonts oder einem CDN findet nicht statt.</p>
+
+<h2>Speicher in Ihrem Browser</h2>
+<p>Mobility Pulse setzt keine Cookies. Einige Einstellungen merkt sich Ihr Browser lokal. Sie verlassen das Gerät nicht und lassen sich jederzeit in den Browser-Einstellungen löschen. Sie dienen nur Funktionen, die Sie selbst auslösen (§ 25 Abs. 2 Nr. 2 TDDDG).</p>
+<div class="tbl"><table>
+<thead><tr><th>Eintrag</th><th>Inhalt</th><th>Dauer</th></tr></thead>
+<tbody>
+<tr><td><code>mp-lang</code>, <code>mp-lang-hint</code></td><td>gewählte Sprache, abgelehnter Sprachhinweis</td><td>bis Sie ihn löschen</td></tr>
+<tr><td><code>mp-theme</code></td><td>helle oder dunkle Darstellung</td><td>bis Sie ihn löschen</td></tr>
+<tr><td><code>mp-calib-mode</code>, <code>mp-calib</code></td><td>gewählte Rechenweise und eigene Korrekturfaktoren je Anbieter</td><td>bis Sie ihn löschen</td></tr>
+<tr><td><code>fv-norm</code></td><td>Darstellung der Prognose</td><td>bis Sie ihn löschen</td></tr>
+<tr><td><code>mp-fl-routes-v1</code>, <code>mp-fl-view</code></td><td>Zwischenspeicher für höchstens 300 berechnete Routen, Karte oder Tabelle</td><td>bis Sie ihn löschen; älteste Routen fallen zuerst heraus</td></tr>
+<tr><td><code>mp-geo</code> (Sitzungsspeicher)</td><td>Zwischenspeicher der Ortssuche</td><td>bis Sie den Tab schließen</td></tr>
+</tbody>
+</table></div>
+
+<h2>Welche Fahrzeugdaten ausgewertet werden</h2>
+<p>Ausgewertet werden die offenen Fahrzeugdaten der Sharing-Anbieter (GBFS): Standort, Ladestand und Verfügbarkeit von Fahrzeugen. Angaben zu Fahrgästen enthalten sie nicht. Fahrzeugkennungen verarbeitet der Sammler nur intern, als Hash mit privatem Schlüssel (HMAC). Er löscht sie spätestens 24 Stunden, nachdem ein Fahrzeug verschwunden ist; veröffentlicht werden sie nicht.</p>
+<p>Veröffentlicht werden Summen je Gemeinde, Stunde und Zelle. Eine Zelle je Tageszeit erscheint erst ab 3 Ereignissen, ein Start-Ziel-Paar erst ab 5 Fahrten am Tag. Dazu kommt der letzte Bestand ohne Kennung; die Standzeit steht dort nur in Klassen.</p>
+<p>Rechtsgrundlage, soweit die abgeleiteten Daten Personen betreffen könnten, ist Art. 6 Abs. 1 lit. f DSGVO. Das berechtigte Interesse ist die Analyse des Sharing-Angebots (Bestand, Nutzung, Prognose).</p>
+<p>Speicherdauer:</p>
+<ul>
+<li>Ereignisse und Ströme: 30 Tage</li>
+<li>Zellen: 14 Tage</li>
+<li>Tageswerte je Gemeinde und Anbieter: im Archiv ohne Frist</li>
+<li>Live-Bestand: nur im jeweils letzten Lauf</li>
+</ul>
+
+<h2>Kontakt</h2>
+<p>Kontakt läuft über die Issues des Projekts auf GitHub. Issues sind öffentlich; dafür gilt die Datenschutzerklärung von GitHub.</p>
+
+<h2>Ihre Rechte</h2>
+<p>Sie haben das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18) und Datenübertragbarkeit (Art. 20). Einer Verarbeitung auf Grundlage berechtigter Interessen können Sie widersprechen (Art. 21). Sie können sich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren (Art. 77), etwa bei der Behörde Ihres Wohnorts.</p>
+<p>Sie müssen keine Daten bereitstellen. Ohne die Verbindungsdaten kann der Browser die Seite allerdings nicht laden. Eine automatisierte Entscheidung im Sinne von Art. 22 DSGVO findet nicht statt.</p>
+
+<h2 id="en" lang="en">Privacy policy (English)</h2>
+<div lang="en">
+<p><b>Controller:</b> the operator of the Mobility Pulse project (GitHub account <a href="https://github.com/fcou1005">fcou1005</a>); contact via the <a href="https://github.com/fcou1005/mobility-pulse/issues">project issues</a>.</p>
+<p><b>In short:</b> no cookies, no analytics or advertising services, no user accounts. When you visit, only technical connection data (mainly your IP address) reaches the servers listed here.</p>
+<p><b>Hosting:</b> GitHub Pages, data from <code>raw.githubusercontent.com</code> (GitHub, Inc., USA). GitHub processes IP address, time, requested file and browser details to deliver the site and prevent abuse. Legal basis: Art. 6(1)(f) GDPR. Transfers to the USA rely on the EU-U.S. Data Privacy Framework and standard contractual clauses. See the <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a>.</p>
+<p><b>Services your browser contacts directly</b>, each of which sees your IP address and the request (map section, route coordinates):</p>
+<ul>
+<li>map tiles from <code>tile.openstreetmap.org</code></li>
+<li>addresses from <code>nominatim.openstreetmap.org</code> (both OpenStreetMap Foundation, UK)</li>
+<li>routing via <code>routing.openstreetmap.de</code>, <code>valhalla1.openstreetmap.de</code> and <code>router.project-osrm.org</code> (FOSSGIS e.V., Germany)</li>
+<li>OpenStreetMap features via <code>overpass-api.de</code> (FOSSGIS e.V.), with <code>overpass.kumi.systems</code> and <code>overpass.private.coffee</code> as fallbacks run by third parties</li>
+<li>official parking areas via <code>api.mobidata-bw.de</code> (MobiData BW, NVBW, Germany)</li>
+<li>in the Live view only: the operators' feeds and directories, e.g. <code>api.citybik.es</code>, partly outside the EU</li>
+</ul>
+<p>Legal basis: Art. 6(1)(f) GDPR. No other data is shared.</p>
+<p><b>Browser storage:</b> no cookies. Settings stay on your device until you delete them: language (<code>mp-lang</code>, <code>mp-lang-hint</code>), theme (<code>mp-theme</code>), calibration (<code>mp-calib-mode</code>, <code>mp-calib</code>), forecast display (<code>fv-norm</code>), up to 300 cached routes (<code>mp-fl-routes-v1</code>, <code>mp-fl-view</code>). Place-search cache (<code>mp-geo</code>) is kept until you close the tab. Legal basis: § 25(2) no. 2 TDDDG.</p>
+<p><b>Vehicle data:</b> open GBFS data of the operators (location, battery, availability; no rider data).</p>
+<ul>
+<li>Vehicle IDs are only hashed internally (HMAC) and deleted at the latest 24 hours after a vehicle disappears.</li>
+<li>Only totals are published: cells by time band from 3 events, origin-destination pairs from 5 trips a day, idle time in classes only.</li>
+<li>Retention: events and flows 30 days, cells 14 days, daily totals without limit, live fleet only in the latest run.</li>
+<li>Legal basis: Art. 6(1)(f) GDPR.</li>
+</ul>
+<p><b>Your rights:</b> access, rectification, erasure, restriction, portability and objection (Art. 15–18, 20, 21 GDPR), and a complaint to a data protection authority (Art. 77). No automated decision-making.</p>
+</div>
+</main>
+</body>
+</html>

@@ -5,7 +5,7 @@
 // dieselbe Aktion aus wie ein Klick, Esc schließt. Die Objektliste kommt aus den Layern der Karte (auch Canvas-Marker), nie aus dem DOM;
 // Karten ohne anklickbare Layer (Zellraster) geben eine eigene Liste über opts.items. Unter der Karte steht ein kurzer Hinweis (DE/EN),
 // verknüpft per aria-describedby.
-import { t, onLang } from './i18n.js?v=mwdbxj53';
+import { t, onLang } from './i18n.js?v=mweoo1k7';
 
 export const MAX_ITEMS = 500;
 const STYLE = `
@@ -16,7 +16,10 @@ const STYLE = `
 .mk-live{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 [hidden]+.mk-hint{display:none}
 @media (hover:none) and (pointer:coarse){.mk-hint{display:none}}
-@media print{.mk-hint{display:none}}`;
+@media print{.mk-hint{display:none}}
+.mk-wheel{position:absolute;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;pointer-events:none;background:rgba(0,0,0,.35);color:#fff;font:500 15px/1.4 var(--sans,system-ui);opacity:0;transition:opacity .2s}
+.mk-wheel.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.mk-wheel{transition:none}}`;
 let styled = false, seq = 0;
 function injectStyle() {
   if (styled || typeof document === 'undefined') return; styled = true;
@@ -46,6 +49,22 @@ function ownerOf(l, depth = 0) {
  * opts.hintAfter    Element, hinter dem der Hinweis steht (Standard: die Karte; gekoppelte Karten teilen einen Hinweis)
  * opts.hintExtra()  zusätzlicher Satz im Hinweis
  */
+// Mausrad zoomt nur mit Strg bzw. ⌘ (Trackpad-Zoom mit zwei Fingern meldet sich ebenfalls mit ctrlKey); ohne Taste scrollt die Seite weiter
+// und ein kurzer Hinweis erscheint über der Karte. Leaflets eigener Handler wird nur für dieses Ereignis eingeschaltet (Capture-Phase am
+// Container läuft vor dem Handler in der Bubble-Phase), damit Glättung und Schrittweite von Leaflet erhalten bleiben.
+const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+function wheelGate(map, box) {
+  if (box._mkWheel) return; box._mkWheel = true;
+  map.scrollWheelZoom.disable();
+  let tip = null, tm = 0;
+  box.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) { map.scrollWheelZoom.enable(); return; }
+    map.scrollWheelZoom.disable();
+    if (!tip) { tip = document.createElement('div'); tip.className = 'mk-wheel'; tip.setAttribute('aria-hidden', 'true'); box.appendChild(tip); }
+    tip.textContent = t(MAC ? 'maps.wheelMac' : 'maps.wheel'); tip.classList.add('on');
+    clearTimeout(tm); tm = setTimeout(() => tip.classList.remove('on'), 1200);
+  }, { capture: true, passive: true });
+}
 export function mapKeys(map, opts = {}) {
   const L = typeof window !== 'undefined' ? window.L : null;
   if (!L || !map) return null;
@@ -54,6 +73,7 @@ export function mapKeys(map, opts = {}) {
   const box = map.getContainer(), max = opts.max || MAX_ITEMS;
   box.classList.add('mk-map');
   if (!box.hasAttribute('tabindex')) box.tabIndex = 0;
+  wheelGate(map, box);
   // Hinweis und Live-Region unter der Karte (bei gleichem Container wiederverwendet)
   const anchor = opts.hintAfter || box;
   let hint = anchor.nextElementSibling;

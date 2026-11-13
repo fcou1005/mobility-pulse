@@ -10,6 +10,7 @@ import * as Cmp from './compare.js';
 import * as Sp from './spots.js';
 import * as Fv from './forecast.js';
 import { mapKeys } from './mapkeys.js';
+import { weatherFor } from './weather.js';
 import { GROUP_MIN, GROUP_M } from './pulse-track.js';
 import { t, tx, tMap, lang, setLang, onLang, applyStatic, numFmt, dateFmt, fmtLocale, suggestLang, dismissSuggestion, tIn } from './i18n.js';
 import { idleClassText } from './pulse-ops.js';
@@ -147,7 +148,7 @@ async function getJson(url, { timeout = 25000 } = {}) {
             for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > MAX_BYTES) { ctrl.abort(); throw new Error(t('app.tooLarge')); } text += dec.decode(value, { stream: true }); }
             text += dec.decode();
           } else text = await r.text();
-          json = JSON.parse(text);
+          json = C.parseJsonSafe(text); // Fremdtext ohne HTML-Wirkung (lib/pulse-core.js safeText)
         } catch (e) { error = e.message === t('app.tooLarge') ? t('app.tooLarge') : e.name === 'AbortError' ? 'Timeout' : t('app.notJson'); }
       }
     }
@@ -550,7 +551,8 @@ function setView(name) {
   $('#crumb-group').textContent = group.label;
   renderSegments(group, name);
   const segLabel = group.segs.length > 1 ? group.segs.find(([v]) => v === name)?.[1] : null;
-  document.title = `${segLabel ? `${segLabel} · ` : ''}${group.label} · Mobility Pulse`;
+  // Titel ohne Dopplung: gleicher Name von Gruppe und Teilansicht nur einmal
+  document.title = `${segLabel && segLabel.toLowerCase() !== group.label.toLowerCase() ? `${segLabel} · ` : ''}${group.label} · Mobility Pulse`;
   if (name === 'live') setTimeout(() => { state.map?.invalidateSize(); if (!dirty.has('live')) fitMap(); }, 50);
   // nur die aktive Ansicht ist gerendert; beim Wechsel wird sie nachgezogen, wenn sich seit dem letzten Zeichnen etwas geändert hat
   if (dirty.has(name)) renderView(name);
@@ -810,6 +812,7 @@ function renderAttribution() {
     foot.innerHTML = `<span>${t('app.data', { v0: esc([...shown, rest > 0 ? t('app.more', { rest }) : null].filter(Boolean).join(', ') || t('app.loadingCollectorSnapshot')), v1: dirs.length ? ` · ${t('app.via', { join: esc(dirs.join(', ')) })}` : '', v2: cl(t('app.licencePerSourceUnderData'), t('app.useSubjectToOperators')) })}</span>`
       + `<span>${t('app.municipalBoundariesVg250DlDe', { v0: esc(state.latest?.boundaries?.attribution?.replace(/\s*\(.*\)\s*$/, '') || '© GeoBasis-DE / BKG') })}</span>`
       + `<span>${t('app.mapsOpenstreetmap')}</span>`
+      + `<span class="foot-legal">${t('app.legalLinks')}</span>`
       + `<details class="foot-privacy"><summary>${t('app.privacyTitle')}</summary><div class="foot-privacy-body">${t('app.privacyBody', { flowMin: 5, cellMin: 3 })}</div></details>`;
     foot.title = names.join('\n');
   }
@@ -1949,12 +1952,13 @@ function T_empty() { return { start: new Array(24).fill(0), end: new Array(24).f
 // swapWaitCens/disDurCens (ab 02.11.2026): davon Mindestwerte (unter 20 % bzw. gesperrt seit erster Sichtung zu Beginn der Verfolgung, Z6) → Anzeige „≥“
 function T_add(a, g, ok = null) { for (const f of ['start', 'end', 'reloc', 'swap', 'pickup', 'disOn', 'disOff']) for (let i = 0; i < 24; i++) if (!ok || ok[i]) a[f][i] += g[f]?.[i] || 0; for (const f of ['swapWaitSum', 'swapWaitN', 'disDurSum', 'disDurN', 'tripDurSum', 'tripDurN', 'tripDistSum', 'tripDistN', 'swapWaitCens', 'disDurCens']) a[f] += g[f] || 0; }
 const atLeast = (cens, text) => cens > 0 ? `≥ ${text}` : text; // Mittel mit zensierten Werten ist ein Mindestwert
+// Wetter aus dem Cache des Sammlers (weather/<UTC-Tag>.json, DWD über Bright Sky), derselbe Stand wie in Bericht und Prognose;
+// kein Abruf bei Drittanbietern (Open-Meteo erlaubt die kostenlose Nutzung nur nicht-kommerziell). Ganz Deutschland: Mittel aller Wetterzellen.
 async function loadWeather(day) {
-  const c = state.scope === 'DE' ? [51.16, 10.45] : muniCenters().get(state.scope); if (!c) return null;
-  const key = `${day}|${c[0].toFixed(2)},${c[1].toFixed(2)}`;
+  const scope = state.scope === 'DE' ? null : state.scope, key = `${day}|${scope || 'DE'}`;
   if (!(key in state.usage.weather)) {
-    const r = await getJson(`https://api.open-meteo.com/v1/forecast?latitude=${c[0].toFixed(3)}&longitude=${c[1].toFixed(3)}&hourly=temperature_2m,precipitation&start_date=${day}&end_date=${day}&timezone=Europe%2FBerlin`, { timeout: 15000 });
-    state.usage.weather[key] = r.ok ? { temp: r.json.hourly.temperature_2m, rain: r.json.hourly.precipitation, name: state.scope === 'DE' ? t('app.centreOfGermany') : muniName(state.scope) } : null;
+    const vals = await weatherFor(Array.from({ length: 24 }, (_, h) => [day, h]), scope, getJsonShared, CFG.DATA).catch(() => null);
+    state.usage.weather[key] = vals?.some(Boolean) ? { temp: vals.map(v => (v ? v.t : null)), rain: vals.map(v => v?.p ?? null), name: scope ? muniName(scope) : t('app.centreOfGermany') } : null;
   }
   return state.usage.weather[key];
 }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <!-- Content-Security-Policy: Skripte, Stile und Schriften nur von hier (Leaflet und IBM Plex liegen unter vendor/, keine Drittanbieter beim Seitenaufruf);
      Daten per fetch von allen https-Hosts, weil der Live-Abruf die Feeds der Anbieter direkt liest (raw.githubusercontent.com, api.mobidata-bw.de,
-     gbfs.* …, OSRM, Nominatim, Overpass, Open-Meteo, Valhalla). Kacheln von OpenStreetMap. frame-ancestors geht per meta nicht (Rahmenschutz: app.js). -->
+     gbfs.* …, OSRM, Nominatim, Overpass, Valhalla). Kacheln von OpenStreetMap. frame-ancestors geht per meta nicht (Rahmenschutz: app.js). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -357,6 +357,7 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
     <div data-i18n="html.openDataCheckedAndMergedNo">Offene Daten, geprüft und zusammengeführt. Kein Anbieterzugang, keine Fahrzeugwege.</div>
     <div data-i18n="html.collector" class="stamp" id="side-stamp">Sammler: –</div>
     <div data-i18n="html.codeDataOnGithub"><a href="https://github.com/fcou1005/mobility-pulse">Code &amp; Daten auf GitHub</a></div>
+    <div data-i18n="html.legalLinks" class="side-legal"><a href="datenschutz.html">Datenschutz</a></div>
     <div class="side-tools" id="side-tools"></div>
   </div>
 </aside>
@@ -444,7 +445,7 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
     <div class="panel"><div class="inline-form"><span data-i18n="html.day"><b>Tag</b></span><div class="chips" id="usage-days"></div><span class="muted small" id="usage-note"></span><span data-i18n-title="html.dailyValuesPerMunicipality" class="muted small" id="usage-archive" title="Tageswerte je Gemeinde, Anbieter und Fahrzeugart; das Archiv wird nie gekürzt"></span></div></div>
     <div class="tiles" id="usage-tiles"></div>
     <div class="grid">
-      <div class="panel c8"><div class="panel-head"><div><h2 data-i18n="html.dailyProfile">Tagesgang</h2><div data-i18n="html.tripStartsPerHourAndOperator" class="sub" id="usage-chart-sub">Fahrtbeginne je Stunde und Anbieter</div></div><div class="inline-form"><label><span data-i18n="html.operator">Anbieter</span> <select data-i18n-title="html.onlyForDailyProfileDefault" id="usage-op" title="Nur für den Tagesgang; Vorgabe aus dem Filter oben"><option data-i18n="html.all" value="all">Alle</option></select></label><label><span data-i18n="html.vehicleType">Fahrzeugart</span> <select data-i18n-title="html.onlyForDailyProfileDefault" id="usage-type" title="Nur für den Tagesgang; Vorgabe aus dem Filter oben"><option data-i18n="html.all" value="all">Alle</option></select></label><label><input type="checkbox" id="chk-weather" checked> <span data-i18n="html.weatherOpenMeteo">Wetter (Open-Meteo)</span></label></div></div><div data-i18n-empty="html.loadingDailyProfile" id="chart-usage" data-empty="Tagesgang wird geladen …"></div><div class="legend" id="usage-legend"></div></div>
+      <div class="panel c8"><div class="panel-head"><div><h2 data-i18n="html.dailyProfile">Tagesgang</h2><div data-i18n="html.tripStartsPerHourAndOperator" class="sub" id="usage-chart-sub">Fahrtbeginne je Stunde und Anbieter</div></div><div class="inline-form"><label><span data-i18n="html.operator">Anbieter</span> <select data-i18n-title="html.onlyForDailyProfileDefault" id="usage-op" title="Nur für den Tagesgang; Vorgabe aus dem Filter oben"><option data-i18n="html.all" value="all">Alle</option></select></label><label><span data-i18n="html.vehicleType">Fahrzeugart</span> <select data-i18n-title="html.onlyForDailyProfileDefault" id="usage-type" title="Nur für den Tagesgang; Vorgabe aus dem Filter oben"><option data-i18n="html.all" value="all">Alle</option></select></label><label><input type="checkbox" id="chk-weather" checked> <span data-i18n="html.weatherOpenMeteo">Wetter (DWD)</span></label></div></div><div data-i18n-empty="html.loadingDailyProfile" id="chart-usage" data-empty="Tagesgang wird geladen …"></div><div class="legend" id="usage-legend"></div></div>
       <div class="panel c4"><div class="panel-head"><div><h2 data-i18n="html.idleTimes">Standzeiten</h2><div data-i18n="html.availableVehiclesByTimeSince" class="sub">Verfügbare Fahrzeuge nach Zeit seit letzter Bewegung</div></div></div><div data-i18n-empty="html.loadingIdleTimes" id="idle-bars" data-empty="Standzeiten werden geladen …"></div></div>
       <div class="panel c12"><div class="panel-head"><div><h2 data-i18n="html.operatorsComparedForDay">Anbieter im Tagesvergleich</h2><div data-i18n="html.measuredTripsAndOperator" class="sub">Gemessene Fahrten und Betreiber-Einsätze je Anbieter am gewählten Tag</div></div></div>
         <div data-i18n-aria-label="html.operatorsComparedForDay" class="tbl" tabindex="0" role="region" aria-label="Anbieter im Tagesvergleich"><table id="tbl-usage"><thead><tr><th data-i18n="html.operator">Anbieter</th><th data-i18n="html.trips" class="n">Fahrten</th><th data-i18n="html.tripEnds" class="n">Fahrtenden</th><th class="n"><abbr data-i18n="html.rebalancing" data-i18n-title="html.transportedByOperator" data-gloss="reloc" title="vom Betreiber transportiert">Umsetzungen</abbr></th><th data-i18n="html.batterySwaps" class="n">Akkutausch</th><th class="n"><abbr data-i18n="html.pickups" data-i18n-title="html.disappearedFromFeedWorkshop" data-gloss="pickup" title="aus dem Feed verschwunden (Werkstatt, Laden)">Abholungen</abbr></th></tr></thead><tbody></tbody></table></div>
@@ -596,6 +597,6 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
 <button type="button" class="to-top" id="to-top" hidden data-i18n-aria-label="ux.toTop" data-i18n-title="ux.toTop" aria-label="Nach oben" title="Nach oben"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 </div>
 <script src="vendor/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="></script>
-<script type="module" src="app.js?v=mwdbxj53"></script>
+<script type="module" src="app.js?v=mweoo1k7"></script>
 </body>
 </html>

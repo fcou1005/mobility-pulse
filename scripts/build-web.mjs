@@ -17,5 +17,7 @@ for (const [dir, f] of [['web', 'app.js'], ['web', 'ops.js'], ['web', 'weather.j
 // Selbst gehostete Schriften und Leaflet (web/vendor → docs/vendor): keine Anfragen an Google Fonts oder unpkg (DSGVO, CSP nur 'self')
 import { cp } from 'node:fs/promises';
 await cp(path.join(ROOT, 'web', 'vendor'), path.join(out, 'vendor'), { recursive: true, force: true });
+// Datenschutzerklärung: statische Seite ohne Skript (S0.5)
+for (const f of ['datenschutz.html']) await writeFile(path.join(out, f), await readFile(path.join(ROOT, 'web', f), 'utf8'));
 await writeFile(path.join(out, '.nojekyll'), '');
 console.error('[web] docs/ aktualisiert');

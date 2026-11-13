@@ -358,3 +358,12 @@ assert(sys.ghosts === 1 && sys.vehicles.length === 2 && sys.vehicles.some(v => v
   C.addStation(st, { docksAvailable: 12, capacity: 20 }); C.addStation(st, { docksAvailable: 999999, isVirtual: true }); C.addStation(st, { docksAvailable: 40, capacity: 10 }); C.addStation(st, { docksAvailable: 0, capacity: 10 }); C.addStation(st, { docksAvailable: null });
   assert(st.stationDocks === 12 && st.stationDocksBad === 2 && st.stationsFull === 1 && C.sumStats([st, st]).stationDocksBad === 4, 'freie Plätze: 999.999 und 40 bei Kapazität 10 nicht gezählt, als unplausibel gezählt');
 }
+// S0.3: Fremdtext entschärfen – Tags aus Feeds werden zu Text, Vergleiche wie „3 km < 25 km“ bleiben
+{
+  assert(C.safeText('Hbf <img src=x onerror=alert(1)>') === 'Hbf ＜img src=x onerror=alert(1)>' && C.safeText('</b><meta http-equiv=refresh>') === '＜/b>＜meta http-equiv=refresh>', 'safeText: Tag-Anfang wird ＜');
+  assert(C.safeText('13,1 km < 25 km') === '13,1 km < 25 km' && C.safeText('a\u0000b\u001fc\td\ne') === 'abc\td\ne' && C.safeText(5) === 5, 'safeText: Vergleich bleibt, Steuerzeichen außer Tab/Zeilenumbruch weg');
+  const j = C.parseJsonSafe('{"name":"Voi <b x>","list":["\\u003cscript>","ok"],"Bolt <i>|scooter":{"n":1},"n":2}');
+  assert(j.name === 'Voi ＜b x>' && j.list[0] === '＜script>' && j.list[1] === 'ok' && j['Bolt ＜i>|scooter'].n === 1 && j.n === 2, 'parseJsonSafe: Werte, \\u003c-Escapes und Schlüssel entschärft');
+  const clean = '{"msg":"Reichweite 13 km < 25 km","a":[1,2]}';
+  assert(JSON.stringify(C.parseJsonSafe(clean)) === JSON.stringify(JSON.parse(clean)), 'parseJsonSafe: ohne Tag-Anfang identisch mit JSON.parse');
+}

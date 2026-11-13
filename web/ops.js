@@ -1,5 +1,6 @@
 // Mobility Pulse — Disposition: Deploy-Spots, Umsetz-, Akkutausch-, Werkstatt- und Stationstouren im Browser.
 import * as O from './pulse-ops.js';
+import { parseJsonSafe } from './pulse-core.js';
 import { t, tMap, lang, dateFmt, fmtLocale } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
 import { mbBadge, mbBase } from './report.js';
@@ -262,7 +263,7 @@ function overpassBackground(ags, points, onDone) {
       try {
         const ctrl = new AbortController(); const tq = setTimeout(() => ctrl.abort(), 100000);
         const r = await fetch(ep, { method: 'POST', body: new URLSearchParams({ data: q }), signal: ctrl.signal }); clearTimeout(tq);
-        if (!r.ok) continue; const j = await r.json(); if (!Array.isArray(j?.elements) || j.remark) continue;
+        if (!r.ok) continue; const j = parseJsonSafe(await r.text()); if (!Array.isArray(j?.elements) || j.remark) continue;
         S.osm[ags] = { state: 'ok', from: new URL(ep).host, at: Date.now(), parking: O.parkingFromOsm(j.elements), transit: O.transitFromOsm(j.elements) };
         onDone(); return;
       } catch { /* nächster Spiegel */ }

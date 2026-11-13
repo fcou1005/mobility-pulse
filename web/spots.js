@@ -158,7 +158,7 @@ function overview(ctx, res, s) {
     const segs = `${a ? `<span class="a" style="width:calc(${w(a)} - ${b ? 1 : 0}px)"></span>` : ''}${b ? `<span class="b" style="width:calc(${w(b)} - ${a ? 1 : 0}px)"></span>` : ''}`;
     return `<div class="sp-bar" style="--c:${c}" role="img" aria-label="${ctx.esc(`${r.op}: ${label}`)}" title="${ctx.esc(label)}">${segs}${!r.own && ownN ? `<i style="left:${w(ownN)}"></i>` : ''}</div><div class="sub-line">${ctx.esc(label)}</div>`;
   };
-  const head = [[t('spots.colOp')], [t('spots.colSpots'), t('spots.colSpotsTip'), true], [t('spots.colDiff'), t('spots.colDiffTip', { own: res.own }), true], [t('spots.colMatch', { own: res.own }), t('spots.colMatchTip', { r: s.radius, own: res.own })],
+  const head = [[t('spots.colOp')], [t('spots.colSpots'), t('spots.colSpotsTip'), true], [t('spots.colDiff'), t('spots.colDiffTip', { own: res.own }), true], [t('spots.colMatch', { own: ctx.esc(res.own) }), t('spots.colMatchTip', { r: s.radius, own: res.own })],
     [t('spots.colKm2'), t('spots.colKm2Tip'), true], [t('spots.colPer1000'), t('spots.colPer1000Tip'), true], [t('spots.colAtSpot'), t('spots.colAtSpotTip', { r: s.radius }), true],
     [t('spots.colEmpty'), t('spots.colEmptyTip', { p: ctx.fmt(res.emptyShare * 100), runs: ctx.fmt(res.minRuns), near: SP.STATION_NEAR_M }), true], [t('spots.colDup'), t('spots.colDupTip', { d: res.dupM }), true]]
     .map(([l, tip, n]) => `<th${n ? ' class="n"' : ''}>${tip ? `<abbr title="${ctx.esc(tip)}">${l}</abbr>` : l}</th>`).join('');
