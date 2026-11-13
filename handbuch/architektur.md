@@ -22,12 +22,44 @@ docs/ (GitHub Pages)  ←  web/ + lib/ gebündelt mit esbuild (scripts/build-web
 | --- | --- |
 | `scripts/build-catalog.mjs` | Quellenkatalog `data/sources.json` aus den Verzeichnissen ([Quellen](quellen.md)) |
 | `scripts/prepare-boundaries.mjs` | Gemeindegrenzen (BKG VG250) |
-| `scripts/collect.mjs` | Sammler: Abruf, Bestand, Verfolgung (Fahrten, Umsetzungen, Akkutausch), Zellen, Ströme, Prognose, Kalibrierung; Phasen mit Zeitmessung in `status.json` |
+| `scripts/collect.mjs` | Sammler-Ablauf: ruft die Phasen in `scripts/collect/` nacheinander auf und misst je Phase die Zeit (`status.json` → `phases`) |
+| `scripts/collect/NN-<phase>.mjs` | je Phase eine Funktion `run(ctx)`: Abruf, Auswertung, Dubletten, Verfolgung (Fahrten, Umsetzungen, Akkutausch), Ereignisse und Zellen, Prognose, Kalibrierung, Grenzen, Abschluss |
 | `lib/pulse-*.js` | gemeinsame Rechenkerne ohne Abhängigkeiten, im Sammler und im Browser dieselben |
-| `web/` | Dashboard-Quelle; `app.js` ist der Einstieg, Ansichten werden beim ersten Öffnen nachgeladen |
+| `web/` | Dashboard-Quelle; `app.js` ist Einstieg und Steuerung, `app-*.js` die Teile der Startseite, Ansichten werden beim ersten Öffnen nachgeladen |
 | `docs/` | gebaute Seite (nicht von Hand ändern) |
 | `schemas/` | Datenverträge der wichtigsten Dateien ([Datenformate](datenformate.md)) |
 | `test/` | Tests; `test/fixtures/web-data` ist ein fester Ausschnitt des Datenstands |
+
+## Sammler in Phasen
+
+`scripts/collect.mjs` legt ein leeres `ctx` an, ruft `scripts/collect/00-start.mjs` (Umgebung, Katalog, Vorlauf) und danach die Phasen in
+fester Reihenfolge auf. Was eine Phase für spätere braucht, legt sie in `ctx` ab: Konstanten und Funktionen packen spätere Phasen am Anfang
+von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort gelesen und geschrieben. Die Phasennamen sind dieselben wie in
+`status.json` → `phases` und in der Statusansicht.
+
+| Phase | Inhalt |
+| --- | --- |
+| `start` | Umgebung, Verfolgungs-Salt, Katalog, Grenzen, Vorlauf, Abruf-Helfer |
+| `abruf`, `auswertung` | Quellen abrufen, Fahrzeuge und Stationen je Gemeinde, Feed-Prüfung |
+| `preise-zonen`, `konsistenz`, `dubletten` | Tarife und Zonen, Abgleich zwischen Quellen, Dubletten und Spiegel |
+| `betriebsgebiete`, `messbasis`, `obergrenzen`, `zonen-beobachtung` | Präsenz, `latest.json`, Messbasis, Obergrenzen, Zonen |
+| `kalender-wetter`, `verkehr`, `baustellen`, `oepnv` | Umgebung der Prognose |
+| `verfolgung`, `abdeckung`, `ereignisse` | Fahrten, Umsetzungen, Zellen, Ströme, Bestand je Land und Gemeinde, Daten nach Gebiet |
+| `sport-termine`, `streiks`, `prognose`, `training` | Termine, Streiks, Prognose, Trainingsarchiv |
+| `kalibrierung`, `grenzen`, `datenvertraege`, `abschluss` | Kalibrierung, Gemeindegrenzen, Formatversion, Lizenzen und `status.json` |
+
+## Startseite in Modulen
+
+| Datei | Inhalt |
+| --- | --- |
+| `web/app.js` | Einstieg und Steuerung: Bedienelemente, Adresse, Sprungleiste, Start |
+| `web/app-core.js` | Einstellungen, Formatierung, Farben, Glossar, Zustand |
+| `web/app-load.js` | Dateien des Datenstands, Cache, Hinweise, Grenzen, Verlauf |
+| `web/app-scope.js`, `web/app-live.js` | Gebiet, Live-Abruf |
+| `web/app-router.js` | Ansichten, nachgeladene Module, nur die sichtbare Ansicht zeichnen |
+| `web/app-lang.js` | Sprache, Kopfzeile, Übersicht und Leistung |
+| `web/app-map.js`, `web/app-energy.js`, `web/app-signals.js` | Karte und Ebenen, Energie, Signale |
+| `web/app-sources.js`, `web/app-usage.js`, `web/app-calib.js` | Quellen und Datenvertrauen, Nutzung und Umsatz, Kalibrierung |
 
 ## Rechenkerne in `lib/`
 

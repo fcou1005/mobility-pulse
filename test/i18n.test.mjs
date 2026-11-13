@@ -25,7 +25,7 @@ assert(used.size > 1900 && !missing.length, `${used.size} verwendete Schlüssel 
 {
   const { AREAS, areaOfKey } = await import('../web/i18n-areas.js');
   const keysOf = (f) => [...readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8').matchAll(/\bt(?:In)?\(\s*(?:[a-z]+\s*,\s*)?['"`]([a-zA-Z][\w$-]*(?:\.[\p{L}\w$-]+)+)['"`]/gu)].map(m => m[1]);
-  const core = new Set(['app.js', 'ui-shared.js', 'i18n.js', 'mapkeys.js', 'weather.js'].flatMap(keysOf));
+  const core = new Set([...readdirSync(new URL('../web/', import.meta.url)).filter(f => /^app(-[a-z]+)?\.js$/.test(f)), 'ui-shared.js', 'i18n.js', 'mapkeys.js', 'weather.js'].flatMap(keysOf)); // S3.9: app.js in app-*.js geschnitten
   for (const m of readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) core.add(m[1]);
   const MOD = { 'ops.js': 'ops', 'report.js': 'report', 'forecast.js': 'forecast', 'spots.js': 'spots', 'flows.js': 'flows', 'compare.js': 'compare', 'coverage.js': 'coverage', 'status.js': 'status' };
   const wrong = []; for (const [f, area] of Object.entries(MOD)) for (const k of keysOf(f)) { const a = core.has(k) ? 'core' : areaOfKey(k); if (a !== 'core' && a !== area) wrong.push(`${f}: ${k} (${a})`); }

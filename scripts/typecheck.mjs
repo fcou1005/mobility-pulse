@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Typprüfung gegen einen gespeicherten Stand (S3.3): tsc --noEmit über lib/, web/, scripts/ und test/ (tsconfig.json, JSDoc, nicht strict).
 // lib/ muss fehlerfrei sein; jede andere Datei darf höchstens so viele Fehler haben wie in typecheck-baseline.json. Sinkt die Zahl,
-// mit --update den Stand nachziehen (er darf nur sinken; --init legt den ersten Stand an). Exit 1 bei mehr Fehlern. Braucht die devDependencies (npm ci).
+// mit --update den Stand nachziehen (er darf nur sinken; --init legt den ersten Stand an; --moved nach Umzug von Code in andere Dateien,
+// solange die Gesamtzahl nicht steigt). Exit 1 bei mehr Fehlern. Braucht die devDependencies (npm ci).
 import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -21,11 +22,13 @@ for (const [f, b] of Object.entries(base.files || {})) if (!now[f] && b) better.
 for (const [f, n, b] of worse) console.log(`✗ ${f}: ${n} Fehler (Stand ${b}${f.startsWith('lib/') ? ', lib/ muss fehlerfrei sein' : ''})`);
 for (const [f, n, b] of better) console.log(`↓ ${f}: ${n} statt ${b}`);
 const init = process.argv.includes('--init') && !worse.some(([f]) => f.startsWith('lib/')); // erster Stand (lib/ trotzdem fehlerfrei)
-if (process.argv.includes('--update') || init) {
-  if (worse.length && !init) { console.error('Stand nicht nachgezogen: erst die neuen Fehler beheben'); process.exit(1); }
+// --moved: Code ist in andere Dateien umgezogen (S3.9 Module schneiden) – Stand je Datei neu, wenn die Gesamtzahl nicht steigt und lib/ fehlerfrei bleibt
+const moved = process.argv.includes('--moved') && total <= (base.total ?? Infinity) && !worse.some(([f]) => f.startsWith('lib/'));
+if (process.argv.includes('--update') || init || moved) {
+  if (worse.length && !init && !moved) { console.error('Stand nicht nachgezogen: erst die neuen Fehler beheben'); process.exit(1); }
   await writeFile(BASE, `${JSON.stringify({ note: 'Fehler je Datei aus scripts/typecheck.mjs; darf nur sinken. lib/ fehlerfrei.', total, files: Object.fromEntries(Object.entries(now).sort()) }, null, 2)}\n`);
   console.log(`Stand gespeichert: ${total} Fehler in ${Object.keys(now).length} Dateien`);
 }
 const lib = Object.entries(now).filter(([f]) => f.startsWith('lib/')).reduce((s, [, n]) => s + n, 0);
 console.log(`${worse.length ? '✗' : '✓'} Typprüfung: ${total} Fehler gesamt (Stand ${base.total ?? '–'}), lib/ ${lib}${better.length && !process.argv.includes('--update') ? ' · weniger als im Stand: mit --update nachziehen' : ''}`);
-process.exit(worse.length && !init ? 1 : 0);
+process.exit(worse.length && !init && !moved ? 1 : 0);

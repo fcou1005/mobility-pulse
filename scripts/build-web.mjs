@@ -36,7 +36,8 @@ await writeFile(path.join(out, 'index.html'), html);
 // 4. Wörterbuch je Sprache und Bereich
 const { DE, EN } = await import(path.join(ROOT, 'web', 'i18n-dict.js'));
 const { AREAS, areaOfKey } = await import(path.join(ROOT, 'web', 'i18n-areas.js'));
-const CORE_FILES = ['app.js', 'ui-shared.js', 'i18n.js', 'mapkeys.js', 'weather.js', 'index.html'];
+// S3.9: app.js ist in app-*.js geschnitten; alle gehören zum Startpaket
+const CORE_FILES = [...(await readdir(path.join(ROOT, 'web'))).filter(f => /^app(-[a-z]+)?\.js$/.test(f)).sort(), 'ui-shared.js', 'i18n.js', 'mapkeys.js', 'weather.js', 'index.html'];
 const coreUse = new Set();
 for (const f of CORE_FILES) {
   const src = await readFile(path.join(ROOT, 'web', f), 'utf8');

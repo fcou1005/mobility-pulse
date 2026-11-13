@@ -29,6 +29,7 @@
     "web/*.js",
     "web/*.d.ts",
     "scripts/*.mjs",
+    "scripts/collect/*.mjs",
     "test/*.mjs"
   ],
   "exclude": [
