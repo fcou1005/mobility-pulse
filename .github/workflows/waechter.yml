@@ -39,6 +39,13 @@ jobs:
             if [ -z "$offen" ]; then gh label create ausfall -R "$REPO" -c B60205 -d "Sammler-Teilausfall (automatisch)" 2>/dev/null || true
               gh issue create -R "$REPO" -l ausfall -t "Sammler: kein erfolgreicher Lauf seit $(TZ=Europe/Berlin date -d "$letzter" '+%d.%m. %H:%M')" -b "Der Wächter stößt neu an. Lauf: ${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}" || true; fi
           fi
+          # S3.2: veröffentlichter Datenstand älter als 45 Min. (Läufe grün, aber nichts kommt an) → Issue „ausfall“
+          st_at=$(curl -fsS -m 20 "https://raw.githubusercontent.com/$REPO/data/status.json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).at||"")}catch{console.log("")}})' || true)
+          if [ -n "$st_at" ] && [ $(( $(date +%s) - st_at / 1000 )) -gt 2700 ]; then
+            offen=$(gh issue list -R "$REPO" -l ausfall -s open --json number -q '.[0].number' 2>/dev/null || true)
+            if [ -z "$offen" ]; then gh label create ausfall -R "$REPO" -c B60205 -d "Sammler-Teilausfall (automatisch)" 2>/dev/null || true
+              gh issue create -R "$REPO" -l ausfall -t "Datenstand veraltet: status.json von $(TZ=Europe/Berlin date -d "@$(( st_at / 1000 ))" '+%d.%m. %H:%M')" -b "status.json ist älter als 45 Minuten (Veröffentlichung im Branch data prüfen). Lauf: ${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}" || true; fi
+          fi
           neuer() { gh run list -R "$REPO" -w waechter.yml -L 10 --json databaseId,status -q "[.[] | select(.databaseId > $GITHUB_RUN_ID and .status != \"completed\")] | length" || echo 0; }
           if [ "$(neuer)" -gt 0 ]; then echo "Neuerer Wächter-Lauf wartet – keine zweite Kette"; exit 0; fi
           n=$(sammler); echo "Aktive Sammler-Läufe: $n"
