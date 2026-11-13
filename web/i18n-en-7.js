@@ -429,4 +429,6 @@ export default {
   "aus.perOp": "per operator {n}",
   "rep.appendix": "Appendix: derivation and data quality",
   "rep.appendixSub": "How the figures above come about: data situation, daily values, places, comparison with official figures and method. In print, the appendix starts on a new page.",
+  "sd.noFeed": "There is no feed for this municipality yet.",
+  "sd.noFeedHint": "Feeds exist for municipalities with at least 20 vehicles, an official cap or after the first alert – checked on every collector run (about every 18 minutes).",
 };

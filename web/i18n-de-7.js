@@ -432,4 +432,6 @@ export default {
   "aus.perOp": "je Anbieter {n}",
   "rep.appendix": "Anhang: Herleitung und Datenqualität",
   "rep.appendixSub": "Wie die Zahlen oben entstehen: Datenlage, Tageswerte, Orte, Vergleich mit amtlichen Zahlen und Methode. Im Druck beginnt der Anhang auf einer neuen Seite.",
+  "sd.noFeed": "Für diese Gemeinde gibt es noch keinen Feed.",
+  "sd.noFeedHint": "Feeds entstehen für Gemeinden ab 20 Fahrzeugen, mit amtlicher Obergrenze oder nach dem ersten Alarm – geprüft bei jedem Lauf des Sammlers (etwa alle 18 Minuten).",
 };

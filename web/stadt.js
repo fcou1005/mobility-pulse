@@ -44,7 +44,7 @@ export async function renderStadt(el, ctx) {
   if (!ags) { clearAnswer(el); pickCity(el, ctx, 'sd.pick'); return; }
   const name = ctx.muniName?.(ags) || ags, latest = ctx.state.latest;
   el.innerHTML = `<div class="muted small">${t('sd.loading')}</div>`;
-  const [ref, ledger, alarms, idle, pricing] = await Promise.all([load(ctx, `${ctx.CFG.MAIN}reference.json`), ledgerOf(ctx), load(ctx, `${ctx.CFG.DATA}auflagen/alarme.json`), load(ctx, `${ctx.CFG.DATA}idle.json`), load(ctx, `${ctx.CFG.DATA}pricing.json`)]);
+  const [ref, ledger, alarms, idle, pricing, feeds] = await Promise.all([load(ctx, `${ctx.CFG.MAIN}reference.json`), ledgerOf(ctx), load(ctx, `${ctx.CFG.DATA}auflagen/alarme.json`), load(ctx, `${ctx.CFG.DATA}idle.json`), load(ctx, `${ctx.CFG.DATA}pricing.json`), load(ctx, `${ctx.CFG.DATA}feeds/index.json`)]);
   if (ctx.state.scope !== ags) return;
   // Bestand gegen amtliche Obergrenze (E-Scooter, wie der Bericht)
   const cap = ref ? (R.capsCheck(ref, latest?.groups || {}, { ags }) || []).find(c => c.ags === ags) : null;
@@ -71,7 +71,8 @@ export async function renderStadt(el, ctx) {
     <div class="panel c8"><div class="panel-head"><div><h2>${t('sd.alarmsTitle')}</h2><div class="sub">${t('sd.alarmsSub')}</div></div></div>${alarmList}
       <div class="sd-links"><a class="chip" href="#bericht">${t('sd.toReport')}</a><a class="chip" href="#auflagen">${t('sd.toAuflagen')}</a><a class="chip" href="#ausschreibungen">${t('sd.toTenders')}</a></div></div>
     <div class="panel c4 sd-noprint"><div class="panel-head"><div><h2>${t('sd.feedsTitle')}</h2><div class="sub">${t('sd.feedsSub')}</div></div></div>
-      <div class="sd-feeds"><a class="chip" href="${ctx.esc(feed(null))}" type="application/atom+xml">${t('sd.feedAll')}</a>${KINDS.map(k => `<a class="chip" href="${ctx.esc(feed(k))}" type="application/atom+xml">${ctx.esc(KIND_DE[k])}</a>`).join('')}</div>
+      ${(feeds?.municipalities || []).includes(ags) ? `<div class="sd-feeds"><a class="chip" href="${ctx.esc(feed(null))}" type="application/atom+xml">${t('sd.feedAll')}</a>${KINDS.map(k => `<a class="chip" href="${ctx.esc(feed(k))}" type="application/atom+xml">${ctx.esc(KIND_DE[k])}</a>`).join('')}</div>`
+        : `<div class="empty"><b>${t('sd.noFeed')}</b>${t('sd.noFeedHint')}</div>`}
       <h3 style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('sd.embedTitle')}</h3><textarea class="sd-code" rows="4" readonly aria-label="${t('sd.embedTitle')}">${ctx.esc(embed)}</textarea></div>
   </div>`;
 }

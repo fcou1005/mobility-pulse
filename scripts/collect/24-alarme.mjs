@@ -1,7 +1,7 @@
 // Sammler, Phase „alarme“ (S5.2, F3): Ereignisse je Gemeinde aus dem Vergleich mit dem vorigen Lauf (lib/pulse-alarme.js) → auflagen/alarme.json
 // und Atom-Feeds feeds/<AGS>.xml (alle Themen) und feeds/<AGS>-<Thema>.xml. Feeds werden nur neu geschrieben, wenn sich ihr Inhalt ändert.
 // Optional Push über ntfy (NTFY_TOPIC, z. B. aus einer Repository-Variable im Workflow): höchstens 20 neue Alarme je Lauf.
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as AL from '../../lib/pulse-alarme.js';
@@ -27,7 +27,10 @@ export async function run(ctx) {
     // Feeds je Gemeinde mit mindestens einer Quelle; „since“ = erster Lauf mit Feeds (fester Wert, damit leere Feeds stabil bleiben)
     await mkdir(path.join(DATA, 'feeds'), { recursive: true });
     const since = prev?.feedsSince || now; doc.feedsSince = since; await writeFile(logFile, JSON.stringify(doc));
-    const agsList = [...new Set((latest?.sources || []).filter(r => !r.candidate && !['duplicate', 'retired'].includes(r.status)).flatMap(r => r.municipalities || []))].filter(a => /^\d{8}$/.test(a)).sort();
+    // Feeds für Gemeinden mit mindestens 20 Fahrzeugen, amtlicher Obergrenze oder einem Alarm im Protokoll (sonst > 7.000 Dateien für Kleinstorte)
+    const fleet = {}; for (const [k, g] of Object.entries(latest?.groups || {})) { const a = k.split('|')[0]; fleet[a] = (fleet[a] || 0) + (g.total || 0); }
+    const capped = new Set((ctx.caps || []).map(c => c.ags)), alarmed = new Set(doc.items.map(x => x.ags));
+    const agsList = Object.keys(munis).filter(a => /^\d{8}$/.test(a) && ((fleet[a] || 0) >= 20 || capped.has(a) || alarmed.has(a))).sort();
     let written = 0;
     for (const ags of agsList) for (const kind of [null, ...AL.KINDS]) {
       const f = path.join(DATA, 'feeds', `${ags}${kind ? `-${kind}` : ''}.xml`);
@@ -36,6 +39,10 @@ export async function run(ctx) {
       await writeFile(f, xml); written++;
     }
     await writeFile(path.join(DATA, 'feeds', 'index.json'), JSON.stringify({ at: since, kinds: AL.KINDS, municipalities: agsList }));
+    // Feeds von Gemeinden, die nicht mehr dazugehören, entfernen
+    const keep = new Set(agsList); let removed = 0;
+    for (const f of await readdir(path.join(DATA, 'feeds'))) { const m = /^(\d{8})(?:-[a-z]+)?\.xml$/.exec(f); if (m && !keep.has(m[1])) { await rm(path.join(DATA, 'feeds', f)); removed++; } }
+    if (removed) log(`Feeds: ${removed} Dateien kleiner Gemeinden entfernt`);
     if (written) log(`Feeds: ${written} geschrieben (${agsList.length} Gemeinden × ${AL.KINDS.length + 1})`);
     // Push über ntfy (frei, ohne Konto): nur wenn ein Thema gesetzt ist
     const topic = process.env.NTFY_TOPIC;
