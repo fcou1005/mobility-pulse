@@ -152,7 +152,7 @@ try {
     const links = [...views.map(v => [v, v]), ...Object.entries(alias)];
     const { page, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 } });
     const wrong = [];
-    for (const [h, want] of links) { await page.evaluate((x) => { location.hash = x; }, h); await page.waitForTimeout(60); const got = await page.evaluate(() => document.querySelector('section.view.active')?.id); if (got !== `view-${want}`) wrong.push(`#${h} → ${got} statt view-${want}`); }
+    for (const [h, want] of links) { await page.evaluate((x) => { location.hash = x; }, h); await page.waitForFunction((w) => document.querySelector('section.view.active')?.id === w, `view-${want}`, { timeout: 3000 }).catch(() => null); const got = await page.evaluate(() => document.querySelector('section.view.active')?.id); if (got !== `view-${want}`) wrong.push(`#${h} → ${got} statt view-${want}`); }
     await close();
     if (wrong.length) fail(`alte Links: ${wrong.slice(0, 6).join('; ')}`); else console.log(`✓ alte Links: ${links.length} Ansichten und Aliasse landen in der passenden Ansicht`);
     for (const [role, want] of [['betrieb', 'ops'], ['analyse', 'usage'], ['stadt', src.match(/stadt: '([\w-]+)'/)[1]]]) {
@@ -193,7 +193,7 @@ try {
   if (!ONLY || ONLY.includes('ops')) {
     const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'ops', query: '&op=Dott' });
     const sub = await page.waitForFunction(() => { const x = document.getElementById('ops-akku-sub')?.textContent || ''; return /fallen voraussichtlich/.test(x) ? x : null; }, null, { timeout: 60000 }).then(h => h.jsonValue()).catch(() => null);
-    const rows = await page.evaluate(() => document.querySelectorAll('#ops-akku tbody tr').length), csv = await page.evaluate(() => !document.getElementById('ops-akku-csv')?.disabled);
+    const rows = await page.evaluate(() => document.querySelectorAll('#ops-akku tbody tr').length), csv = await page.evaluate(() => !!document.querySelector('#ops-akku-csv:not([disabled])'));
     const before = await page.evaluate(() => document.getElementById('ops-runs')?.innerText || '');
     await page.click('#ops-akku-swap').catch(() => null);
     const replanned = await page.waitForFunction((b) => (document.getElementById('ops-runs')?.innerText || '') !== b, before, { timeout: 30000 }).then(() => true, () => false);
