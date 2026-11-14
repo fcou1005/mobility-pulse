@@ -1,0 +1,71 @@
+# Vorlage für .github/workflows/geo.yml (nur über die GitHub-Weboberfläche unter fcou1005 anlegen, siehe CLAUDE.md).
+# Sprint 8 (Geo): Zensus 2022 (100-m-Gitter), Unfallatlas, GTFS-Fahrplan (gtfs.de) und Umwegfaktor (OSM) aufbereiten und im Branch geo ablegen
+# (scripts/geo.mjs). Monatlich am 2.; was nicht fällig ist (Zensus und Unfallatlas jährlich), wird übersprungen. Der Sammler liest den Branch geo.
+# Wie monatsbericht.yml: der Job mit fremden Downloads hat nur Leserechte, veröffentlicht wird in einem eigenen Job mit dem Artefakt.
+name: Geo
+on:
+  schedule:
+    - cron: '17 2 2 * *'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Nur diese Teile (zensus,unfall,gtfs,umweg), leer = was fällig ist'
+        required: false
+        default: ''
+      force:
+        description: 'Alles neu rechnen (1)'
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: geo
+  cancel-in-progress: false
+jobs:
+  rechnen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Datenstand (Branch data)
+        run: git clone -q --depth 1 -b data "https://github.com/${GITHUB_REPOSITORY}.git" datenstand
+      - name: Bisherige Geo-Daten (Branch geo)
+        run: git clone -q --depth 1 -b geo "https://github.com/${GITHUB_REPOSITORY}.git" geo || mkdir -p geo
+      - name: Geo-Lauf
+        env:
+          GEO_ONLY: ${{ inputs.only }}
+          GEO_FORCE: ${{ inputs.force }}
+          NODE_OPTIONS: --max-old-space-size=12000
+        run: |
+          rm -rf geo/.git
+          node scripts/geo.mjs datenstand geo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geo
+          path: geo
+          retention-days: 3
+  veroeffentlichen:
+    needs: rechnen
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: geo
+          path: geo
+      - name: Branch geo schreiben
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd geo
+          git init -q && git checkout -q -b geo && git add -A
+          git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Geo $(date -u +%FT%TZ)"
+          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" geo:geo
