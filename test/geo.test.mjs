@@ -45,6 +45,7 @@ function censusCsv() {
   assert(back.length === 400 && near(back.reduce((a, p) => a + p[2], 0), 10000, 0) && pk.cells.length > 50, 'Zensus: Δ-kodiert und zurück');
   const sum = Z.popSummary(res.by, FEAT);
   assert(sum.n === 2 && sum.within === 1 && near(sum.rows.find(r => r.ags === '08416041').dev, 0.04, 1e-9), 'Abgleich VG250-EW: Stuttgart 0 %, Tübingen +4 % (außerhalb ±3 %)');
+  assert(sum.landFactor['08'] === 1.02 && sum.withinAdj === 2 && near(sum.rows.find(r => r.ags === '08416041').adj, 0.04 / 2.04 * 1, 1e-3), `Abgleich nach Landes-Median (Stichtag): Faktor ${sum.landFactor['08']}, ${sum.withinAdj} von 2 innerhalb`);
 }
 // ---------- Versorgung ----------
 {
@@ -63,9 +64,9 @@ function censusCsv() {
   assert(mo.missing.length === 1 && mo.missing[0] === 'Voi' && mo.countGap === 2, 'Anbieter mit Genehmigung ohne offenen Feed markiert (Voi, 2 von 5 fehlen)');
 }
 // ---------- Unfallatlas ----------
-function unfallCsv(y) {
+function unfallCsv(y, land = 8) { // land 9: nur Bayern (München) – Stuttgart fehlt in diesem Jahr
   const l = ['OBJECTID;UIDENTSTLAE;ULAND;UREGBEZ;UKREIS;UGEMEINDE;UJAHR;UMONAT;USTUNDE;UWOCHENTAG;UKATEGORIE;UART;UTYP1;ULICHTVERH;IstRad;IstPKW;IstFuss;IstKrad;IstGkfz;IstSonstige;LINREFX;LINREFY;XGCSWGS84;YGCSWGS84;STRZUSTAND'];
-  const row = (la, lo, kat, rad) => `1;x;8;1;11;0;${y};5;12;3;${kat};5;1;0;${rad};1;0;0;0;0;1;2;${lo.toFixed(6).replace('.', ',')};${la.toFixed(6).replace('.', ',')};0`;
+  const row = (la, lo, kat, rad) => `1;x;${land};1;${land === 8 ? 11 : 62};0;${y};5;12;3;${kat};5;1;0;${rad};1;0;0;0;0;1;2;${lo.toFixed(6).replace('.', ',')};${la.toFixed(6).replace('.', ',')};0`;
   for (let i = 0; i < 25; i++) l.push(row(48.7750 + (rnd() - 0.5) * 0.0015, 9.1800 + (rnd() - 0.5) * 0.002, i < 3 ? 2 : 3, i % 2)); // Schwerpunkt
   for (let i = 0; i < 40; i++) l.push(row(48.705 + rnd() * 0.09, 9.105 + rnd() * 0.14, 3, 0));
   return l.join('\r\n') + '\r\n';
@@ -100,6 +101,10 @@ function unfallCsv(y) {
   const acc = Z.popAccumulator(Z.muniLocator([sq('1', 48.0, 9.0, 48.1, 9.1), sq('2', 48.0, 9.1, 48.1, 9.2)])); acc.add({ lat: 48.05, lon: 9.1, ew: 100 }); acc.add({ lat: 48.05, lon: 9.05, ew: 10 });
   const r = acc.result(), e1 = r.by.get('1')?.ew, e2 = r.by.get('2')?.ew;
   assert(r.split === 1 && near(e1 + e2, 110, 1e-9) && near(e1, 60, 1e-9) && near(e2, 50, 1e-9) && r.by.get('2').pts[0][1] > 9.1, `Zensus: Zelle auf der Grenze halb und halb verteilt (${e1} / ${e2})`); }
+{ // gebündelte Ausbringung: 4 Voi in 10 m im selben Lauf = Umsetzung; 2 Lime dort und 1 Voi weiter weg bleiben Fahrten
+  const pts = [[48.7, 9.1, 'Voi'], [48.70005, 9.1, 'Voi'], [48.7, 9.10007, 'Voi'], [48.70004, 9.10005, 'Voi'], [48.7, 9.1, 'Lime'], [48.70003, 9.1, 'Lime'], [48.71, 9.1, 'Voi']];
+  const r = P.dropBatches(pts, { r: 25, min: 3 });
+  assert(r.removed === 4 && r.kept.length === 3 && r.kept.filter(p => p[2] === 'Lime').length === 2, `Umsetzungen: ${r.removed} gebündelte Voi entfernt, Lime-Paar und einzelner Voi bleiben`); }
 // ---------- Umwegfaktor ----------
 function gridOsm(n, stepDeg) {
   const els = []; let id = 1; const nid = (i, j) => i * 1000 + j + 1;
@@ -112,6 +117,10 @@ function gridOsm(n, stepDeg) {
   const r = N.detourFactors(g, pts);
   assert(g.n === 625 && r.n > 50 && r.median > 1.0 && r.median < 1.45, `Raster-Straßennetz: Umwegfaktor Median ${r.median?.toFixed(2)} (Manhattan, Erwartung 1–1,41)`);
   const d = N.netDistance(g, [48.7, 9.1], [48.7, 9.1 + 10 * 0.00135]); assert(d != null && near(d, 10 * 0.00135 * 111320 * Math.cos(48.7 * Math.PI / 180), 2), `Netzentfernung entlang einer Straße = Luftlinie (${d?.toFixed(0)} m)`);
+  const np = N.netPath(g, [48.7 + 0.0002, 9.1 + 0.0002], [48.7, 9.1 + 10 * 0.00135]);
+  assert(np && np.from[0] === 48.7 && np.from[1] === 9.1 && np.snapA > 20 && np.snapA < 40 && near(np.d, d, 0.5), `Router-Stichprobe startet am angebundenen Netzknoten (${np?.from?.join(', ')}, ${np?.snapA?.toFixed(0)} m daneben)`);
+  const q = N.overpassFoot([48, 9, 49, 10]);
+  assert(/access"!~"\^\(no\|private\|agricultural\|forestry\|delivery/.test(q) && /"foot"!~"\^\(no\|private\|use_sidepath\)\$"/.test(q) && /"highway"="cycleway"\]\["foot"~/.test(q) && !/\|cycleway\|/.test(q), 'Fußwegnetz: Land-/Forstwirtschaft, Lieferverkehr, Benutzungspflicht für Radweg ausgeschlossen; Radweg nur mit foot=yes');
 }
 // ---------- Abstellflächen-Planer ----------
 {
@@ -139,7 +148,7 @@ function gridOsm(n, stepDeg) {
   await writeFile(path.join(DATA, 'latest.json'), JSON.stringify({ municipalities: { '08111000': { name: 'Stuttgart', operators: { Dott: { types: { scooter: 1000 } } } }, '08416041': { name: 'Tübingen', operators: { nextbike: { types: { bike: 300 } } } } } }));
   await writeFile(path.join(SRV, 'Zensus2022_Bevoelkerungszahl_100m-Gitter.csv'), censusCsv()); execFileSync('zip', ['-qj', path.join(SRV, 'zensus.zip'), path.join(SRV, 'Zensus2022_Bevoelkerungszahl_100m-Gitter.csv')]);
   await writeFile(path.join(SRV, 'Datensatzbeschreibung.txt'), 'Beschreibung\n');
-  for (const y of [2016, 2020, 2024]) { const f = `Unfallorte${y}_LinRef.${y === 2016 ? 'txt' : 'csv'}`; await writeFile(path.join(SRV, f), unfallCsv(y)); execFileSync('zip', ['-qj', path.join(SRV, `unfall-${y}.zip`), path.join(SRV, 'Datensatzbeschreibung.txt'), path.join(SRV, f)]); } // 2016 wie die älteren Jahre als .txt
+  for (const y of [2016, 2020, 2024]) { const f = `Unfallorte${y}_LinRef.${y === 2016 ? 'txt' : 'csv'}`; await writeFile(path.join(SRV, f), unfallCsv(y, y === 2016 ? 9 : 8)); execFileSync('zip', ['-qj', path.join(SRV, `unfall-${y}.zip`), path.join(SRV, 'Datensatzbeschreibung.txt'), path.join(SRV, f)]); } // 2016 wie die älteren Jahre als .txt
   const gd = path.join(SRV, 'g'); await mkdir(gd);
   await writeFile(path.join(gd, 'calendar.txt'), 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nwk,1,1,1,1,1,0,0,20200101,20301231\n');
   await writeFile(path.join(gd, 'trips.txt'), 'route_id,service_id,trip_id\nr,wk,t1\nr,wk,t2\n');
@@ -163,6 +172,8 @@ function gridOsm(n, stepDeg) {
   assert(out.c === 0 && files.includes('pop/BW.json') && files.includes('unfall/08111000.json') && files.includes('index.json'), `Geo-Lauf: ${files.length} Dateien${out.c ? `\n${out.s}` : ''}`);
   assert(pop.n === 2 && pop.within === 1 && pop.ags['08111000'][0] === 10000, 'Geo-Lauf: Zensus je Gemeinde mit Abgleich');
   assert(un.years.length === 3 && un.missingYears.length >= 5 && un.checks.sumsEqual === un.checks.municipalities, `Geo-Lauf: Unfallatlas ${un.years.join(', ')} (fehlende Jahre protokolliert), Summen gleich`);
+  const us = JSON.parse(await readFile(path.join(OUT, 'unfall', '08111000.json'), 'utf8'));
+  assert(!un.landsByYear['2016'].includes('08') && un.landsByYear['2016'].includes('09') && us.years.join() === '2020,2024' && un.ags['08111000'].years.join() === '2020,2024', `Geo-Lauf: Jahr ohne Baden-Württemberg zählt für Stuttgart nicht (${us.years.join(', ')})`);
   assert(gt.ags['08111000']?.length === 2 && gt.ags['08111000'][0][2] === 2 && gt.ags['08111000'][0][3] === 'Hauptbahnhof, Stuttgart', 'Geo-Lauf: Haltestellen mit Abfahrten am Dienstag');
   const st = um.cities['08111000']; assert(st && st.cells > 10 && st.samples.length >= 1 && st.median > 1, `Geo-Lauf: Umwegfaktor Stuttgart Median ${st?.median?.toFixed(2)}, Stichproben ${st?.samples?.map(s => s.dev).join('/')}`);
 }

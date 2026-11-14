@@ -3,6 +3,7 @@ out/
 cache/
 .work/
 test/out/
+test/geo-cache/
 test/server.pid
 .uitest/
 .realdata/

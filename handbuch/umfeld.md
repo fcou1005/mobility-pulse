@@ -16,6 +16,7 @@ Formate: [Datenformate](datenformate.md) (Familie `geo`).
 - Quelle: Zensus 2022, Bevölkerung im 100-m-Gitter (Destatis, dl-de/by-2-0, Stichtag 15.05.2022). Zellen mit geheimgehaltenem Wert („–“) zählen nicht.
 - Zuordnung: Mittelpunkt der Zelle (EPSG:3035, Lambert-Flächentreu, Umrechnung `lib/pulse-geo-proj.js` nach Snyder) → Gemeinde per Punkt-in-Polygon gegen VG250. Für die Veröffentlichung wird jede 100-m-Zelle flächenanteilig auf die ≈250-m-Zellen des Dashboards verteilt; gerechnet wird mit den Mittelpunkten.
 - Abgleich: Summe je Gemeinde gegen die Einwohnerzahl der Gemeindegrenzen (VG250-EW); Abnahme ±3 % (`pop/index.json`: `n`, `within`).
+- VG250-EW und Zensus haben verschiedene Stichtage, und die Fortschreibung verschiebt ein Land als Ganzes (Live-Stand November 2026: Median −1,0 %, 946 von 1.212 Gemeinden in ±3 %). Darum zusätzlich `withinAdj`: Abweichung nach Teilen durch den Median von Zensus ÷ VG250-EW im selben Land (`landFactor`); was dann noch über ±3 % liegt, ist Zuordnung (Grenzzellen, geheimgehaltene Zellen) oder eine echte Abweichung der Gemeinde. Je Gemeinde stehen beide Werte in `ags` (`abweichung`, `abweichungLandBereinigt`). Der saubere Vergleich wären die amtlichen Zensus-Ergebnisse je Gemeinde zum selben Stichtag; sie sind nicht eingebunden.
 
 ## Versorgung (S8.2)
 
@@ -29,6 +30,7 @@ Formate: [Datenformate](datenformate.md) (Familie `geo`).
 ## Unfälle (S8.3)
 
 - Quelle: Unfallatlas der Statistischen Ämter (Unfälle mit Personenschaden, dl-de/by-2-0), alle Jahre ab 2016, die erreichbar sind; fehlende Jahre stehen in `unfall/index.json` → `missingYears`.
+- Frühe Jahre enthalten nicht alle Länder. Ein Land gilt in einem Jahr als erfasst, wenn es dort mindestens ein Fünftel seines stärksten Jahres hat (`landsByYear`); jede Gemeinde rechnet nur mit den Jahren ihres Landes (`years` in `unfall/<AGS>.json` und `ags.<AGS>.years`). Ohne diese Regel zählte ein fehlendes Jahr als Jahr ohne Unfälle und drückte Rate und Schwerpunkte.
 - Kategorien: alle, mit Rad, mit Fußgänger, mit Motorrad, mit Sonstigen (E-Scooter haben keine eigene Spalte), Getötete oder Schwerverletzte.
 - Glättung: Empirical Bayes (Poisson-Gamma, Momente über alle Zellen der Gemeinde) je ≈250-m-Zelle, Rate je Jahr.
 - Schwerpunkte: Getis-Ord Gi* mit 3 × 3 Nachbarschaft über alle Zellen der Gemeinde (auch ohne Unfall), Benjamini-Hochberg-Korrektur bei 5 % (FDR). Stabilität: Schwerpunkte der ersten und der zweiten Hälfte der Jahre, Überlappung = gemeinsame ÷ kleinere Menge; Abnahme mindestens 70 %.
@@ -39,13 +41,16 @@ Formate: [Datenformate](datenformate.md) (Familie `geo`).
 
 - Fahrplan: gtfs.de (CC BY 4.0), aktive Dienste am nächsten Dienstag nach dem Download (Stichtag), Abfahrten je Halt; Halte im Abstand bis 150 m werden gebündelt.
 - Je Lauf: Fahrtbeginne und -enden aus dem Vergleich mit dem vorigen Lauf (verschwunden über der Ausblend-Grenze oder mindestens 200 m versetzt = Beginn, neu aufgetaucht oder versetzt = Ende; verliert eine Gruppe über 30 % ihrer Fahrzeuge, zählt ihr Verschwinden nicht).
+- Umsetzungen durch den Betreiber zählen nicht: drei oder mehr Fahrzeuge eines Anbieters, die im selben Lauf in 25 m verschwinden oder auftauchen (Ausbringen, Einsammeln, `dropBatches`), und versetzte Fahrzeuge mit mindestens 15 Punkten mehr Akku (Akkutausch). Die Zahl steht als `moved` in `zubringer/index.json`. Einzelne Umsetzungen bei Anbietern mit wechselnder Kennung bleiben unerkannt.
+- Grundlinie `base`: Anteil der abgestellten verfügbaren Fahrzeuge in 150 m um einen Halt mit Abfahrten (Mittel über die Läufe). Faktor = Anteil der Beginne und Enden ÷ Grundlinie; über 1 heißt, Fahrten beginnen und enden öfter an Halten, als Fahrzeuge dort stehen. Ohne Grundlinie sagt der Anteil wenig, weil in dichten Innenstädten fast jeder Punkt nahe an einem Halt liegt.
 - Index = Beginne und Enden in 150 m um einen gebündelten Halt mit Abfahrten ÷ Abfahrten am Stichtag × 100; Anteil = davon ÷ alle Beginne und Enden. Für die 30 Gemeinden mit den größten Flotten.
 
 ## Umwegfaktor (S8.6)
 
 - Fußwegenetz aus OpenStreetMap (Overpass, ODbL) für die 30 größten Flottenstädte, monatlich; Graph in `lib/pulse-geo-net.js` (Dijkstra mit Heap).
 - Je bewohnter 100-m-Zelle bis zu acht Ziele (je Himmelsrichtung eines) in 300 bis 800 m Luftlinie; Faktor = Median von Netzweg ÷ Luftlinie; ein Ziel, das im Netz nicht erreichbar ist, zählt mit 2,5. Punkte weiter als 60 m vom Netz zählen nicht. Über 15.000 Zellen wird zufällig ausgewählt (`sampled`).
-- Gegenprobe: drei Paare je Stadt gegen den Fußgänger-Router von FOSSGIS (`routing.openstreetmap.de`); Abweichung bis ±15 % gilt als passend (`samplesOk`).
+- Netz: Wege mit `access` no, private, agricultural, forestry, delivery, customers, permit, military und mit `foot` no, private, use_sidepath fallen weg, außer `foot` ist yes, designated oder permissive. Reine Radwege (`highway=cycleway`) zählen nur mit `foot=yes`, `designated` oder `permissive`.
+- Gegenprobe: drei Paare je Stadt gegen den Fußgänger-Router von FOSSGIS (`routing.openstreetmap.de`); Abweichung bis ±15 % gilt als passend (`samplesOk`). Seit Format 1.1 bekommt der Router die Netzknoten, an die die Zellmitten angebunden wurden (`a`, `b`, Anbinde-Abstand in `snap`), sodass beide Seiten zwischen denselben Punkten messen.
 
 ## Abstellflächen-Planer (S8.4)
 
@@ -62,7 +67,7 @@ Formate: [Datenformate](datenformate.md) (Familie `geo`).
 ## Grenzen
 
 - Die 100-m-Zensuszellen werden als Rechtecke im Gradnetz angenähert (Drehung gegen LAEA unter 4°); für Anteile auf 250-m-Zellen reicht das.
-- Fahrtbeginne und -enden kommen aus dem Vergleich zweier Läufe: bei Anbietern mit wechselnder Kennung zählt auch ein Umsetzen durch den Betreiber, und Fahrten unter 20 Minuten zwischen zwei Läufen mit Rückkehr zum Startort fehlen.
+- Fahrtbeginne und -enden kommen aus dem Vergleich zweier Läufe: gebündelte Umsetzungen und Akkutausch sind herausgefiltert, einzelne Umsetzungen bei Anbietern mit wechselnder Kennung nicht, und Fahrten unter 20 Minuten zwischen zwei Läufen mit Rückkehr zum Startort fehlen.
 - Der Zubringer-Index hängt am Fahrplan eines Stichtags; in Ferien oder bei Bauarbeiten weicht er ab.
 - Der Planer hängt an der Vollständigkeit von OpenStreetMap (Gehweg-Tags, vorhandene Flächen) und an der Erreichbarkeit von Overpass.
 - Die Adressen der Quelldateien (Destatis, Unfallatlas) sind im Code hinterlegt; ändern die Ämter sie, meldet der Geo-Lauf den Fehler und die Seite zeigt den letzten Stand.

@@ -3,7 +3,7 @@
   "$id": "https://github.com/fcou1005/mobility-pulse/schemas/geo.schema.json",
   "title": "Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8)",
   "description": "Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.",
-  "x-version": "1.0",
+  "x-version": "1.1",
   "$defs": {
     "versorgung": {
       "type": "object",
@@ -240,6 +240,10 @@
         "missingYears": {
           "type": "array"
         },
+        "landsByYear": {
+          "type": "object",
+          "description": "Jahr → erfasste Länder (zweistelliger AGS-Anfang, mindestens ein Fünftel des stärksten Jahres); eine Gemeinde nutzt nur die Jahre ihres Landes (ab 1.1)"
+        },
         "ags": {
           "type": "object"
         }
@@ -318,6 +322,14 @@
         },
         "within": {
           "type": "integer"
+        },
+        "withinAdj": {
+          "type": "integer",
+          "description": "Gemeinden innerhalb ±maxDev nach Abzug des Landes-Medians von Zensus ÷ VG250-EW (Stichtagsunterschied); ab 1.1"
+        },
+        "landFactor": {
+          "type": "object",
+          "description": "Land (zweistelliger AGS-Anfang) → Median von Zensus ÷ VG250-EW; ab 1.1"
         },
         "n": {
           "type": "integer"

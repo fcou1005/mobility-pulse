@@ -18,7 +18,7 @@ export async function run(ctx) {
     for (const r of counted) { const k = `${r.licenseId || r.licenseUrl || 'ohne Angabe'}|${C.commercialUse(r.licenseId, r.licenseUrl, r.url).why}`; if (!byLic.has(k)) byLic.set(k, []); byLic.get(k).push(r); }
     const lic = [...byLic].sort((a, b) => b[1].length - a[1].length);
     const CU_TXT = { ja: 'ja', nein: 'nein', ungeklaert: 'ungeklärt' }, cuOp = new Map();
-    for (const r of counted) { const c = cuOp.get(r.operator) || { n: 0, ja: 0, nein: 0, ungeklaert: 0 }; c.n++; c[C.commercialUse(r.licenseId, r.licenseUrl, r.url).k]++; cuOp.set(r.operator, c); }
+    for (const r of counted) { if (r.mirror?.of) continue; const c = cuOp.get(r.operator) || { n: 0, ja: 0, nein: 0, ungeklaert: 0 }; c.n++; c[C.commercialUse(r.licenseId, r.licenseUrl, r.url).k]++; cuOp.set(r.operator, c); }
     const cuByOp = [...cuOp].sort((a, b) => b[1].n - a[1].n || String(a[0]).localeCompare(String(b[0]), 'de'));
     const sa = counted.filter(r => /^CC-BY-SA/.test(r.licenseId || ''));
     const noLic = counted.filter(r => !r.licenseId && !r.licenseUrl), badLic = counted.filter(r => !r.licenseId && /privacy|datenschutz/i.test(r.licenseUrl || ''));
@@ -52,7 +52,7 @@ export async function run(ctx) {
       '| Lizenz | Kommerziell | Quellen | Namensnennung / Anbieter |', '|---|---|---|---|',
       ...lic.map(([k, list]) => { const names = [...new Set(list.map(r => r.attribution || r.systemOperator || r.operator).filter(Boolean).map(md))]; const url = list.find(r => r.licenseUrl)?.licenseUrl; const cu = C.commercialUse(list[0].licenseId, list[0].licenseUrl, list[0].url), lk = k.split('|')[0]; return `| ${md(lk)}${url && url !== lk ? ` (${md(url)})` : ''} | ${CU_TXT[cu.k]} (${cu.why}) | ${list.length} | ${names.slice(0, 25).join(', ')}${names.length > 25 ? ` u. a. (${names.length})` : ''} |`; }),
       '', '## Kommerzielle Nutzung je Anbieter', '',
-      'Je Quelle eingestuft nach der Lizenz im Feed: ja (offene Lizenz, mit Namensnennung bzw. Weitergabe unter gleichen Bedingungen), nein (nicht kommerziell), ungeklärt (ohne Angabe, eigene Bedingungen des Betreibers oder Link auf eine Datenschutzerklärung). Keine Rechtsberatung; vor einem bezahlten Auftrag gelten die Bedingungen der jeweiligen Quelle. Ein Anbieter gilt als „ja“, wenn alle seine Quellen „ja“ sind, als „teils“, wenn sie gemischt sind.', '',
+      'Je Quelle eingestuft nach der Lizenz im Feed: ja (offene Lizenz, mit Namensnennung bzw. Weitergabe unter gleichen Bedingungen), nein (nicht kommerziell), ungeklärt (ohne Angabe, eigene Bedingungen des Betreibers oder Link auf eine Datenschutzerklärung). Keine Rechtsberatung; vor einem bezahlten Auftrag gelten die Bedingungen der jeweiligen Quelle. Ein Anbieter gilt als „ja“, wenn alle seine Quellen „ja“ sind, als „teils“, wenn sie gemischt sind. Spiegel einer anderen Quelle (Fahrzeuge verworfen) zählen hier nicht. Gelesene Bedingungen: Lime (Public GBFS Terms: nur interne, nicht kommerzielle Nutzung, https://www.li.me/legal/public-gbfs-terms), Dott-Direktfeeds (nur mit API-Lizenzvertrag, https://ridedott.com/api-license); Feeds über MobiData BW ohne eigene Angabe: Lizenz des Datensatzes im Portal (dl-de/by-2-0).', '',
       '| Anbieter | Quellen | ja | nein | ungeklärt | Einstufung |', '|---|---|---|---|---|---|',
       ...cuByOp.map(([op, c]) => `| ${md(op)} | ${c.n} | ${c.ja} | ${c.nein} | ${c.ungeklaert} | ${c.nein ? 'nein' : c.ja === c.n ? 'ja' : c.ja ? 'teils' : 'ungeklärt'} |`),
       '', '## Weitergabe unter gleichen Bedingungen', '',

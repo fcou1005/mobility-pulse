@@ -451,12 +451,16 @@
         {
           "name": "Innenstadtbezirke",
           "jeAnbieter": 800,
-          "beobachtung": "innenstadtbezirke"
+          "beobachtung": "innenstadtbezirke",
+          "zeitpunkt": "tagesbeginn",
+          "zeitpunktQuelle": "Stadt Stuttgart: „innerhalb des City-Rings zum Tagesbeginn maximal 100 E-Scooter“, in den Innenstadtbezirken „ausgebracht“ bzw. „abstellen“ (Pressemitteilung und Bilanz 20.10.2026); gezählt wird 5:00–8:59 Uhr"
         },
         {
           "name": "zentrale Innenstadt",
           "jeAnbieter": 100,
-          "beobachtung": "zentrale-innenstadt"
+          "beobachtung": "zentrale-innenstadt",
+          "zeitpunkt": "tagesbeginn",
+          "zeitpunktQuelle": "Stadt Stuttgart: „innerhalb des City-Rings zum Tagesbeginn maximal 100 E-Scooter“, in den Innenstadtbezirken „ausgebracht“ bzw. „abstellen“ (Pressemitteilung und Bilanz 20.10.2026); gezählt wird 5:00–8:59 Uhr"
         }
       ],
       "anbieterZahl": null,
@@ -472,6 +476,7 @@
       "url": "https://www.stuttgart.de/service/aktuelle-meldungen/2026/oktober/zwei-jahre-sonderregeln-fuer-e-scooter-in-stuttgart-stadt-zieht-positive-bilanz",
       "hinweis": "Werte aus data/reference.json übernommen (Stadt Stuttgart 20.10.2026). Stuttgarter Zeitung 17.01.2025: Genehmigung zwei Jahre ab 01.01.2025, Deckel 1.500 je Unternehmen, 100 im City-Bereich, Gebühr 4,50–7,50 € je Roller und Monat.",
       "url2": "https://www.stuttgarter-zeitung.de/lokales/stuttgart/e-roller-in-stuttgart-neue-lizenzen-zum-scooterfahren-79030240.html",
+      "url3": "https://www.stuttgart.de/pressemitteilungen/mai/e-scooter-stadt-stuttgart-zieht-aktuelle-bilanz-und-plaediert-fuer-regelkonforme-und-umsichtige-nutzung",
       "status": "amtlich",
       "innenstadtbezirke": 800,
       "zentraleInnenstadt": 100,

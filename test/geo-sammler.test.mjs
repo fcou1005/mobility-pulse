@@ -36,11 +36,11 @@ for (let k = 0; k < 8; k++) {
   prev = snapFromVehicles(fleet, vkey); prevAt = now;
 }
 const v = JSON.parse(await readFile(path.join(DATA, 'versorgung', '08111000.json'), 'utf8')), vi = JSON.parse(await readFile(path.join(DATA, 'versorgung', 'index.json'), 'utf8'));
-assert(v.schemaVersion === '1.0' && v.pop === 10800 && v.days.length === 1 && v.days[0].day === '2026-11-14' && v.days[0].share.length === 3 && v.today?.day === "2026-11-15" && v.today.runs >= 1, `Versorgung: Tag 14.11. abgeschlossen (${v.days[0]?.runs} Läufe), heute vorläufig (stündlich geschrieben)`);
+assert(v.schemaVersion === (await import('../lib/pulse-schema.js')).SCHEMA.geo && v.pop === 10800 && v.days.length === 1 && v.days[0].day === '2026-11-14' && v.days[0].share.length === 3 && v.today?.day === "2026-11-15" && v.today.runs >= 1, `Versorgung: Tag 14.11. abgeschlossen (${v.days[0]?.runs} Läufe), heute vorläufig (stündlich geschrieben)`);
 assert(v.cells?.rows?.length > 10 && vi.ags['08111000'][0] === '2026-11-14' && vi.ags['08111000'].length === 11, 'Versorgung: Zellen des letzten Tages und Übersicht je Gemeinde');
 assert(v.missingOps.includes('Voi') || v.missingOps.length >= 0, `Anbieter ohne offenen Feed laut reference.json: ${v.missingOps.join(', ') || 'keine'}`);
 const z = JSON.parse(await readFile(path.join(DATA, 'zubringer', 'index.json'), 'utf8')), c = z.cities.find(x => x.ags === '08111000');
-assert(c && c.dep === 500 && c.last && c.last.near > 0 && c.last.index > 0 && c.last.ends > 0, `Zubringer: ${c?.last?.near} von ${c?.last?.starts + c?.last?.ends} Beginnen/Enden an Haltestellen, Index ${c?.last?.index}`);
+assert(c && c.dep === 500 && c.last && c.last.near > 0 && c.last.index > 0 && c.last.ends > 0 && c.last.base > 0 && c.last.base < 1 && Number.isFinite(c.last.moved) && c.days[0].length === 4, `Zubringer: ${c?.last?.near} von ${c?.last?.starts + c?.last?.ends} Beginnen/Enden an Haltestellen, Index ${c?.last?.index}, Basis ${c?.last?.base}, Umsetzungen ${c?.last?.moved}`);
 const a = JSON.parse(await readFile(path.join(DATA, 'abstell', '08111000.json'), 'utf8'));
 assert(a.month === '2026-11' && a.cells.rows.every(r => r[1] >= 3) && a.cells.rows.length >= 1, `Fahrtenden je 50-m-Zelle: ${a.cells.rows.length} Zellen ab 3 (am Hauptbahnhof)`);
 assert(existsSync(path.join(DATA, 'unfall', '08111000.json')) && !JSON.parse(await readFile(path.join(DATA, 'unfall', 'index.json'), 'utf8')).ags['09162000'] && existsSync(path.join(DATA, 'umweg', '08111000.json')), 'Unfälle und Umwegfaktor aus geo kopiert, nur aktive Gemeinden');

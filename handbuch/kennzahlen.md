@@ -31,11 +31,12 @@ Jedes Teilgebiet mit eigener Grenze in `data/reference.json` → `obergrenzen[].
 - **Anteils-Regeln** (`zonen[].anteilMax` / `anteilMin`, 0–1, z. B. Dresden „max. 30 % der Flotte“): je Anbieter Bestand im Teilgebiet ÷ sein Bestand der Art in der Gemeinde; über `anteilMax` „über“ (ab 90 % davon „nahe“), unter `anteilMin` „unter Mindestanteil“ (auch Anbieter ganz ohne Fahrzeug im Teilgebiet).
 - **Umfassender Umriss** (`umfassend: true`, z. B. Dortmund: Bezirke statt „dicht bebauter Bereiche“): Bestand ist eine Obergrenze, „über/nahe“ wird zum Hinweis „Bestand ist Obergrenze“.
 - **Nicht amtliche Einträge** (`status` ≠ amtlich, z. B. Düsseldorf): Teilgebiete werden nur gezählt (Status „nur Information“).
+- **Zeitpunkt** (`zonen[].zeitpunkt: "tagesbeginn"`, Quelle in `zeitpunktQuelle`, z. B. Stuttgart: „zum Tagesbeginn maximal 100 E-Scooter“ innerhalb des City-Rings): Die Grenze gilt für das Ausbringen am Morgen, nicht für jeden Moment des Tages. Gewertet wird das Maximum der Läufe von 5:00 bis 8:59 Uhr (`ZONE_EARLY`, Tagesfeld `early` in `zone-watch.json`); „jetzt“ ist dann der Wert vom letzten Tagesbeginn (`startDay`), Tage über Grenze zählen nur diesen Wert. Tagsüber fahren Nutzer Fahrzeuge in die Innenstadt, das verletzt die Regel nicht.
 - **Anzeige:** Kommunal-Bericht › Obergrenzen-Wächter (Teilgebiet mit Grenze, Status, je Anbieter jetzt/Max. heute/Max. 30 Tage/Tage über Grenze, Anteil an der Flotte) und Zonen-Beobachtung (Karte mit gestrichelten Umrissen, Hinweis „vermutete Abgrenzung · ± m · nicht amtlich“). Kennt `zone-watch.json` eine neue Zone noch nicht, zählt die Seite sie für die gewählte Gemeinde einmal live aus `ops/<Land>.json` („live gezählt“).
 
 | Stadt | Teilgebiet | Grenzwert | Amtliche Quelle | Vermutete Abgrenzung (Ableitung) | ± m |
 |---|---|---|---|---|---|
-| Stuttgart | Innenstadtbezirke / zentrale Innenstadt | 800 / 100 je Anbieter | Stadt Stuttgart, 20.10.2026 | grob aus der Beschreibung (bestehend) | 600 / 150 |
+| Stuttgart | Innenstadtbezirke / zentrale Innenstadt | 800 / 100 je Anbieter, beide zum Tagesbeginn | Stadt Stuttgart, 20.10.2026 und PM Mai | grob aus der Beschreibung (bestehend); zentrale Innenstadt = innerhalb des City-Rings | 600 / 150 |
 | Berlin | Innenstadt innerhalb S-Bahn-Ring | 19.000 gesamt (4.750 je Anbieter gerechnet) | Abgeordnetenhaus Drs. 19/26583 (22.07.2026) | Gleislage der Ringbahn S41 (OSM), 70 m vereinfacht | 150 |
 | Köln | Innenstadt | 4.500 gesamt, 650 je Anbieter | Stadt Köln, PM 01.09.2021 | Stadtbezirk Innenstadt (OSM) – Mitteilung grenzt nicht ab | 150 |
 | Frankfurt | zentraler Innenstadtbereich | 2.400 gesamt | traffiQ, PM 26.02.2026 | Stadtteile Altstadt, Innenstadt, Bahnhofsviertel (OSM) – grobe Annahme, Stadt beschreibt den Bereich nicht | 500 |

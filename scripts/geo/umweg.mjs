@@ -35,18 +35,21 @@ export async function runUmweg({ OUT, bounds, log, now, top }) {
     try {
       const t1 = Date.now(), bb = bboxOf(f.geometry), json = await overpass(N.overpassFoot([bb[1], bb[0], bb[3], bb[2]]));
       const g = N.buildGraph(json), pts = unpackPts(pa.pts), res = N.detourFactors(g, pts);
-      // Stichproben gegen den Router: drei Paare aus bewohnten Zellen in 400–900 m Abstand
+      // Stichproben gegen den Router: drei Paare aus bewohnten Zellen in 400–900 m Abstand. Der Router bekommt die Netzknoten, an die wir
+      // die Zellmitten angebunden haben – sonst misst er von einem anderen Punkt aus (Zellmitte im Park, im Hof) und die Abweichung zeigt den Anbindepunkt statt des Netzes
       const samples = [];
       for (let k = 0; k < pts.length && samples.length < 3; k += Math.max(1, Math.floor(pts.length / 7))) {
         const a = pts[k], b = pts.find(p => { const d = Math.hypot((p[0] - a[0]) * 111320, (p[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180)); return d > 400 && d < 900; }); if (!b) continue;
-        const ours = N.netDistance(g, a, b), ext = await routerDist(a, b); await sleep(Math.min(1100, UMWEG.pauseMs));
-        if (ours != null && ext != null) samples.push({ a: a.slice(0, 2), b: b.slice(0, 2), ours: Math.round(ours), router: Math.round(ext), dev: Math.round((ours / ext - 1) * 1000) / 1000 });
+        const np = N.netPath(g, a, b); if (!np) continue;
+        const ext = await routerDist(np.from, np.to); await sleep(Math.min(1100, UMWEG.pauseMs));
+        const r5 = (p) => p.map(v => Math.round(v * 1e5) / 1e5);
+        if (ext != null) samples.push({ a: r5(np.from), b: r5(np.to), ours: Math.round(np.d), router: Math.round(ext), dev: Math.round((np.d / ext - 1) * 1000) / 1000, snap: [Math.round(np.snapA), Math.round(np.snapB)] });
       }
       idx[ags] = { name, fleet, nodes: g.n, cells: res.n, median: res.median, p90: res.p90, over15: res.over15, sampled: res.sampled, samples, samplesOk: samples.filter(s => Math.abs(s.dev) <= UMWEG.maxDev).length, s: Math.round((Date.now() - t1) / 1000) };
-      await writeFile(path.join(dir, `${ags}.json`), JSON.stringify({ schemaVersion: '1.0', ags, at: now, attribution: '© OpenStreetMap-Mitwirkende (ODbL); Zensus 2022 © Destatis', fields: ['lat', 'lon', 'faktor', 'ziele'], rows: res.cells.map(([la, lo, fa, n]) => [Math.round(la * 1e5) / 1e5, Math.round(lo * 1e5) / 1e5, fa, n]), median: res.median, p90: res.p90, over15: res.over15, sampled: res.sampled, samples }));
+      await writeFile(path.join(dir, `${ags}.json`), JSON.stringify({ schemaVersion: '1.1', ags, at: now, attribution: '© OpenStreetMap-Mitwirkende (ODbL); Zensus 2022 © Destatis', fields: ['lat', 'lon', 'faktor', 'ziele'], rows: res.cells.map(([la, lo, fa, n]) => [Math.round(la * 1e5) / 1e5, Math.round(lo * 1e5) / 1e5, fa, n]), median: res.median, p90: res.p90, over15: res.over15, sampled: res.sampled, samples }));
       log(`Umweg ${name}: ${g.n} Knoten, ${res.n} Zellen, Median ${res.median?.toFixed(2)}, Stichproben ${samples.map(s => `${(s.dev * 100).toFixed(0)} %`).join('/')} (${idx[ags].s} s)`);
       await sleep(UMWEG.pauseMs); // Overpass schonen
     } catch (e) { log(`Umweg ${name}: ${e.message}`); idx[ags] = { name, fleet, error: e.message }; }
   }
-  await writeFile(path.join(dir, 'index.json'), JSON.stringify({ schemaVersion: '1.0', at: now, maxDev: UMWEG.maxDev, router: UMWEG.router, cities: idx }));
+  await writeFile(path.join(dir, 'index.json'), JSON.stringify({ schemaVersion: '1.1', at: now, maxDev: UMWEG.maxDev, router: UMWEG.router, samplePoints: 'netzknoten', cities: idx }));
 }

@@ -188,6 +188,7 @@ export default {
   "zv.below": "unter Mindestanteil",
   "zv.rest": "Rest der Gemeinde: Fahrzeuge außerhalb der vermuteten Teilgebiete",
   "zv.live": "live gezählt (noch nicht im Protokoll des Sammlers)",
+  "zv.atStart": "gezählt zu Tagesbeginn (höchster Bestand 5:00 bis 8:59 Uhr) am {day}; die Grenze gilt für die Ausbringung, tagsüber fahren Kunden Fahrzeuge in das Gebiet",
   "zv.superset": "Umriss bewusst größer als das beschriebene Gebiet: Bestand ist eine Obergrenze, darüber nur Hinweis",
   "zv.noRuns": "vermutete Abgrenzung vorhanden, aber kein Bestand dieser Fahrzeugart im Feed – nicht prüfbar",
   "zv.hintUpper": "Hinweis (Bestand ist Obergrenze)",

@@ -10,13 +10,13 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import * as C from '../../lib/pulse-geo-cover.js';
 import * as G from '../../lib/pulse-geo-gtfs.js';
-import { G50, cellOfGrid, distM } from '../../lib/pulse-geo-proj.js';
+import { G50, cellOfGrid, distM, dropBatches } from '../../lib/pulse-geo-proj.js';
 import { unpackPts } from '../../lib/pulse-geo-pop.js';
 import { cellOf, dayOf, hourOf } from '../../lib/pulse-track-rules.js';
 import * as SV from '../../lib/pulse-schema.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const GEO = Object.freeze({ base: process.env.GEO_BASE || 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/geo/', checkH: 6, minVehicles: 20, keepDays: 30, feederCities: 30, minCount: 3, hideBand: 5, floorDefault: 15, moveM: 200, massLoss: 0.3, stateV: 1 });
+export const GEO = Object.freeze({ base: process.env.GEO_BASE || 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/geo/', checkH: 6, minVehicles: 20, keepDays: 30, feederCities: 30, minCount: 3, hideBand: 5, floorDefault: 15, moveM: 200, massLoss: 0.3, batchM: 25, batchMin: 3, swapPts: 15, stateV: 1 });
 const r4 = (x) => (x == null ? null : Math.round(x * 1e4) / 1e4);
 const LAND = { '01': 'SH', '02': 'HH', '03': 'NI', '04': 'HB', '05': 'NW', '06': 'HE', '07': 'RP', '08': 'BW', '09': 'BY', '10': 'SL', '11': 'BE', '12': 'BB', '13': 'MV', '14': 'SN', '15': 'ST', '16': 'TH' };
 
@@ -75,7 +75,7 @@ export async function run(ctx) {
       st.cover[ags] = { acc: C.accToJson(acc) };
       if (writeHour || fresh || !existsSync(docFile)) {
         const today = C.finalizeDay(prep, acc), mo = C.missingOperators(refCaps, ags, opsByAgs.get(ags));
-        doc = { ...doc, at: now, today: { ...today, cells: undefined }, missingOps: mo.missing, missingCount: mo.countGap, attribution: 'Einwohner: Zensus 2022 © Destatis (dl-de/by-2-0); Fahrzeuge: offene Feeds der Anbieter' };
+        doc = { ...doc, schemaVersion: SV.SCHEMA.geo, at: now, today: { ...today, cells: undefined }, missingOps: mo.missing, missingCount: mo.countGap, attribution: 'Einwohner: Zensus 2022 © Destatis (dl-de/by-2-0); Fahrzeuge: offene Feeds der Anbieter' };
         await writeFile(docFile, JSON.stringify(doc));
         const last = doc.days.at(-1) || today;
         vIndex.ags[ags] = [last.day, Math.round(prep.pop), ...last.share.map(r4), ...last.time50.map(r4), r4(last.gini), r4(last.diffPP), mo.missing.length];
@@ -85,7 +85,8 @@ export async function run(ctx) {
     if (writeHour || fresh) await writeFile(path.join(vdir, 'index.json'), JSON.stringify({ ...vIndex, schemaVersion: SV.SCHEMA.geo, at: now, fields: ['tag', 'einwohner', ...C.COVER.radii.map(r => `anteil_${r}m`), ...C.COVER.radii.map(r => `zeit50_${r}m`), 'gini_1km', 'abweichung_jeder_dritte_pp', 'anbieter_ohne_feed'] }));
     // ---------- Beginne und Enden dieses Laufs (Punkte) ----------
     const prev = ctx.akkuPrev?.snap || null, floors = {}; for (const r of sourceOut || []) { const f = r.batteryFloor; if (f?.hides && Number.isFinite(f.p005)) floors[r.operator] = Math.max(floors[r.operator] ?? 0, f.p005); }
-    const starts = new Map(), ends = new Map(), add = (m, ags, la, lo) => { let l = m.get(ags); if (!l) m.set(ags, l = []); l.push([la, lo]); };
+    const starts = new Map(), ends = new Map(), add = (m, ags, la, lo, op) => { let l = m.get(ags); if (!l) m.set(ags, l = []); l.push([la, lo, op]); };
+    const moved = new Map(), addMoved = (ags, n) => moved.set(ags, (moved.get(ags) || 0) + n);
     if (prev) {
       const cur = new Map(); for (const v of dv.vehicles) if (v.type !== 'car' && v.ags) cur.set(vkey(v.operator, v.rawId), v);
       const pres = new Map(), gone = new Map(), appear = new Map(), g = (m, k) => m.set(k, (m.get(k) || 0) + 1);
@@ -94,25 +95,34 @@ export async function run(ctx) {
       const mass = (m, gk) => (pres.get(gk) || 0) >= 20 && (m.get(gk) || 0) / pres.get(gk) > GEO.massLoss;
       for (const [k, p] of prev) {
         if (p.missing || p.dis || p.res || p.ty === 'car' || !p.ags) continue; const c = cur.get(k), gk = `${p.op}|${p.ags}`;
-        if (!c) { if (!mass(gone, gk) && !(p.bat != null && p.bat <= (floors[p.op] ?? GEO.floorDefault) + GEO.hideBand)) add(starts, p.ags, p.lat, p.lon); }
-        else if (!c.disabled && distM(p.lat, p.lon, c.lat, c.lon) >= GEO.moveM) { add(starts, p.ags, p.lat, p.lon); add(ends, c.ags, c.lat, c.lon); }
+        if (!c) { if (!mass(gone, gk) && !(p.bat != null && p.bat <= (floors[p.op] ?? GEO.floorDefault) + GEO.hideBand)) add(starts, p.ags, p.lat, p.lon, p.op); }
+        else if (!c.disabled && distM(p.lat, p.lon, c.lat, c.lon) >= GEO.moveM) {
+          // versetzt und deutlich voller: Akkutausch mit Umsetzung im Transporter, keine Fahrt
+          if (p.bat != null && Number.isFinite(c.batteryPct) && c.batteryPct - p.bat >= GEO.swapPts) addMoved(p.ags, 1);
+          else { add(starts, p.ags, p.lat, p.lon, p.op); add(ends, c.ags, c.lat, c.lon, c.operator); }
+        }
       }
-      for (const [k, v] of cur) { const p = prev.get(k); if ((!p || p.missing) && !v.disabled && !v.reserved && !mass(appear, `${v.operator}|${v.ags}`)) add(ends, v.ags, v.lat, v.lon); }
+      for (const [k, v] of cur) { const p = prev.get(k); if ((!p || p.missing) && !v.disabled && !v.reserved && !mass(appear, `${v.operator}|${v.ags}`)) add(ends, v.ags, v.lat, v.lon, v.operator); }
+      // gebündelt ausgebracht oder abgeholt (3 und mehr eines Anbieters in 25 m im selben Lauf): Umsetzung, keine Fahrt
+      for (const m of [starts, ends]) for (const [ags, l] of m) { const r = dropBatches(l, { r: GEO.batchM, min: GEO.batchMin }); m.set(ags, r.kept); if (r.removed) addMoved(ags, r.removed); }
     }
     // ---------- S8.5 Zubringer ----------
     const top = [...byAgs].sort((a, b) => b[1].length - a[1].length).slice(0, GEO.feederCities).map(([a]) => a);
     for (const ags of active) {
       const bl = gtfsDocs[stateOf(ags)]?.ags?.[ags]; if (!bl?.length) continue;
       const fi = G.feederIndex(bl.map(b => ({ lat: b[0], lon: b[1], dep: b[2] })));
-      let f = st.feeder[ags]; if (!f || f.day !== day) { if (f) (st.feederDone ??= {})[ags] = [...((st.feederDone || {})[ags] || []).filter(x => x.day !== f.day), { day: f.day, starts: f.s, ends: f.e, near: f.n, dep: fi.dep, runs: f.r }].slice(-GEO.keepDays); f = st.feeder[ags] = { day, s: 0, e: 0, n: 0, r: 0 }; }
+      let f = st.feeder[ags]; if (!f || f.day !== day) { if (f) (st.feederDone ??= {})[ags] = [...((st.feederDone || {})[ags] || []).filter(x => x.day !== f.day), { day: f.day, starts: f.s, ends: f.e, near: f.n, dep: fi.dep, runs: f.r, vn: f.vn || 0, vt: f.vt || 0, moved: f.u || 0 }].slice(-GEO.keepDays); f = st.feeder[ags] = { day, s: 0, e: 0, n: 0, r: 0, vn: 0, vt: 0, u: 0 }; }
       f.r++; for (const p of starts.get(ags) || []) { f.s++; if (fi.near(p[0], p[1])) f.n++; } for (const p of ends.get(ags) || []) { f.e++; if (fi.near(p[0], p[1])) f.n++; }
+      // Vergleichsbasis: Anteil der abgestellten verfügbaren Fahrzeuge in 150 m an einer Haltestelle
+      for (const v of byAgs.get(ags) || []) { f.vt = (f.vt || 0) + 1; if (fi.near(v[0], v[1])) f.vn = (f.vn || 0) + 1; }
+      f.u = (f.u || 0) + (moved.get(ags) || 0);
     }
     if (writeHour || fresh) {
       const rows = top.filter(a => st.feeder[a] || st.feederDone?.[a]).map(a => { const hist = st.feederDone?.[a] || [], last = hist.at(-1), t = st.feeder[a], dep = gtfsDocs[stateOf(a)]?.ags?.[a]?.reduce((s, b) => s + b[2], 0) || 0;
-        return { ags: a, name: ctx.latest?.municipalities?.[a]?.name || a, dep, last: last ? { day: last.day, index: r4(G.indexValue(last.near, last.dep)), share: r4(last.near / Math.max(1, last.starts + last.ends)), starts: last.starts, ends: last.ends, near: last.near } : null, today: t ? { index: r4(G.indexValue(t.n, dep)), share: r4(t.n / Math.max(1, t.s + t.e)), starts: t.s, ends: t.e, near: t.n, runs: t.r } : null, days: hist.map(x => [x.day, r4(G.indexValue(x.near, x.dep)), r4(x.near / Math.max(1, x.starts + x.ends))]) }; });
+        return { ags: a, name: ctx.latest?.municipalities?.[a]?.name || a, dep, last: last ? { day: last.day, index: r4(G.indexValue(last.near, last.dep)), share: r4(last.near / Math.max(1, last.starts + last.ends)), base: last.vt ? r4(last.vn / last.vt) : null, starts: last.starts, ends: last.ends, near: last.near, moved: last.moved ?? null } : null, today: t ? { index: r4(G.indexValue(t.n, dep)), share: r4(t.n / Math.max(1, t.s + t.e)), base: t.vt ? r4(t.vn / t.vt) : null, starts: t.s, ends: t.e, near: t.n, moved: t.u || 0, runs: t.r } : null, days: hist.map(x => [x.day, r4(G.indexValue(x.near, x.dep)), r4(x.near / Math.max(1, x.starts + x.ends)), x.vt ? r4(x.vn / x.vt) : null]) }; });
       const gi = await readJson(path.join(cacheDir, 'gtfs', 'index.json'));
       await mkdir(path.join(DATA, 'zubringer'), { recursive: true });
-      await writeFile(path.join(DATA, 'zubringer', 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.geo, at: now, nearM: G.GTFS.nearM, perDep: G.GTFS.perDep, timetableDay: gi?.day || null, attribution: G.GTFS.attribution, rule: 'Index = (Fahrtbeginne + Fahrtenden in 150 m um eine gebündelte Haltestelle mit Abfahrten) ÷ Abfahrten des Stichtags × 100; Anteil = davon ÷ alle Beginne und Enden', cities: rows }));
+      await writeFile(path.join(DATA, 'zubringer', 'index.json'), JSON.stringify({ schemaVersion: SV.SCHEMA.geo, at: now, nearM: G.GTFS.nearM, perDep: G.GTFS.perDep, timetableDay: gi?.day || null, attribution: G.GTFS.attribution, rule: 'Index = (Fahrtbeginne + Fahrtenden in 150 m um eine gebündelte Haltestelle mit Abfahrten) ÷ Abfahrten des Stichtags × 100; Anteil = davon ÷ alle Beginne und Enden; Basis = Anteil der abgestellten verfügbaren Fahrzeuge in 150 m; Umsetzungen (gebündelt, Akkutausch) nicht gezählt', cities: rows }));
     }
     // ---------- S8.4 Fahrtenden je 50-m-Zelle und Monat ----------
     const month = day.slice(0, 7);

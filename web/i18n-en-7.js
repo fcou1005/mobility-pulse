@@ -185,6 +185,7 @@ export default {
   "zv.below": "below minimum share",
   "zv.rest": "rest of the municipality: vehicles outside the assumed sub-areas",
   "zv.live": "counted live (not yet in the collector log)",
+  "zv.atStart": "counted at the start of the day (highest count 5:00 to 8:59) on {day}; the cap applies to deployment, during the day customers ride vehicles into the area",
   "zv.superset": "outline deliberately larger than the described area: the fleet is an upper bound, above the cap only a note",
   "zv.noRuns": "assumed boundary available, but no fleet of this vehicle type in the feed – not checkable",
   "zv.hintUpper": "note (fleet is an upper bound)",

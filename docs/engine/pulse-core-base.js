@@ -123,11 +123,18 @@ export function normalizeLicense(id, url = null) {
 // Betreibers oder mit einem Link auf eine Datenschutzerklärung ist sie ungeklärt. Keine Rechtsberatung: maßgeblich bleibt die Quelle.
 // Feeds über MobiData BW ohne eigene Angabe: Lizenz des Datensatzes im Portal (Sharing-Angebote: dl-de/by-2-0, Stand 14.11.2026).
 export const COMMERCIAL = Object.freeze(['ja', 'nein', 'ungeklaert']);
-/** @returns {{ k: 'ja'|'nein'|'ungeklaert', why: string }} */
+// Gelesene Bedingungen einzelner Anbieter (Stand 14.11.2026); gelten vor der Datensatz-Lizenz eines Verzeichnisses
+export const LICENSE_TERMS = Object.freeze([
+  { license: /li\.me\/(legal\/public-)?gbfs-terms/i, k: 'nein', why: 'Lime Public GBFS Terms: Nutzung nur für interne, nicht kommerzielle Zwecke', src: 'https://www.li.me/legal/public-gbfs-terms' },
+  { source: /^https:\/\/gbfs\.api\.ridedott\.com\//i, k: 'nein', why: 'Dott-Direktfeed ohne Lizenzangabe: Dott stellt die Daten nur unter einem API-Lizenzvertrag bereit', src: 'https://ridedott.com/api-license' },
+  { license: /stella-sharing\.de\/agb/i, k: 'ungeklaert', why: 'Lizenz-Link führt zu den Kunden-AGB, keine Datenlizenz; Anfrage bei stella nötig', src: 'https://www.stella-sharing.de/agb/' },
+]);
+/** @returns {{ k: 'ja'|'nein'|'ungeklaert', why: string, src?: string }} */
 export function commercialUse(licenseId, licenseUrl = null, sourceUrl = null) {
   const id = String(licenseId || ''), url = String(licenseUrl || ''), all = `${id} ${url}`.toLowerCase();
   if (/(^|[^a-z])nc([^a-z]|$)|non-?commercial|nicht-?kommerziell|by-nc/.test(all)) return { k: 'nein', why: 'nicht kommerziell' };
   const n = normalizeLicense(id || url, url || null).id || '';
+  if (!/^(CC0|CC-BY|ODbL|dl-de)/.test(n)) for (const r of LICENSE_TERMS) if ((r.license && r.license.test(url || id)) || (r.source && !id && !url && r.source.test(String(sourceUrl || '')))) return { k: r.k, why: r.why, src: r.src };
   if (/^(CC0-1\.0|dl-de\/zero-2-0)$/.test(n)) return { k: 'ja', why: 'frei' };
   if (/^CC-BY-SA-|^ODbL-1\.0$/.test(n)) return { k: 'ja', why: 'Namensnennung, gleiche Bedingungen' };
   if (/^CC-BY-\d|^dl-de\/by-2-0$/.test(n)) return { k: 'ja', why: 'Namensnennung' };

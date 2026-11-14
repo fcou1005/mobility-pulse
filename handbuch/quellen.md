@@ -32,9 +32,10 @@ Marktauftritt M2, `commercialUse` in `lib/pulse-core-base.js`. Jede Quelle bekom
 | --- | --- |
 | ja | CC0, dl-de/zero (frei); CC BY, dl-de/by (Namensnennung); CC BY-SA, ODbL (Namensnennung, abgeleitete Daten unter gleichen Bedingungen) |
 | ja | Feed über MobiData BW ohne eigene Angabe: Lizenz des Datensatzes im Portal (Sharing-Angebote, dl-de/by-2-0, Stand 14.11.2026) |
-| nein | NC-Lizenzen (nicht kommerziell) |
-| ungeklärt | ohne Angabe, eigene Bedingungen des Betreibers (z. B. Lime, stella), Link auf eine Datenschutzerklärung |
+| nein | NC-Lizenzen (nicht kommerziell); Lime: Public GBFS Terms erlauben nur interne, nicht kommerzielle Nutzung ([li.me](https://www.li.me/legal/public-gbfs-terms)); Dott-Direktfeeds ohne Lizenzangabe: nur mit API-Lizenzvertrag ([ridedott.com](https://ridedott.com/api-license)) |
+| ungeklärt | ohne Angabe, Link auf Kunden-AGB (stella) oder auf eine Datenschutzerklärung |
 
 - `DATA-LICENSE.md` im Datenzweig: Spalte „Kommerziell“ je Lizenz und eine Tabelle je Anbieter (ja, wenn alle Quellen ja sind; teils bei gemischten Quellen), dazu die Einstufung der Grundlagen (ungeklärt: Verkehrsinformation der Autobahn GmbH, Nachrichtensuche der tagesschau-App, Termine aus Programmseiten).
 - Quellen-Ansicht: Spalte „Kommerziell“ in der Lizenz-Übersicht.
-- Kommunal-Bericht: Schalter „nur Quellen mit geklärter kommerzieller Nutzung“ (`?lizenz=1`) blendet jeden Anbieter aus, der in der Gemeinde eine Quelle mit anderer Einstufung als „ja“ hat (`licenseExclude` in `lib/pulse-report-base.js`); der Bericht nennt die ausgeblendeten Anbieter.
+- Kommunal-Bericht: Schalter „nur Quellen mit geklärter kommerzieller Nutzung“ (`?lizenz=1`) blendet jeden Anbieter aus, der in der Gemeinde eine Quelle mit anderer Einstufung als „ja“ hat (`licenseExclude` in `lib/pulse-report-base.js`); Spiegel einer anderen Quelle (Fahrzeuge verworfen, z. B. Dott-Direktfeed neben MobiData BW) zählen nicht. Der Bericht nennt die ausgeblendeten Anbieter.
+- Gelesene Bedingungen stehen in `LICENSE_TERMS` (`lib/pulse-core-base.js`) mit Quelle und Stand; sie gehen der Datensatz-Lizenz eines Verzeichnisses vor, eine Lizenz im Feed geht ihnen vor.

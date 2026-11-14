@@ -546,7 +546,7 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
   log = R.zoneLogUpdate(log, zones, new Map([['innenstadt|Bolt|scooter', [5, 5]], ['kernstadt|Bolt|scooter', [1, 1]]]), { at: t2 });
   log = R.zoneLogUpdate(log, zones, new Map([['innenstadt|Bolt|scooter', [9, 9]]]), { at: t3, flag: 0 });
   const d = (z, op) => log.daily.find(r => r[1] === z && r[2] === op);
-  assert(log.zones.length === 2 && !JSON.stringify(log).includes('9.17') && d('innenstadt', 'Bolt').slice(4).join() === '3,5,4,2' && d('innenstadt', 'Voi').slice(4).join() === '0,1,0.5,2' && d('kernstadt', 'Bolt').slice(4).join() === '1,2,1.5,2',
+  assert(log.zones.length === 2 && !JSON.stringify(log).includes('9.17') && d('innenstadt', 'Bolt').slice(4, 8).join() === '3,5,4,2' && d('innenstadt', 'Voi').slice(4, 8).join() === '0,1,0.5,2' && d('kernstadt', 'Bolt').slice(4, 8).join() === '1,2,1.5,2' && d('innenstadt', 'Bolt')[8] === null,
     'Tageswerte Min/Max/Mittel/Läufe; Anbieter ohne Fahrzeuge im Folgelauf mit 0; Lauf mit Flag 0 zählt nicht; keine Koordinaten im Protokoll');
   const later = R.zoneLogUpdate(log, zones, new Map([['innenstadt|Bolt|scooter', [7, 6]]]), { at: T('2026-12-05T10:00:00') });
   assert(later.daily.every(r => r[0] >= '2026-11-06') && later.runs.every(r => r[0] >= T('2026-12-03T10:00:00')), 'Tageswerte 30 Tage, Läufe 2 Tage');
@@ -594,6 +594,15 @@ assert(R.csvCell(1.5, null, 'en') === '1.5' && R.csvCell(2.345, 1, 'en') === '2.
     && !d1.check.operators.some(o => o.op === 'RegioRad') && d1.status === 'near' && d2.status === 'unchecked' && !d2.check,
     'Teilgebiet mit Zuordnung: je Anbieter jetzt gegen 100 (nahe), Tagesmaximum 120 → 1 Tag über Grenze, nur Arten der Obergrenze; ohne Zuordnung weiter nicht prüfbar');
   assert(R.capsCheck({ obergrenzen: [{ ags: '08111000', ort: 'S', type: 'scooter', jeAnbieter: 10, zonen: [{ name: 'x', jeAnbieter: 1, beobachtung: 'fehlt' }], status: 'amtlich' }] }, {}, { zoneWatch: log })[0].districts[0].status === 'unchecked', 'Zuordnung auf unbekannte Zone: nicht prüfbar');
+  { // Grenze für die Ausbringung (Stuttgart „zum Tagesbeginn“): Morgenwert 5–9 Uhr zählt, nicht der Bestand am Nachmittag
+    let lg = R.zoneLogUpdate(null, zs, new Map([['zentrale-innenstadt|Voi|scooter', [80, 80]]]), { at: T('2026-11-03T06:00:00') });
+    lg = R.zoneLogUpdate(lg, zs, new Map([['zentrale-innenstadt|Voi|scooter', [96, 96]]]), { at: T('2026-11-03T08:40:00') });
+    lg = R.zoneLogUpdate(lg, zs, new Map([['zentrale-innenstadt|Voi|scooter', [175, 170]]]), { at: T('2026-11-03T17:00:00') });
+    const rule = (zt) => ({ obergrenzen: [{ ags: '08111000', ort: 'Stuttgart', type: 'scooter', jeAnbieter: 1500, anbieter: ['Voi'], zonen: [{ name: 'zentrale Innenstadt', jeAnbieter: 100, beobachtung: 'zentrale-innenstadt', ...zt }], status: 'amtlich' }] });
+    const st0 = R.capsCheck(rule({}), {}, { zoneWatch: lg })[0].districts[0], st1 = /** @type {any} */ (R.capsCheck(rule({ zeitpunkt: 'tagesbeginn' }), {}, { zoneWatch: lg })[0].districts[0]), v1 = st1.check.operators[0];
+    assert(st0.status === 'over' && st1.check.atStart && st1.check.startDay === '2026-11-03' && v1.now === 96 && v1.status === 'near' && v1.daysOver === 0 && lg.daily[0][8] === 96 && lg.daily[0][5] === 175,
+      'Ausbringungs-Grenze: 96 um 8:40 (nahe 100) statt 175 am Nachmittag (über), Tage über der Grenze nach dem Morgenwert');
+  }
 }
 // ---------- zweite Stadt: Rest-Gebiet (Düsseldorf), Anteils-Regeln (Dresden), Karlsruhe aus dem Repo ----------
 {
@@ -780,7 +789,13 @@ assert(R.energyLow(null, 30, { type: 'car' }) === true && R.energyLow(null, 30) 
 // ---------- Marktauftritt M2: Anbieter mit ungeklärter kommerzieller Nutzung ausblendbar ----------
 {
   const src = [{ operator: 'Voi', municipalities: ['08111000'], licenseId: 'CC-BY-SA-4.0' }, { operator: 'Lime', municipalities: ['08111000'], licenseId: null, licenseUrl: 'https://www.li.me/gbfs-terms' },
-    { operator: 'Bolt', municipalities: ['08111000'], licenseId: 'CC-BY-4.0' }, { operator: 'Bolt', municipalities: ['08111000'], licenseId: null }, { operator: 'Dott', municipalities: ['09162000'], licenseId: null }, { operator: 'Dott', municipalities: ['08111000'], licenseId: null, url: 'https://api.mobidata-bw.de/sharing/gbfs/v2/dott_stuttgart/gbfs' }];
+    { operator: 'Bolt', municipalities: ['08111000'], licenseId: 'CC-BY-4.0' }, { operator: 'Bolt', municipalities: ['08111000'], licenseId: null }, { operator: 'Dott', municipalities: ['09162000'], licenseId: null }, { operator: 'Dott', municipalities: ['08111000'], licenseId: null, url: 'https://api.mobidata-bw.de/sharing/gbfs/v2/dott_stuttgart/gbfs' },
+    { operator: 'Dott', municipalities: ['08111000'], licenseId: null, url: 'https://gbfs.api.ridedott.com/public/v2/stuttgart/gbfs.json', mirror: { of: 'dott_stuttgart', municipalities: ['08111000'] } }];
   const ex = R.licenseExclude(src, '08111000'), keep = R.keyFilter({ ags: '08111000', exclude: ex });
-  assert(ex.has('Lime') && ex.has('Bolt') && !ex.has('Voi') && !ex.has('Dott') && ex.size === 2 && keep('08111000|Voi|scooter') && !keep('08111000|Lime|scooter'), `licenseExclude: ${[...ex].join(', ')} ausgeblendet (Bolt teils ohne Lizenz), Voi und Dott (MobiData BW, dl-de/by-2-0) bleiben`);
+  assert(ex.has('Lime') && ex.has('Bolt') && !ex.has('Voi') && !ex.has('Dott') && ex.size === 2 && keep('08111000|Voi|scooter') && !keep('08111000|Lime|scooter'), `licenseExclude: ${[...ex].join(', ')} ausgeblendet (Lime laut eigenen Bedingungen nicht kommerziell, Bolt teils ohne Lizenz), Voi und Dott (MobiData BW, dl-de/by-2-0; Direktfeed nur Spiegel) bleiben`);
+}
+{ // gelesene Bedingungen einzelner Anbieter (lib/pulse-core-base.js LICENSE_TERMS)
+  const C = await import('../lib/pulse-core.js');
+  const lime = C.commercialUse(null, 'https://www.li.me/gbfs-terms'), dott = C.commercialUse(null, null, 'https://gbfs.api.ridedott.com/public/v2/stuttgart/gbfs.json'), mb = C.commercialUse(null, null, 'https://api.mobidata-bw.de/sharing/gbfs/v2/voi_de/gbfs');
+  assert(lime.k === 'nein' && /nicht kommerziell/.test(lime.why) && lime.src && dott.k === 'nein' && mb.k === 'ja' && C.commercialUse('CC-BY-4.0', null, 'https://gbfs.api.ridedott.com/x').k === 'ja', 'Lizenz-Einstufung: Lime nein (Public GBFS Terms), Dott-Direktfeed nein (API-Lizenzvertrag), MobiData BW ja; Feed-Lizenz geht vor');
 }

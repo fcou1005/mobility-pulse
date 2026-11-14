@@ -20,7 +20,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.0 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.0 | `akku/<AGS>.json`, `akku/bewertung.json` |
-| [geo](#geo) | 1.0 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
+| [geo](#geo) | 1.1 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 
 ## status
 
@@ -532,7 +532,7 @@ Ergebnis einer Nacht: Zählwerte (getroffen tp, falsch fp, übersehen fn, richti
 
 Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8). Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.
 
-Version 1.0 · Schema: [schemas/geo.schema.json](../schemas/geo.schema.json)
+Version 1.1 · Schema: [schemas/geo.schema.json](../schemas/geo.schema.json)
 
 ### geo · versorgung
 
@@ -602,6 +602,7 @@ S8.3 Übersicht: Jahre, fehlende Jahre, Abgleich, Schwerpunkte je Gemeinde
 | `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
 | `years` | ja | array |
 | `missingYears` |  | array |
+| `landsByYear` |  | object – Jahr → erfasste Länder (zweistelliger AGS-Anfang, mindestens ein Fünftel des stärksten Jahres); eine Gemeinde nutzt nur die Jahre ihres Landes (ab 1.1) |
 | `ags` | ja | object |
 
 ### geo · umweg
@@ -635,4 +636,6 @@ S8.1 Zensus 2022 gegen VG250-EW je Gemeinde
 | `maxDev` | ja | number |
 | `ags` | ja | object |
 | `within` |  | integer |
+| `withinAdj` |  | integer – Gemeinden innerhalb ±maxDev nach Abzug des Landes-Medians von Zensus ÷ VG250-EW (Stichtagsunterschied); ab 1.1 |
+| `landFactor` |  | object – Land (zweistelliger AGS-Anfang) → Median von Zensus ÷ VG250-EW; ab 1.1 |
 | `n` |  | integer |
