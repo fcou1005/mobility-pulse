@@ -23,6 +23,6 @@ export async function runZensus({ OUT, TMP, bounds, log, now }) {
     rows: res.rows, skipped: bad, ewGermany: res.ewAll, ewInActive: res.ewIn, maxDev: sum.maxDev, n: sum.n, within: sum.within, share: sum.share, worst: sum.worst,
     ags: Object.fromEntries(sum.rows.map(r => [r.ags, [r.zensus, r.vg250, Math.round(r.dev * 10000) / 10000]])), agsFields: ['zensus', 'vg250', 'abweichung'] };
   await writeFile(path.join(OUT, 'pop', 'index.json'), JSON.stringify(doc));
-  log(`Zensus: ${res.rows} Zellen, ${Math.round(res.ewAll)} Einwohner, davon ${Math.round(res.ewIn)} in ${res.by.size} aktiven Gemeinden; ${sum.within} von ${sum.n} Gemeinden innerhalb ±${sum.maxDev * 100} % zu VG250-EW (${(Date.now() - t0) / 1000} s)`);
+  log(`Zensus: ${res.rows} Zellen, ${Math.round(res.ewAll)} Einwohner, davon ${Math.round(res.ewIn)} in ${res.by.size} aktiven Gemeinden, ${res.split} Grenzzellen anteilig; ${sum.within} von ${sum.n} Gemeinden innerhalb ±${sum.maxDev * 100} % zu VG250-EW (${(Date.now() - t0) / 1000} s)`);
   return { by: res.by, summary: sum };
 }

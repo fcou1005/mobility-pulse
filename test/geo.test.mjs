@@ -93,6 +93,13 @@ function unfallCsv(y) {
   assert(b.length === 2 && b.find(x => x.name === 'Rathaus').dep === 14 && b.find(x => x.name === 'Markt').n === 2, 'Bündel: Elternstation bzw. gleicher Name in 150 m');
   const f = G.feederIndex(b); assert(f.dep === 19 && f.near(48.7765, 9.1829) && !f.near(48.79, 9.19) && near(G.indexValue(38, 19), 200, 1e-9), 'Zubringer: Punkt in 150 m, Index je 100 Abfahrten');
 }
+{ const h = 'ULAND;UREGBEZ;UKREIS;UGEMEINDE;UJAHR;UKATEGORIE;IstRad;XGCSWGS84;YGCSWGS84', ix = U.unfallHeader(h), r = U.unfallRow('11;0;03;000;2024;3;1;13,41;52,52', ix);
+  assert(r?.ags === '11000000' && U.unfallRow('02;0;00;000;2024;3;0;10,0;53,55', ix)?.ags === '02000000', 'Unfallatlas: Berliner Bezirke (Kreis 01–12) zählen zu Berlin 11000000'); }
+{ // Grenzzelle zwischen zwei Gemeinden: anteilig, Summe bleibt
+  const sq = (ags, a, b, c, d) => ({ type: 'Feature', properties: { ags }, geometry: { type: 'Polygon', coordinates: [[[b, a], [d, a], [d, c], [b, c], [b, a]]] } });
+  const acc = Z.popAccumulator(Z.muniLocator([sq('1', 48.0, 9.0, 48.1, 9.1), sq('2', 48.0, 9.1, 48.1, 9.2)])); acc.add({ lat: 48.05, lon: 9.1, ew: 100 }); acc.add({ lat: 48.05, lon: 9.05, ew: 10 });
+  const r = acc.result(), e1 = r.by.get('1')?.ew, e2 = r.by.get('2')?.ew;
+  assert(r.split === 1 && near(e1 + e2, 110, 1e-9) && near(e1, 60, 1e-9) && near(e2, 50, 1e-9) && r.by.get('2').pts[0][1] > 9.1, `Zensus: Zelle auf der Grenze halb und halb verteilt (${e1} / ${e2})`); }
 // ---------- Umwegfaktor ----------
 function gridOsm(n, stepDeg) {
   const els = []; let id = 1; const nid = (i, j) => i * 1000 + j + 1;
