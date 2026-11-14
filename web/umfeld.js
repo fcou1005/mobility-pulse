@@ -26,12 +26,13 @@ export async function renderUmfeld(el, ctx) {
   const [ver, unf, umw, abs] = city ? await Promise.all([`versorgung/${ags}.json`, `unfall/${ags}.json`, `umweg/${ags}.json`, `abstell/${ags}.json`].map(f => load(ctx, D + f))) : [null, null, null, null];
   if (run !== S.run) return;
   const f = ctx.fmt, name = city ? ctx.esc(ctx.muniName(ags)) : t('geo.germany');
-  const vi = vIdx?.ags || {}, allShare = Object.values(vi).map(r => r[3]), med200 = median(allShare);
+  const vi = vIdx?.ags || {}, allShare = Object.values(vi).map(r => r[3]), med200 = median(allShare), medBig = median(Object.values(vi).filter(r => r[1] >= 100000).map(r => r[3]));
+  const runsTxt = (n) => (n === 1 ? t('geo.runOne') : t('geo.runMany', { n: f(n || 0) }));
   // ---------- Antwort ----------
   const last = ver?.days?.at(-1) || null, cur = last || ver?.today || null;
   if (city && cur) {
     putAnswer(el, { id: 'umfeld', sentence: t('geo.answer', { name, p: `<strong>${pct(ctx, cur.share[1])}</strong>`, from: ver.dayFrom, to: ver.dayTo }),
-      kpis: [{ label: t('geo.k200'), value: pct(ctx, cur.share[1]), n: cur.share[1] * 100, cmp: med200 != null ? t('geo.kCmpAll', { v: pct(ctx, med200) }) : t('geo.kCmpNone'), eq: '#geo-ver td.geo-s200' },
+      kpis: [{ label: t('geo.k200'), value: pct(ctx, cur.share[1]), n: cur.share[1] * 100, cmp: medBig != null ? t('geo.kCmpAll', { v: pct(ctx, medBig) }) : t('geo.kCmpNone'), eq: '#geo-ver td.geo-s200' },
         { label: t('geo.kTime50'), value: pct(ctx, cur.time50[1]), cmp: t('geo.kTime50Cmp') },
         { label: t('geo.kGini'), value: cur.gini == null ? '–' : f(cur.gini, 2), cmp: t('geo.kGiniCmp') }], how: t('geo.how'), asOf: last ? dayTxt(last.day) : t('geo.provisional') });
   } else if (!city && Object.keys(vi).length) {
@@ -40,12 +41,12 @@ export async function renderUmfeld(el, ctx) {
 
   // ---------- Versorgung ----------
   const radii = ver?.radii || [150, 200, 300];
-  const verPanel = city ? (cur ? `<div class="panel"><div class="panel-head"><div><h2>${t('geo.verTitle', { name })}</h2><div class="sub">${t('geo.verSub', { day: last ? dayTxt(last.day) : t('geo.provisional'), runs: f(cur.runsDay), pop: f(ver.pop) })}</div></div></div>
+  const verPanel = city ? (cur ? `<div class="panel"><div class="panel-head"><div><h2>${t('geo.verTitle', { name })}</h2><div class="sub">${t('geo.verSub', { day: last ? dayTxt(last.day) : t('geo.provisional'), runs: runsTxt(cur.runsDay), pop: f(ver.pop) })}</div></div></div>
       <div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('geo.verTitle', { name }))}"><table id="geo-ver"><thead><tr><th>${t('geo.band')}</th>${radii.map(r => `<th class="n">${t('geo.within', { r })}</th>`).join('')}</tr></thead><tbody>
       <tr><td>${t('geo.day7to22')}</td>${cur.share.map((x, i) => `<td class="n${i === 1 ? ' geo-s200' : ''}">${pct(ctx, x, 1)}</td>`).join('')}</tr>
       <tr><td>${t('geo.time50Row')}</td>${cur.time50.map(x => `<td class="n">${pct(ctx, x, 1)}</td>`).join('')}</tr>
       ${(cur.band || []).map((b, i) => (b ? `<tr><td>${t(`band.${i}`)}</td>${b.map(x => `<td class="n">${pct(ctx, x, 1)}</td>`).join('')}</tr>` : '')).join('')}</tbody></table></div>
-      <p class="small">${t('geo.subCheck', { d: f(cur.diffPP ?? 0, 2), n: f(cur.runsDay3 || 0) })}</p>
+      <p class="small">${t('geo.subCheck', { d: f(cur.diffPP ?? 0, 2), n: runsTxt(cur.runsDay3 || 0) })}</p>
       ${ver.missingOps?.length ? `<p class="small warn-text">${t('geo.missingOps', { ops: ctx.esc(ver.missingOps.join(', ')) })}</p>` : ''}
       ${ver.cells?.rows?.length ? `<h3>${t('geo.lowCells')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('geo.lowCells'))}"><table><thead><tr><th>${t('geo.cell')}</th><th class="n">${t('geo.pop')}</th>${radii.map(r => `<th class="n">${t('geo.within', { r })}</th>`).join('')}</tr></thead><tbody>
         ${ver.cells.rows.filter(r => r[1] >= 50).sort((a, b) => (a[3] ?? 1) - (b[3] ?? 1) || b[1] - a[1]).slice(0, 15).map(r => `<tr><td>${osm(...cellLL(r[0]))}</td><td class="n">${f(r[1])}</td>${r.slice(2).map(x => `<td class="n">${pct(ctx, x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}
@@ -65,8 +66,8 @@ export async function renderUmfeld(el, ctx) {
   // ---------- Zubringer ----------
   const zc = zub?.cities || [], me = zc.find(c => c.ags === ags);
   const zubPanel = `<div class="panel"><div class="panel-head"><div><h2>${t('geo.zubTitle')}</h2><div class="sub">${t('geo.zubSub', { day: zub?.timetableDay ? dayTxt(`${zub.timetableDay.slice(0, 4)}-${zub.timetableDay.slice(4, 6)}-${zub.timetableDay.slice(6, 8)}`) : '–' })}</div></div></div>
-    ${zc.length ? `${me ? `<p>${t('geo.zubMe', { name, i: f(me.last?.index ?? me.today?.index ?? 0, 1), s: pct(ctx, me.last?.share ?? me.today?.share), dep: f(me.dep) })}</p>` : ''}<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('geo.zubTitle'))}"><table id="geo-zub"><thead><tr><th class="n">#</th><th>${t('geo.city')}</th><th class="n">${t('geo.zubIndex')}</th><th class="n">${t('geo.zubShare')}</th><th class="n">${t('geo.zubDep')}</th></tr></thead><tbody>
-      ${[...zc].sort((a, b) => ((b.last || b.today)?.index ?? -1) - ((a.last || a.today)?.index ?? -1)).map((c, i) => { const v = c.last || c.today; return `<tr${c.ags === ags ? ' class="hl"' : ''}><td class="n">${i + 1}</td><td>${ctx.esc(c.name)}</td><td class="n">${v?.index == null ? '–' : f(v.index, 1)}</td><td class="n">${pct(ctx, v?.share)}</td><td class="n">${f(c.dep)}</td></tr>`; }).join('')}</tbody></table></div><p class="muted small">${t('geo.zubNote')}</p>` : `<div class="empty">${t('geo.zubNone')}</div>`}</div>`;
+    ${zc.length ? `${me ? `<p>${t('geo.zubMe', { name, i: f(me.last?.index ?? me.today?.index ?? 0, (me.last?.index ?? me.today?.index ?? 0) < 1 ? 2 : 1), s: pct(ctx, me.last?.share ?? me.today?.share), dep: f(me.dep) })}</p>` : ''}<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('geo.zubTitle'))}"><table id="geo-zub"><thead><tr><th class="n">#</th><th>${t('geo.city')}</th><th class="n">${t('geo.zubIndex')}</th><th class="n">${t('geo.zubShare')}</th><th class="n">${t('geo.zubDep')}</th></tr></thead><tbody>
+      ${[...zc].sort((a, b) => ((b.last || b.today)?.index ?? -1) - ((a.last || a.today)?.index ?? -1)).map((c, i) => { const v = c.last || c.today; return `<tr${c.ags === ags ? ' class="hl"' : ''}><td class="n">${i + 1}</td><td>${ctx.esc(c.name)}</td><td class="n">${v?.index == null ? '–' : f(v.index, v.index < 1 ? 2 : 1)}</td><td class="n">${pct(ctx, v?.share)}</td><td class="n">${f(c.dep)}</td></tr>`; }).join('')}</tbody></table></div><p class="muted small">${t('geo.zubNote')}</p>` : `<div class="empty">${t('geo.zubNone')}</div>`}</div>`;
   // ---------- Umwegfaktor ----------
   const wi = city ? wIdx?.cities?.[ags] : null;
   const umwPanel = city ? `<div class="panel"><div class="panel-head"><div><h2>${t('geo.umwTitle', { name })}</h2><div class="sub">${t('geo.umwSub')}</div></div></div>
