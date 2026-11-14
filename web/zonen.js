@@ -7,10 +7,11 @@ import * as Z from './pulse-zones.js';
 import { decodeFleet } from './pulse-ops.js';
 import { t, dateFmt } from './i18n.js';
 import { clearAnswer, putAnswer } from './answer.js';
+import { NEUTRAL } from './tokens.js';
 
 const cache = new Map(), S = { map: null, layers: null, run: 0, res: null, zones: null, spots: [], own: [], reasons: null, ags: null, op: null };
 const load = (ctx, url, timeout = 60000) => { if (!cache.has(url)) cache.set(url, ctx.getJson(url, { timeout }).then(r => (r?.ok ? r.json : null)).catch(() => null)); return cache.get(url); };
-const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || NEUTRAL.fallback;
 const KCOL = { no_ride: '--bad', no_park: '--warn', mandatory: '--info', allowed: '--ok' };
 const KLBL = () => ({ no_ride: t('zw.kNoRide'), no_park: t('zw.kNoPark'), mandatory: t('zw.kMandatory'), allowed: t('zw.kAllowed') });
 let cssDone = false;
@@ -24,7 +25,7 @@ function css() {
   document.head.appendChild(s);
 }
 const dayTxt = (ms) => dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(ms));
-const osmAt = (p) => `https://www.openstreetmap.org/?mlat=${p[1].toFixed(5)}&mlon=${p[0].toFixed(5)}#map=19/${p[1].toFixed(5)}/${p[0].toFixed(5)}`;
+const osmQ = (p) => `?mlat=${p[1].toFixed(5)}&mlon=${p[0].toFixed(5)}#map=19/${p[1].toFixed(5)}/${p[0].toFixed(5)}`;
 
 export async function renderZonen(el, ctx) {
   css();
@@ -93,7 +94,7 @@ async function audit(el, ctx, log) {
     ...res.spotsInBan.map(o => [t('zw.fSpot'), `${ctx.esc(o.name || '–')} (${ctx.esc(o.src || '')}) – ${KLBL()[o.kind]}${o.zoneName ? ` „${ctx.esc(o.zoneName)}“` : ''}`, [o.lon, o.lat]]),
     ...(res.banNoReason || []).map(o => [t('zw.fNoReason'), `${KLBL()[o.kind]}${o.name ? ` „${ctx.esc(o.name)}“` : ''}, ${f(o.areaM2)} m²`, o.at]),
   ];
-  el.querySelector('#zw-find tbody').innerHTML = rows.length ? rows.slice(0, 400).map(([k, d, at]) => `<tr><td>${k}</td><td>${d}</td><td>${at ? `<button type="button" class="chip" data-fly="${at[0]},${at[1]}">${t('zw.onMap')}</button> <a href="${osmAt(at)}" target="_blank" rel="noopener">OSM ↗</a>` : ''}</td></tr>`).join('')
+  el.querySelector('#zw-find tbody').innerHTML = rows.length ? rows.slice(0, 400).map(([k, d, at]) => `<tr><td>${k}</td><td>${d}</td><td>${at ? `<button type="button" class="chip" data-fly="${at[0]},${at[1]}">${t('zw.onMap')}</button> <a href="https://www.openstreetmap.org/${osmQ(at)}" target="_blank" rel="noopener">OSM ↗</a>` : ''}</td></tr>`).join('')
     : `<tr><td colspan="3" class="empty">${t('zw.noFindings')}</td></tr>`;
   el.querySelector('#zw-hist tbody').innerHTML = res.history.length ? res.history.slice(0, 60).map(h => `<tr><td>${dayTxt(h.at)}</td><td>${ctx.esc(h.source)}</td><td class="n">${f(h.added)}</td><td class="n">${f(h.removed)}</td><td class="n">${f(h.count)}</td></tr>`).join('') : `<tr><td colspan="5" class="empty">${t('zw.noHistory')}</td></tr>`;
   drawFindings(); renderExport(el, ctx);
