@@ -24,7 +24,7 @@ const CHECKS = {
   coverage: [['Anbieter vor Ort', /ANBIETER VOR ORT\s*\d+/i], ['Voi gelistet', /Voi/]],
   vergleich: [['Gebiet', /Anbieter-Vergleich: Stuttgart/], ['mehrere Anbieter', /Voi[\s\S]*Lime[\s\S]*Bolt/]],
   bericht: [['Gemeindeschlüssel', /AGS 08111000/], ['Einwohner', /609\.365 Einwohner/], ['Zeitraum', /Alle verfügbaren Tage \(3\)/]],
-  ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/], ['Schichtplan', /Schichtplan/], ['Soll je Tageszeit', /[\d.]+ von [\d.]+ verfügbaren Fahrzeugen auf [\d.]+ Zellen/], ['Akku bis morgen 8 Uhr', /Akku bis morgen 8 Uhr[\s\S]*melden keinen Ladestand/], ['Akku: Trefferquote', /Selbstprüfung: \d+ % von [\d.]+ Vorhersagen getroffen/]],
+  ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/], ['Schichtplan', /Schichtplan/], ['Soll je Tageszeit', /[\d.]+ von [\d.]+ verfügbaren Fahrzeugen auf [\d.]+ Zellen/], ['Akku bis morgen 8 Uhr', /Akku bis morgen 8 Uhr[\s\S]*melden keinen Ladestand/], ['Akku: Trefferquote', /Selbstprüfung: \d+ % von [\d.]+ Vorhersagen getroffen in/]],
   spots: [['Gebiet', /Spot-Abgleich: Stuttgart/], ['eigener Anbieter mit Spots', /Mein Anbieter\s*Voi \(\d+ Spots\)/]],
   prognose: [['Prognose für Anbieter und Gebiet', /Prognose für Voi in Stuttgart/], ['Güte', /Wie gut ist die Prognose\?/]],
   'prognose-spots': [['Filter Gebiet', /Gebiet: Stuttgart/], ['Spots bewertet', /Wichtigkeit und Fehlbestand/]],

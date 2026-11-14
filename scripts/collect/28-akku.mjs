@@ -13,7 +13,7 @@ import * as L from '../../lib/pulse-akku-learn.js';
 import { cellOf, dayOf } from '../../lib/pulse-track-rules.js';
 import * as SV from '../../lib/pulse-schema.js';
 
-export const MIN_VEHICLES = 20, DROP_MAX = 50;
+export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 2; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen)
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 
 export async function run(ctx) {
@@ -52,12 +52,12 @@ export async function run(ctx) {
     for (const f of drop) await rm(path.join(dir, f), { force: true });
     // Rückblick auf die goldenen Tage: einmal am Tag (nach 8 Uhr, dann ist die letzte Nacht vollständig)
     const today = dayOf(now), gd = TRACK_DIR ? path.join(TRACK_DIR, 'golden') : null;
-    if (gd && existsSync(gd) && st.backtest?.day !== today && A.clockOf(now)[0] >= A.AKKU.targetHour) {
+    if (gd && existsSync(gd) && (st.backtest?.day !== today || st.backtest?.v !== BACKTEST_V) && A.clockOf(now)[0] >= A.AKKU.targetHour) {
       const runs = [];
       for (const f of (await readdir(gd)).filter(x => /^\d{4}-\d{2}-\d{2}\.jsonl\.gz$/.test(x)).sort())
         for (const line of gunzipSync(await readFile(path.join(gd, f))).toString('utf8').split('\n')) if (line.trim()) { try { runs.push(JSON.parse(line)); } catch { /* Zeile kaputt */ } }
       const bt = L.backtestGolden(runs, { skipOps: [...(ctx.rangeOnlyOps || [])] });
-      st.backtest = { day: today, at: now, skipOps: [...(ctx.rangeOnlyOps || [])], runs: bt.runs, from: bt.from, to: bt.to, floors: bt.floors, groups: [...new Set(runs.flatMap(r => Object.keys(r.groups || {})))].sort(), nights: bt.nights, total: bt.total };
+      st.backtest = { v: BACKTEST_V, day: today, at: now, skipOps: [...(ctx.rangeOnlyOps || [])], runs: bt.runs, from: bt.from, to: bt.to, floors: bt.floors, groups: bt.groups, nights: bt.nights, total: bt.total };
       log(`Akku-Rückblick (goldene Tage, ${bt.runs} Läufe): ${bt.total.nights} Nächte, Treffer ${bt.total.precision == null ? '–' : `${(bt.total.precision * 100).toFixed(1)} %`}`);
     }
     const models = Object.fromEntries(Object.entries(st.g).map(([k, a]) => [k, [a[1] > 0 ? r4(a[0] / a[1]) : null, a[3] > 0 ? r4(a[2] / a[3]) : null, Math.round(a[1]), Math.round(a[3])]]));

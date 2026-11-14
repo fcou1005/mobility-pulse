@@ -40,8 +40,9 @@ const pct = (x) => (x == null ? '–' : `${X.fmt(x * 100, 0)} %`);
 function hitsText(ev) {
   const tot = ev?.total, bt = ev?.backtest?.total;
   const parts = [];
-  if (tot?.nights) parts.push(t('ops.akkuHits', { p: pct(tot.precision), n: X.fmt(tot.tp + tot.fp), nights: X.fmt(tot.nights), r: pct(tot.recall), pb: pct(tot.base?.precision) }));
-  if (bt?.nights) parts.push(t('ops.akkuHitsBack', { p: pct(bt.precision), n: X.fmt(bt.tp + bt.fp), nights: X.fmt(bt.nights), r: pct(bt.recall), groups: (ev.backtest.groups || []).map(g => `${g.split('|')[0]} ${X.muniName(g.split('|')[1])}`).join(', ') }));
+  const nightsText = (n) => (n === 1 ? t('ops.akkuNightOne') : t('ops.akkuNightMany', { n: X.fmt(n) }));
+  if (tot?.nights) parts.push(t('ops.akkuHits', { p: pct(tot.precision), n: X.fmt(tot.tp + tot.fp), nights: nightsText(tot.nights), r: pct(tot.recall), pb: pct(tot.base?.precision) }));
+  if (bt?.nights) parts.push(t('ops.akkuHitsBack', { p: pct(bt.precision), n: X.fmt(bt.tp + bt.fp), nights: nightsText(bt.nights), r: pct(bt.recall), groups: (ev.backtest.groups || []).map(g => `${g.split('|')[0]} ${X.muniName(g.split('|')[1])}`).join(', ') }));
   return parts.length ? parts.join(' ') : t('ops.akkuHitsNone', { hour: AK.AKKU.targetHour });
 }
 function zonesCsv(ff) {
