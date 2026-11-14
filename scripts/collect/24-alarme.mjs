@@ -8,6 +8,7 @@ import * as AL from '../../lib/pulse-alarme.js';
 import * as SV from '../../lib/pulse-schema.js';
 
 const BASE = 'https://fcou1005.github.io/mobility-pulse/', DATA_BASE = 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/';
+const FEED_DROP_MAX = 600;
 
 export async function run(ctx) {
   const { DATA, latest, log, now } = ctx;
@@ -39,10 +40,11 @@ export async function run(ctx) {
       await writeFile(f, xml); written++;
     }
     await writeFile(path.join(DATA, 'feeds', 'index.json'), JSON.stringify({ at: since, kinds: AL.KINDS, municipalities: agsList }));
-    // Feeds von Gemeinden, die nicht mehr dazugehören, entfernen
-    const keep = new Set(agsList); let removed = 0;
-    for (const f of await readdir(path.join(DATA, 'feeds'))) { const m = /^(\d{8})(?:-[a-z]+)?\.xml$/.exec(f); if (m && !keep.has(m[1])) { await rm(path.join(DATA, 'feeds', f)); removed++; } }
-    if (removed) log(`Feeds: ${removed} Dateien kleiner Gemeinden entfernt`);
+    // Feeds von Gemeinden, die nicht mehr dazugehören, entfernen – höchstens 600 je Lauf: der Datenstand-Schutz (scripts/data-guard.mjs)
+    // bricht ab, wenn ein Lauf weniger als 90 % der bisherigen Dateien hat (rund 13.600 Dateien → Abbau über mehrere Läufe)
+    const keep = new Set(agsList), drop = (await readdir(path.join(DATA, 'feeds'))).filter(f => { const m = /^(\d{8})(?:-[a-z]+)?\.xml$/.exec(f); return m && !keep.has(m[1]); }).sort();
+    for (const f of drop.slice(0, FEED_DROP_MAX)) await rm(path.join(DATA, 'feeds', f));
+    if (drop.length) log(`Feeds: ${Math.min(drop.length, FEED_DROP_MAX)} Dateien kleiner Gemeinden entfernt${drop.length > FEED_DROP_MAX ? `, ${drop.length - FEED_DROP_MAX} folgen in den nächsten Läufen` : ''}`);
     if (written) log(`Feeds: ${written} geschrieben (${agsList.length} Gemeinden × ${AL.KINDS.length + 1})`);
     // Push über ntfy (frei, ohne Konto): nur wenn ein Thema gesetzt ist
     const topic = process.env.NTFY_TOPIC;
