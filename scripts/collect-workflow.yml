@@ -107,6 +107,7 @@ jobs:
           RUNTIME_FILE: runtime.txt
           DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
           DB_API_KEY: ${{ secrets.DB_API_KEY }}
+          NTFY_TOPIC: ${{ vars.NTFY_TOPIC }}
         run: |
           cp data/sources.json out/sources.json
           node scripts/collect.mjs
