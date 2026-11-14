@@ -29,6 +29,11 @@ const res = await esbuild.build({
   legalComments: 'none', metafile: true, logLevel: 'warning',
 });
 
+// 2b. Fahrermodus (S6.2): eigene kleine Seite ohne Splitting (offline aus einem Stück), Service Worker nur für fahrer.html
+await esbuild.build({ entryPoints: [path.join(ROOT, 'web', 'fahrer.js')], bundle: true, format: 'esm', minify: true, target: ['es2022'], outfile: path.join(out, 'fahrer.js'), plugins: [libResolve], legalComments: 'none', logLevel: 'warning' });
+await writeFile(path.join(out, 'fahrer.html'), (await readFile(path.join(ROOT, 'web', 'fahrer.html'), 'utf8')).replace('src="fahrer.js"', `src="fahrer.js?v=${v}"`));
+await writeFile(path.join(out, 'sw-fahrer.js'), (await readFile(path.join(ROOT, 'web', 'sw-fahrer.js'), 'utf8')).replace('__MP_BUILD__', v));
+
 // 3. index.html mit Versionsanhang für app.js (Teile tragen einen Inhalts-Hash im Namen)
 const html = (await readFile(path.join(ROOT, 'web', 'index.html'), 'utf8')).replace('src="app.js"', `src="app.js?v=${v}"`);
 await writeFile(path.join(out, 'index.html'), html);
@@ -69,7 +74,7 @@ const closure = (f, seen = new Set()) => { if (seen.has(f)) return seen; seen.ad
 const dyn = Object.fromEntries((outs[path.relative(ROOT, path.join(out, 'app.js'))]?.imports || []).filter(im => im.kind === 'dynamic-import').map(im => [rel(im.path), im.path]));
 const entryOf = (name) => Object.keys(dyn).find(f => outs[path.relative(ROOT, path.join(out, f))]?.entryPoint?.endsWith(`web/${name}.js`));
 const VIEW_MODS = { start: [null, null], ops: ['ops', 'ops'], bericht: ['report', 'report'], prognose: ['forecast', 'forecast'], spots: ['spots', 'spots'], usage: ['flows', 'flows'], vergleich: ['compare', 'compare'], status: ['status', 'status'], stadt: ['stadt', 'stadt'] };
-const BUDGET = { start: 180, ops: 270 }; // KB gzip (S3.5)
+const BUDGET = { start: 180, ops: 270 }; // KB gzip (S3.5); Fahrermodus ≤ 60 KB (S6.2)
 const report = [];
 const base = closure('app.js');
 for (const [view, [m, area]] of Object.entries(VIEW_MODS)) {
@@ -78,6 +83,7 @@ for (const [view, [m, area]] of Object.entries(VIEW_MODS)) {
   const i18n = sizes['i18n/de/core.json'] + (area ? sizes[`i18n/de/${area}.json`] : 0);
   report.push([view, js, i18n, js + i18n, BUDGET[view]]);
 }
+report.push(['fahrer', await gzOf('fahrer.js'), 0, await gzOf('fahrer.js'), 60]); // S6.2: Fahrermodus ohne Wörterbuch-Dateien (Texte im Modul)
 const kb = (b) => (b / 1024).toFixed(0).padStart(4);
 console.error(`[web] docs/ gebaut (${Object.keys(outs).filter(f => f.endsWith('.js')).length} JS-Dateien, Wörterbuch ${Object.keys(sizes).length} Teile)`);
 let over = 0;

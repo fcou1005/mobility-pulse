@@ -3,3 +3,4 @@
 export * from './ops-data.js';
 export * from './ops-plan.js';
 export * from './ops-extra.js';
+export * from './ops-shift.js';

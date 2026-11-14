@@ -28,6 +28,8 @@
     "ajv": "8.20.0",
     "esbuild": "0.28.2",
     "playwright": "1.63.0",
+    "polygon-clipping": "0.15.7",
+    "qrcode-generator": "2.0.4",
     "typescript": "6.0.3"
   },
   "//": "Der Sammler (scripts/collect.mjs) läuft ohne Abhängigkeiten; devDependencies nur für Build, Typprüfung und Tests."

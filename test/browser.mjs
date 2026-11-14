@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { startFixtureServer, FIX } from './fixture-server.mjs';
 import { openFixturePage, settledText, mask } from './browser-lib.mjs';
+import { driverChecks } from './browser-fahrer.mjs';
 
 const PORT = +process.env.BROWSER_PORT || 8766, RUNS = Math.max(1, +process.env.BROWSER_RUNS || 1);
 const ONLY = process.env.VIEWS ? process.env.VIEWS.split(',') : null;
@@ -23,7 +24,7 @@ const CHECKS = {
   coverage: [['Anbieter vor Ort', /ANBIETER VOR ORT\s*\d+/i], ['Voi gelistet', /Voi/]],
   vergleich: [['Gebiet', /Anbieter-Vergleich: Stuttgart/], ['mehrere Anbieter', /Voi[\s\S]*Lime[\s\S]*Bolt/]],
   bericht: [['Gemeindeschlüssel', /AGS 08111000/], ['Einwohner', /609\.365 Einwohner/], ['Zeitraum', /Alle verfügbaren Tage \(3\)/]],
-  ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/]],
+  ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/], ['Schichtplan', /Schichtplan/], ['Soll je Tageszeit', /[\d.]+ von [\d.]+ verfügbaren Fahrzeugen auf [\d.]+ Zellen/]],
   spots: [['Gebiet', /Spot-Abgleich: Stuttgart/], ['eigener Anbieter mit Spots', /Mein Anbieter\s*Voi \(\d+ Spots\)/]],
   prognose: [['Prognose für Anbieter und Gebiet', /Prognose für Voi in Stuttgart/], ['Güte', /Wie gut ist die Prognose\?/]],
   'prognose-spots': [['Filter Gebiet', /Gebiet: Stuttgart/], ['Spots bewertet', /Wichtigkeit und Fehlbestand/]],
@@ -186,6 +187,8 @@ try {
     if (ok) console.log('✓ Hinweis bei abweichender Formatversion (status.json 9.0)'); else fail('kein Hinweis bei abweichender Formatversion (status.json 9.0)');
     await close();
   }
+  // S6.2/S6.6: Fahrermodus mit 20 Stopps im Flugmodus, Trefferflächen, Blatt ohne Sprung
+  if (!ONLY || ONLY.includes('fahrer')) await driverChecks(browser, PORT, fail);
 } finally { await browser.close(); server.close(); }
 const firstDiff = (h0, h1) => { const a = (TEXTS.get(h0) || '').split(' '), b = (TEXTS.get(h1) || '').split(' '); let i = 0; while (i < a.length && a[i] === b[i]) i++; return `\n    Lauf 1: …${a.slice(Math.max(0, i - 12), i + 18).join(' ')}…\n    dieser: …${b.slice(Math.max(0, i - 12), i + 18).join(' ')}…`; };
 if (RUNS > 1) for (let r = 1; r < RUNS; r++) for (const side of ['a', 'b']) for (const v of VIEWS) if (runs[r][side][v] !== runs[0][side][v]) fail(`Lauf ${r + 1} weicht ab: ${side === 'a' ? 'Desktop' : 'Handy'} ${v} (${runs[0][side][v]} ≠ ${runs[r][side][v]})${firstDiff(runs[0][side][v], runs[r][side][v])}`);

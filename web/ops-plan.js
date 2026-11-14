@@ -6,6 +6,7 @@ import { $, AHP_L, BAND_NOW, FL, IDLE_COL, RUN_COLOR, RUN_KINDS, RUN_LABEL, S, S
 import { GEO, GEO_TOP, GF0, collectFor, geoKey, groupView, groupsEmpty, osrmDown, queueGeo, renderCollect, renderGroups, routeRuns, violLegend, violToggle } from './ops-extra.js';
 import { NEUTRAL } from './tokens.js';
 import { setAnswer } from './answer.js';
+import { renderShiftPanels } from './ops-shift.js';
 
 // ---------- Plan ----------
 export async function computePlan() {
@@ -79,7 +80,7 @@ export async function computePlan() {
     if (!S.depot[ags] && !S.depotUrlUsed) { const u = urlDepot(); S.depotUrlUsed = true; if (u && (!b || (u.lon >= b[0] - 0.2 && u.lon <= b[2] + 0.2 && u.lat >= b[1] - 0.2 && u.lat <= b[3] + 0.2))) S.depot[ags] = u; } // nur einmal, nur in der Nähe der Gemeinde
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
     const params = { topN, spacing, share, horizonH, van: num('#ops-van', 20), common: { depot, maxRuns: num('#ops-maxruns', 6), horizonH, maxRunMin: Math.round(num('#ops-maxh', 4) * 60), prioLambda: prioLambda() }, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
-    const plan = { ags, op, type, noDemand, band, bandNote, model, share, depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
+    const plan = { ags, op, type, noDemand, band, bandNote, model, cellDocs, share, depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
     if (!S.gf || S.gf.forOp !== op || S.gf.forAgs !== ags) S.gf = { ...GF0(), kind: S.gf?.kind || 'deploy', sort: S.gf?.sort || 'count', dir: S.gf?.dir || 'desc', op, forOp: op, forAgs: ags };
     // Rechenschritte nacheinander mit Status, dazwischen die Seite freigeben
     const steps = [
@@ -93,7 +94,7 @@ export async function computePlan() {
     plan.kpi = O.fleetKpis(vehicles, { swapThreshold: params.swapThreshold, swapRangeKm: params.swapRangeKm });
     S.plan = plan; S.routed = {}; S.focus = null; S.stale = false; plan.hhmm = hhmm();
     status(t('ops.mapAndTables')); await tick(); if (S.plan !== plan) return;
-    renderTiles(); renderRuns(); renderSpots(); renderGroups(); await tick(); if (S.plan !== plan) return;
+    renderTiles(); renderRuns(); renderSpots(); renderGroups(); renderShiftPanels(); await tick(); if (S.plan !== plan) return;
     drawMap(true);
     status(planStatus(plan));
     loadArea(ags).then(a => X.econFor(ags, op, type, a)).then(e => { if (S.plan === plan) { plan.econ = e || false; renderTiles(); } }).catch(() => { plan.econ = false; });
@@ -399,7 +400,7 @@ export function renderRuns() {
         <p>${t('ops.kmMinDrivingMinOnSiteMin', { km: f(r.km, 1), driveMin: f(r.driveMin), handleMin: f(r.handleMin), totalMin: f(r.totalMin), v4: S.routed[r.id] ? `, ${t('ops.road')}` : '', v5: (limit && r.totalMin > limit ? `, <span class="warn-text">${t('ops.byRoadOver', { hText })}</span>` : '') + (r.trimmed ? `, <span class="warn-text">${t('ops.trimmedByLimit', { n: f(r.trimmed), hText })}</span>` : '') })}</p>
         ${seqLine(r)}
         <details${open.has(r.id) ? ' open' : ''}><summary>${t('ops.stopList')}</summary><ol class="small">${r.stops.map(s => stopItem(s, r)).join('')}</ol></details>
-        <div class="foot"><button class="chip" data-fit="${r.id}">${t('ops.onMap')}</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener" title="${t('ops.googleMapsAllowsAtMost10')}">${links.length > 1 ? t('ops.routePartOf', { v0: i + 1, length: links.length }) : t('ops.route')} ↗</a>`).join(', ')}</div></div>`;
+        <div class="foot"><button class="chip" data-fit="${r.id}">${t('ops.onMap')}</button> <button class="chip" data-driver="${r.id}">${t('ops.driverLink')}</button> ${links.map((u, i) => `<a href="${u}" target="_blank" rel="noopener" title="${t('ops.googleMapsAllowsAtMost10')}">${links.length > 1 ? t('ops.routePartOf', { v0: i + 1, length: links.length }) : t('ops.route')} ↗</a>`).join(', ')}</div></div>`;
     }).join('') : `<div class="muted small">${t('ops.noRunNeeded')}</div>`;
     return `<h3 style="margin-top:12px">${RUN_LABEL[kind]}</h3><div class="sub">${head}</div><div class="cards" style="grid-template-columns:1fr">${body}</div>`;
   };

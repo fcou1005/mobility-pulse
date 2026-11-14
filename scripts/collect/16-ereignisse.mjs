@@ -126,7 +126,7 @@ export async function run(ctx) {
     const cellWorkFile = TRACK_DIR ? path.join(TRACK_DIR, 'cells-work.json.gz') : null;
     // je Bundesland aufgeteilt (kleinere Downloads); bandTainted/taintChecked: Altläufe repariert (lib/pulse-track.js repairCells)
     const cellMeta = (d) => ({ bandMin: d.bandMin, bandRuns: d.bandRuns, ...(d.bandTainted ? { bandTainted: d.bandTainted } : {}), ...(d.taintChecked ? { taintChecked: d.taintChecked } : {}), ...(d.relocUnrepaired ? { relocUnrepaired: true } : {}) });
-    const CELL_FIELDS = 'start,end,present,reloc,start×6,present×6,end×6', BELOW_FIELDS = 'start×6,end×6,start_ohne_Band,end_ohne_Band';
+    const CELL_FIELDS = 'start,end,present,reloc,start×6,present×6,end×6,angebot×6', BELOW_FIELDS = 'start×6,end×6,start_ohne_Band,end_ohne_Band';
     const publishCells = async (doc, complete) => {
       await mkdir(path.join(cellsDir, doc.day), { recursive: true });
       for (const [st, m] of Object.entries(doc.states || {})) {

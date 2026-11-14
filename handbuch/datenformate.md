@@ -12,8 +12,8 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [sources](#sources) | 1.0 | `sources.json` |
 | [history](#history) | 1.0 | `history/index.json`, `history/<Tag>.json` |
 | [events](#events) | 1.1 | `events/index.json`, `events/<Tag>.json`, `events/<Tag>/<Land>.json`, `events/hour-totals.json`, `events/daily-summary.json` |
-| [cells](#cells) | 1.0 | `cells/<Tag>/<Land>.json` |
-| [ops](#ops) | 1.3 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
+| [cells](#cells) | 1.1 | `cells/<Tag>/<Land>.json` |
+| [ops](#ops) | 1.4 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
@@ -159,7 +159,7 @@ Tagessummen je Gruppe (Gemeinde|Anbieter|Art): groups\[key\]\[i\] = Summen der F
 
 cells/&lt;Tag&gt;/&lt;Land&gt;.json – Zellen je Tageszeit-Band. Je Gemeinde und Rasterzelle Summen je Band; Zellen mit weniger als minCount Ereignissen sind unterdrückt (Summen in below).
 
-Version 1.0 · Schema: [schemas/cells.schema.json](../schemas/cells.schema.json)
+Version 1.1 · Schema: [schemas/cells.schema.json](../schemas/cells.schema.json)
 
 | Feld | Pflicht | Typ |
 | --- | --- | --- |
@@ -168,7 +168,7 @@ Version 1.0 · Schema: [schemas/cells.schema.json](../schemas/cells.schema.json)
 | `state` | ja | string (Muster `^[A-Z]{2}$`) |
 | `bandMin` |  | array |
 | `bandRuns` |  | array |
-| `fields` | ja | string |
+| `fields` | ja | string – Felder je Zelle: start,end,present,reloc,start×6,present×6,end×6; seit 1.1 (S6.3, 14.11.2026) dazu angebot×6 = Läufe mit mindestens einem verfügbaren Fahrzeug je Band (ältere Tage ohne diese Felder) |
 | `munis` | ja | object |
 | `below` |  | object |
 | `minCount` | ja | integer |
@@ -179,7 +179,7 @@ Version 1.0 · Schema: [schemas/cells.schema.json](../schemas/cells.schema.json)
 
 ops/&lt;Land&gt;.json – Bestand für die Disposition. ops/&lt;Land&gt;.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/&lt;AGS&gt;.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json. Ab 1.2 ops-input/fleet/&lt;AGS&gt;.json (Bestand einer Gemeinde im Format von $defs/state, Feld ags) und ops-input/fleet/index.json.
 
-Version 1.3 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
+Version 1.4 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 
 ### ops · state
 
@@ -232,7 +232,7 @@ Version 1.3 · Schema: [schemas/ops.schema.json](../schemas/ops.schema.json)
 
 ### ops · inputCompact
 
-ops-input/cells/&lt;AGS&gt;.json (S3.8 Rest): Zellen wie ops-input/&lt;AGS&gt;.json, je Tag spaltenweise (cols: Zellschlüssel x, y als Differenzen in Originalreihenfolge, v je Feld ohne drop), dazu die Start-Ziel-Ströme der Gemeinde für die Zellen-Tage.
+ops-input/cells/&lt;AGS&gt;.json (S3.8 Rest): Zellen wie ops-input/&lt;AGS&gt;.json, je Tag spaltenweise (cols: Zellschlüssel x, y als Differenzen in Originalreihenfolge, v je Feld ohne drop; seit 1.4 n = Werte je Zelle, wenn nicht 22 – 28 mit den Angebotsfeldern aus S6.3), dazu die Start-Ziel-Ströme der Gemeinde für die Zellen-Tage.
 
 | Feld | Pflicht | Typ |
 | --- | --- | --- |

@@ -1,7 +1,7 @@
 // @ts-check
 // Mobility Pulse — Fahrzeug-Verfolgung – Gruppen-Monatsdateien, Altläufe, Zellen und Ströme veröffentlichen (aus pulse-track.js geschnitten; pulse-track.js bleibt die Fassade für alle Importe).
 import { hourMinutes } from './pulse-core.js';
-import { BANDS, CELL_LAT, CELL_LEN, CELL_LON, DEMAND_MAIN, GAP_MS, HOUR_FIELDS, HOUR_SUMS, STATION_BOUND, SWAP_TO, TRACK_VERSION, arr, bandOf, dayOf, emptyHourly, hourOf, isNightHour } from './pulse-track-rules.js';
+import { BANDS, CELL_FULL, CELL_LAT, CELL_LEN, CELL_LON, CELL_SUPPLY, DEMAND_MAIN, GAP_MS, HOUR_FIELDS, HOUR_SUMS, STATION_BOUND, SWAP_TO, TRACK_VERSION, arr, bandOf, dayOf, emptyHourly, hourOf, isNightHour } from './pulse-track-rules.js';
 import { GROUP_M, GROUP_MIN } from './pulse-track-run.js';
 
 // ---------- Gruppen-Ereignisse dauerhaft: groups/<JJJJ-MM>.json (Monat nach Europe/Berlin) + groups/index.json ----------
@@ -156,7 +156,7 @@ function neutralizeBand(munis, b) {
   for (const cells of Object.values(munis || {})) for (const c of Object.values(cells || {})) {
     if (!Array.isArray(c) || c.length < CELL_LEN) continue;
     c[0] = Math.max(0, (c[0] || 0) - (c[4 + b] || 0)); c[2] = Math.max(0, (c[2] || 0) - (c[10 + b] || 0)); c[1] = Math.max(0, (c[1] || 0) - (c[16 + b] || 0));
-    c[4 + b] = 0; c[10 + b] = 0; c[16 + b] = 0;
+    c[4 + b] = 0; c[10 + b] = 0; c[16 + b] = 0; if (c.length >= CELL_FULL) c[CELL_SUPPLY + b] = 0;
   }
 }
 /**
@@ -228,19 +228,21 @@ export function secondarySuppress(munis, below, { min = CELL_MIN } = {}) {
   }
   return n;
 }
-// Zellen je Bundesland: { ags: { cell: [start,end,present,reloc] } }
+// Zellen je Bundesland: { ags: { cell: [start,end,present,reloc,…, Läufe mit Angebot ×6] } } (ältere Tageszellen werden auf CELL_FULL ergänzt)
 // runs/at: Läufe des Tages aus events/<Tag>.json und Zeitpunkt dieses Laufs – ältere Dateien werden damit einmalig repariert (repairCells)
 export function mergeCells(doc, cells, munis, day, { dt = null, hour = null, gap = false, runs = null, at = null } = {}) {
   const fresh = !(doc && doc.day === day);
-  const out = fresh ? { day, version: TRACK_VERSION, states: {}, taintChecked: CELLS_TAINT_VERSION } : doc;
+  const out = fresh ? { day, version: TRACK_VERSION, states: {}, taintChecked: CELLS_TAINT_VERSION, supplyFields: 1 } : doc;
   if (!fresh && !out.taintChecked && runs) repairCells(out, runs, { exclude: at });
+  // S6.3: Tagesdatei aus der Zeit vor den Angebotsfeldern einmal auf CELL_FULL ergänzen (gleiche Länge aller Zellen eines Tags)
+  if (!out.supplyFields) { for (const sd of Object.values(out.states || {})) for (const a of Object.values(sd || {})) for (const c of Object.values(a || {})) if (Array.isArray(c)) while (c.length < CELL_FULL) c.push(0); out.supplyFields = 1; }
   out.bandMin ??= new Array(BANDS.length).fill(0); out.bandRuns ??= new Array(BANDS.length).fill(0);
   if (hour != null && !gap) { const b = bandOf(hour); out.bandRuns[b]++; if (dt != null) out.bandMin[b] += Math.min(dt, GAP_MS) / 60e3; }
   for (const [ags, m] of cells) {
     const st = munis[ags]?.state || 'XX';
     const sdoc = (out.states[st] ??= {});
     const a = (sdoc[ags] ??= {});
-    for (const [cell, v] of m) { const c = a[cell] || (a[cell] = new Array(CELL_LEN).fill(0)); while (c.length < CELL_LEN) c.push(0); for (let i = 0; i < CELL_LEN; i++) c[i] += v[i] || 0; }
+    for (const [cell, v] of m) { const c = a[cell] || (a[cell] = new Array(CELL_FULL).fill(0)); while (c.length < CELL_FULL) c.push(0); for (let i = 0; i < CELL_FULL; i++) c[i] += v[i] || 0; }
   }
   return out;
 }

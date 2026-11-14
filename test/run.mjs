@@ -7,6 +7,7 @@ import { startExtra } from './fixtures/extra-server.mjs';
 import * as T from '../lib/pulse-track.js';
 import * as CX from '../lib/pulse-context.js';
 import * as TR from '../lib/pulse-train.js';
+import * as SV from '../lib/pulse-schema.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
@@ -327,6 +328,8 @@ assert(plog.fields.join() === 'at,sourceId,operator,planId,field,old,new' && plo
   assert(kid4?.status === 'error' && kid4.errors[0] === 'Manifest ausgefallen' && kid4.parent === 'mf_test' && kid4.manifestMissingSince > 0 && l4.sources.find(s => s.id === 'mf_test')?.status === 'error', 'M-6: Kind eines ausgefallenen Manifests aus dem vorigen Stand mit Status error (keine Scheinfahrten, siehe runs.json oben)');
   const cellsDay = JSON.parse(await readFile(`test/out/cells/${T.dayOf(Date.now())}/BW.json`, 'utf8'));
   assert(cellsDay.taintChecked === T.CELLS_TAINT_VERSION && !(cellsDay.bandTainted || []).some(Boolean) && cellsDay.minCount === 3 && cellsDay.below, 'M-3/M-11: Zellendatei geprüft (taintChecked, kein Altlauf), kleine Zellen unterdrückt (minCount 3, below)');
+  const cv = Object.values(cellsDay.munis || {}).flatMap(m => Object.values(m));
+  assert(cellsDay.schemaVersion === SV.SCHEMA.cells && /angebot×6$/.test(cellsDay.fields) && cv.length > 0 && cv.every(c => c.length === T.CELL_FULL) && cv.some(c => c.slice(T.CELL_SUPPLY).some(x => x > 0)), `S6.3: Zellendatei mit Läufen mit Angebot je Band (${cv.length} Zellen, 28 Werte)`);
 }
 assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.counts.byStatus.gone && l4.counts.retired === 1 && l4.counts.failing === 2 && runs4.slice(-1)[0][6] === 2, 'über 14 Tage weg → retired, kein Fehler (latest.counts.failing, runs.json: nur Manifest und Kind aus M-6)');
 
@@ -453,7 +456,7 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
     const fi = existsSync('test/out/ops-input/fleet/index.json') ? JSON.parse(await readFile('test/out/ops-input/fleet/index.json', 'utf8')) : null;
     const fl = fi?.ags?.length ? JSON.parse(await readFile(`test/out/ops-input/fleet/${fi.ags[0]}.json`, 'utf8')) : null;
     assert(lat.schemaVersion === '1.1' && full.schemaVersion === '1.1' && parts.length >= 1 && nG === Object.keys(full.groups).length && ht.days[d0]?.startsH?.length === 24 && ds.days.includes(d0)
-      && oi && one?.schemaVersion === '1.3' && one.cells.every(c => Object.keys(c.munis).length <= 1)
+      && oi && one?.schemaVersion === SV.SCHEMA.ops && one.cells.every(c => Object.keys(c.munis).length <= 1)
       && fl?.ags === fi.ags[0] && fl.vehicles.every(r => fl.munis[r[8]] === fl.ags) && fl.ops.length >= 1,
       `S3.7/S3.8: schemaVersion vorn, events/${d0}/ je Land (${parts.join(', ')}, ${nG} Gruppen), hour-totals, daily-summary, ops-input für ${oi?.ags?.length ?? 0} Gemeinde(n), Bestand je Gemeinde für ${fi?.ags?.length ?? 0}`);
   }

@@ -74,6 +74,17 @@ try {
     if (errs.length) fail(`Skriptfehler: ${errs.slice(0, 5).join(' | ')}`);
     await close();
   }
+  // 1c. Fahrermodus (S6.2/S6.6): Handy, Tour mit 20 Stopps, Blatt halb geöffnet
+  if (!ONLY || ONLY.includes('fahrer')) {
+    const { tour20 } = await import('./browser-fahrer.mjs'), { encodeTour } = await import('../lib/pulse-fahrer.js');
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'de-DE' });
+    await ctx.route('**/*', (r) => (new URL(r.request().url()).hostname === '127.0.0.1' ? r.continue() : r.abort()));
+    const page = await ctx.newPage(); await page.goto(`http://127.0.0.1:${PORT}/fahrer.html#t=${encodeTour(tour20())}`, { waitUntil: 'load' });
+    await page.evaluate(() => /** @type {any} */ (window).__drv.snapTo('half')); await page.waitForTimeout(900);
+    const viol = await axe(page, 'fahrer');
+    if (viol.length) fail(`axe fahrer: ${viol.length} Regel(n) verletzt\n    ${viol.map(violText).join('\n    ')}`); else console.log('✓ axe fahrer     0 Verstöße (WCAG 2.1 AA)');
+    await ctx.close();
+  }
   // 2. Referenz-Screenshots
   {
     const env = environment(), metaFile = path.join(SHOT_DIR, 'umgebung.json');

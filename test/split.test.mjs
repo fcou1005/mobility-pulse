@@ -154,5 +154,17 @@ for (const DIR of DIRS) {
     }
   }
 }
+
+// S6.3: Zellen mit Angebotsfeldern (28 Werte) spaltenweise und zurück, alte (22) unverändert
+{
+  const row28 = (k) => Array.from({ length: 28 }, (_, j) => (j === 1 || j === 2 ? 7 : j * 10 + k)), row22 = (k) => row28(k).slice(0, 22);
+  const d28 = [{ day: '2026-11-14', bandMin: [1, 1, 1, 1, 1, 1], munis: { '08111000': { '1:2': row28(1), '3:5': row28(2) } } }];
+  const c28 = cellsCompact(d28, '08111000'), x28 = cellsExpand(JSON.parse(JSON.stringify(c28)));
+  check(c28[0].cols?.n === 28 && same(x28[0].munis['08111000']['3:5'].slice(22), row28(2).slice(22)) && x28[0].munis['08111000']['1:2'][1] === null, 'S6.3: 28 Werte spaltenweise (cols.n), Angebotsfelder unverändert zurück');
+  const c22 = cellsCompact([{ ...d28[0], munis: { '08111000': { '1:2': row22(1) } } }], '08111000');
+  check(c22[0].cols && c22[0].cols.n === undefined && cellsExpand(c22)[0].munis['08111000']['1:2'].length === 22, 'S6.3: 22 Werte wie bisher (ohne cols.n)');
+  const mix = cellsCompact([{ ...d28[0], munis: { '08111000': { '1:2': row22(1), '3:5': row28(2) } } }], '08111000');
+  check(!mix[0].cols && mix[0].munis['08111000']['3:5'].length === 28, 'S6.3: gemischte Längen bleiben unverändert');
+}
 console.log(`${bad ? '✗' : '✓'} split: ${ok} ok, ${bad} fehlgeschlagen`);
 process.exit(bad ? 1 : 0);

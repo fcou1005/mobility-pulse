@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<!-- Fahrermodus (S6.2/S6.6): Tour aus dem Link (#t=…), offline per Service Worker (sw-fahrer.js), Karte mit Unterblatt in drei Stufen.
+     Gleiche Regeln wie die Startseite: Skripte, Stile, Schriften nur von hier, Kacheln von OpenStreetMap. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c1014">
+<meta name="robots" content="noindex">
+<title>Mobility Pulse – Fahrermodus</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<style>
+:root{--bg:#0c1014;--bg-2:#121820;--panel:#161d26;--panel-2:#1c2530;--line:#273240;--fg:#e7edf3;--fg-2:#aab6c3;--muted:#8693a0;--accent:#49c7b0;--accent-ink:#06211d;--ok:#5ec36a;--warn:#e3b341;--bad:#ef6b6b;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;--hit:48px;--peek:176px;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:16px/1.4 var(--sans);-webkit-text-size-adjust:100%;overscroll-behavior:none}
+#map{position:fixed;inset:0;background:var(--bg-2)}
+.leaflet-tile-pane{filter:grayscale(1) invert(1) brightness(.8) contrast(.88)}
+.leaflet-container{font:.8125rem var(--sans);background:var(--bg-2)}.leaflet-control-attribution{background:rgba(22,29,38,.85)!important;color:var(--muted)!important}.leaflet-control-attribution a{color:var(--fg-2)!important}
+.pin{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:600 .8125rem/1 var(--sans);border:2px solid var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pin.done{background:var(--panel-2);color:var(--muted)}.pin.issue{background:var(--warn)}.pin.next{outline:3px solid var(--fg);outline-offset:1px}.pin.depot{border-radius:6px;background:var(--fg);color:var(--bg)}
+#offline{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:1001;padding:10px 14px;border-radius:12px;background:rgba(28,37,48,.92);border:1px solid var(--warn);color:var(--fg);font-size:.875rem;backdrop-filter:blur(12px)}
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:1000;height:calc(100dvh - 40px - env(safe-area-inset-top));display:flex;flex-direction:column;background:rgba(22,29,38,.94);backdrop-filter:blur(20px) saturate(160%);
+  border-top:1px solid rgba(255,255,255,.08);border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.35);transform:translateY(var(--y,60vh));will-change:transform;touch-action:none}
+.grip{display:block;width:100%;height:28px;border:0;background:none;cursor:grab;flex:none;padding:0}.grip::before{content:"";display:block;width:40px;height:5px;margin:10px auto 0;border-radius:3px;background:var(--line)}
+.grip:focus-visible{outline:2px solid var(--accent);outline-offset:-4px;border-radius:12px}
+header.head{flex:none;padding:0 16px 12px}
+.title{font-size:.8125rem;color:var(--fg-2);margin:0;display:flex;justify-content:space-between;gap:8px}
+.bar{height:6px;border-radius:3px;background:var(--panel-2);margin:8px 0 10px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--ok);width:0}
+.next{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.next h1{font-size:1.125rem;margin:0;font-weight:600}.next p{margin:2px 0 0;color:var(--fg-2);font-size:.875rem}
+.list{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:0 12px calc(24px + env(safe-area-inset-bottom));overscroll-behavior:contain;touch-action:pan-y}
+ol{list-style:none;margin:0;padding:0}
+li.stop{display:grid;grid-template-columns:36px 1fr;gap:4px 10px;padding:10px 4px;border-top:1px solid var(--line)}
+li.stop .no{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--panel-2);font:600 .8125rem var(--mono)}
+li.stop.done{opacity:.55}li.stop.done .no{background:var(--ok);color:var(--accent-ink)}li.stop.issue .no{background:var(--warn);color:var(--accent-ink)}
+li.stop .what{font-weight:600}li.stop .meta{color:var(--fg-2);font-size:.8125rem}
+.acts{grid-column:2;display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+button,a.btn{min-height:var(--hit);min-width:var(--hit);padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);color:var(--fg);font:500 .9375rem var(--sans);display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:active,a.btn:active{transform:scale(.97)}button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}button[aria-pressed="true"]{background:var(--ok);color:var(--accent-ink);border-color:var(--ok)}
+button.warn[aria-pressed="true"]{background:var(--warn);border-color:var(--warn)}
+button:focus-visible,a.btn:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+footer.foot{display:flex;flex-wrap:wrap;gap:8px;padding:12px 4px}
+.empty{padding:24px 16px;color:var(--fg-2)}.empty h1{color:var(--fg);font-size:1.25rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (prefers-reduced-motion: reduce){#sheet{transition:none!important}button:active,a.btn:active{transform:none}}
+@media (prefers-reduced-transparency: reduce){#sheet,#offline{background:var(--panel);backdrop-filter:none}}
+</style>
+</head>
+<body>
+<div id="map" aria-hidden="true"></div>
+<div id="offline" role="status" hidden></div>
+<section id="sheet" aria-labelledby="drv-title">
+  <button class="grip" id="grip" type="button" aria-controls="sheet" aria-label="Liste größer oder kleiner"></button>
+  <header class="head" id="head"><p class="title"><span id="drv-title">Fahrermodus</span><span id="drv-count"></span></p><div class="bar" aria-hidden="true"><i id="drv-bar"></i></div><div id="drv-next" class="next"></div></header>
+  <div class="list" id="list"><ol id="stops"></ol><footer class="foot" id="foot"></footer></div>
+</section>
+<script src="vendor/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="></script>
+<script type="module" src="fahrer.js?v=mwg376k3"></script>
+</body>
+</html>

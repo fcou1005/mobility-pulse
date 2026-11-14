@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/ops.schema.json",
  "title": "ops/<Land>.json – Bestand für die Disposition",
  "description": "ops/<Land>.json (Bestand je Land, $defs/state); ab 1.1 (S3.8) ops-input/<AGS>.json mit der Nachfrage-Eingabe der Disposition ($defs/input) und ops-input/index.json. Ab 1.2 ops-input/fleet/<AGS>.json (Bestand einer Gemeinde im Format von $defs/state, Feld ags) und ops-input/fleet/index.json.",
- "x-version": "1.3",
+ "x-version": "1.4",
  "$defs": {
   "state": {
    "type": "object",
@@ -256,7 +256,7 @@
   },
   "inputCompact": {
    "type": "object",
-   "description": "ops-input/cells/<AGS>.json (S3.8 Rest): Zellen wie ops-input/<AGS>.json, je Tag spaltenweise (cols: Zellschlüssel x, y als Differenzen in Originalreihenfolge, v je Feld ohne drop), dazu die Start-Ziel-Ströme der Gemeinde für die Zellen-Tage.",
+   "description": "ops-input/cells/<AGS>.json (S3.8 Rest): Zellen wie ops-input/<AGS>.json, je Tag spaltenweise (cols: Zellschlüssel x, y als Differenzen in Originalreihenfolge, v je Feld ohne drop; seit 1.4 n = Werte je Zelle, wenn nicht 22 – 28 mit den Angebotsfeldern aus S6.3), dazu die Start-Ziel-Ströme der Gemeinde für die Zellen-Tage.",
    "required": [
     "schemaVersion",
     "version",

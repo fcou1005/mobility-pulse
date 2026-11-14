@@ -51,6 +51,15 @@ const doc = T.mergeHourly(null, r.hourly, { day: r.day, at: t5, dt: 20 * 60e3, s
 assert(doc.runs.length === 1, 'Tagesdatei angelegt');
 const cd = T.mergeCells(null, cellsT4, munis, r.day);
 assert(cd.states.BW && cd.states.BW['08416041'], 'Zellen nach Bundesland');
+// S6.3: Läufe mit Angebot je Band (Felder 22–27): je Lauf höchstens 1 je Zelle und Band, nur Zellen mit verfügbarem Fahrzeug
+{
+  const b4 = T.bandOf(T.hourOf(t4)), vals = [...cellsT4.get('08416041').values()];
+  assert(vals.every(c => c.length === T.CELL_FULL) && vals.some(c => c[2] > 0 && c[T.CELL_SUPPLY + b4] === 1) && vals.every(c => (c[2] > 0) === (c[T.CELL_SUPPLY + b4] === 1)) && vals.every(c => c.slice(T.CELL_SUPPLY).reduce((a, x) => a + x, 0) <= 1), 'S6.3: Lauf mit Angebot je Zelle und Band (0/1 je Lauf)');
+  const two = T.mergeCells(T.mergeCells(null, cellsT4, munis, r.day), cellsT4, munis, r.day), z = Object.values(two.states.BW['08416041']).find(c => c[2] > 0);
+  assert(z[T.CELL_SUPPLY + b4] === 2, 'S6.3: Tagesdatei zählt Läufe mit Angebot zusammen');
+  const old22 = { day: r.day, states: { BW: { '08416041': { '1:1': new Array(22).fill(1) } } }, taintChecked: 1 }, up = T.mergeCells(old22, cellsT4, munis, r.day);
+  assert(up.states.BW['08416041']['1:1'].length === T.CELL_FULL && up.states.BW['08416041']['1:1'][T.CELL_SUPPLY] === 0, 'S6.3: ältere Tageszellen (22 Werte) auf 28 ergänzt');
+}
 // Kennungswechsel am Ort: x verschwindet, y taucht 10 m daneben auf → keine Fahrt, Standzeit bleibt
 {
   const u0 = Date.parse('2026-11-01T10:00:00Z');
