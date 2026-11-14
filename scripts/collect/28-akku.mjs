@@ -23,6 +23,7 @@ export async function run(ctx) {
     const t0 = Date.now(), stFile = path.join(TRACK_DIR || path.join(DATA, 'track'), 'akku-state.json.gz');
     let st = null; try { st = existsSync(stFile) ? JSON.parse(gunzipSync(await readFile(stFile)).toString('utf8')) : null; } catch (e) { log('Akku-Zustand unlesbar, Neustart:', e.message); }
     if (st?.version !== L.AKKU_STATE_V) st = L.emptyAkkuState();
+    if (st.method !== A.AKKU_METHOD) { if (st.method) log(`Akku-Prognose: Rechenstand ${st.method} → ${A.AKKU_METHOD}, Modell lernt neu`); st.g = {}; st.r = {}; st.backtest = null; st.method = A.AKKU_METHOD; }
     const floors = {}; for (const r of sourceOut || []) { const f = r.batteryFloor; if (f?.hides && Number.isFinite(f.p005)) floors[r.operator] = Math.max(floors[r.operator] ?? 0, f.p005); }
     const cur = L.snapFromVehicles(dv.vehicles, vkey);
     const lr = L.learnStep(st, ctx.akkuPrev?.snap || null, cur, { prevAt: ctx.akkuPrev?.at ?? null, now, floors });
@@ -55,12 +56,12 @@ export async function run(ctx) {
       const runs = [];
       for (const f of (await readdir(gd)).filter(x => /^\d{4}-\d{2}-\d{2}\.jsonl\.gz$/.test(x)).sort())
         for (const line of gunzipSync(await readFile(path.join(gd, f))).toString('utf8').split('\n')) if (line.trim()) { try { runs.push(JSON.parse(line)); } catch { /* Zeile kaputt */ } }
-      const bt = L.backtestGolden(runs);
-      st.backtest = { day: today, at: now, runs: bt.runs, from: bt.from, to: bt.to, floors: bt.floors, groups: [...new Set(runs.flatMap(r => Object.keys(r.groups || {})))].sort(), nights: bt.nights, total: bt.total };
+      const bt = L.backtestGolden(runs, { skipOps: [...(ctx.rangeOnlyOps || [])] });
+      st.backtest = { day: today, at: now, skipOps: [...(ctx.rangeOnlyOps || [])], runs: bt.runs, from: bt.from, to: bt.to, floors: bt.floors, groups: [...new Set(runs.flatMap(r => Object.keys(r.groups || {})))].sort(), nights: bt.nights, total: bt.total };
       log(`Akku-Rückblick (goldene Tage, ${bt.runs} Läufe): ${bt.total.nights} Nächte, Treffer ${bt.total.precision == null ? '–' : `${(bt.total.precision * 100).toFixed(1)} %`}`);
     }
     const models = Object.fromEntries(Object.entries(st.g).map(([k, a]) => [k, [a[1] > 0 ? r4(a[0] / a[1]) : null, a[3] > 0 ? r4(a[2] / a[3]) : null, Math.round(a[1]), Math.round(a[3])]]));
-    const evDoc = { schemaVersion: SV.SCHEMA.akku, at: now, low: A.AKKU.low, targetHour: A.AKKU.targetHour, eveningHour: A.AKKU.eveningHour, pCut: A.AKKU.pCut,
+    const evDoc = { schemaVersion: SV.SCHEMA.akku, at: now, method: A.AKKU_METHOD, low: A.AKKU.low, targetHour: A.AKKU.targetHour, eveningHour: A.AKKU.eveningHour, pCut: A.AKKU.pCut,
       rule: `Vorhersage „unter ${A.AKKU.low} % bis ${A.AKKU.targetHour} Uhr“ im ersten Lauf ab ${A.AKKU.eveningHour} Uhr für Fahrzeuge mit ${A.AKKU.low}–${L.LEARN.keepBelow - 1} %, geprüft im ersten Lauf ab ${A.AKKU.targetHour} Uhr; Treffer = getroffen ÷ vorhergesagt, Abdeckung = getroffen ÷ tatsächlich unter ${A.AKKU.low} %; getauscht (≥ ${L.LEARN.swapUp} Punkte mehr) und unbekannt (verschwunden über der Ausblend-Grenze) zählen nicht; Vergleich: Regel „heute Abend unter ${L.LEARN.baseRule} %“`,
       nights: (st.nights || []).map(n => (n.late ? { day: n.day, late: true } : n)), total: L.totalOf(st.nights), backtest: st.backtest || null,
       modelFields: ['drain_je_h', 'verbrauch_je_fahrt', 'standstunden', 'fahrten'], models, open: st.fc ? { day: st.fc.day, target: st.fc.target, n: Object.keys(st.fc.items).length } : null };

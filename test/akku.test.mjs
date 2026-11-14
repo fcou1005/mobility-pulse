@@ -24,13 +24,14 @@ const berlin = (s) => Date.parse(s); // ISO mit Versatz
 {
   const { slots } = A.slotsUntil(berlin('2026-11-14T21:00:00+01:00'));
   const g = { drain: 0.5, trip: 5, rate: new Array(24).fill(0) };
-  const f = A.forecastVehicle(25, g, slots);
-  assert(f.p === 1 && near(f.morning, 19.5, 1e-9) && f.cross === berlin('2026-11-15T07:00:00+01:00'), `ohne Fahrten: 25 % − 11 h × 0,5 = 19,5 % → sicher unter 20, ab 7 Uhr (${new Date(f.cross).toISOString()})`);
+  const f = A.forecastVehicle(25, g, slots), f24 = A.forecastVehicle(24, g, slots);
+  assert(near(f.p, 0.5, 1e-9) && near(f24.p, 1, 1e-9) && near(f.morning, 19.5, 1e-9) && f.cross === berlin('2026-11-15T07:00:00+01:00'), `ohne Fahrten: gemeldet 25 % (wahr 24,5–25,5) − 5,5 = 19–20 → zur Hälfte gemeldet ≤ 19; 24 % sicher darunter; ab etwa 7 Uhr (${new Date(f.cross).toISOString()})`);
+  assert(near(A.underProb(21, 1.08, 0, 0), 0.08, 1e-9) && A.underProb(20, 1.08, 0, 0) === 1 && A.underProb(30, 0, 0, 5) === 0, 'Rundung: 21 % mit 1,08 Punkten Entladung nur zu 8 % gemeldet unter 20');
   const f2 = A.forecastVehicle(40, g, slots);
   assert(f2.p === 0 && f2.cross == null, 'ohne Fahrten: 40 % bleibt darüber');
   const g3 = { drain: 0.5, trip: 5, rate: new Array(24).fill(0.1) }; // 1,1 Fahrten erwartet
-  const f3 = A.forecastVehicle(30, g3, slots); // Rand 30 − 5,5 − 20 = 4,5 → schon eine Fahrt reicht
-  assert(near(f3.p, 1 - Math.exp(-1.1), 1e-9) && f3.p > 0.5, `mit Fahrten: P(mindestens eine Fahrt) = ${f3.p.toFixed(3)}`);
+  const f3 = A.forecastVehicle(29, g3, slots), f4 = A.forecastVehicle(30, g3, slots); // Abstand 9: eine Fahrt reicht; Abstand 10: eine Fahrt zur Hälfte
+  assert(near(f3.p, 1 - Math.exp(-1.1), 1e-9) && f3.p > 0.5 && near(f4.p, Math.exp(-1.1) * 1.1 * 0.5 + (1 - Math.exp(-1.1) * 2.1), 1e-9), `mit Fahrten: 29 % → P = ${f3.p.toFixed(3)} (mindestens eine Fahrt), 30 % → ${f4.p.toFixed(3)}`);
   const doc = { low: 20, targetHour: 8, groups: { 'Dott|scooter': [0.5, 5, 'gruppe', 'art', ...new Array(24).fill(0)] } };
   const veh = [
     { lat: 48.7758, lon: 9.1829, operator: 'Dott', type: 'scooter', battery: 24 }, { lat: 48.7759, lon: 9.1830, operator: 'Dott', type: 'scooter', battery: 25 },

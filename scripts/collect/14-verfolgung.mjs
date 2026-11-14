@@ -41,7 +41,7 @@ export async function run(ctx) {
     try {
       const want = new Set((process.env.GOLDEN ?? 'Dott|08111000,Lime|08111000,nextbike|05315000').split(',').map(x => x.trim()).filter(Boolean));
       const rows = {}; for (const v of dv.vehicles) { const g = `${v.operator}|${v.ags}`; if (!want.has(g) || !C.validLatLon(v.lat, v.lon)) continue;
-        (rows[g] ??= []).push([vkey(v.operator, v.rawId).slice(0, 12), +v.lat.toFixed(5), +v.lon.toFixed(5), Number.isFinite(v.batteryPct) ? Math.round(v.batteryPct) : null, (v.disabled ? 1 : 0) | (v.reserved ? 2 : 0), v.type, v.sourceId, v.stationId ?? null]); }
+        (rows[g] ??= []).push([vkey(v.operator, v.rawId).slice(0, 12), +v.lat.toFixed(5), +v.lon.toFixed(5), Number.isFinite(v.batteryPct) ? Math.round(v.batteryPct) : null, (v.disabled ? 1 : 0) | (v.reserved ? 2 : 0) | (v.batteryDerived ? 4 : 0), v.type, v.sourceId, v.stationId ?? null]); }
       const gd = path.join(TRACK_DIR, 'golden'), gf = path.join(gd, `${T.dayOf(now)}.jsonl.gz`); await mkdir(gd, { recursive: true });
       const old = existsSync(gf) ? gunzipSync(await readFile(gf)).toString('utf8') : '';
       await writeFile(gf, gzipSync(old + JSON.stringify({ at: now, fields: ['key', 'lat', 'lon', 'bat', 'flags', 'type', 'source', 'station'], status: Object.fromEntries(sourceOut.filter(r => [...want].some(g => g.startsWith(`${r.operator}|`))).map(r => [r.id, r.status])), groups: rows }) + '\n'));

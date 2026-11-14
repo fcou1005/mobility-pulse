@@ -1,4 +1,4 @@
-import{b as P}from"./chunk-VBTM2O27.js";import{c as h,g as V}from"./chunk-SVAMK55S.js";var re=500,se=`
+import{b as P}from"./chunk-VBTM2O27.js";import{c as h,g as V}from"./chunk-3UFNWC23.js";var re=500,se=`
 .leaflet-container.mk-map:focus,.leaflet-container.mk-map:focus-visible{outline:none}
 .leaflet-container.mk-map:focus-visible::after{content:"";position:absolute;inset:0;z-index:1001;pointer-events:none;border-radius:inherit;box-shadow:inset 0 0 0 3px var(--accent),inset 0 0 0 5px var(--panel)}
 .mk-hint{margin:var(--s2) 0 0;font-size:.75rem;line-height:1.5;color:var(--muted);max-width:96ch}
