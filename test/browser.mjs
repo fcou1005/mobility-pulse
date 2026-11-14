@@ -223,6 +223,16 @@ try {
     else console.log(`✓ Abstellflächen-Planer Stuttgart (synthetisch): ${m[1]} Vorschläge decken ${m[2]} von ${m[3]} Fahrtenden, CSV bereit`);
     await close();
   }
+  // M2: Bericht ohne Anbieter mit ungeklärter kommerzieller Nutzung (?lizenz=1): Hinweis nennt sie, Kopfzahl Flotte sinkt
+  if (!ONLY || ONLY.includes('bericht')) {
+    const fleetOf = async (q) => { const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'bericht', query: q });
+      const txt = await page.waitForFunction(() => { const x = document.getElementById('rp-report')?.innerText || ''; return /Quellen in der Gemeinde/.test(x) ? x : null; }, null, { timeout: 60000 }).then(h => h.jsonValue()).catch(() => '');
+      await close(); return { txt: String(txt), errs }; };
+    const a = await fleetOf(''), b = await fleetOf('&lizenz=1');
+    const hid = /Ausgeblendet \(kommerzielle Nutzung ungeklärt\)\s*([^\n]+)/.exec(b.txt)?.[1] || '';
+    if (!/Lime/.test(hid) || /Voi/.test(hid) || a.txt === b.txt || /Ausgeblendet/.test(a.txt) || b.errs.length) fail(`Bericht ?lizenz=1: ${JSON.stringify({ hid, same: a.txt === b.txt, errs: b.errs.slice(0, 2) })}`);
+    else console.log(`✓ Bericht nur mit kommerziell geklärten Quellen: ausgeblendet ${hid.split(' fehlen')[0]}`);
+  }
   // S6.2/S6.6: Fahrermodus mit 20 Stopps im Flugmodus, Trefferflächen, Blatt ohne Sprung
   if (!ONLY || ONLY.includes('fahrer')) await driverChecks(browser, PORT, fail);
 } finally { await browser.close(); server.close(); }

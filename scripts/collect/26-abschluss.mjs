@@ -6,6 +6,7 @@ import path from 'node:path';
 import * as T from '../../lib/pulse-track.js';
 import * as FE from '../../lib/pulse-flowest.js';
 import * as SS from '../../lib/pulse-status.js';
+import * as C from '../../lib/pulse-core.js';
 
 export async function run(ctx) {
   const { DATA, HEALTH, PH, RULE, catalog, ds, dv, failing, latest, log, now, sourceOut, statusCounts, tr } = ctx;
@@ -14,8 +15,11 @@ export async function run(ctx) {
     const md = (x) => String(x ?? '').replace(/[\r\n|]+/g, ' ').replace(/[<>]/g, '').replace(/([\[\]`*_\\])/g, '\\$1').trim(); // Text aus Feeds entschärfen (Markdown/HTML)
     const counted = sourceOut.filter(r => ['live', 'delayed', 'stale'].includes(r.status));
     const byLic = new Map();
-    for (const r of counted) { const k = r.licenseId || r.licenseUrl || 'ohne Angabe'; if (!byLic.has(k)) byLic.set(k, []); byLic.get(k).push(r); }
+    for (const r of counted) { const k = `${r.licenseId || r.licenseUrl || 'ohne Angabe'}|${C.commercialUse(r.licenseId, r.licenseUrl, r.url).why}`; if (!byLic.has(k)) byLic.set(k, []); byLic.get(k).push(r); }
     const lic = [...byLic].sort((a, b) => b[1].length - a[1].length);
+    const CU_TXT = { ja: 'ja', nein: 'nein', ungeklaert: 'ungeklärt' }, cuOp = new Map();
+    for (const r of counted) { const c = cuOp.get(r.operator) || { n: 0, ja: 0, nein: 0, ungeklaert: 0 }; c.n++; c[C.commercialUse(r.licenseId, r.licenseUrl, r.url).k]++; cuOp.set(r.operator, c); }
+    const cuByOp = [...cuOp].sort((a, b) => b[1].n - a[1].n || String(a[0]).localeCompare(String(b[0]), 'de'));
     const sa = counted.filter(r => /^CC-BY-SA/.test(r.licenseId || ''));
     const noLic = counted.filter(r => !r.licenseId && !r.licenseUrl), badLic = counted.filter(r => !r.licenseId && /privacy|datenschutz/i.test(r.licenseUrl || ''));
     const lines = [
@@ -40,11 +44,17 @@ export async function run(ctx) {
       '- ÖPNV-Störungen (`incidents/<Tag>.json` → `ptN`, `ptSkip`, `ptLate`, `pt`: Halte mit Echtzeit, ausgefallene und verspätete Halte je Gemeinde und Stunde; `oepnv/haltestellen.json.gz`: Haltestelle → Gemeinde): abgeleitet aus dem GTFS-Realtime-Strom von gtfs.de (Creative Commons BY-SA 4.0, https://gtfs.de/de/realtime/, Datengeber dort aufgeführt) und dem freien deutschlandweiten GTFS-Feed von gtfs.de (Creative Commons BY 4.0). Die abgeleiteten ÖPNV-Felder stehen deshalb unter CC BY-SA 4.0.',
       '- Trainingsarchiv (`train/<Jahr>/<Tag>.json.gz`, `train-cells/<Jahr>/<Jahr>-W<KW>.json.gz`, `weather-fc/<Tag>.json`): dauerhafte Ablage der oben genannten Tagesdaten (Stundenwerte je Gemeinde, Anbieter und Fahrzeugart; Wochensummen der veröffentlichten Zellen; Wetter samt der ausgegebenen Vorhersage), abgeleitet aus denselben Quellen und unter denselben Bedingungen weiterzugeben (Namensnennung; bei CC-BY-SA-Quellen Weitergabe unter gleichen Bedingungen; Kalender ODbL). Keine Fahrzeugkennungen, keine Fahrzeugkoordinaten; Gruppen mit 1–2 Fahrtbeginnen am Tag nur als Tagessumme.',
       '- Tagtyp-Kalender (`calendar.json`: gesetzliche Feiertage und Schulferien je Land): OpenHolidays API (https://www.openholidaysapi.org), Open Database License 1.0 (ODbL); `calendar.json` steht unter der ODbL 1.0.',
+      '- Umfeld (`versorgung/`, `unfall/`, `umweg/`, `pop/index.json`, `zubringer/index.json`, `abstell/`; Sprint 8, aufbereitet im Branch `geo`): Zensus 2022, Bevölkerung im 100-m-Gitter (© Statistisches Bundesamt, dl-de/by-2-0); Unfallatlas (© Statistische Ämter des Bundes und der Länder, dl-de/by-2-0); Fahrplan gtfs.de (CC BY 4.0); Fußwegenetz © OpenStreetMap-Mitwirkende (ODbL 1.0).',
       '- Verzeichnisse: MobilityData GBFS systems.csv, MobiData BW, MOBIDROM NRW, CityBikes, Betreiber-Direktfeeds.', '',
+      'Kommerzielle Nutzung der Grundlagen: ja mit Namensnennung bei Gemeindegrenzen, Zensus, Unfallatlas, Baustellen (dl-de/by-2-0), DWD Open Data, Fahrplan gtfs.de (CC BY 4.0) und Wikidata (CC0); ja mit Weitergabe unter gleichen Bedingungen bei OpenStreetMap, OpenHolidays, OpenLigaDB (ODbL) und dem Echtzeit-Strom von gtfs.de (CC BY-SA 4.0); ungeklärt bei der Verkehrsinformation der Autobahn GmbH, der Nachrichtensuche der tagesschau-App (Streiks) und den Terminen aus Programmseiten und Quellenseiten.', '',
       '## Quellen nach Lizenz', '',
       `${counted.length} Quellen mit Daten in diesem Stand (Kopien anderer Quellen und nicht erreichbare Quellen ausgenommen).`, '',
-      '| Lizenz | Quellen | Namensnennung / Anbieter |', '|---|---|---|',
-      ...lic.map(([k, list]) => { const names = [...new Set(list.map(r => r.attribution || r.systemOperator || r.operator).filter(Boolean).map(md))]; const url = list.find(r => r.licenseUrl)?.licenseUrl; return `| ${md(k)}${url && url !== k ? ` (${md(url)})` : ''} | ${list.length} | ${names.slice(0, 25).join(', ')}${names.length > 25 ? ` u. a. (${names.length})` : ''} |`; }),
+      '| Lizenz | Kommerziell | Quellen | Namensnennung / Anbieter |', '|---|---|---|---|',
+      ...lic.map(([k, list]) => { const names = [...new Set(list.map(r => r.attribution || r.systemOperator || r.operator).filter(Boolean).map(md))]; const url = list.find(r => r.licenseUrl)?.licenseUrl; const cu = C.commercialUse(list[0].licenseId, list[0].licenseUrl, list[0].url), lk = k.split('|')[0]; return `| ${md(lk)}${url && url !== lk ? ` (${md(url)})` : ''} | ${CU_TXT[cu.k]} (${cu.why}) | ${list.length} | ${names.slice(0, 25).join(', ')}${names.length > 25 ? ` u. a. (${names.length})` : ''} |`; }),
+      '', '## Kommerzielle Nutzung je Anbieter', '',
+      'Je Quelle eingestuft nach der Lizenz im Feed: ja (offene Lizenz, mit Namensnennung bzw. Weitergabe unter gleichen Bedingungen), nein (nicht kommerziell), ungeklärt (ohne Angabe, eigene Bedingungen des Betreibers oder Link auf eine Datenschutzerklärung). Keine Rechtsberatung; vor einem bezahlten Auftrag gelten die Bedingungen der jeweiligen Quelle. Ein Anbieter gilt als „ja“, wenn alle seine Quellen „ja“ sind, als „teils“, wenn sie gemischt sind.', '',
+      '| Anbieter | Quellen | ja | nein | ungeklärt | Einstufung |', '|---|---|---|---|---|---|',
+      ...cuByOp.map(([op, c]) => `| ${md(op)} | ${c.n} | ${c.ja} | ${c.nein} | ${c.ungeklaert} | ${c.nein ? 'nein' : c.ja === c.n ? 'ja' : c.ja ? 'teils' : 'ungeklärt'} |`),
       '', '## Weitergabe unter gleichen Bedingungen', '',
       sa.length ? `${sa.length} Quellen stehen unter CC BY-SA (${[...new Set(sa.map(r => md(r.operator)))].join(', ')}). Daten, die aus diesen Quellen abgeleitet sind (Bestände, Ereignisse, Zellen, Archiv der betroffenen Gebiete und Anbieter), stehen unter CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).` : 'In diesem Stand liefert keine Quelle Daten unter CC BY-SA.',
       'Aus OpenStreetMap abgeleitete Datenbankteile (`context/`) stehen unter der ODbL 1.0.',

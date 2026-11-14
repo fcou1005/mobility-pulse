@@ -777,3 +777,10 @@ assert(R.energyLow(null, 30, { type: 'car' }) === true && R.energyLow(null, 30) 
   const e = R.energyFromOps(doc, { rangeOnly: () => false }).get('08111000|stadtmobil|car'), rd = R.readinessFromOps(doc, { rangeOnly: () => false }).get('08111000');
   assert(e.known === 2 && e.low === 1 && rd.ready === 1, 'energyFromOps/readinessFromOps: Auto mit 30 km Reichweite niedrig, mit 300 km bereit');
 }
+// ---------- Marktauftritt M2: Anbieter mit ungeklärter kommerzieller Nutzung ausblendbar ----------
+{
+  const src = [{ operator: 'Voi', municipalities: ['08111000'], licenseId: 'CC-BY-SA-4.0' }, { operator: 'Lime', municipalities: ['08111000'], licenseId: null, licenseUrl: 'https://www.li.me/gbfs-terms' },
+    { operator: 'Bolt', municipalities: ['08111000'], licenseId: 'CC-BY-4.0' }, { operator: 'Bolt', municipalities: ['08111000'], licenseId: null }, { operator: 'Dott', municipalities: ['09162000'], licenseId: null }, { operator: 'Dott', municipalities: ['08111000'], licenseId: null, url: 'https://api.mobidata-bw.de/sharing/gbfs/v2/dott_stuttgart/gbfs' }];
+  const ex = R.licenseExclude(src, '08111000'), keep = R.keyFilter({ ags: '08111000', exclude: ex });
+  assert(ex.has('Lime') && ex.has('Bolt') && !ex.has('Voi') && !ex.has('Dott') && ex.size === 2 && keep('08111000|Voi|scooter') && !keep('08111000|Lime|scooter'), `licenseExclude: ${[...ex].join(', ')} ausgeblendet (Bolt teils ohne Lizenz), Voi und Dott (MobiData BW, dl-de/by-2-0) bleiben`);
+}

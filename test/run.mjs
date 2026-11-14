@@ -99,6 +99,8 @@ assert(g3.stationsVirtual === 3 && g3.stationsEmptyVirtual === 3 && g3.stationsE
 const lic = await readFile('test/out/DATA-LICENSE.md', 'utf8');
 assert(p3.licenseId === 'CC-BY-SA-4.0' && p3.licenseUrl === 'https://creativecommons.org/licenses/by-sa/4.0/' && p3.attribution === 'Teststadt Mobil GmbH' && p3.attributionUrl === 'https://example.org', 'Lizenz-ID/URL und Namensnennung je Quelle');
 assert(/dl-de\/by-2-0/.test(lic) && /ODbL/.test(lic) && /CC BY-SA 4\.0/.test(lic) && /Teststadt Mobil GmbH/.test(lic), 'DATA-LICENSE.md: BKG, OSM, CC BY-SA, Namensnennung');
+{ const tab = lic.split('## Kommerzielle Nutzung je Anbieter')[1]?.split('\n## ')[0] || '', rows = tab.split('\n').filter(l => /^\| (?!Anbieter|---)/.test(l));
+  assert(rows.length > 0 && rows.every(l => / (ja|nein|teils|ungeklärt) \|$/.test(l)) && /\| Lizenz \| Kommerziell \|/.test(lic) && /CC-BY-SA-4\.0[^|]*\| ja \(Namensnennung, gleiche Bedingungen\)/.test(lic), `M2 Lizenz-Matrix: ${rows.length} Anbieter mit Einstufung, jede Lizenz mit ja/nein/ungeklärt`); }
 // M4: Tarifwährung nur ISO-Kürzel
 const pr3 = JSON.parse(await readFile('test/out/pricing.json', 'utf8')).plans.find(x => x.sourceId === 'p_test');
 assert(pr3 && !('currency' in pr3.plans.find(x => x.id === 'std')) && pr3.plans.find(x => x.id === 'eur').currency === 'EUR' && !JSON.stringify(l3).includes('onerror'), 'Währung: eingeschleuster Text verworfen, EUR übernommen');

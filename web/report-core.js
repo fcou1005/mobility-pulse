@@ -16,7 +16,7 @@ export const S = new WeakMap(); // Element → { ctx, tok, period, show }
 // Teilbare Ansicht: ?period=… bzw. ?day=… (nur geprüfte Formen; unbekannte Werte fallen auf den Standard zurück)
 const urlParam = (k) => { try { const v = new URLSearchParams(location.search).get(k); return v && /^[A-Za-z0-9:_-]{1,20}$/.test(v) ? v : null; } catch { return null; } };
 const urlSet = (k, v) => { try { const q = new URLSearchParams(location.search); if (v && v !== 'all') q.set(k, v); else q.delete(k); const qs = q.toString().replace(/%3A/gi, ':'); history.replaceState(history.state, '', `${location.pathname}${qs ? `?${qs}` : ''}${location.hash}`); } catch { /* file:// o. Ä. */ } };
-export const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: urlParam('period') || 'all', show: {} }; S.set(el, s); } return s; };
+export const st = (el) => { let s = S.get(el); if (!s) { s = { tok: 0, period: urlParam('period') || 'all', lic: urlParam('lizenz') === '1', show: {} }; S.set(el, s); } return s; };
 const CACHE = new Map();
 // Datum, Uhrzeit, Wochentage, Fahrzeugart, Zeitraum-Art und Quellstatus in der Sprache der Seite (Formatierer je Sprache gecacht)
 export const stamp = (ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: R.TZ }).format(new Date(ms)) : '–');
@@ -471,7 +471,7 @@ function reportHtml(ctx, rep, meta, ref) {
   const hh = ctx.health?.(rep.ags);
   const srcTxt = hh?.counted ? t('rep.currentDelayedOther', { length: hh.fresh, length2: hh.delayed, length3: hh.counted - hh.fresh - hh.delayed }) : t('rep.none');
   const gaps = (ctx.state.latest?.gaps || []).filter(g => g.city === meta.name);
-  const extra = [[t('rep.sourcesInMunicipality'), t('rep.asOf', { srcTxt, v1: stamp(ctx.state.latest?.at) })]];
+  const extra = [[t('rep.sourcesInMunicipality'), t('rep.asOf', { srcTxt, v1: stamp(ctx.state.latest?.at) })]]; if (meta.excluded) extra.push([t('rep.licTitle'), meta.excluded.length ? `${esc(meta.excluded.join(', '))} <span class="muted">${t('rep.licHiddenNote')}</span>` : t('rep.licNone')]);
   if (gaps.length) extra.push([t('rep.operatorsWithoutOpenFeed'), gaps.map(g => `${esc(g.operator)}${g.since ? ` ${t('rep.since', { v0: dd(g.since) })}` : ''}`).join(', ') + ` <span class="muted">${t('rep.missingFromAllFigures')}</span>`]);
   if (meta.missing.length) extra.push([q.source === 'archiv' ? t('rep.daysWithoutArchiveValues') : t('rep.dailyFilesMissing'), meta.missing.length > 8 ? `${plural(meta.missing.length, t('rep.day'), t('rep.days'))} (${meta.missing.slice(0, 4).map(dd).join(', ')} …)` : meta.missing.map(dd).join(', ')]);
   if (q.source === 'archiv') extra.push([t('rep.period'), t('rep.extendsBeyond30DaysOfDaily', { kind: esc(PKIND(meta.period.kind)), label: esc(meta.period.label) })]);
@@ -518,7 +518,7 @@ function reportHtml(ctx, rep, meta, ref) {
 function reportControls(ctx, s, days, archDays = []) {
   const opts = periodOptions(days, archDays);
   if (!opts.some(([v]) => v === s.period)) s.period = 'all';
-  return `<div class="rp-ctl rp-noprint"><label>${t('rep.period')} <select data-rp="period">${opts.map(([v, l]) => `<option value="${ctx.esc(v)}"${v === s.period ? ' selected' : ''}>${ctx.esc(l)}</option>`).join('')}</select></label>
+  return `<div class="rp-ctl rp-noprint"><label>${t('rep.period')} <select data-rp="period">${opts.map(([v, l]) => `<option value="${ctx.esc(v)}"${v === s.period ? ' selected' : ''}>${ctx.esc(l)}</option>`).join('')}</select></label><label class="rp-lic"><input type="checkbox" data-rp="lic"${s.lic ? ' checked' : ''}> ${t('rep.licOnly')}</label>
     <button type="button" data-rp="print" title="${t('rep.printOnlyReportOrSaveItAsPdf')}">${t('rep.printPdf')}</button><button type="button" data-rp="csv" title="${t('rep.dailyAndPeriodValuesPer')}">↓ CSV</button></div>`;
 }
 /**
@@ -530,7 +530,7 @@ export async function renderReport(el, ctx) {
   if (!el) return;
   const s = prep(el, ctx); const { state, esc } = ctx;
   bindOnce(el, 'report', () => {
-    el.addEventListener('change', (e) => { if (e.target.matches('[data-rp="period"]')) { s.period = e.target.value; urlSet('period', s.period); renderReport(el, s.ctx); } });
+    el.addEventListener('change', (e) => { if (e.target.matches('[data-rp="period"]')) { s.period = e.target.value; urlSet('period', s.period); renderReport(el, s.ctx); } if (e.target.matches('[data-rp="lic"]')) { s.lic = e.target.checked; urlSet('lizenz', s.lic ? '1' : ''); renderReport(el, s.ctx); } });
     el.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-rp]'); if (!b) return;
       if (b.dataset.rp === 'print') printReport(el);
@@ -555,12 +555,12 @@ export async function renderReport(el, ctx) {
     if (!periodOptions(all, archDays).some(([v]) => v === s.period)) s.period = 'all';
     const days = pickDays(all, s.period, archDays);
     const useArchive = days.some(d => !all.includes(d));
-    let rep, missing, ref;
+    let rep, missing, ref; const excl = s.lic ? R.licenseExclude(state.latest.sources, ags) : null;
     const calibP = loadCalibration(ctx); const limits = (await calibP).limits || null; if (tok !== s.tok) return;
     if (useArchive) {
       const [{ archive, fields }, r, daily] = await Promise.all([archiveFor(ctx, days), reference(ctx), dailyDoc(ctx).catch(() => null)]); ref = r;
       if (tok !== s.tok) return;
-      rep = R.archiveReport({ archive, fields, ags, pop: m.pop || null, operator: state.operator, type: state.type, days, rvdLimit: limits, eventChecks: state.latest.eventChecks, breaks: daily?.breaks || null });
+      rep = R.archiveReport({ archive, fields, ags, pop: m.pop || null, operator: state.operator, type: state.type, exclude: excl, days, rvdLimit: limits, eventChecks: state.latest.eventChecks, breaks: daily?.breaks || null });
       missing = days.filter(d => !archive[d]);
     } else {
       const [hidx, daily] = await Promise.all([histIndex(ctx), dailyDoc(ctx)]);
@@ -570,12 +570,12 @@ export async function renderReport(el, ctx) {
       if (tok !== s.tok) return;
       const cells = {}, cellRuns = {};
       days.forEach((d, i) => { const c = cdocs[i]; if (c?.munis) { cells[d] = c.munis[ags] || {}; cellRuns[d] = sum(c.bandRuns) || (docs[i]?.runs || []).length; } });
-      rep = R.municipalReport({ docs: docs.filter(Boolean), hists: Object.fromEntries(days.map((d, i) => [d, hists[i]]).filter(x => x[1])), cells, cellRuns, ags, pop: m.pop || null, operator: state.operator, type: state.type, latestGroups: state.latest.groups, rvdLimit: limits, eventChecks: state.latest.eventChecks, breaks: daily?.breaks || null });
+      rep = R.municipalReport({ docs: docs.filter(Boolean), hists: Object.fromEntries(days.map((d, i) => [d, hists[i]]).filter(x => x[1])), cells, cellRuns, ags, pop: m.pop || null, operator: state.operator, type: state.type, exclude: excl, latestGroups: state.latest.groups, rvdLimit: limits, eventChecks: state.latest.eventChecks, breaks: daily?.breaks || null });
       missing = days.filter((d, i) => !docs[i]);
     }
     const calib = await calibP; if (tok !== s.tok) return;
     const cal = K.calibrateReport(rep, calib.k, { limits: calib.limits, kinds: calib.kinds }); // k nur für die Kennungsart der Berliner Referenz
-    const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive };
+    const meta = { name, missing, s, calib, cal, period: periodInfo(s.period), archive: useArchive, excluded: excl ? [...excl].sort((a, b) => a.localeCompare(b, 'de')) : null };
     s.rep = rep; s.meta = meta;
     put(head(t('rep.municipalReport2'), t('rep.printableReportPer2', { name: esc(name) }), reportControls(ctx, s, all, archDays)) + reportHtml(ctx, rep, meta, ref));
     setAnswer(viewSlot(el), meta.answer); // S4.1: Antwort oben in der Ansicht (im Druck steht dieselbe im Bericht)
