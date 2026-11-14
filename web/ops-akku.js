@@ -62,7 +62,7 @@ export async function renderAkku() {
   const f = X.fmt;
   sub.textContent = t('ops.akkuSub', { when: HM.format(ff.target), morning: f(ff.morning), known: f(ff.known), low: AK.AKKU.low, now: f(ff.nowLow) });
   const ops = [...new Set(p.fleet.vehicles.filter(v => v.battery != null).map(v => `${v.operator}|${v.type}`))].map(k => [k, AK.groupModel(doc, ...k.split('|'))]).filter(([, g]) => g);
-  $('#ops-akku-model').textContent = ops.slice(0, 4).map(([k, g]) => t('ops.akkuModel', { op: `${k.split('|')[0]} (${X.TYPE[k.split('|')[1]] || k.split('|')[1]})`, drain: f(g.drain, 2), trip: f(g.trip, 1), basis: t(`ops.akkuBasis.${g.basisTrip}`) })).join(' ');
+  $('#ops-akku-model').textContent = ops.slice(0, 4).map(([k, g]) => t('ops.akkuModel', { op: `${k.split('|')[0]} (${X.TYPE[k.split('|')[1]] || k.split('|')[1]})`, drain: f(g.drain, 2), basis: t(`ops.akkuBasis.${g.basisDrain}`) })).join(' ') + ' ' + t('ops.akkuStays');
   csv.disabled = !ff.zones.length;
   const rows = ff.zones.slice(0, 30);
   body.innerHTML = rows.map(z => `<tr><td><a href="https://www.openstreetmap.org/?mlat=${z.lat.toFixed(5)}&mlon=${z.lon.toFixed(5)}#map=17/${z.lat.toFixed(5)}/${z.lon.toFixed(5)}" target="_blank" rel="noopener">${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}</a>${ops.length > 1 ? ` <span class="muted">${X.esc(z.op)}</span>` : ''}</td><td class="n">${f(z.nowLow)}</td><td class="n">${f(z.morning)}</td><td class="n">${z.cross == null ? '–' : HM.format(z.cross)}</td></tr>`).join('')

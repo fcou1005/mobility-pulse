@@ -30,8 +30,9 @@ const berlin = (s) => Date.parse(s); // ISO mit Versatz
   const f2 = A.forecastVehicle(40, g, slots);
   assert(f2.p === 0 && f2.cross == null, 'ohne Fahrten: 40 % bleibt darüber');
   const g3 = { drain: 0.5, trip: 5, rate: new Array(24).fill(0.1) }; // 1,1 Fahrten erwartet
-  const f3 = A.forecastVehicle(29, g3, slots), f4 = A.forecastVehicle(30, g3, slots); // Abstand 9: eine Fahrt reicht; Abstand 10: eine Fahrt zur Hälfte
+  const f3 = A.forecastVehicle(29, g3, slots, { rides: true }), f4 = A.forecastVehicle(30, g3, slots, { rides: true }), f5 = A.forecastVehicle(29, g3, slots); // Abstand 9: eine Fahrt reicht; Abstand 10: eine Fahrt zur Hälfte
   assert(near(f3.p, 1 - Math.exp(-1.1), 1e-9) && f3.p > 0.5 && near(f4.p, Math.exp(-1.1) * 1.1 * 0.5 + (1 - Math.exp(-1.1) * 2.1), 1e-9), `mit Fahrten: 29 % → P = ${f3.p.toFixed(3)} (mindestens eine Fahrt), 30 % → ${f4.p.toFixed(3)}`);
+  assert(f5.p === 0 && near(f5.morning, 23.5, 1e-9), 'Vorgabe: Fahrzeug bleibt stehen, Fahrten zählen nicht');
   const doc = { low: 20, targetHour: 8, groups: { 'Dott|scooter': [0.5, 5, 'gruppe', 'art', ...new Array(24).fill(0)] } };
   const veh = [
     { lat: 48.7758, lon: 9.1829, operator: 'Dott', type: 'scooter', battery: 24 }, { lat: 48.7759, lon: 9.1830, operator: 'Dott', type: 'scooter', battery: 25 },
