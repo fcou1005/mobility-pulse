@@ -14,6 +14,7 @@ import { MORE, MORE_RENDER, checkSupply, renderCoverage, renderSourceTable, rend
 import { renderEcon, renderUsage, renderUsageChart, setCalibMode } from './app-usage.js';
 import { renderCalibPanel, setCalib } from './app-calib.js';
 import { firstVisit } from './app-terms.js';
+import { searchable } from './combo.js';
 
 // ---------- Steuerung ----------
 export function populateScope() {
@@ -79,6 +80,8 @@ export function populateOperators(prefer = 'type') {
   }
 }
 export function bind() {
+  // Gebiet und Anbieter mit Suchfeld (web/combo.js): Tippen filtert, Enter oder Klick wählt; das <select> bleibt dahinter die Quelle der Werte
+  searchable($('#sel-scope')); searchable($('#sel-operator'));
   // Gebietswahl: Grenzen lädt erst der Live-Abruf (Ortszuordnung) bzw. die Grenz-Ebene; die Karte zeigt bis dahin die Sammler-Positionen
   // Pfeiltasten auf der geschlossenen Liste lösen je Schritt „change“ aus: per Tastatur erst nach 400 ms Ruhe wechseln (Enter sofort),
   // sonst startet jeder Schritt einen Gebietswechsel samt Live-Abruf aller Feeds

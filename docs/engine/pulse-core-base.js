@@ -124,6 +124,7 @@ export function normalizeLicense(id, url = null) {
 // Feeds über MobiData BW ohne eigene Angabe: Lizenz des Datensatzes im Portal (Sharing-Angebote: dl-de/by-2-0, Stand 14.11.2026).
 export const COMMERCIAL = Object.freeze(['ja', 'nein', 'ungeklaert']);
 // Gelesene Bedingungen einzelner Anbieter (Stand 14.11.2026); gelten vor der Datensatz-Lizenz eines Verzeichnisses
+/** @type {ReadonlyArray<{ license?: RegExp, source?: RegExp, k: 'ja' | 'nein' | 'ungeklaert', why: string, src?: string }>} */
 export const LICENSE_TERMS = Object.freeze([
   { license: /li\.me\/(legal\/public-)?gbfs-terms/i, k: 'nein', why: 'Lime Public GBFS Terms: Nutzung nur für interne, nicht kommerzielle Zwecke', src: 'https://www.li.me/legal/public-gbfs-terms' },
   { source: /^https:\/\/gbfs\.api\.ridedott\.com\//i, k: 'nein', why: 'Dott-Direktfeed ohne Lizenzangabe: Dott stellt die Daten nur unter einem API-Lizenzvertrag bereit', src: 'https://ridedott.com/api-license' },

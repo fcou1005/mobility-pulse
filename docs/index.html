@@ -119,6 +119,18 @@ main{min-width:0;padding:0 max(var(--gut),env(safe-area-inset-right,0px)) 64px m
 .filters label{flex:0 1 210px}
 .filters label,.ops-form label{display:flex;flex-direction:column;gap:var(--s1);font-size:.75rem;font-weight:500;color:var(--muted)}
 .filters select{width:100%}
+/* Suchfeld für lange Auswahllisten (web/combo.js): sieht aus wie die Auswahl, Liste darunter */
+.combo{position:relative;display:block;width:100%;min-width:12em}
+.combo>input{width:100%;padding-right:30px;text-overflow:ellipsis;cursor:pointer}.combo>input:focus{cursor:text}
+.combo::after{content:"";position:absolute;right:13px;top:50%;width:6px;height:6px;border-right:2px solid var(--fg);border-bottom:2px solid var(--fg);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.combo-pop{position:absolute;left:0;top:calc(100% + 4px);z-index:1100;min-width:100%;width:max-content;max-width:min(360px,calc(100vw - 24px));max-height:min(360px,55vh);overflow:auto;overscroll-behavior:contain;padding:4px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow)}
+.combo-pop[hidden]{display:none}
+.combo-opt{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);padding:6px 8px;border-radius:6px;cursor:pointer;font-size:.875rem;font-weight:400;color:var(--fg)}
+.combo-opt.active{background:var(--panel-2);box-shadow:inset 2px 0 0 var(--accent)}
+.combo-opt[aria-selected=true]{font-weight:600}
+.combo-opt small{flex:none;font-size:.75rem;color:var(--muted)}
+.combo-grp{padding:10px 8px 4px;font-size:.75rem;font-weight:600;color:var(--muted)}
+.combo-note{padding:8px;font-size:.8125rem;color:var(--muted);white-space:normal}
 .filters .count{flex:1 1 260px;display:flex;align-items:center;min-height:var(--ctl);font-size:.875rem;color:var(--fg-2)}
 /* Telefon: Zusammenfassung der Filter als Knopf (app.js renderFilterSum); am Desktop ausgeblendet */
 .filters-sum{display:none;flex:1 1 100%;justify-content:space-between;width:100%;min-height:var(--ctl);font-weight:500;text-align:left;white-space:normal}
@@ -323,6 +335,7 @@ svg.chart .mon-pt{stroke:var(--panel);stroke-width:2}svg.chart .mon-pt.warn{fill
 @media (pointer:coarse){
   button,select,input[type=number],input[type=search],input[type=text]{min-height:44px}
   .chip,.seg a,.toolbar .tog,#nav a,details>summary,.leaflet-bar a{min-height:44px}
+  .combo-opt{min-height:40px;align-items:center}
   .leaflet-bar a{width:44px!important;line-height:44px!important}
   input[type=checkbox]{width:22px;height:22px}
 }
@@ -684,6 +697,6 @@ svg[data-ct]{cursor:crosshair;touch-action:pan-y}svg[data-ct]:focus-visible{outl
 <button type="button" class="to-top" id="to-top" hidden data-i18n-aria-label="ux.toTop" data-i18n-title="ux.toTop" aria-label="Nach oben" title="Nach oben"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 </div>
 <script src="vendor/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="></script>
-<script type="module" src="app.js?v=mwgo5c71"></script>
+<script type="module" src="app.js?v=mwgwj4fm"></script>
 </body>
 </html>

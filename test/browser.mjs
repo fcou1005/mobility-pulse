@@ -183,6 +183,22 @@ try {
     else if (!m.answerFirst || m.core > 2 * page) fail(`Bericht im Druck: Kern ${(m.core / page).toFixed(2)} Seiten${m.answerFirst ? '' : ', Antwort nicht vorn'}`);
     else console.log(`✓ Bericht im Druck: Antwort vorn, Kern ${(m.core / page).toFixed(2)} Seiten (höchstens 2), Anhang ab neuer Seite`);
   }
+  // Suchfeld der Gebietswahl (web/combo.js, 14.11.2026): Tippen filtert, Enter wählt und setzt das Gebiet, Escape stellt die Wahl wieder her
+  if (!ONLY) {
+    const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: 'DE', viewport: { width: 1280, height: 900 } });
+    await page.waitForSelector('#sel-scope option[value="08416041"]', { state: 'attached', timeout: 30000 });
+    const inp = page.locator('label[data-f="scope"] input[role="combobox"]'), opts = () => page.$$eval('label[data-f="scope"] [role="option"]', o => o.map(x => (x.textContent || '').trim()));
+    await inp.click(); const all = await opts();
+    await inp.pressSequentially('tüb'); const hit = await opts();
+    await inp.press('Enter'); const scope = await page.waitForFunction(() => new URL(location.href).searchParams.get('scope') === '08416041', null, { timeout: 5000 }).then(() => '08416041', () => new URL(page.url()).searchParams.get('scope'));
+    const v1 = await inp.inputValue(), exp = await inp.getAttribute('aria-expanded');
+    await inp.click(); await inp.fill('xyz'); const none = await page.$eval('label[data-f="scope"] .combo-note', e => e.textContent || '');
+    await inp.press('Escape'); const v2 = await inp.inputValue();
+    await close();
+    const ok = all.length === 3 && hit.length === 1 && /^Tübingen/.test(hit[0]) && scope === '08416041' && v1 === 'Tübingen' && exp === 'false' && /Nichts passt zu „xyz“/.test(none) && v2 === 'Tübingen' && !errs.length;
+    if (ok) console.log('✓ Suchfeld Gebiet: „tüb“ zeigt nur Tübingen, Enter wählt (scope=08416041), kein Treffer mit Hinweis, Escape stellt die Wahl wieder her');
+    else fail(`Suchfeld Gebiet: ${JSON.stringify({ all, hit, scope, v1, exp, none, v2, errs: errs.slice(0, 3) })}`);
+  }
   // S3.7: passt die MAJOR-Version einer Datei nicht zur Seite, erscheint ein Hinweis (hier status.json mit 9.0)
   if (!ONLY) {
     const { page, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, patch: { 'status.json': (d) => ({ ...d, schemaVersion: '9.0' }) } });

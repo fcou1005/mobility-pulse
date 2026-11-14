@@ -7,6 +7,7 @@ import { VEHICLE_TYPE_LABEL } from './pulse-core.js';
 import { t, tMap, lang, dateFmt, decimalSep } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
 import { NEUTRAL as NT } from './tokens.js';
+import { searchable } from './combo.js';
 
 const OSRM_BIKE = 'https://routing.openstreetmap.de/routed-bike/route/v1/bike/';
 const SHOW = 40;            // Ströme auf Karte, in der Tabelle und mit Routing (Top nach Anzahl)
@@ -23,7 +24,7 @@ const STYLE = `
 .fl-root{display:flex;flex-direction:column;gap:var(--s3)}
 .fl-root .panel-head{margin-bottom:0}
 .fl-root [hidden]{display:none!important}
-.fl-ctl select{max-width:240px}
+.fl-ctl select{max-width:240px}.fl-ctl .combo{width:240px;max-width:100%}
 .fl-note{font-size:.75rem;line-height:1.5}
 .fl-note b{color:var(--fg);font-weight:600}
 .fl-sum{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2)}
@@ -156,6 +157,7 @@ function skeleton(S) {
   <div data-fl="empty" hidden></div>`;
   const q = (k) => el.querySelector(`[data-fl="${k}"]`);
   S.q = q;
+  searchable(/** @type {HTMLSelectElement} */ (q('ags'))); // Gemeinde mit Suchfeld (web/combo.js)
   for (const k of ['ags', 'day', 'op', 'type', 'band']) q(k).addEventListener('change', () => { S.sel[k] = q(k).value; update(S).catch(e => console.error('Ströme', e)); });
   el.querySelectorAll('[data-fl-view]').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.flView; setViewPref(S.view); applyView(S); }));
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-fl-src]'); if (!b || b.dataset.flSrc === S.src) return; S.src = b.dataset.flSrc; S.sel.day = null; update(S).catch(err => console.error('Ströme', err)); });
