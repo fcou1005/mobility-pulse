@@ -8,6 +8,7 @@ Prognose, Disposition und Datenqualität für jede Gemeinde.
 - **Dashboard:** GitHub Pages aus `docs/` (gebaut aus `web/` und `lib/`).
 - **Branch `main`:** Code – Katalog-Builder, Sammler, Rechenkerne, Dashboard, Tests.
 - **Branch `data`:** Datenstand, alle 20 Minuten als ein Commit ohne Verlauf neu geschrieben ([Datenstand](handbuch/datenstand.md)).
+- **Branch `geo`:** Zensus, Unfallatlas, Fahrplan und Fußwegenetz, monatlich vom Workflow „Geo“ aufbereitet ([Umfeld](handbuch/umfeld.md)).
 
 ## Handbuch
 

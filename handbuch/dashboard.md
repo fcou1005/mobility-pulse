@@ -28,6 +28,10 @@ Alle Karten sind per Tastatur bedienbar (`web/mapkeys.js`): Pfeiltasten verschie
 - **Disposition:** Schichtplan, Soll je Tageszeit und Fahrer-Link je Tour; Fahrermodus als eigene Seite `fahrer.html` (offline, Unterblatt in drei Stufen).
 - **Auswerten › Markt (`#marktindex`, `web/markt.js`; `#markt` führt wie bisher zur Übersicht):** Deutschland-Index je Stadt und Fahrzeugart mit Grafik (SVG) und Druck, Grafik der Woche, offene Daten-Pakete, Wirkung von Ereignissen und Preisänderungen, Expansions-Scout ([kennzahlen.md](kennzahlen.md#deutschland-index)).
 
+## Umfeld (Sprint 8, 14.11.2026)
+
+- **Auswerten › Umfeld (`#umfeld`, `web/umfeld.js`):** Versorgung der Einwohner mit Fahrzeugen in 150, 200 und 300 m, Unfall-Schwerpunkte, ÖPNV-Zubringer, Umwegfaktor und Abstellflächen-Planer (Methoden in [umfeld.md](umfeld.md)). Der Planer lädt OpenStreetMap erst auf Knopfdruck.
+
 ## Sprache
 
 Oberfläche Deutsch (Standard) oder Englisch: Umschalter DE | EN in der Kopfleiste, `?lang=en|de` (wird von „Link kopieren“ mitgenommen), Wahl im Browser gespeichert; englische Browser bekommen einen Vorschlag. Wörterbuch, `t()`, Zahlen- und Datumsformat in `web/i18n.js` (Glossar der Fachbegriffe dort), statisches HTML über `data-i18n*`. Test: `node test/i18n.test.mjs`.

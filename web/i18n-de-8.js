@@ -121,6 +121,7 @@ export default {
   "zw.osmLoading": "OSM-Gründe werden über Overpass abgefragt (bis zu zwei Minuten) …",
   "zw.osmFail": "Overpass nicht erreichbar – später erneut versuchen.",
   "zw.answerNone": "Für {name} gibt es keine Zonen aus offenen Feeds – keine Prüfung möglich.",
+  "st.ph.geo": "Geo (Versorgung, Zubringer, Abstellorte)",
   "st.ph.akku": "Akku-Prognose",
   "st.ph.markt": "Markt (Index, Wirkung, Scout)",
   "nav.market": "Markt",

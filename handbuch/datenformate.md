@@ -20,6 +20,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.0 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.0 | `akku/<AGS>.json`, `akku/bewertung.json` |
+| [geo](#geo) | 1.0 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 
 ## status
 
@@ -526,3 +527,112 @@ Ergebnis einer Nacht: Zählwerte (getroffen tp, falsch fp, übersehen fn, richti
 | `backtest` |  | object / null – Rückblick auf die goldenen Tage (private Rohstände weniger Gruppen), einmal am Tag: nights, total, floors, groups, from, to |
 | `models` | ja | object – 'Anbieter\|Art' → \[drain je Stunde, Verbrauch je Fahrt, Standstunden, Fahrten\] (gelernte Summen, Halbwertszeit 7 Tage) |
 | `open` |  | object / null – abgelegte, noch nicht geprüfte Prognose: day, target, n |
+
+## geo
+
+Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8). Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.
+
+Version 1.0 · Schema: [schemas/geo.schema.json](../schemas/geo.schema.json)
+
+### geo · versorgung
+
+S8.2 je Gemeinde: Einwohneranteil mit Fahrzeug in 150/200/300 m, mindestens 50 % der Zeit 7–22 Uhr, Gini, je Tag (days) und vorläufig heute (today); cells = Anteil je 250-m-Zelle für den letzten vollen Tag
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `pop` | ja | integer |
+| `radii` | ja | array von integer |
+| `days` | ja | array von object |
+| `today` |  | object / null |
+| `cells` |  | object |
+| `missingOps` |  | array von string – Anbieter mit Genehmigung ohne offenen Feed: Versorgung unterschätzt |
+
+### geo · versorgungIndex
+
+S8.2 Übersicht je Gemeinde
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `fields` | ja | array |
+| `ags` | ja | object |
+
+### geo · zubringer
+
+S8.5 ÖPNV-Zubringer-Index der größten Flottenstädte
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `cities` | ja | array von object |
+| `rule` | ja | string |
+
+### geo · abstell
+
+S8.4 Fahrtenden je 50-m-Zelle im Monat (ab minCount)
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `month` | ja | string (Muster `^\d{4}-\d{2}$`) |
+| `cells` | ja | object |
+
+### geo · unfall
+
+S8.3 Unfälle je 250-m-Zelle: Summen je Kategorie über die Jahre, EB-Rate, Gi*-z, Schwerpunkt
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `years` | ja | array |
+| `fields` | ja | array |
+| `rows` | ja | array |
+| `overlap` |  | number / null |
+
+### geo · unfallIndex
+
+S8.3 Übersicht: Jahre, fehlende Jahre, Abgleich, Schwerpunkte je Gemeinde
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `years` | ja | array |
+| `missingYears` |  | array |
+| `ags` | ja | object |
+
+### geo · umweg
+
+S8.6 Umwegfaktor je bewohnter 100-m-Zelle
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `fields` | ja | array |
+| `rows` | ja | array |
+| `median` |  | number / null |
+
+### geo · umwegIndex
+
+S8.6 Übersicht je Stadt mit Stichproben gegen einen Router
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `cities` | ja | object |
+
+### geo · popIndex
+
+S8.1 Zensus 2022 gegen VG250-EW je Gemeinde
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `maxDev` | ja | number |
+| `ags` | ja | object |
+| `within` |  | integer |
+| `n` |  | integer |

@@ -13,6 +13,7 @@ export const AREAS = Object.freeze({
   stadt: ['sd', 'aufl', 'aus'],
   zonen: ['zw'],
   markt: ['mk'],
+  umfeld: ['geo'],
 });
 const BY_PREFIX = Object.fromEntries(Object.entries(AREAS).flatMap(([a, ps]) => ps.map(p => [p, a])));
 /** Bereich eines Schlüssels ohne die Startliste (Build); core für alles Übrige */

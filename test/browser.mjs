@@ -36,13 +36,14 @@ const CHECKS = {
   ausschreibungen: [['Kalender', /Fristenkalender/], ['Quelle', /Heidelberg[\s\S]*geprüft/]],
   marktindex: [['Antwort', /Im November 2026 \(vorläufig\) gab es in Stuttgart [\d.]+ Fahrten je Tag/], ['Rangliste', /1 Köln [\d.]+/], ['Wirkung', /Wirkung von Ereignissen[\s\S]*(mehr Fahrten|weniger Fahrten|nicht unterscheidbar)/], ['Scout', /Expansions-Scout[\s\S]*Leonberg/], ['Grafik der Woche', /Grafik der Woche/]],
   zonen: [['Antwort', /Dott hat in Stuttgart \d+ Zonen: \d+ Überlappungen/], ['Export geprüft', /Abstellverbot \d+ Zonen, [\d.]+ Stützpunkte ✓ Upload-Prüfung bestanden/], ['Änderungsverlauf', /Änderungsverlauf/]],
+  umfeld: [['Antwort mit Versorgung', /In Stuttgart steht für [\d,]+ % der Einwohner im Mittel zwischen 7 und 22 Uhr/], ['Versorgungstabelle', /Versorgung in Stuttgart[\s\S]*in 200 m/], ['Unfall-Schwerpunkte', /Schwerpunkte \(Getis-Ord Gi\*, FDR 5 %\)/], ['Zubringer', /Stuttgart: [\d,]+ Beginne und Enden je 100 Abfahrten/], ['Umwegfaktor', /Mittlerer Umwegfaktor [\d,]+/], ['Planer', /Abstellflächen-Planer[\s\S]*Vorschläge berechnen/]],
   begriffe: [['Begriffe', /Netto-Abfluss/], ['Erklärung', /Fahrtbeginne minus Fahrtenden/]],
   status: [['letzter Lauf', /LETZTER LAUF\s*\d\d:\d\d/i], ['Laufzeit mit Stufe', /LAUFZEIT\s*\d+ s/i], ['Verlauf', /Laufzeit der letzten 7 Tage/]],
 };
 const VIEWS = Object.keys(CHECKS).filter(v => !ONLY || ONLY.includes(v));
 // S4.1: Ansichten mit Antwort-Komponente – genau eine Antwort vor dem ersten Diagramm, drei Kennzahlen, Antwortwert = Tabellenwert,
 // auf dem Handy (390 × 844) die Kennzahlen im ersten Bildschirm
-const ANSWER_VIEWS = ['live', 'usage', 'ops', 'prognose', 'bericht', 'spots', 'vergleich', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'zonen', 'marktindex'];
+const ANSWER_VIEWS = ['live', 'usage', 'ops', 'prognose', 'bericht', 'spots', 'vergleich', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'zonen', 'marktindex', 'umfeld'];
 /** @param {import('playwright').Page} page @param {string} v @param {boolean} mobile */
 async function answerProblems(page, v, mobile) {
   return page.evaluate(([x, mob]) => {
@@ -200,6 +201,26 @@ try {
     const m = /fallen voraussichtlich ([\d.]+) von ([\d.]+) verfügbaren Fahrzeugen mit Ladestand unter 20 %, ([\d.]+) sind schon darunter/.exec(sub || '');
     if (!m || rows < 5 || !csv || !replanned || errs.length) fail(`Akku-Prognose Dott: ${JSON.stringify({ sub, rows, csv, replanned, errs: errs.slice(0, 2) })}`);
     else console.log(`✓ Akku-Prognose Dott Stuttgart: ${m[1]} von ${m[2]} bis 8 Uhr unter 20 % (${m[3]} schon darunter), ${rows} Zonen, Häkchen plant die Tauschtouren neu`);
+    await close();
+  }
+  // S8.4: Abstellflächen-Planer gegen ein Ersatz-Overpass (Straßenraster mit Gehwegen, Haltestellen an den Kreuzungen, zwei vorhandene Flächen)
+  if (!ONLY || ONLY.includes('umfeld')) {
+    const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'umfeld' });
+    await page.route('**/api/interpreter', (route) => {
+      const m = /\(([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)/.exec(decodeURIComponent((route.request().postData() || '').replace(/\+/g, ' ')));
+      const [s, w, n, e] = m ? m.slice(1).map(Number) : [0, 0, 0, 0], els = []; let id = 1;
+      for (let la = s; la <= n; la += 0.0011) els.push({ type: 'way', id: id++, nodes: [id * 10, id * 10 + 1], tags: { highway: 'residential', sidewalk: 'both' }, geometry: [{ lat: la, lon: w }, { lat: la, lon: e }] });
+      for (let lo = w; lo <= e; lo += 0.0016) els.push({ type: 'way', id: id++, nodes: [id * 10, id * 10 + 1], tags: { highway: 'residential' }, geometry: [{ lat: s, lon: lo }, { lat: n, lon: lo }] });
+      els.push({ type: 'node', id: 9e6, lat: (s + n) / 2, lon: (w + e) / 2, tags: { highway: 'bus_stop' } }, { type: 'node', id: 9e6 + 1, lat: 48.7840, lon: 9.1822, tags: { amenity: 'kick-scooter_parking' } }, { type: 'node', id: 9e6 + 2, lat: 48.7766, lon: 9.1856, tags: { amenity: 'bicycle_rental' } });
+      return route.fulfill({ json: { elements: els } });
+    });
+    const form = await page.waitForSelector('#geo-plan-form', { timeout: 30000 }).then(() => true, () => false);
+    if (form) { await page.fill('#geo-plan-k', '12'); await page.click('#geo-plan-form button[type=submit]'); }
+    const st = form ? await page.waitForFunction(() => { const x = document.getElementById('geo-plan-status')?.textContent || ''; return /Vorschläge decken/.test(x) ? x : null; }, null, { timeout: 60000 }).then(h => h.jsonValue()).catch(() => null) : null;
+    const rows = await page.evaluate(() => document.querySelectorAll('#geo-plan tbody tr').length), csv = await page.evaluate(() => !!document.querySelector('#geo-plan-csv:not([disabled])'));
+    const m = /(\d+) Vorschläge decken ([\d.]+) von ([\d.]+) Fahrtenden ab/.exec(String(st || ''));
+    if (!m || rows !== +m[1] || !csv || errs.length) fail(`Abstellflächen-Planer: ${JSON.stringify({ st, rows, csv, errs: errs.slice(0, 2) })}`);
+    else console.log(`✓ Abstellflächen-Planer Stuttgart (synthetisch): ${m[1]} Vorschläge decken ${m[2]} von ${m[3]} Fahrtenden, CSV bereit`);
     await close();
   }
   // S6.2/S6.6: Fahrermodus mit 20 Stopps im Flugmodus, Trefferflächen, Blatt ohne Sprung

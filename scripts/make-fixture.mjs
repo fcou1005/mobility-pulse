@@ -6,7 +6,7 @@
 // gewählten Gemeinden; Zeilen, die mit einem Gemeindeschlüssel beginnen, ebenso; Listen von Objekten mit ags/municipalities/gebiet.ags behalten
 // Einträge der Gemeinden (und solche ohne Gebiet). Datierte Dateien nur für die gewählten Tage, Verzeichnisse (index.json) passend gekürzt.
 // Sonderfälle: ops/<Land> (Zeilen verweisen auf munis[]), boundaries/<Land> (Features), zone-watch (Zonen der Gemeinden), zones/ (Verzeichnis
-// leer: keine Betreiber-Geometrien im Repo). Keine Abhängigkeiten.
+// leer: keine Betreiber-Geometrien im Repo), Geo-Dateien (Sprint 8; ohne echte der synthetische Stand aus test/fixtures/geo-synth). Keine Abhängigkeiten.
 import { readFile, writeFile, mkdir, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -110,6 +110,15 @@ if (has('zone-watch.json')) { const z = await rd('zone-watch.json'); const ids =
 if (has('zones/index.json')) { const zi = await rd('zones/index.json'); await put('zones/index.json', { ...zi, zones: [] }); }
 for (const a of KEEP) if (has(`akku/${a}.json`)) await put(`akku/${a}.json`, await rd(`akku/${a}.json`)); // S6.5 Akku-Prognose
 if (has('akku/bewertung.json')) await put('akku/bewertung.json', await rd('akku/bewertung.json'));
+// Sprint 8 (Umfeld): echte Geo-Dateien, sonst der synthetische Stand aus scripts/geo-fixture.mjs (test/fixtures/geo-synth)
+const GEO_DIRS = ['versorgung', 'unfall', 'umweg', 'abstell'], geoReal = has('versorgung/index.json');
+if (geoReal) {
+  for (const d of GEO_DIRS) for (const a of KEEP) if (has(`${d}/${a}.json`)) await put(`${d}/${a}.json`, await rd(`${d}/${a}.json`));
+  for (const f of ['versorgung/index.json', 'unfall/index.json', 'umweg/index.json', 'zubringer/index.json', 'pop/index.json']) if (has(f)) await put(f, trim(await rd(f)));
+} else {
+  const SYN = path.join(ROOT, 'test/fixtures/geo-synth'), rs = async (f) => JSON.parse(await readFile(path.join(SYN, f), 'utf8'));
+  for (const d of [...GEO_DIRS, 'zubringer', 'pop']) if (existsSync(path.join(SYN, d))) for (const f of await readdir(path.join(SYN, d))) await put(`${d}/${f}`, await rs(`${d}/${f}`));
+}
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
 
@@ -117,7 +126,7 @@ if (has('context/index.json')) await put('context/index.json', trim(await rd('co
 await writeCellsCompact(OUT, { log: console.log }); await writeArea(OUT, { log: console.log });
 
 const at = latest.at;
-await put('FIXTURE.json', { at, generatedAt: latest.generatedAt, days: DAYS, ags: [...KEEP], states: [...states], source: 'scripts/make-fixture.mjs' });
+await put('FIXTURE.json', { at, generatedAt: latest.generatedAt, days: DAYS, ags: [...KEEP], states: [...states], geo: geoReal ? 'echt' : 'synthetisch', source: 'scripts/make-fixture.mjs' });
 const total = written.reduce((s, [, n]) => s + n, 0);
 for (const [f, n] of written.sort((a, b) => b[1] - a[1]).slice(0, 12)) console.log(`${(n / 1e3).toFixed(0).padStart(7)} KB  ${f}`);
 console.log(`${written.length} Dateien, ${(total / 1e6).toFixed(2)} MB roh · Tage ${DAYS.join(', ')} · Gemeinden ${[...KEEP].join(', ')} → ${path.relative(ROOT, OUT)}/`);

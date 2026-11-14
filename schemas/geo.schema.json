@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/geo.schema.json",
+  "title": "Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8)",
+  "description": "Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.",
+  "x-version": "1.0",
+  "$defs": {
+    "versorgung": {
+      "type": "object",
+      "description": "S8.2 je Gemeinde: Einwohneranteil mit Fahrzeug in 150/200/300 m, mindestens 50 % der Zeit 7–22 Uhr, Gini, je Tag (days) und vorläufig heute (today); cells = Anteil je 250-m-Zelle für den letzten vollen Tag",
+      "required": [
+        "schemaVersion",
+        "ags",
+        "pop",
+        "radii",
+        "days"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "ags": {
+          "type": "string",
+          "pattern": "^\\d{8}$"
+        },
+        "pop": {
+          "type": "integer"
+        },
+        "radii": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "day",
+              "share",
+              "time50"
+            ],
+            "properties": {
+              "day": {
+                "type": "string"
+              },
+              "share": {
+                "type": "array"
+              },
+              "time50": {
+                "type": "array"
+              },
+              "gini": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "diffPP": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "größte Abweichung „nur jeder dritte Lauf“ in Prozentpunkten"
+              }
+            }
+          }
+        },
+        "today": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "cells": {
+          "type": "object"
+        },
+        "missingOps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Anbieter mit Genehmigung ohne offenen Feed: Versorgung unterschätzt"
+        }
+      }
+    },
+    "versorgungIndex": {
+      "type": "object",
+      "description": "S8.2 Übersicht je Gemeinde",
+      "required": [
+        "schemaVersion",
+        "fields",
+        "ags"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "fields": {
+          "type": "array"
+        },
+        "ags": {
+          "type": "object"
+        }
+      }
+    },
+    "zubringer": {
+      "type": "object",
+      "description": "S8.5 ÖPNV-Zubringer-Index der größten Flottenstädte",
+      "required": [
+        "schemaVersion",
+        "cities",
+        "rule"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "cities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "ags",
+              "dep"
+            ],
+            "properties": {
+              "ags": {
+                "type": "string",
+                "pattern": "^\\d{8}$"
+              },
+              "dep": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "rule": {
+          "type": "string"
+        }
+      }
+    },
+    "abstell": {
+      "type": "object",
+      "description": "S8.4 Fahrtenden je 50-m-Zelle im Monat (ab minCount)",
+      "required": [
+        "schemaVersion",
+        "ags",
+        "month",
+        "cells"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "ags": {
+          "type": "string",
+          "pattern": "^\\d{8}$"
+        },
+        "month": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}$"
+        },
+        "cells": {
+          "type": "object",
+          "required": [
+            "rows"
+          ],
+          "properties": {
+            "rows": {
+              "type": "array"
+            }
+          }
+        }
+      }
+    },
+    "unfall": {
+      "type": "object",
+      "description": "S8.3 Unfälle je 250-m-Zelle: Summen je Kategorie über die Jahre, EB-Rate, Gi*-z, Schwerpunkt",
+      "required": [
+        "schemaVersion",
+        "ags",
+        "years",
+        "fields",
+        "rows"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "ags": {
+          "type": "string",
+          "pattern": "^\\d{8}$"
+        },
+        "years": {
+          "type": "array"
+        },
+        "fields": {
+          "type": "array"
+        },
+        "rows": {
+          "type": "array"
+        },
+        "overlap": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "unfallIndex": {
+      "type": "object",
+      "description": "S8.3 Übersicht: Jahre, fehlende Jahre, Abgleich, Schwerpunkte je Gemeinde",
+      "required": [
+        "schemaVersion",
+        "years",
+        "ags"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "years": {
+          "type": "array"
+        },
+        "missingYears": {
+          "type": "array"
+        },
+        "ags": {
+          "type": "object"
+        }
+      }
+    },
+    "umweg": {
+      "type": "object",
+      "description": "S8.6 Umwegfaktor je bewohnter 100-m-Zelle",
+      "required": [
+        "schemaVersion",
+        "ags",
+        "fields",
+        "rows"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "ags": {
+          "type": "string",
+          "pattern": "^\\d{8}$"
+        },
+        "fields": {
+          "type": "array"
+        },
+        "rows": {
+          "type": "array"
+        },
+        "median": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "umwegIndex": {
+      "type": "object",
+      "description": "S8.6 Übersicht je Stadt mit Stichproben gegen einen Router",
+      "required": [
+        "schemaVersion",
+        "cities"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "cities": {
+          "type": "object"
+        }
+      }
+    },
+    "popIndex": {
+      "type": "object",
+      "description": "S8.1 Zensus 2022 gegen VG250-EW je Gemeinde",
+      "required": [
+        "schemaVersion",
+        "maxDev",
+        "ags"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "maxDev": {
+          "type": "number"
+        },
+        "ags": {
+          "type": "object"
+        },
+        "within": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

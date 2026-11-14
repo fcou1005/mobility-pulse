@@ -16,6 +16,7 @@ unter dem Konto, das die Datei zuletzt geändert hat. Vorlagen liegen in `script
 | `chronos.yml` | `scripts/chronos-workflow.yml` | Chronos-Vorhersage (Python) für die Prognose |
 | `termine.yml` | `scripts/termine-workflow.yml` | Termine und Veranstaltungen |
 | `backup.yml` | `scripts/backup-workflow.yml` | Sicherung des Datenstands als Vorabversion |
+| `geo.yml` | `scripts/geo-workflow.yml` | Zensus, Unfallatlas, Fahrplan, Fußwegenetz für die Ansicht Umfeld in den Branch `geo`, monatlich ([Umfeld](umfeld.md#datenfluss)) |
 | `test.yml` | `scripts/test-workflow.yml` | Tests, Typprüfung, Build-Budget, Browser, Barrierefreiheit, Lighthouse |
 
 Sammler-Läufe von Hand nur über Actions → Sammler → Run workflow.
@@ -48,6 +49,7 @@ Fixture neu schneiden: `node scripts/make-fixture.mjs <Checkout des Branches dat
 
 - Phase `alarme` des Sammlers (`scripts/collect/24-alarme.mjs`, `lib/pulse-alarme.js`) vergleicht jeden Lauf mit dem vorigen und schreibt `auflagen/alarme.json` sowie Atom-Feeds `feeds/<AGS>.xml` und `feeds/<AGS>-<cap|source|zone|price|fleet>.xml` in den Datenzweig (nur bei geändertem Inhalt). Push über ntfy (seit 14.11.2026 aktiv): Repository-Variable `NTFY_TOPIC`, im Sammler-Workflow `NTFY_TOPIC: ${{ vars.NTFY_TOPIC }}` unter `env` des Schritts „Sammeln“; empfangen in der ntfy-App mit „Thema abonnieren“ und dem Wert der Variable (steht bewusst nicht im Repo).
 - Phase `akku` (`scripts/collect/28-akku.mjs`, läuft nach `verfolgung`): Akku-Prognose (S6.5) – lernt je Lauf, schreibt `akku/<AGS>.json` und `akku/bewertung.json`; Zustand privat in `TRACK_DIR/akku-state.json.gz` (gesalzene Kennungen wie `state.json.gz`).
+- Phase `geo` (`scripts/collect/29-geo.mjs`, läuft nach `akku`): Versorgung, Zubringer und Fahrtenden je 50-m-Zelle (Sprint 8); liest den Branch `geo` alle 6 Stunden, Zustand privat in `TRACK_DIR/geo-state.json.gz` ([Umfeld](umfeld.md#datenfluss)). Ohne Branch `geo` entstehen nur `abstell/` (Fahrtenden brauchen weder Zensus noch Fahrplan) und ein leeres `zubringer/index.json`.
 - Phase `markt` (`scripts/collect/27-markt.mjs`, läuft nach `alarme`): Deutschland-Index und Daten-Paket des Vormonats im ersten Lauf ab dem 1. (`index/`, `offen/`), laufender Monat `index/laufend.json`, Grafik der Woche (`grafik/`), Ereignis- und Preis-Wirkung (`markt/wirkung.json`), Expansions-Scout einmal am Tag (`markt/scout.json`). Der Workflow „Monatsbericht“ (Vorlage `scripts/monatsbericht-workflow.yml`, über die Weboberfläche anlegen) druckt zusätzlich `deutschland-index.pdf`.
 - Jahresbuch der Feed-Verfügbarkeit: Phase `ereignisse` schreibt `auflagen/verfuegbarkeit-<Jahr>.json` (`lib/pulse-auflagen.js`; letzte zehn Tage einzeln, ältere je Monat).
 - Monats-Steckbrief: Workflow `.github/workflows/monatsbericht.yml` (seit 14.11.2026, Vorlage `scripts/monatsbericht-workflow.yml`); am 1. des Monats um 5:41 UTC entstehen die PDFs des Vormonats im Branch `berichte`, von Hand über Actions → Monatsbericht → Run workflow.

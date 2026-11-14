@@ -121,6 +121,7 @@ export default {
   "zw.osmLoading": "Querying OSM reasons via Overpass (up to two minutes) …",
   "zw.osmFail": "Overpass not reachable – please try again later.",
   "zw.answerNone": "There are no zones from open feeds for {name} – nothing to check.",
+  "st.ph.geo": "Geo (coverage, feeder, parking)",
   "st.ph.akku": "Battery forecast",
   "st.ph.markt": "Market (index, effects, scout)",
   "nav.market": "Market",

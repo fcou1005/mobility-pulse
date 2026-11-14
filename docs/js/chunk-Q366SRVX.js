@@ -1,0 +1,1 @@
+var N=["at","art","anbieter","gemeinde","lat","lon","anzahl","arten"];var x=3;var A=["gemeinde","von","nach","anbieter","art","band","anzahl","dauer_s","luftlinie_m"];var u=4,p=40;export{N as a,x as b,A as c,u as d,p as e};
