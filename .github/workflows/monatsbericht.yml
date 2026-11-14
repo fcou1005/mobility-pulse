@@ -1,0 +1,63 @@
+# Vorlage für .github/workflows/monatsbericht.yml (nur über die GitHub-Weboberfläche unter fcou1005 anlegen, siehe CLAUDE.md).
+# Monats-Steckbrief (S5.4): am 1. des Monats den Kommunal-Bericht des Vormonats je Gemeinde mit amtlicher Obergrenze als PDF drucken
+# (scripts/monatsbericht.mjs, Playwright/Chromium, kein Netz außer 127.0.0.1) und im Branch berichte ablegen: <JJJJ-MM>/<AGS>.pdf, index.json.
+# Wie termine.yml: der Job mit fremdem Code (Chromium) hat nur Leserechte, veröffentlicht wird in einem eigenen Job mit dem Artefakt.
+name: Monatsbericht
+on:
+  schedule:
+    - cron: '41 5 1 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: monatsbericht
+  cancel-in-progress: false
+jobs:
+  drucken:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Datenstand (Branch data)
+        run: git clone -q --depth 1 -b data "https://github.com/${GITHUB_REPOSITORY}.git" datenstand
+      - name: Bisherige Berichte (Branch berichte)
+        run: git clone -q --depth 1 -b berichte "https://github.com/${GITHUB_REPOSITORY}.git" berichte || mkdir -p berichte
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/build-web.mjs
+      - name: PDF je Gemeinde
+        env:
+          BERICHTE_OUT: berichte
+        run: node scripts/monatsbericht.mjs datenstand
+      - uses: actions/upload-artifact@v4
+        with:
+          name: berichte
+          path: |
+            berichte/**/*.pdf
+            berichte/index.json
+          retention-days: 3
+  veroeffentlichen:
+    needs: drucken
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: berichte
+          path: berichte
+      - name: Branch berichte schreiben
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd berichte
+          git init -q && git checkout -q -b berichte && git add -A
+          git -c user.name='mobility-pulse-bot' -c user.email='bot@users.noreply.github.com' commit -qm "Monatsberichte $(date -u +%FT%TZ)"
+          git push -f -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" berichte:berichte
