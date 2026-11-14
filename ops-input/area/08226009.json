@@ -1,0 +1,1 @@
+{"schemaVersion":"1.4","version":1,"ags":"08226009","at":1794662108872,"zonesAt":1794639894985,"econ":null,"groups":{"months":["2026-11"],"fields":["at","art","anbieter","gemeinde","lat","lon","anzahl","arten"],"events":[]},"zones":{"Voi":{"path":"ops-input/zones/08226009/0.json","files":[{"file":"voi_de.json","at":1794639894985}]}},"parking":{}}

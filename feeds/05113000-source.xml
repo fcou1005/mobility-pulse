@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05113000-source.xml</id>
+  <title>Mobility Pulse – Essen: Quelle aus</title>
+  <subtitle>Alarme zum Thema Quelle aus aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-14T01:55:44Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05113000-source.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05113000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05113000:Voi:1794621344264</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-14T01:55:44Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05113000#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-essen:source-voi-essen meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+</feed>

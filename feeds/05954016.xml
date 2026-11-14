@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05954016.xml</id>
+  <title>Mobility Pulse – Hattingen</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-14T07:04:54Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05954016.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05954016#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:05954016:Lime:1794639894985</id>
+    <title>Lime: Preise geändert</title>
+    <updated>2026-11-14T07:04:54Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05954016#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_e-scooter-sharing-nrw:source-lime-essen); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:05954016:Lime:1794639894985</id>
+    <title>Lime: Preise geändert</title>
+    <updated>2026-11-14T07:04:54Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05954016#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_lime-nrw:source-lime-essen); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:05954016:Lime:1794639894985</id>
+    <title>Lime: Preise geändert</title>
+    <updated>2026-11-14T07:04:54Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05954016#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_offer-lime-essen:source-lime-essen); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+</feed>

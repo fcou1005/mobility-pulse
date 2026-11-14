@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/08226095.xml</id>
+  <title>Mobility Pulse – Walldorf</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-14T07:04:54Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/08226095.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08226095#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:08226095:nextbike:1794639894985</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-14T07:04:54Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08226095#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle nextbike_ds); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+</feed>

@@ -1,0 +1,1 @@
+{"schemaVersion":"1.4","version":1,"ags":"07338019","at":1794662108872,"zonesAt":1794639894985,"econ":null,"groups":{"months":["2026-11"],"fields":["at","art","anbieter","gemeinde","lat","lon","anzahl","arten"],"events":[[1794375041673,"deploy","Zeus","07338019",49.4348,8.36177,43,{"scooter":43}]]},"zones":{},"parking":{}}
