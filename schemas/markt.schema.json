@@ -1,0 +1,563 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/markt.schema.json",
+ "title": "Markt – Deutschland-Index, Wirkung, Scout, Grafik der Woche, offene Daten (Sprint 7)",
+ "description": "index/<JJJJ-MM>.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).",
+ "x-version": "1.0",
+ "$defs": {
+  "index": {
+   "type": "object",
+   "description": "Monatswerte je Gemeinde und Fahrzeugart über alle Anbieter; complete = Monat abgeschlossen (sonst vorläufig)",
+   "required": [
+    "schemaVersion",
+    "month",
+    "complete",
+    "days",
+    "rows",
+    "de"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "month": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}$"
+    },
+    "complete": {
+     "type": "boolean"
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "firstDay": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "lastDay": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "rows": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "ags",
+       "name",
+       "type",
+       "days",
+       "tripsDay",
+       "fleet",
+       "operators",
+       "series"
+      ],
+      "properties": {
+       "ags": {
+        "type": "string",
+        "pattern": "^\\d{8}$"
+       },
+       "name": {
+        "type": "string"
+       },
+       "type": {
+        "type": "string",
+        "description": "Fahrzeugart"
+       },
+       "days": {
+        "type": "integer",
+        "description": "volle Messtage"
+       },
+       "tripsDay": {
+        "type": "number",
+        "description": "Fahrten je vollem Messtag, alle Anbieter"
+       },
+       "fleet": {
+        "type": "number",
+        "description": "Fahrzeuge im Feed (Tagesmittel), alle Anbieter"
+       },
+       "tvd": {
+        "type": [
+         "number",
+         "null"
+        ],
+        "description": "Fahrten je Fahrzeug und Tag"
+       },
+       "operators": {
+        "type": "integer",
+        "description": "Zahl der Anbieter (keine Anbieter-Ebene vor der Lizenzprüfung)"
+       },
+       "relocDay": {
+        "type": "number"
+       },
+       "swapDay": {
+        "type": "number"
+       },
+       "series": {
+        "type": "array",
+        "items": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "description": "Fahrten je Tag des Monats (null = kein voller Messtag)"
+       },
+       "change": {
+        "type": [
+         "object",
+         "null"
+        ],
+        "description": "Veränderung zum Vormonat (Anteile): trips, fleet"
+       }
+      }
+     }
+    },
+    "de": {
+     "type": "object",
+     "description": "Summen Deutschlands je Fahrzeugart: tripsDay, fleet, tvd, cities"
+    },
+    "operatorLevel": {
+     "type": "boolean",
+     "description": "false: keine Werte je Anbieter"
+    },
+    "at": {
+     "type": "integer",
+     "description": "Stand (ms seit 1970)"
+    }
+   }
+  },
+  "indexList": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "months"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "months": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "month",
+       "complete"
+      ],
+      "properties": {
+       "month": {
+        "type": "string"
+       },
+       "complete": {
+        "type": "boolean"
+       },
+       "days": {
+        "type": "integer"
+       },
+       "rows": {
+        "type": "integer"
+       },
+       "svg": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "at": {
+        "type": "integer",
+        "description": "Stand (ms seit 1970)"
+       }
+      }
+     }
+    }
+   }
+  },
+  "wirkung": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "events",
+    "prices"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "integer",
+     "description": "Stand (ms seit 1970)"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "events": {
+     "type": "array",
+     "description": "Ereignis-Wirkung: Ist − Prognose im Zeitfenster, 90-%-Band aus den übrigen Tagen",
+     "items": {
+      "type": "object",
+      "required": [
+       "key",
+       "day",
+       "ags",
+       "actual",
+       "forecast",
+       "effect",
+       "band",
+       "verdict"
+      ],
+      "properties": {
+       "key": {
+        "type": "string"
+       },
+       "id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "day": {
+        "type": "string"
+       },
+       "ags": {
+        "type": "string"
+       },
+       "art": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "titel": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "window": {
+        "type": "array",
+        "items": {
+         "type": "integer"
+        }
+       },
+       "actual": {
+        "type": "integer"
+       },
+       "forecast": {
+        "type": "integer"
+       },
+       "effect": {
+        "type": "integer"
+       },
+       "rel": {
+        "type": "number"
+       },
+       "hours": {
+        "type": "integer"
+       },
+       "band": {
+        "type": "array",
+        "items": {
+         "type": "integer"
+        }
+       },
+       "relBand": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "n": {
+        "type": "integer",
+        "description": "Vergleichstage"
+       },
+       "verdict": {
+        "enum": [
+         "mehr",
+         "weniger",
+         "nicht unterscheidbar"
+        ]
+       },
+       "quelle": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      }
+     }
+    },
+    "prices": {
+     "type": "array",
+     "description": "Preis-Wirkung: Differenz der Differenzen gegen die übrigen Anbieter der Gemeinde, je 7 Tage davor und danach",
+     "items": {
+      "type": "object",
+      "required": [
+       "key",
+       "day",
+       "operator",
+       "ags",
+       "type",
+       "status"
+      ],
+      "properties": {
+       "key": {
+        "type": "string"
+       },
+       "day": {
+        "type": "string"
+       },
+       "operator": {
+        "type": "string"
+       },
+       "ags": {
+        "type": "string"
+       },
+       "type": {
+        "type": "string"
+       },
+       "status": {
+        "enum": [
+         "ok",
+         "wartet",
+         "ohne Vergleich",
+         "zu wenig Tage"
+        ]
+       },
+       "readyOn": {
+        "type": "string"
+       },
+       "did": {
+        "type": "number"
+       },
+       "effect": {
+        "type": "number"
+       },
+       "ci": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "verdict": {
+        "type": "string"
+       },
+       "before": {
+        "type": "integer"
+       },
+       "after": {
+        "type": "integer"
+       },
+       "controls": {
+        "type": "integer"
+       },
+       "fields": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "scout": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "rows",
+    "candidates"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "integer",
+     "description": "Stand (ms seit 1970)"
+    },
+    "minPop": {
+     "type": "integer"
+    },
+    "radiusKm": {
+     "type": "number"
+    },
+    "candidates": {
+     "type": "integer"
+    },
+    "sharing": {
+     "type": "integer"
+    },
+    "weights": {
+     "type": "object"
+    },
+    "rows": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "rank",
+       "ags",
+       "name",
+       "pop",
+       "score",
+       "reason"
+      ],
+      "properties": {
+       "rank": {
+        "type": "integer"
+       },
+       "ags": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "state": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "pop": {
+        "type": "integer"
+       },
+       "densityKm2": {
+        "type": [
+         "integer",
+         "null"
+        ]
+       },
+       "nearest": {
+        "type": [
+         "object",
+         "null"
+        ]
+       },
+       "sharingNear": {
+        "type": "integer"
+       },
+       "fleetNear": {
+        "type": "number"
+       },
+       "score": {
+        "type": "number"
+       },
+       "parts": {
+        "type": "object"
+       },
+       "reason": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  },
+  "grafik": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "weeks"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "weeks": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "week",
+       "file",
+       "title"
+      ],
+      "properties": {
+       "week": {
+        "type": "string",
+        "pattern": "^\\d{4}-W\\d{2}$"
+       },
+       "theme": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       },
+       "file": {
+        "type": "string"
+       },
+       "days": {
+        "type": "integer"
+       },
+       "at": {
+        "type": "integer",
+        "description": "Stand (ms seit 1970)"
+       }
+      }
+     }
+    }
+   }
+  },
+  "offen": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "packages"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "packages": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "month",
+       "files"
+      ],
+      "properties": {
+       "month": {
+        "type": "string"
+       },
+       "at": {
+        "type": "integer",
+        "description": "Stand (ms seit 1970)"
+       },
+       "files": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "rows": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

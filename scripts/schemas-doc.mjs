@@ -16,6 +16,7 @@ const FILES = {
   boundaries: ['boundaries/index.json', 'boundaries/<Land>.json'], calib: ['calib.json'],
   forecast: ['forecast/latest.json', 'forecast/log.json', 'forecast/series.json', 'forecast/moped/…', 'forecast/car/…'],
   auflagen: ['auflagen/verfuegbarkeit-<Jahr>.json', 'auflagen/alarme.json'],
+  markt: ['index/<JJJJ-MM>.json', 'index/laufend.json', 'index/index.json', 'markt/wirkung.json', 'markt/scout.json', 'grafik/index.json', 'offen/index.json'],
 };
 
 // Fließtext aus den Schemas: <Tag>, [i] außerhalb von `Code` maskieren (sonst HTML bzw. Verweis in Markdown)

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Monats-Steckbrief als PDF (S5.4): Kommunal-Bericht des Vormonats je Gemeinde mit amtlicher Obergrenze (data/reference.json → obergrenzen),
-// gedruckt wie über den Knopf „Drucken / PDF“ (Antwort und Kennzahlen vorn, Herleitung im Anhang, S5.5).
+// gedruckt wie über den Knopf „Drucken / PDF“ (Antwort und Kennzahlen vorn, Herleitung im Anhang, S5.5); dazu der Deutschland-Index des
+// Monats (S7.1, Ansicht Markt) als deutschland-index.pdf.
 //   node scripts/monatsbericht.mjs <Checkout des Branches data> [JJJJ-MM] [AGS,AGS,…]   (Ausgabe: BERICHTE_OUT, Standard ./berichte)
 // Liefert die Seite aus docs/ und den Datenstand lokal aus (kein Netz außer 127.0.0.1), schreibt <Ausgabe>/<JJJJ-MM>/<AGS>.pdf und
 // <Ausgabe>/index.json (veröffentlicht im Branch berichte, nicht im Datenzweig). Läuft am 1. des Monats im Workflow „Monatsbericht“ (Vorlage scripts/monatsbericht-workflow.yml).
@@ -49,6 +50,24 @@ try {
     const file = path.join(out, `${ags}.pdf`);
     await page.pdf({ path: file, format: 'A4', printBackground: true, preferCSSPageSize: true });
     done.push(ags); console.log(`✓ ${ags}: ${path.relative(OUT, file)}`);
+    await ctx.close();
+  }
+  // S7.1: Deutschland-Index des Monats als PDF (Ansicht Markt, Gebiet Deutschland), nur wenn der Monat abgeschlossen im Datenstand steht
+  {
+    const ctx = await browser.newContext({ viewport: { width: 703, height: 1016 }, locale: 'de-DE', timezoneId: 'Europe/Berlin' });
+    await ctx.addInitScript(() => { try { localStorage.setItem('mp-first-done', '1'); } catch { /* ohne Speicher */ } });
+    const page = await ctx.newPage();
+    await page.route('**/*', (r) => (new URL(r.request().url()).hostname === '127.0.0.1' ? r.continue() : r.abort()));
+    await page.goto(`http://127.0.0.1:${port}/?data=/d/&scope=DE#marktindex`, { waitUntil: 'load', timeout: 60000 });
+    const ok = await page.waitForSelector('#view-marktindex #mk-idx', { timeout: 90000 }).then(() => true, () => false);
+    if (ok && await page.$(`#view-marktindex #mk-month option[value="${MONTH}"]`)) {
+      await page.selectOption('#view-marktindex #mk-month', MONTH); await page.waitForTimeout(1500);
+      await page.evaluate(() => { window.print = () => {}; document.body.classList.add('mk-printing'); });
+      await page.emulateMedia({ media: 'print' });
+      const file = path.join(out, `deutschland-index.pdf`);
+      await page.pdf({ path: file, format: 'A4', printBackground: true });
+      done.push('deutschland-index'); console.log(`✓ Deutschland-Index: ${path.relative(OUT, file)}`);
+    } else console.log(`– Deutschland-Index ${MONTH} noch nicht abgeschlossen im Datenstand`);
     await ctx.close();
   }
 } finally { await browser.close(); server.close(); }

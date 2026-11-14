@@ -18,6 +18,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
+| [markt](#markt) | 1.0 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 
 ## status
 
@@ -406,3 +407,70 @@ Alarme der letzten 60 Tage, neueste zuerst; Zustand für den Vergleich mit dem n
 | `at` | ja | integer – Stand (ms seit 1970) |
 | `items` | ja | array von object |
 | `state` |  | object – Stand des letzten Laufs für den Vergleich (Obergrenzen, Quellenstatus, Zonen, Preise, Flotte) |
+
+## markt
+
+Markt – Deutschland-Index, Wirkung, Scout, Grafik der Woche, offene Daten (Sprint 7). index/&lt;JJJJ-MM&gt;.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).
+
+Version 1.0 · Schema: [schemas/markt.schema.json](../schemas/markt.schema.json)
+
+### markt · index
+
+Monatswerte je Gemeinde und Fahrzeugart über alle Anbieter; complete = Monat abgeschlossen (sonst vorläufig)
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `month` | ja | string (Muster `^\d{4}-\d{2}$`) |
+| `complete` | ja | boolean |
+| `days` | ja | array von string |
+| `firstDay` |  | string / null |
+| `lastDay` |  | string / null |
+| `rows` | ja | array von object |
+| `de` | ja | object – Summen Deutschlands je Fahrzeugart: tripsDay, fleet, tvd, cities |
+| `operatorLevel` |  | boolean – false: keine Werte je Anbieter |
+| `at` |  | integer – Stand (ms seit 1970) |
+
+### markt · indexList
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `months` | ja | array von object |
+
+### markt · wirkung
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` |  | integer – Stand (ms seit 1970) |
+| `version` |  | integer |
+| `events` | ja | array von object – Ereignis-Wirkung: Ist − Prognose im Zeitfenster, 90-%-Band aus den übrigen Tagen |
+| `prices` | ja | array von object – Preis-Wirkung: Differenz der Differenzen gegen die übrigen Anbieter der Gemeinde, je 7 Tage davor und danach |
+
+### markt · scout
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` |  | integer – Stand (ms seit 1970) |
+| `minPop` |  | integer |
+| `radiusKm` |  | number |
+| `candidates` | ja | integer |
+| `sharing` |  | integer |
+| `weights` |  | object |
+| `rows` | ja | array von object |
+
+### markt · grafik
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `weeks` | ja | array von object |
+
+### markt · offen
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `packages` | ja | array von object |

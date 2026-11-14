@@ -7,7 +7,7 @@ import { chartSpec, tableButton } from './charttip.js';
 
 const TZ = 'Europe/Berlin';
 const lvlCls = { ok: 'ok', warn: 'warn', fail: 'bad' };
-const PHASE_KEYS = ['start', 'abruf', 'auswertung', 'preise-zonen', 'konsistenz', 'dubletten', 'betriebsgebiete', 'messbasis', 'obergrenzen', 'zonen-beobachtung', 'kalender-wetter', 'verkehr', 'baustellen', 'oepnv', 'verfolgung', 'abdeckung', 'ereignisse', 'sport-termine', 'streiks', 'prognose', 'training', 'kalibrierung', 'grenzen', 'gebiet', 'alarme', 'datenvertraege', 'abschluss'];
+const PHASE_KEYS = ['start', 'abruf', 'auswertung', 'preise-zonen', 'konsistenz', 'dubletten', 'betriebsgebiete', 'messbasis', 'obergrenzen', 'zonen-beobachtung', 'kalender-wetter', 'verkehr', 'baustellen', 'oepnv', 'verfolgung', 'abdeckung', 'ereignisse', 'sport-termine', 'streiks', 'prognose', 'training', 'kalibrierung', 'grenzen', 'gebiet', 'alarme', 'markt', 'datenvertraege', 'abschluss'];
 const phaseName = (n) => (PHASE_KEYS.includes(n) ? t(`st.ph.${n}`) : n);
 
 function tile(l, v, s, cls = '') { return `<div class="tile ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }

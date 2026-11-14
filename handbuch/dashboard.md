@@ -22,6 +22,12 @@ Alle Karten sind per Tastatur bedienbar (`web/mapkeys.js`): Pfeiltasten verschie
 - **Stadt-Paket (Sprint 5, `web/stadt.js`):** Meine Stadt (`#stadt`: Bestand gegen Obergrenze, Feed-Verfügbarkeit, Standzeiten über 72 h, Alarme, Feeds, Einbettcode), Datenauflagen (`#auflagen`: je Anbieter Feed, Datenalter, Verfügbarkeit im Kalenderjahr mit Ampel gegen 96 %, Zonen, Preise, Lizenz, Format; Monatsnachweis über Drucken), Ausschreibungen (`#ausschreibungen`: Fristenkalender aus `data/ausschreibungen.json`). Einbetten: `?embed=1&ags=<AGS>` zeigt die Stadtseite ohne Menü und ohne Rahmen-Warnung.
 - **Kommunal-Bericht (S5.5):** Antwort und Kennzahlen vorn, Herleitung (Datenqualität, Tageswerte, Orte, Referenz, Methode) im Anhang; im Druck beginnt der Anhang auf einer neuen Seite, der Kern hat höchstens zwei A4-Seiten (Browser-Test). Monats-PDF: `node scripts/monatsbericht.mjs <Checkout data>` (Vorlage `scripts/monatsbericht-workflow.yml`, Branch `berichte`).
 
+## Betreiber-Paket und Markt (Sprint 6 und 7, 14.11.2026)
+
+- **Planen › Zonen (`#zonen`, `web/zonen.js`):** Zonen-Werkbank je Anbieter und Gemeinde mit Karte, Befundliste, Änderungsverlauf und Export im Backend-Format (Einzelheiten in [disposition.md](disposition.md#betreiber-paket-sprint-6-14112026)).
+- **Disposition:** Schichtplan, Soll je Tageszeit und Fahrer-Link je Tour; Fahrermodus als eigene Seite `fahrer.html` (offline, Unterblatt in drei Stufen).
+- **Auswerten › Markt (`#marktindex`, `web/markt.js`; `#markt` führt wie bisher zur Übersicht):** Deutschland-Index je Stadt und Fahrzeugart mit Grafik (SVG) und Druck, Grafik der Woche, offene Daten-Pakete, Wirkung von Ereignissen und Preisänderungen, Expansions-Scout ([kennzahlen.md](kennzahlen.md#deutschland-index)).
+
 ## Sprache
 
 Oberfläche Deutsch (Standard) oder Englisch: Umschalter DE | EN in der Kopfleiste, `?lang=en|de` (wird von „Link kopieren“ mitgenommen), Wahl im Browser gespeichert; englische Browser bekommen einen Vorschlag. Wörterbuch, `t()`, Zahlen- und Datumsformat in `web/i18n.js` (Glossar der Fachbegriffe dort), statisches HTML über `data-i18n*`. Test: `node test/i18n.test.mjs`.

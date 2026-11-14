@@ -8,7 +8,7 @@ let ok = 0, bad = 0;
 const eq = (a, b, m) => { const s = JSON.stringify(a) === JSON.stringify(b); if (s) { ok++; console.log(`ok: ${m}`); } else { bad++; console.log(`FEHLER ${m}: ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`); } };
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
-eq(Object.keys(SCHEMA).sort(), ['auflagen', 'boundaries', 'calib', 'cells', 'events', 'forecast', 'history', 'latest', 'ops', 'sources', 'status'], 'zehn Familien aus S3.7 und auflagen (S5.1/S5.2)');
+eq(Object.keys(SCHEMA).sort(), ['auflagen', 'boundaries', 'calib', 'cells', 'events', 'forecast', 'history', 'latest', 'markt', 'ops', 'sources', 'status'], 'zehn Familien aus S3.7, auflagen (S5.1/S5.2) und markt (S7)');
 for (const [f, v] of Object.entries(SCHEMA)) {
   eq(/^\d+\.\d+$/.test(v), true, `${f}: MAJOR.MINOR`);
   const s = JSON.parse(await readFile(path.join(ROOT, 'schemas', `${f}.schema.json`), 'utf8'));
