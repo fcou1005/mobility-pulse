@@ -1,1 +1,1 @@
-{"at":1794556680041,"zones":[]}
+{"at":1794556680041,"zones":[{"sourceId":"dott_stuttgart","operator":"Dott","municipalities":["08111000","08118080","08116078","08119020"],"file":"dott_stuttgart.json","count":72,"bytes":63607,"kinds":{"noRide":302,"noThrough":0,"slow":1,"noEnd":0},"at":1794556680041}]}

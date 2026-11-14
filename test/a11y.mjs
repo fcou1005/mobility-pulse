@@ -19,7 +19,7 @@ import { startFixtureServer, FIX, ROOT } from './fixture-server.mjs';
 import { openFixturePage, settledText, maskTimesInPage } from './browser-lib.mjs';
 
 const PORT = +process.env.A11Y_PORT || 8768;
-const AXE_VIEWS = ['live', 'ops', 'bericht', 'prognose', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'begriffe'];
+const AXE_VIEWS = ['live', 'ops', 'bericht', 'prognose', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'begriffe', 'zonen'];
 const SHOT_VIEWS = ['live', 'lab', 'staedte', 'usage', 'coverage', 'vergleich', 'bericht', 'ops', 'spots', 'prognose', 'prognose-spots', 'prognose-basis', 'sources', 'signals', 'status', 'stadt', 'auflagen', 'ausschreibungen', 'begriffe'];
 const SHOT_DIR = path.join(ROOT, 'test/screenshots'), OUT = '/tmp/mp-shots';
 const MAX_DIFF = 0.001, UPDATE = !!process.env.UPDATE_SCREENSHOTS, BREAK = !!process.env.A11Y_BREAK;

@@ -34,13 +34,14 @@ const CHECKS = {
   stadt: [['Antwort mit Bestand', /Unterwegs sind in Stuttgart [\d.]+ E-Scooter bei einer amtlichen Obergrenze von [\d.]+/], ['Feeds', /Alle Themen/]],
   auflagen: [['Titel', /Datenauflagen in Stuttgart/], ['Ampel', /Verfügbarkeit 2026/]],
   ausschreibungen: [['Kalender', /Fristenkalender/], ['Quelle', /Heidelberg[\s\S]*geprüft/]],
+  zonen: [['Antwort', /Dott hat in Stuttgart \d+ Zonen: \d+ Überlappungen/], ['Export geprüft', /Abstellverbot \d+ Zonen, [\d.]+ Stützpunkte ✓ Upload-Prüfung bestanden/], ['Änderungsverlauf', /Änderungsverlauf/]],
   begriffe: [['Begriffe', /Netto-Abfluss/], ['Erklärung', /Fahrtbeginne minus Fahrtenden/]],
   status: [['letzter Lauf', /LETZTER LAUF\s*\d\d:\d\d/i], ['Laufzeit mit Stufe', /LAUFZEIT\s*\d+ s/i], ['Verlauf', /Laufzeit der letzten 7 Tage/]],
 };
 const VIEWS = Object.keys(CHECKS).filter(v => !ONLY || ONLY.includes(v));
 // S4.1: Ansichten mit Antwort-Komponente – genau eine Antwort vor dem ersten Diagramm, drei Kennzahlen, Antwortwert = Tabellenwert,
 // auf dem Handy (390 × 844) die Kennzahlen im ersten Bildschirm
-const ANSWER_VIEWS = ['live', 'usage', 'ops', 'prognose', 'bericht', 'spots', 'vergleich', 'sources', 'stadt', 'auflagen', 'ausschreibungen'];
+const ANSWER_VIEWS = ['live', 'usage', 'ops', 'prognose', 'bericht', 'spots', 'vergleich', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'zonen'];
 /** @param {import('playwright').Page} page @param {string} v @param {boolean} mobile */
 async function answerProblems(page, v, mobile) {
   return page.evaluate(([x, mob]) => {

@@ -73,7 +73,7 @@ const gzOf = async (f) => { if (!gz.has(f)) gz.set(f, gzipSync(await readFile(pa
 const closure = (f, seen = new Set()) => { if (seen.has(f)) return seen; seen.add(f); for (const im of outs[path.relative(ROOT, path.join(out, f))]?.imports || []) if (im.kind === 'import-statement') closure(rel(im.path), seen); return seen; };
 const dyn = Object.fromEntries((outs[path.relative(ROOT, path.join(out, 'app.js'))]?.imports || []).filter(im => im.kind === 'dynamic-import').map(im => [rel(im.path), im.path]));
 const entryOf = (name) => Object.keys(dyn).find(f => outs[path.relative(ROOT, path.join(out, f))]?.entryPoint?.endsWith(`web/${name}.js`));
-const VIEW_MODS = { start: [null, null], ops: ['ops', 'ops'], bericht: ['report', 'report'], prognose: ['forecast', 'forecast'], spots: ['spots', 'spots'], usage: ['flows', 'flows'], vergleich: ['compare', 'compare'], status: ['status', 'status'], stadt: ['stadt', 'stadt'] };
+const VIEW_MODS = { start: [null, null], ops: ['ops', 'ops'], bericht: ['report', 'report'], prognose: ['forecast', 'forecast'], spots: ['spots', 'spots'], usage: ['flows', 'flows'], vergleich: ['compare', 'compare'], status: ['status', 'status'], stadt: ['stadt', 'stadt'], zonen: ['zonen', 'zonen'] };
 const BUDGET = { start: 180, ops: 270 }; // KB gzip (S3.5); Fahrermodus ≤ 60 KB (S6.2)
 const report = [];
 const base = closure('app.js');

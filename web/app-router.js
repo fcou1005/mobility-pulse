@@ -18,7 +18,7 @@ import { TYPE_FILTER, populateOperators, populateScope, renderFilterSum, schedul
 // ---------- Ansichtsmodule bei Bedarf laden (S3.4): Modul und sein Wörterbuchbereich zusammen; M[k] = geladenes Modul ----------
 export const LAZY = { ops: [() => import('./ops.js'), 'ops'], rp: [() => import('./report.js'), 'report'], fl: [() => import('./flows.js'), 'flows'], cov: [() => import('./coverage.js'), 'coverage'],
   cmp: [() => import('./compare.js'), 'compare'], sp: [() => import('./spots.js'), 'spots'], fv: [() => import('./forecast.js'), 'forecast'], st: [() => import('./status.js'), 'status'],
-  sd: [() => import('./stadt.js'), 'stadt'] }; // S5: Stadt-Startseite, Datenauflagen, Ausschreibungen
+  sd: [() => import('./stadt.js'), 'stadt'], zw: [() => import('./zonen.js'), 'zonen'] }; // S5: Stadt-Startseite, Datenauflagen, Ausschreibungen; S6.1 Zonen-Werkbank
 export const M = {}, MP = {};
 // Teil nicht ladbar (z. B. nach einer neuen Version liegen die Teile unter anderen Namen): Hinweis zum Neuladen, nächster Versuch lädt erneut
 export const mod = (k) => MP[k] || (MP[k] = Promise.all([LAZY[k][0](), ensureI18n([LAZY[k][1]])]).then(([m]) => { M[k] = m; if (k === 'ops') m.initOps(opsCtx()); return m; })
@@ -30,23 +30,23 @@ export const applyOpsParams = (p) => { mod('ops').then(m => m.applyOpsParams(p))
 // ---------- Rendering ----------
 // Vier Hauptbereiche; die alten Ansichten bleiben Sections und werden als Segmente gezeigt. Alte Hashes funktionieren weiter.
 // „Städte“: die bundesweiten Vergleiche (Gebietsvergleich, Verfügbarkeit je Stadt, Rangliste, Dichte) aus „Leistung“ ausgelagert
-export const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources', 'status', 'begriffe', 'stadt', 'auflagen', 'ausschreibungen'];
+export const VIEWS = ['live', 'lab', 'staedte', 'usage', 'ops', 'prognose', 'prognose-spots', 'prognose-basis', 'spots', 'signals', 'coverage', 'vergleich', 'bericht', 'sources', 'status', 'begriffe', 'stadt', 'auflagen', 'ausschreibungen', 'zonen'];
 // S5.6: vier Gruppen nach Aufgaben statt gleichrangiger Ansichten – Heute, Planen, Auswerten, Prüfen
 export const GROUPS_DEF = () => [
   { id: 'heute', label: t('nav.today'), segs: [['live', t('app.overview')], ['stadt', t('nav.city')], ['prognose', t('app.forecast')], ['signals', t('app.signals')]] },
-  { id: 'planen', label: t('nav.plan'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')], ['prognose-spots', t('fv.segSpots')]] },
+  { id: 'planen', label: t('nav.plan'), segs: [['ops', t('app.operations')], ['spots', t('app.spots')], ['zonen', t('nav.zones')], ['prognose-spots', t('fv.segSpots')]] },
   { id: 'auswerten', label: t('nav.analyse'), segs: [['usage', t('app.usage')], ['lab', t('app.performance')], ['staedte', t('app.citiesSeg')], ['vergleich', t('app.compare')], ['bericht', t('app.report')], ['ausschreibungen', t('nav.tenders')], ['coverage', t('app.coverageSeg')]] },
   { id: 'pruefen', label: t('nav.check'), segs: [['auflagen', t('nav.auflagen')], ['sources', t('app.sources2')], ['status', t('app.statusSeg')], ['prognose-basis', t('fv.segBasis')], ['begriffe', t('nav.terms')]] },
 ];
 // S5.6: Startansicht nach Rolle (?rolle=stadt|betrieb|analyse, auch gemerkt aus der Erstbesuch-Karte)
 export const ROLE_START = { stadt: 'stadt', betrieb: 'ops', analyse: 'usage' };
 export function roleOf() { const q = new URLSearchParams(location.search).get('rolle'); if (q && ROLE_START[q]) return q; try { const r = localStorage.getItem('mp-rolle'); return ROLE_START[r] ? r : null; } catch { return null; } }
-export const VIEW_ALIAS = { stadtseite: 'stadt', meinestadt: 'stadt', city: 'stadt', datenauflagen: 'auflagen', auflagen: 'auflagen', obligations: 'auflagen', ausschreibung: 'ausschreibungen', tenders: 'ausschreibungen', radar: 'ausschreibungen', heute: 'live', planen: 'ops', auswerten: 'usage', pruefen: 'sources', prüfen: 'sources', begriff: 'begriffe', glossar: 'begriffe', glossary: 'begriffe', terms: 'begriffe', cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources', datenqualität: 'sources', datenqualitaet: 'sources', qualitaet: 'sources' };
+export const VIEW_ALIAS = { werkbank: 'zonen', zones: 'zonen', 'zonen-werkbank': 'zonen', stadtseite: 'stadt', meinestadt: 'stadt', city: 'stadt', datenauflagen: 'auflagen', auflagen: 'auflagen', obligations: 'auflagen', ausschreibung: 'ausschreibungen', tenders: 'ausschreibungen', radar: 'ausschreibungen', heute: 'live', planen: 'ops', auswerten: 'usage', pruefen: 'sources', prüfen: 'sources', begriff: 'begriffe', glossar: 'begriffe', glossary: 'begriffe', terms: 'begriffe', cities: 'staedte', städte: 'staedte', abdeckung: 'coverage', compare: 'vergleich', anbietervergleich: 'vergleich', report: 'bericht', kommune: 'bericht', markt: 'live', marktbild: 'live', uebersicht: 'live', disposition: 'ops', forecast: 'prognose', vorhersage: 'prognose', forecastdashboard: 'prognose', 'forecast-spots': 'prognose-spots', 'prognose-spot': 'prognose-spots', 'forecast-basis': 'prognose-basis', grundlagen: 'prognose-basis', kontrolle: 'prognose-basis', 'spot-abgleich': 'spots', spotabgleich: 'spots', vertrauen: 'sources', datenvertrauen: 'sources', datenqualität: 'sources', datenqualitaet: 'sources', qualitaet: 'sources' };
 export const CLIENT_HIDDEN = new Set(['usage', 'sources', 'signals', 'prognose-basis', 'status']); // Kundenansicht: ohne Schätzungen und Datenvertrauen
 export let currentView = 'live', urlReady = false;
 export const resolveView = (h) => { try { h = decodeURIComponent(h); } catch { /* Hash nicht dekodierbar: roh verwenden */ } let n = VIEW_ALIAS[h] || h; if (!VIEWS.includes(n)) n = 'live'; if (isClient() && CLIENT_HIDDEN.has(n)) n = 'live'; return n; };
 // Welche Filter der Leiste in welcher Ansicht wirken; die übrigen werden ausgeblendet (Disposition und Vergleich haben eigene Auswahl im Panel)
-export const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op type', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', sources: 'scope op', signals: 'scope op type mode', status: 'none' };
+export const FILTERS = { live: 'scope op type mode', lab: 'scope op type mode', staedte: 'scope op type', usage: 'scope op type', coverage: 'scope op type', vergleich: 'scope', bericht: 'scope op type', ops: 'scope', prognose: 'scope op type', 'prognose-spots': 'scope op type', 'prognose-basis': 'scope op type', spots: 'scope', zonen: 'scope', sources: 'scope op', signals: 'scope op type mode', status: 'none' };
 export let viewShown = false;
 export function setView(name) {
   name = resolveView(name);
@@ -216,6 +216,7 @@ VIEW_RENDER.staedte = [() => renderCities(), rp('rp', 'renderAvailability', 'rp-
 VIEW_RENDER.usage.push(rp('fl', 'renderFlows', 'fl-panel'));
 VIEW_RENDER.vergleich = [rp('cmp', 'renderCompare', 'cmp-panel')];
 VIEW_RENDER.begriffe = [() => renderTerms()]; // S4.8
+VIEW_RENDER.zonen = [rp('zw', 'renderZonen', 'zonen-panel')]; // S6.1
 VIEW_RENDER.stadt = [rp('sd', 'renderStadt', 'stadt-panel')]; VIEW_RENDER.auflagen = [rp('sd', 'renderAuflagen', 'auflagen-panel')]; VIEW_RENDER.ausschreibungen = [rp('sd', 'renderTenders', 'tenders-panel')]; // S5
 export const fvCtx = () => ({ ...rpCtx(), loadOnce });
 export const fv = (part, id) => () => { const el = document.getElementById(id); if (el) return mod('fv').then(m => m.renderForecastView(el, fvCtx(), { part })); };

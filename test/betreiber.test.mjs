@@ -83,3 +83,58 @@ const at = (dn, de) => ({ lat: depot.lat + dn / 111320, lon: depot.lon + de / (1
   assert(fb[0] === 'Tour F1 (Stuttgart · Voi): 2/20 erledigt, 2 mit Problem, 16 offen' && fb[1].startsWith('Stopp 3 (06:14): nicht gefunden – 48.70') && fb[2].includes('defekt') && fb.length === 4, 'S6.2: Rückmeldung als Text mit Lage je Problem');
   assert(F.tourKey(txt) === F.tourKey(txt) && F.tourKey(txt) !== F.tourKey(txt + 'A') && F.navUrl(tour.stops[1]).startsWith('https://www.google.com/maps/dir/?api=1&destination=48.700000,9.100000'), 'S6.2: Speicherschlüssel je Tour, Navigation je Stopp');
 }
+
+// ---------- S6.1: Zonen-Werkbank ----------
+{
+  const Z = await import('../lib/pulse-zones.js');
+  const lat0 = 48.78, lon0 = 9.18, ky = 1 / 111320, kx = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
+  const rect = (e0, n0, w, h) => [[[lon0 + e0 * kx, lat0 + n0 * ky], [lon0 + (e0 + w) * kx, lat0 + n0 * ky], [lon0 + (e0 + w) * kx, lat0 + (n0 + h) * ky], [lon0 + e0 * kx, lat0 + (n0 + h) * ky], [lon0 + e0 * kx, lat0 + n0 * ky]]];
+  const F = (coords, rules, name = null) => ({ type: 'Feature', properties: { name, rules }, geometry: { type: 'Polygon', coordinates: coords } });
+  const NP = [{ rideAllowed: false, rideThrough: true }], NR = [{ rideAllowed: false, rideThrough: false }], MPZ = [{ rideAllowed: true, rideThrough: true, parking: true }], OK = [{ rideAllowed: true, rideThrough: true }];
+  assert(Z.gbfsKind(NP) === 'no_park' && Z.gbfsKind(NR) === 'no_ride' && Z.gbfsKind(MPZ) === 'mandatory' && Z.gbfsKind(OK) === 'allowed' && Z.gbfsKind([]) === null, 'S6.1: Zonenart aus den GBFS-Regeln');
+  const doc = { sourceId: 'x_stgt', operator: 'X', features: [
+    F(rect(0, 0, 100, 100), NP, 'A'), F(rect(80, 0, 100, 100), NP, 'B'), // Überlappung 20 × 100 m
+    F(rect(300, 0, 100, 100), NP, 'C'), F(rect(401, 0, 100, 100), NP, 'D'), // Lücke 1 m
+    // Ring aus vier Abstellverboten um eine Tasche von 40 × 40 m bei (1000, 0)
+    F(rect(960, -40, 120, 40), NP), F(rect(960, 40, 120, 40), NP), F(rect(960, 0, 40, 40), NP), F(rect(1040, 0, 40, 40), NP),
+    // gleicher Ring bei (2000, 0), die Lücke gefüllt von einer erlaubten Fläche (Hub): gewollt
+    F(rect(1960, -40, 120, 40), NP), F(rect(1960, 40, 120, 40), NP), F(rect(1960, 0, 40, 40), NP), F(rect(2040, 0, 40, 40), NP), F(rect(2000, 0, 40, 40), OK, 'Hub'),
+    F(rect(0, 500, 50, 50), NR, 'Gleis'), F(rect(3000, 0, 60, 60), MPZ, 'MPZ'),
+  ] };
+  const twin = { ...doc, sourceId: 'x_mobidata', features: [doc.features[0]] }; // gleiche Zone aus zweiter Quelle
+  const zones = Z.zonesFor([doc, twin], { operator: 'X' });
+  assert(zones.length === doc.features.length, 'S6.1: Zonen eines Anbieters, gleiche Zone aus zwei Quellen nur einmal');
+  const at = (e, n) => ({ lat: lat0 + n * ky, lon: lon0 + e * kx });
+  const spots = [{ ...at(50, 50), name: 'im Verbot' }, { ...at(2020, 20), name: 'im Hub' }, { ...at(5000, 0), name: 'frei' }];
+  const reasons = [{ ...at(20, 520), tag: 'railway=rail' }, { ...at(320, 50), tag: 'leisure=playground' }];
+  const log = { fields: ['at', 'sourceId', 'operator', 'added', 'removed', 'count'], changes: [[1, 'x_stgt', 'X', 2, 1, 15], [2, 'y_other', 'Y', 1, 0, 3]] };
+  const a = Z.auditZones(zones, { spots, reasons, log });
+  const ov = a.overlaps.find(o => o.names.includes('A') && o.names.includes('B'));
+  assert(a.overlaps.length === 1 && ov && Math.abs(ov.areaM2 - 2000) < 30, `S6.1: Überlappung gleicher Art erkannt (${ov?.areaM2} m², erwartet 2.000)`);
+  const gp = a.gaps.find(g => g.names.includes('C') && g.names.includes('D'));
+  assert(gp && Math.abs(gp.gapM - 1) < 0.05 && a.gaps.length === 1, `S6.1: Lücke unter 3 m zwischen Zonen gleicher Art (${gp?.gapM} m)`);
+  assert(a.pockets.length === 1 && Math.abs(a.pockets[0].areaM2 - 1600) < 30 && a.pockets[0].kind === 'no_park', `S6.1: Tasche zwischen vier Zonen (${a.pockets[0]?.areaM2} m²), gefüllte Tasche (Hub) nicht gemeldet`);
+  assert(a.spotsInBan.length === 1 && a.spotsInBan[0].name === 'im Verbot', 'S6.1: Spot im Abstellverbot; Spot im kleineren Hub zählt nicht');
+  const nr = (a.banNoReason || []).map(z => z.name);
+  assert(!nr.includes('Gleis') && !nr.includes('C') && nr.includes('A') && nr.includes('D'), `S6.1: Verbotszonen ohne OSM-Grund (${nr.filter(Boolean).join(', ')})`);
+  assert(a.history.length === 1 && a.history[0].added === 2 && a.counts.changes === 1, 'S6.1: Änderungsverlauf nur der eigenen Quellen');
+  // Export: Überlappung vereinigt, Tasche aufgeschnitten (keine Innenringe), Upload-Prüfung bestanden
+  const ex = Z.exportKind(zones, 'no_park', { prefix: 'Test', now: Date.parse('2026-11-14T08:00:00Z') });
+  const v = Z.validateUpload(ex);
+  assert(v.ok && ex.features.every(f => f.geometry.type === 'Polygon' && f.geometry.coordinates.length === 1 && Z.ringSigned(f.geometry.coordinates[0]) > 0), `S6.1: Export besteht die Upload-Prüfung (${v.errors.join('; ') || 'ok'}), nur Polygone ohne Löcher, gegen den Uhrzeigersinn`);
+  assert(ex.features.every(f => Object.keys(f.properties).every(k => Z.UPLOAD.fields.includes(k)) && /^[0-9A-Za-z]{20}$/.test(f.properties.id) && f.properties.features.scooter.isParkingForbidden === true && f.properties.features.scooter.needsRelocation === true)
+    && Object.keys(ex).join() === 'timestampMs,timestampFormatted,type,features', 'S6.1: nur Felder der Positivliste, IDs 20 Zeichen, Flags „No parking“, Hülle wie der Live-Export');
+  const area = (k) => Z.exportKind(zones, k).features.reduce((s, f) => s + Z.areaM2(f.geometry), 0);
+  assert(Math.abs(area('no_park') - (18000 + 2 * 10000 + 2 * 12800)) < 10, `S6.1: vereinigte Fläche ohne Doppelzählung (${Math.round(area('no_park'))} m², erwartet 63.600 abzüglich der 1,5-cm-Schnitte)`);
+  assert(Z.exportKind(zones, 'no_park').features.map(f => f.properties.id).join() === Z.exportKind(zones, 'no_park').features.map(f => f.properties.id).join(), 'S6.1: IDs beim nächsten Export gleich');
+  // Prüfung erkennt die typischen Fehler
+  const ok = Z.exportKind(zones, 'mandatory'), bad = (fn) => { const d = JSON.parse(JSON.stringify(ok)); fn(d); return Z.validateUpload(d).errors.join(' | '); };
+  assert(Z.validateUpload(ok).ok && ok.features[0].properties.features.scooter.mustParkInParkingLocation === true, 'S6.1: Pflicht-Abstellzone exportiert');
+  assert(/Positivliste: notes/.test(bad(d => { d.features[0].properties.notes = 'x'; })) && /Uhrzeigersinn/.test(bad(d => { d.features[0].geometry.coordinates[0].reverse(); })) && /Hülle/.test(bad(d => { d.extra = 1; }))
+    && /Innenringe/.test(bad(d => { d.features[0].geometry.coordinates.push(rect(3010, 10, 5, 5)[0].reverse()); })) && /doppelte IDs/.test(bad(d => { d.features.push(JSON.parse(JSON.stringify(d.features[0]))); }))
+    && /berühren/.test(bad(d => { const f = JSON.parse(JSON.stringify(d.features[0])); f.properties.id = 'B'.repeat(20); d.features.push(f); }))
+    && /näher als 1 cm/.test(bad(d => { const f = { type: 'Feature', properties: { id: 'C'.repeat(20), name: 'n', features: {}, is: {} }, geometry: { type: 'Polygon', coordinates: rect(3060.005, 0, 10, 10) } }; d.features.push(f); }))
+    && /ohne Zielzone/.test(bad(d => { d.features[0].properties.parentSubregionId = 'Z'.repeat(20); })), 'S6.1: Upload-Prüfung erkennt Positivliste, Uhrzeigersinn, Hülle, Innenring, doppelte ID, Berührung, Spalt unter 1 cm, verwaiste Elternzone');
+  const q = Z.reasonQuery([9.1, 48.7, 9.3, 48.9]), pts = Z.osmReasonPoints([{ type: 'node', lat: 48.8, lon: 9.2, tags: { highway: 'bus_stop' } }, { type: 'way', tags: { railway: 'rail' }, geometry: [{ lat: 48.8, lon: 9.2 }, { lat: 48.80001, lon: 9.20001 }, { lat: 48.801, lon: 9.201 }] }, { type: 'way', tags: { name: 'x' }, geometry: [{ lat: 1, lon: 1 }] }]);
+  assert(q.includes('[bbox:48.7000,9.1000,48.9000,9.3000]') && q.includes('out tags geom qt') && pts.length === 3 && pts[1].tag === 'railway=rail', 'S6.1: OSM-Gründe (Abfrage, Punkte ausgedünnt, fremde Tags ignoriert)');
+}

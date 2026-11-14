@@ -11,6 +11,7 @@ export const AREAS = Object.freeze({
   coverage: ['cov'],
   status: ['st'],
   stadt: ['sd', 'aufl', 'aus'],
+  zonen: ['zw'],
 });
 const BY_PREFIX = Object.fromEntries(Object.entries(AREAS).flatMap(([a, ps]) => ps.map(p => [p, a])));
 /** Bereich eines Schlüssels ohne die Startliste (Build); core für alles Übrige */
