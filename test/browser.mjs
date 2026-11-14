@@ -24,7 +24,7 @@ const CHECKS = {
   coverage: [['Anbieter vor Ort', /ANBIETER VOR ORT\s*\d+/i], ['Voi gelistet', /Voi/]],
   vergleich: [['Gebiet', /Anbieter-Vergleich: Stuttgart/], ['mehrere Anbieter', /Voi[\s\S]*Lime[\s\S]*Bolt/]],
   bericht: [['Gemeindeschlüssel', /AGS 08111000/], ['Einwohner', /609\.365 Einwohner/], ['Zeitraum', /Alle verfügbaren Tage \(3\)/]],
-  ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/], ['Schichtplan', /Schichtplan/], ['Soll je Tageszeit', /[\d.]+ von [\d.]+ verfügbaren Fahrzeugen auf [\d.]+ Zellen/]],
+  ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/], ['Schichtplan', /Schichtplan/], ['Soll je Tageszeit', /[\d.]+ von [\d.]+ verfügbaren Fahrzeugen auf [\d.]+ Zellen/], ['Akku bis morgen 8 Uhr', /Akku bis morgen 8 Uhr[\s\S]*melden keinen Ladestand/], ['Akku: Trefferquote', /Selbstprüfung: \d+ % von [\d.]+ Vorhersagen getroffen/]],
   spots: [['Gebiet', /Spot-Abgleich: Stuttgart/], ['eigener Anbieter mit Spots', /Mein Anbieter\s*Voi \(\d+ Spots\)/]],
   prognose: [['Prognose für Anbieter und Gebiet', /Prognose für Voi in Stuttgart/], ['Güte', /Wie gut ist die Prognose\?/]],
   'prognose-spots': [['Filter Gebiet', /Gebiet: Stuttgart/], ['Spots bewertet', /Wichtigkeit und Fehlbestand/]],
@@ -187,6 +187,19 @@ try {
     const { page, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, patch: { 'status.json': (d) => ({ ...d, schemaVersion: '9.0' }) } });
     const ok = await page.waitForFunction(() => /Datenformat passt nicht zur Seite: status\.json hat Version 9\.0/.test(document.getElementById('notice')?.innerText || ''), null, { timeout: 15000 }).then(() => true, () => false);
     if (ok) console.log('✓ Hinweis bei abweichender Formatversion (status.json 9.0)'); else fail('kein Hinweis bei abweichender Formatversion (status.json 9.0)');
+    await close();
+  }
+  // S6.5: Akku-Prognose für einen Anbieter mit Ladestand (Dott Stuttgart): Satz, Zonen, CSV, Häkchen plant die Tauschtouren neu
+  if (!ONLY || ONLY.includes('ops')) {
+    const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'ops', query: '&op=Dott' });
+    const sub = await page.waitForFunction(() => { const x = document.getElementById('ops-akku-sub')?.textContent || ''; return /fallen voraussichtlich/.test(x) ? x : null; }, null, { timeout: 60000 }).then(h => h.jsonValue()).catch(() => null);
+    const rows = await page.evaluate(() => document.querySelectorAll('#ops-akku tbody tr').length), csv = await page.evaluate(() => !document.getElementById('ops-akku-csv')?.disabled);
+    const before = await page.evaluate(() => document.getElementById('ops-runs')?.innerText || '');
+    await page.click('#ops-akku-swap').catch(() => null);
+    const replanned = await page.waitForFunction((b) => (document.getElementById('ops-runs')?.innerText || '') !== b, before, { timeout: 30000 }).then(() => true, () => false);
+    const m = /fallen voraussichtlich ([\d.]+) von ([\d.]+) verfügbaren Fahrzeugen mit Ladestand unter 20 %, ([\d.]+) sind schon darunter/.exec(sub || '');
+    if (!m || rows < 5 || !csv || !replanned || errs.length) fail(`Akku-Prognose Dott: ${JSON.stringify({ sub, rows, csv, replanned, errs: errs.slice(0, 2) })}`);
+    else console.log(`✓ Akku-Prognose Dott Stuttgart: ${m[1]} von ${m[2]} bis 8 Uhr unter 20 % (${m[3]} schon darunter), ${rows} Zonen, Häkchen plant die Tauschtouren neu`);
     await close();
   }
   // S6.2/S6.6: Fahrermodus mit 20 Stopps im Flugmodus, Trefferflächen, Blatt ohne Sprung

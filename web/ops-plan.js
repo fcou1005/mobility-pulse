@@ -7,6 +7,7 @@ import { GEO, GEO_TOP, GF0, collectFor, geoKey, groupView, groupsEmpty, osrmDown
 import { NEUTRAL } from './tokens.js';
 import { setAnswer } from './answer.js';
 import { renderShiftPanels } from './ops-shift.js';
+import { akkuVehicles } from './ops-akku.js';
 
 // ---------- Plan ----------
 export async function computePlan() {
@@ -112,7 +113,7 @@ function scoreFor(p, osm) {
   return spots;
 }
 const rebalanceFor = (p) => O.planRebalance({ spots: p.noDemand ? [] : p.spots.spots, vehicles: p.fleet.vehicles.filter(O.isAvailable), model: p.model, share: p.share, vanCapacity: p.params.van, ...p.params.common });
-const swapsFor = (p) => O.planSwaps({ vehicles: p.fleet.vehicles.filter(v => !v.reserved), model: p.model, swapCapacity: p.params.swapCapacity, swapThreshold: p.params.swapThreshold, swapRangeKm: p.params.swapRangeKm, ...p.params.common });
+const swapsFor = (p) => O.planSwaps({ vehicles: akkuVehicles(p, p.fleet.vehicles.filter(v => !v.reserved)), model: p.model, swapCapacity: p.params.swapCapacity, swapThreshold: p.params.swapThreshold, swapRangeKm: p.params.swapRangeKm, ...p.params.common });
 const workshopFor = (p) => O.planWorkshop({ vehicles: p.fleet.vehicles, workshopCapacity: p.params.van, ...p.params.common });
 const stationFor = (p) => { const sb = p.fleet.stations.length ? O.planStationBalance({ stations: p.fleet.stations, vanCapacity: p.params.van, ...p.params.common }) : null; return sb?.stations ? sb : null; };
 /** Regler „Priorität ↔ Strecke“ geändert: nur die Touren neu (Bündelung, Einsatzgrenze, Reihenfolge); Nachfrage, Spots und Kartenebenen

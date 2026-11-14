@@ -4,6 +4,7 @@ import * as O from './pulse-ops.js';
 import { encodeTour, makeTour } from './pulse-fahrer.js';
 import { t, lang } from './i18n.js';
 import { $, DAY_BERLIN, S, X, allRuns, download, slug } from './ops-data.js';
+import { renderAkku } from './ops-akku.js';
 
 const SH = { plan: null, soll: null, forPlan: null };
 const minOf = (v, d) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '')); return m ? +m[1] * 60 + +m[2] : d; };
@@ -47,6 +48,7 @@ export function renderShiftPanels() {
   ensurePanels(); if (!$('#ops-shift-panel')) return;
   if (SH.forPlan !== S.plan) { SH.forPlan = S.plan; SH.plan = null; $('#ops-shift-out').innerHTML = ''; /** @type {HTMLButtonElement} */ ($('#ops-shift-csv')).disabled = true; }
   renderSoll();
+  renderAkku().catch(e => console.error(e));
 }
 
 function noteOf(s) {

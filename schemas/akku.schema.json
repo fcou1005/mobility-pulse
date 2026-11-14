@@ -1,0 +1,203 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/akku.schema.json",
+ "title": "Akku-Prognose – Modell und Zonen je Gemeinde, Trefferquote (S6.5)",
+ "description": "akku/<AGS>.json (Modell je Anbieter und Fahrzeugart, Zonen mit Fahrzeugen, die bis zum nächsten Morgen 8 Uhr unter 20 % fallen) und akku/bewertung.json (Selbstprüfung je Nacht, Rückblick auf die goldenen Tage). Keine Fahrzeugkennungen.",
+ "x-version": "1.0",
+ "$defs": {
+  "ags": {
+   "type": "object",
+   "description": "Gemeinden mit mindestens 20 Fahrzeugen mit absolutem Ladestand; je Lauf neu",
+   "required": [
+    "schemaVersion",
+    "ags",
+    "at",
+    "low",
+    "targetHour",
+    "target",
+    "groups",
+    "zones",
+    "totals"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "at": {
+     "type": "number",
+     "description": "Zeitpunkt des Laufs (ms)"
+    },
+    "low": {
+     "type": "number",
+     "description": "Schwelle in % (20)"
+    },
+    "targetHour": {
+     "type": "integer",
+     "description": "Zielstunde Ortszeit Berlin (8)"
+    },
+    "target": {
+     "type": "number",
+     "description": "nächster Zeitpunkt targetHour:00 (ms)"
+    },
+    "groupFields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "groups": {
+     "type": "object",
+     "description": "'Anbieter|Art' → [drain (Prozentpunkte je Stunde Standzeit), trip (Prozentpunkte je Fahrt), Herkunft drain, Herkunft trip ('gruppe' | 'art' | 'startwert'), Fahrten je verfügbarer Fahrzeugstunde für die Ortsstunden 0–23]",
+     "additionalProperties": {
+      "type": "array",
+      "minItems": 28,
+      "maxItems": 28
+     }
+    },
+    "zones": {
+     "type": "object",
+     "required": [
+      "fields",
+      "rows"
+     ],
+     "properties": {
+      "fields": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "rows": {
+       "type": "array",
+       "description": "[Zelle (≈ 280 × 250 m), lat, lon (Mittel der Fahrzeuge), Anbieter, Art, jetzt unter 20 %, bis 8 Uhr dazu, Median des Zeitpunkts (ms, null = nur jetzt)]",
+       "items": {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 8
+       }
+      }
+     }
+    },
+    "totals": {
+     "type": "object",
+     "required": [
+      "known",
+      "nowLow",
+      "morning"
+     ],
+     "properties": {
+      "known": {
+       "type": "integer",
+       "description": "verfügbare Fahrzeuge mit Ladestand"
+      },
+      "nowLow": {
+       "type": "integer"
+      },
+      "morning": {
+       "type": "integer"
+      }
+     }
+    }
+   }
+  },
+  "night": {
+   "type": "object",
+   "description": "Ergebnis einer Nacht: Zählwerte (getroffen tp, falsch fp, übersehen fn, richtig nein tn), getauscht/unbekannt zählen nicht, ausgeblendet zählt als unter 20 %; late = Prüfung verpasst",
+   "required": [
+    "day"
+   ],
+   "properties": {
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "late": {
+     "type": "boolean"
+    },
+    "tp": {
+     "type": "integer"
+    },
+    "fp": {
+     "type": "integer"
+    },
+    "fn": {
+     "type": "integer"
+    },
+    "tn": {
+     "type": "integer"
+    },
+    "precision": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "recall": {
+     "type": [
+      "number",
+      "null"
+     ]
+    }
+   }
+  },
+  "bewertung": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "at",
+    "rule",
+    "nights",
+    "total",
+    "models"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "number"
+    },
+    "rule": {
+     "type": "string",
+     "description": "Prüfregel im Wortlaut"
+    },
+    "nights": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/night"
+     }
+    },
+    "total": {
+     "type": "object",
+     "description": "Summe der geprüften Nächte mit precision (Treffer), recall (Abdeckung) und base (Vergleichsregel)"
+    },
+    "backtest": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Rückblick auf die goldenen Tage (private Rohstände weniger Gruppen), einmal am Tag: nights, total, floors, groups, from, to"
+    },
+    "models": {
+     "type": "object",
+     "description": "'Anbieter|Art' → [drain je Stunde, Verbrauch je Fahrt, Standstunden, Fahrten] (gelernte Summen, Halbwertszeit 7 Tage)"
+    },
+    "open": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "abgelegte, noch nicht geprüfte Prognose: day, target, n"
+    }
+   }
+  }
+ }
+}

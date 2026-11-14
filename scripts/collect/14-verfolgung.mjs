@@ -8,6 +8,7 @@ import * as T from '../../lib/pulse-track.js';
 import * as E from '../../lib/pulse-econ.js';
 import * as R from '../../lib/pulse-report.js';
 import * as SV from '../../lib/pulse-schema.js';
+import * as AL from '../../lib/pulse-akku-learn.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 
 export async function run(ctx) {
@@ -28,6 +29,8 @@ export async function run(ctx) {
   }
   if (prevState?.v) for (const k of ghostKeys) delete prevState.v[k]; // verschwinden still, keine Abholung
   // Umzugslauf zählt nichts: verworfene alte Einträge (ohne aktuelle Kennung nicht umschlüsselbar) würden sonst Fahrtenden ohne Beginn erzeugen
+  // S6.5: Stand vor diesem Lauf für die Akku-Prognose (Phase „akku“), bevor trackRun den Zustand fortschreibt
+  ctx.akkuPrev = prevState?.v ? { snap: AL.snapFromTrack(prevState), at: prevState.at ?? null } : null;
   const tr = T.trackRun(prevState, { vehicles: dv.vehicles, stations: ds.stations, sourceRecs: sourceOut.map(r => ({ id: r.id, status: r.status, feedStatus: r.feedStatus || null, latencyMs: r.latencyMs, batteryFloor: r.batteryFloor?.hides ? r.batteryFloor.p005 : null })), now, hmac: ctx.hmac, noEvents: migrated });
   ctx.tr = tr;
   if (ctx.keyId) tr.state.keyId = ctx.keyId;

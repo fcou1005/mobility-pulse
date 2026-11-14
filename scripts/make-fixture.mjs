@@ -108,6 +108,8 @@ if (has('zone-watch.json')) { const z = await rd('zone-watch.json'); const ids =
   await put('zone-watch.json', { ...z, zones: z.zones.filter(x => ids.has(x.id)), runs: z.runs.filter(r => ids.has(r[1]) && r[0] >= T0), daily: z.daily.filter(r => ids.has(r[1]) && DSET.has(r[0])) }); }
 // Geofencing-Zonen der Anbieter kommen nicht ins Repo (CLAUDE.md: keine Betreiber-Geometrien auf main) – das Verzeichnis bleibt leer
 if (has('zones/index.json')) { const zi = await rd('zones/index.json'); await put('zones/index.json', { ...zi, zones: [] }); }
+for (const a of KEEP) if (has(`akku/${a}.json`)) await put(`akku/${a}.json`, await rd(`akku/${a}.json`)); // S6.5 Akku-Prognose
+if (has('akku/bewertung.json')) await put('akku/bewertung.json', await rd('akku/bewertung.json'));
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
 

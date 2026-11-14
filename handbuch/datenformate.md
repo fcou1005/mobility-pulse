@@ -19,6 +19,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.0 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
+| [akku](#akku) | 1.0 | `akku/<AGS>.json`, `akku/bewertung.json` |
 
 ## status
 
@@ -474,3 +475,54 @@ Monatswerte je Gemeinde und Fahrzeugart über alle Anbieter; complete = Monat ab
 | --- | --- | --- |
 | `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
 | `packages` | ja | array von object |
+
+## akku
+
+Akku-Prognose – Modell und Zonen je Gemeinde, Trefferquote (S6.5). akku/&lt;AGS&gt;.json (Modell je Anbieter und Fahrzeugart, Zonen mit Fahrzeugen, die bis zum nächsten Morgen 8 Uhr unter 20 % fallen) und akku/bewertung.json (Selbstprüfung je Nacht, Rückblick auf die goldenen Tage). Keine Fahrzeugkennungen.
+
+Version 1.0 · Schema: [schemas/akku.schema.json](../schemas/akku.schema.json)
+
+### akku · ags
+
+Gemeinden mit mindestens 20 Fahrzeugen mit absolutem Ladestand; je Lauf neu
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `at` | ja | number – Zeitpunkt des Laufs (ms) |
+| `low` | ja | number – Schwelle in % (20) |
+| `targetHour` | ja | integer – Zielstunde Ortszeit Berlin (8) |
+| `target` | ja | number – nächster Zeitpunkt targetHour:00 (ms) |
+| `groupFields` |  | array von string |
+| `groups` | ja | object – 'Anbieter\|Art' → \[drain (Prozentpunkte je Stunde Standzeit), trip (Prozentpunkte je Fahrt), Herkunft drain, Herkunft trip ('gruppe' \| 'art' \| 'startwert'), Fahrten je verfügbarer Fahrzeugstunde für die Ortsstunden 0–23\] |
+| `zones` | ja | object |
+| `totals` | ja | object |
+
+### akku · night
+
+Ergebnis einer Nacht: Zählwerte (getroffen tp, falsch fp, übersehen fn, richtig nein tn), getauscht/unbekannt zählen nicht, ausgeblendet zählt als unter 20 %; late = Prüfung verpasst
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `day` | ja | string (Muster `^\d{4}-\d{2}-\d{2}$`) |
+| `late` |  | boolean |
+| `tp` |  | integer |
+| `fp` |  | integer |
+| `fn` |  | integer |
+| `tn` |  | integer |
+| `precision` |  | number / null |
+| `recall` |  | number / null |
+
+### akku · bewertung
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` | ja | number |
+| `rule` | ja | string – Prüfregel im Wortlaut |
+| `nights` | ja | array von Werten |
+| `total` | ja | object – Summe der geprüften Nächte mit precision (Treffer), recall (Abdeckung) und base (Vergleichsregel) |
+| `backtest` |  | object / null – Rückblick auf die goldenen Tage (private Rohstände weniger Gruppen), einmal am Tag: nights, total, floors, groups, from, to |
+| `models` | ja | object – 'Anbieter\|Art' → \[drain je Stunde, Verbrauch je Fahrt, Standstunden, Fahrten\] (gelernte Summen, Halbwertszeit 7 Tage) |
+| `open` |  | object / null – abgelegte, noch nicht geprüfte Prognose: day, target, n |
