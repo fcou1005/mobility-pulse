@@ -131,7 +131,8 @@ function gridOsm(n, stepDeg) {
   await writeFile(path.join(DATA, 'boundaries', 'BW.json'), JSON.stringify({ type: 'FeatureCollection', features: FEAT }));
   await writeFile(path.join(DATA, 'latest.json'), JSON.stringify({ municipalities: { '08111000': { name: 'Stuttgart', operators: { Dott: { types: { scooter: 1000 } } } }, '08416041': { name: 'Tübingen', operators: { nextbike: { types: { bike: 300 } } } } } }));
   await writeFile(path.join(SRV, 'Zensus2022_Bevoelkerungszahl_100m-Gitter.csv'), censusCsv()); execFileSync('zip', ['-qj', path.join(SRV, 'zensus.zip'), path.join(SRV, 'Zensus2022_Bevoelkerungszahl_100m-Gitter.csv')]);
-  for (const y of [2016, 2020, 2024]) { await writeFile(path.join(SRV, `Unfallorte${y}_LinRef.csv`), unfallCsv(y)); execFileSync('zip', ['-qj', path.join(SRV, `unfall-${y}.zip`), path.join(SRV, `Unfallorte${y}_LinRef.csv`)]); }
+  await writeFile(path.join(SRV, 'Datensatzbeschreibung.txt'), 'Beschreibung\n');
+  for (const y of [2016, 2020, 2024]) { const f = `Unfallorte${y}_LinRef.${y === 2016 ? 'txt' : 'csv'}`; await writeFile(path.join(SRV, f), unfallCsv(y)); execFileSync('zip', ['-qj', path.join(SRV, `unfall-${y}.zip`), path.join(SRV, 'Datensatzbeschreibung.txt'), path.join(SRV, f)]); } // 2016 wie die älteren Jahre als .txt
   const gd = path.join(SRV, 'g'); await mkdir(gd);
   await writeFile(path.join(gd, 'calendar.txt'), 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nwk,1,1,1,1,1,0,0,20200101,20301231\n');
   await writeFile(path.join(gd, 'trips.txt'), 'route_id,service_id,trip_id\nr,wk,t1\nr,wk,t2\n');

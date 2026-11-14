@@ -9,8 +9,13 @@ import path from 'node:path';
 
 export const UA = 'mobility-pulse-geo (+https://github.com/fcou1005/mobility-pulse)';
 /** Datei herunterladen (Stream auf die Platte); wirft bei HTTP-Fehler */
-export async function download(url, file, { timeoutMs = 20 * 60e3 } = {}) {
-  const r = await fetch(url, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(timeoutMs), redirect: 'follow' });
+export async function download(url, file, { timeoutMs = 20 * 60e3, tries = 3, waitMs = 15e3 } = {}) {
+  // Netzfehler („fetch failed“: Verbindung abgebrochen) bis zu dreimal versuchen; HTTP-Fehler nicht wiederholen
+  let r = null;
+  for (let k = 1; ; k++) {
+    try { r = await fetch(url, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(timeoutMs), redirect: 'follow' }); break; }
+    catch (e) { if (k >= tries) throw new Error(`${e.message}${e.cause?.code ? ` (${e.cause.code})` : ''} nach ${k} Versuchen`); await sleep(waitMs * k); }
+  }
   if (!r.ok || !r.body) throw new Error(`${url}: HTTP ${r.status}`);
   await pipeline(Readable.fromWeb(/** @type {any} */ (r.body)), createWriteStream(file));
   return { bytes: (await stat(file)).size, lastModified: r.headers.get('last-modified') };

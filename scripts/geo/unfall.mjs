@@ -20,7 +20,9 @@ export async function runUnfall({ OUT, TMP, bounds, log, now, keep }) {
     for (const url of process.env.GEO_UNFALL_URL ? [process.env.GEO_UNFALL_URL.replace('{y}', String(y))] : U.UNFALL.urls(y)) {
       try {
         const zip = path.join(TMP, `unfall-${y}.zip`), dl = await download(url, zip, { timeoutMs: 10 * 60e3 });
-        const member = zipNames(zip).find(n => /\.csv$/i.test(n) && !/^__MACOSX/.test(n)); if (!member) throw new Error('keine CSV im ZIP');
+        // CSV-Datei im ZIP: neuere Jahre .csv, ältere .txt (gleicher Inhalt, Semikolon); Beschreibungen und macOS-Reste nicht
+        const names = zipNames(zip).filter(n => !/^__MACOSX|\/$/.test(n)), pick = (re) => names.find(n => re.test(n));
+        const member = pick(/unfallorte[^/]*\.(csv|txt)$/i) || pick(/\.csv$/i) || pick(/\.txt$/i); if (!member) throw new Error(`keine CSV im ZIP (${names.slice(0, 6).join(', ')})`);
         let ix = null, rows = 0;
         await zipLines(zip, member, (line, n) => { if (n === 0) { ix = U.unfallHeader(line); return; } const r = U.unfallRow(line, ix); if (r) { rows++; acc.add(r); } }, { encoding: 'latin1' });
         files[y] = { url, member, bytes: dl.bytes, rows }; years.push(y); ok = true; await rm(zip, { force: true });
