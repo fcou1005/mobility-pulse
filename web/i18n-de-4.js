@@ -164,6 +164,7 @@ export default {
   "fc.model.adaptive": "lernend (je Gruppe aus Fehlern)",
   "fc.model.hybrid": "Niveau wie gestern, Tagesgang aus dem Modell",
   "fc.model.chronos": "Chronos-2 (KI, nur Vergleich)",
+  "fc.model.nowcast": "Tageskorrektur (nur Vergleich)",
   "fc.model.blend": "Mischung Chronos-2 + Hybrid",
   "fv.mBlend": "Mischt je Gruppe Chronos-2 und das Hybrid-Modell. Das Gewicht lernt sich aus den Fehlern beider an den vergangenen Tagen (Chronos rechnet dafür jeden Tag nach, was es am Vorabend vorhergesagt hätte; jüngere Tage zählen mehr): Wo Chronos besser traf, zählt es stärker, sonst Hybrid. Wählbar ab {from}, bis dahin lernt es nur mit.",
   "fv.blendShare": "Bisher gelernt: Chronos-Anteil {pct} (aus {days} Tagen, {n} Gruppen bewertet).",

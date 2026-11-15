@@ -849,3 +849,15 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const out = CX.venueEntries(rows, venues, { now: t - 86400e3 });
   assert(out.length === 1 && out[0].id === 'e3', `A14: abgesagte und VVK-Einträge verworfen (${out.map(x => x.id).join(', ')})`);
 }
+// ---------- Tageskorrektur (nowcast) und letzte Stunde des Tages
+{
+  const hm = new Array(24).fill(60); hm[13] = 30;
+  assert(F.nowcastWindow(hm, 11) === null && F.nowcastWindow(hm, 12).join() === '8,9,10,11' && F.nowcastWindow(hm, 16).join() === '10,11,12,14,15' && F.nowcastWindow(hm.map((x, h) => (h >= 12 ? 0 : x)), 17) === null && F.nowcastWindow(null, 15) === null,
+    'Tageskorrektur: erst ab 12 Uhr, nur voll beobachtete Stunden ab 8 Uhr, höchstens 6 zurück, mindestens 4');
+  const r = F.nowcastRatios(new Map([['a', 170], ['b', 0], ['c', 1000]]), new Map([['a', 70], ['b', 30], ['c', 100], ['d', 0]]));
+  assert(r.get('a') === 2 && r.get('b') === 0.5 && r.get('c') === 2 && r.get('d') === 1 && Math.abs(F.nowcastRatios(new Map([['a', 60]]), new Map([['a', 50]])).get('a') - 90 / 80) < 1e-12, 'Tageskorrektur: Verhältnis mit 30 Fahrten zur 1 gezogen, begrenzt auf 0,5 bis 2');
+  const mu = F.nowcastApply(Float64Array.from([100, 100, 100, 100]), (j) => ['a', 'a', 'b', 'x'][j], (j) => [0, 6, 0, 0][j], new Map([['a', 1.5], ['b', 0.8]]));
+  assert(mu[0] === 150 && Math.abs(mu[1] - 100 * (1 + 0.5 * Math.exp(-1))) < 1e-9 && Math.abs(mu[2] - 80) < 1e-9 && mu[3] === 100, 'Tageskorrektur: volle Wirkung zur Ausgabe, nach 6 Stunden noch 37 %, Gruppe ohne Verhältnis bleibt');
+  const mk = (m23) => ({ day: '2026-11-08', cls: () => 3, era: 0, complete: true, hourMin: [...new Array(23).fill(60), m23], groups: { '08111000|Voi|scooter': { start: new Array(24).fill(5), vmin: new Array(24).fill(600) } } });
+  assert(F.buildRows([mk(42)]).n === 24 && F.buildRows([mk(39)]).n === 23 && F.buildRows([{ ...mk(60), hourMin: [...new Array(22).fill(60), 42, 42] }]).n === 23, 'Stunde 23 zählt fürs Training ab 40 beobachteten Minuten, jede andere ab 50');
+}
