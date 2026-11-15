@@ -40,7 +40,7 @@ export async function run(ctx) {
     const { target } = A.slotsUntil(now);
     for (const [ags, veh] of byAgs) {
       if (veh.length < MIN_VEHICLES) continue;
-      const groups = {}; for (const v of veh) { const k = `${v.operator}|${v.type}`; if (!groups[k]) groups[k] = L.packModel(M(ags, v.operator, v.type)); }
+      const groups = {}; for (const v of veh) { const k = `${v.operator}|${v.type}`; if (!groups[k] && !A.noForecast(v.type)) groups[k] = L.packModel(M(ags, v.operator, v.type)); }
       const doc = { schemaVersion: SV.SCHEMA.akku, ags, at: now, low: A.AKKU.low, targetHour: A.AKKU.targetHour, target, groupFields: A.AKKU_FIELDS, groups };
       const ff = A.fleetForecast(veh, doc, now, { cellOf });
       doc.zones = { fields: ['zelle', 'lat', 'lon', 'anbieter', 'art', 'jetzt_unter', 'bis_ziel', 'ab'], rows: ff.zones.map(z => [z.cell, r4(z.lat), r4(z.lon), z.op, z.type, z.nowLow, z.morning, z.cross]) };

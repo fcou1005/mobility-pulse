@@ -104,6 +104,17 @@ function simulate(days, startIso, { day = 0.5, night = 0.5 } = {}) { // Entladun
   const g = { drain: m.drain, drainH: m.drainH }, { slots } = A.slotsUntil(Date.parse('2026-11-14T19:05:00Z')), flat = A.forecastVehicle(23, { drain: m.drain }, slots), prof = A.forecastVehicle(23, g, slots);
   assert(prof.morning < flat.morning - 1 && prof.p > flat.p, `23 % um 20 Uhr: morgens ${prof.morning.toFixed(1)} % mit Stundenprofil statt ${flat.morning.toFixed(1)} % mit dem Mittel`);
 }
+// ---------- Autos: keine Prognose (Nacht 14./15.11.2026: 4 von 56 Vorhersagen für stadtmobil getroffen, sie laden an Stationen) ----------
+{
+  const doc = { groups: { 'Dott|scooter': [0.15, 4, 'gruppe', 'gruppe', ...new Array(24).fill(0), ...new Array(24).fill(0.15)], 'stadtmobil|car': [0.27, 4, 'gruppe', 'startwert', ...new Array(24).fill(0), ...new Array(24).fill(0.27)] } };
+  const now = berlin('2026-11-15T20:30:00+01:00'), veh = (operator, type) => ({ operator, type, battery: 21, lat: 48.78, lon: 9.18, disabled: false, reserved: false });
+  assert(A.noForecast('car') && !A.noForecast('scooter') && !A.noForecast('ebike') && !A.noForecast('moped') && A.groupModel(doc, 'stadtmobil', 'car') === null && A.groupModel(doc, 'Dott', 'scooter') != null, 'Autos: kein Gruppenmodell, Roller und Räder weiter');
+  const f = A.fleetForecast([veh('Dott', 'scooter'), veh('stadtmobil', 'car')], doc, now);
+  assert(f.known === 1 && f.items.length === 1 && f.items[0].v.operator === 'Dott', `Autos: nicht in der Flottenprognose (bekannt ${f.known}, Vorhersagen ${f.items.length})`);
+  const st = L.emptyAkkuState(), cur = new Map([['a', { lat: 48.78, lon: 9.18, bat: 21, dis: false, res: false, missing: false, ty: 'car', op: 'stadtmobil', ags: '08111000' }], ['b', { lat: 48.78, lon: 9.18, bat: 21, dis: false, res: false, missing: false, ty: 'scooter', op: 'Dott', ags: '08111000' }]]);
+  const fc = L.storeForecast(st, cur, now, L.modelsOf(st));
+  assert(fc && Object.keys(fc.items).length === 1 && fc.items.b && !fc.items.a, 'Autos: nicht in der abgelegten Abendprognose (und damit nicht in der Selbstprüfung)');
+}
 if (process.env.AKKU_PHASE !== "0") // ---------- Sammler-Phase: Zustand privat, Dateien je Gemeinde und Bewertung ----------
 {
   const { run } = await import('../scripts/collect/28-akku.mjs');
