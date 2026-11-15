@@ -13,7 +13,7 @@ import * as L from '../../lib/pulse-akku-learn.js';
 import { cellOf, dayOf } from '../../lib/pulse-track-rules.js';
 import * as SV from '../../lib/pulse-schema.js';
 
-export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 3; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen, 3: am Ort / gefahren getrennt)
+export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 4; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen, 3: am Ort / gefahren getrennt, 4: Entladung je Stunde)
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 
 export async function run(ctx) {
