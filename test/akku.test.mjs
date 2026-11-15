@@ -6,6 +6,7 @@ import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import * as A from '../lib/pulse-akku.js';
 import * as L from '../lib/pulse-akku-learn.js';
+import * as SV from '../lib/pulse-schema.js';
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
 const near = (a, b, e) => Math.abs(a - b) <= e;
 const berlin = (s) => Date.parse(s); // ISO mit Versatz
@@ -76,6 +77,10 @@ function simulate(days, startIso) {
   assert(ok.length >= 4, `Selbstprüfung: ${ok.length} Nächte geprüft`);
   assert(bt.total.precision >= 0.7, `Trefferquote über ${bt.total.nights} Nächte ${(bt.total.precision * 100).toFixed(1)} % (≥ 70 %), Abdeckung ${(bt.total.recall * 100).toFixed(1)} %, Regel „unter 25 %“ ${(bt.total.base.precision * 100).toFixed(1)} %`);
   assert(bt.total.hidden > 0 && bt.total.swapped > 0, `ausgeblendete zählen als unter 20 % (${bt.total.hidden}), getauschte zählen nicht (${bt.total.swapped})`);
+  { const T = bt.total, sum = (k) => T.stay[k] + T.moved[k], binN = ok.reduce((a, n) => a + Object.values(n.bins).flatMap(o => Object.values(o)).reduce((x, b) => x + b[0] + b[2], 0), 0);
+    assert(T.stay.nights === T.nights && sum('tp') === T.tp && sum('fn') === T.fn && sum('fp') === T.fp && T.moved.tp + T.moved.fp + T.moved.fn + T.moved.tn > 0 && binN === T.tp + T.fp + T.fn + T.tn,
+      `Selbstprüfung getrennt: am Ort ${T.stay.tp}/${T.stay.tp + T.stay.fn} erkannt (Abdeckung ${(T.stay.recall * 100).toFixed(0)} %), gefahren ${T.moved.tp + T.moved.fp + T.moved.fn + T.moved.tn} (davon ${T.moved.fn} übersehen); Zählung je Abend-Ladestand vollständig`);
+    assert(T.stay.recall >= T.recall, `ohne Fahrten deckt die Prognose am Ort mehr ab (${(T.stay.recall * 100).toFixed(0)} % ≥ ${(T.recall * 100).toFixed(0)} %)`); }
   // Lernen: dieselben Läufe Schritt für Schritt
   const st = L.emptyAkkuState(); let prev = null, prevAt = null;
   for (const r of runs) {
@@ -107,7 +112,7 @@ if (process.env.AKKU_PHASE !== "0") // ---------- Sammler-Phase: Zustand privat,
   }
   const doc = JSON.parse(await readFile(path.join(DATA, 'akku', '08111000.json'), 'utf8'));
   const ev = JSON.parse(await readFile(path.join(DATA, 'akku', 'bewertung.json'), 'utf8'));
-  assert(doc.schemaVersion === '1.0' && doc.ags === '08111000' && doc.groups['Dott|scooter']?.length === 28 && doc.zones.rows.length > 0 && doc.totals.known > 0, `akku/<AGS>.json: Modell je Anbieter|Art und ${doc.zones.rows.length} Zonen`);
+  assert(doc.schemaVersion === SV.SCHEMA.akku && doc.ags === '08111000' && doc.groups['Dott|scooter']?.length === 28 && doc.zones.rows.length > 0 && doc.totals.known > 0, `akku/<AGS>.json: Modell je Anbieter|Art und ${doc.zones.rows.length} Zonen`);
   assert(!JSON.stringify(doc).includes('Dott:k') && !JSON.stringify(ev).includes('Dott:k'), 'keine Fahrzeugkennungen in den veröffentlichten Dateien');
   assert(ev.backtest && ev.backtest.nights.length >= 1 && ev.backtest.total.precision != null, `Bewertung: Rückblick auf die goldenen Tage (${ev.backtest.nights.length} Nacht, Treffer ${(ev.backtest.total.precision * 100).toFixed(0)} %)`);
   const st = JSON.parse((await import('node:zlib')).gunzipSync(await readFile(path.join(TRACK_DIR, 'akku-state.json.gz'))).toString('utf8'));

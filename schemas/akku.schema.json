@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/akku.schema.json",
  "title": "Akku-Prognose – Modell und Zonen je Gemeinde, Trefferquote (S6.5)",
  "description": "akku/<AGS>.json (Modell je Anbieter und Fahrzeugart, Zonen mit Fahrzeugen, die bis zum nächsten Morgen 8 Uhr unter 20 % fallen) und akku/bewertung.json (Selbstprüfung je Nacht, Rückblick auf die goldenen Tage). Keine Fahrzeugkennungen.",
- "x-version": "1.0",
+ "x-version": "1.1",
  "$defs": {
   "ags": {
    "type": "object",
@@ -143,6 +143,18 @@
       "number",
       "null"
      ]
+    },
+    "stay": {
+     "type": "object",
+     "description": "ab 1.1: dieselben Zählwerte nur für Fahrzeuge, die am Morgen weniger als 200 m vom Abendort stehen (dazu ausgeblendete), mit precision, recall, base"
+    },
+    "moved": {
+     "type": "object",
+     "description": "ab 1.1: Zählwerte für gefahrene oder umgesetzte Fahrzeuge (≥ 200 m vom Abendort)"
+    },
+    "bins": {
+     "type": "object",
+     "description": "ab 1.1: je Anbieter und Abend-Ladestand [am Ort, davon unter 20 %, gefahren, davon unter 20 %]"
     }
    }
   },

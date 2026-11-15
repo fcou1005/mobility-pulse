@@ -42,6 +42,7 @@ function hitsText(ev) {
   const parts = [];
   const nightsText = (n) => (n === 1 ? t('ops.akkuNightOne') : t('ops.akkuNightMany', { n: X.fmt(n) }));
   if (tot?.nights) parts.push(t('ops.akkuHits', { p: pct(tot.precision), n: X.fmt(tot.tp + tot.fp), nights: nightsText(tot.nights), r: pct(tot.recall), pb: pct(tot.base?.precision) }));
+  if (tot?.stay?.nights && tot.stay.tp + tot.stay.fn > 0) parts.push(t('ops.akkuHitsStay', { r: pct(tot.stay.recall), f: X.fmt(tot.stay.fn), m: X.fmt(tot.moved.tp + tot.moved.fn), rb: pct(tot.stay.base?.recall) }));
   if (bt?.nights) parts.push(t('ops.akkuHitsBack', { p: pct(bt.precision), n: X.fmt(bt.tp + bt.fp), nights: nightsText(bt.nights), r: pct(bt.recall), groups: (ev.backtest.groups || []).map(g => `${g.split('|')[0]} ${X.muniName(g.split('|')[1])}`).join(', ') }));
   return parts.length ? parts.join(' ') : t('ops.akkuHitsNone', { hour: AK.AKKU.targetHour });
 }

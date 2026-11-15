@@ -36,6 +36,7 @@ export default {
   "ops.akkuHits": "Selbstprüfung: {p} von {n} Vorhersagen getroffen in {nights}, Abdeckung {r} (Regel „heute Abend unter 25 %“: {pb}).",
   "ops.akkuNightOne": "einer Nacht",
   "ops.akkuNightMany": "{n} Nächten",
+  "ops.akkuHitsStay": "Bei Fahrzeugen, die am Ort blieben, Abdeckung {r} ({f} übersehen, Regel: {rb}); {m} gefahrene oder umgesetzte fielen ebenfalls unter 20 % und stehen am Morgen woanders.",
   "ops.akkuHitsBack": "Rückblick auf die Rohstände ({groups}): {p} von {n} Vorhersagen getroffen in {nights}, Abdeckung {r}.",
   "ops.akkuHitsNone": "Die erste Prüfung der Vorhersagen läuft morgen ab {hour} Uhr; die Trefferquote steht dann hier.",
   "ops.akkuNoData": "Für diese Gemeinde gibt es noch keine Akku-Prognose. Sie entsteht ab {min} Fahrzeugen mit Ladestand im nächsten Lauf des Sammlers, in etwa 20 Minuten.",

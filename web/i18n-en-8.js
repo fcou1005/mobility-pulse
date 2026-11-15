@@ -36,6 +36,7 @@ export default {
   "ops.akkuHits": "Self-check: {p} of {n} predictions correct over {nights}, coverage {r} (rule “below 25 % tonight”: {pb}).",
   "ops.akkuNightOne": "one night",
   "ops.akkuNightMany": "{n} nights",
+  "ops.akkuHitsStay": "For vehicles that stayed in place, coverage {r} ({f} missed, rule: {rb}); {m} ridden or relocated vehicles also fell below 20 % and are elsewhere in the morning.",
   "ops.akkuHitsBack": "Look-back on the raw snapshots ({groups}): {p} of {n} predictions correct over {nights}, coverage {r}.",
   "ops.akkuHitsNone": "The first check of the predictions runs tomorrow from {hour} am; the hit rate will show here then.",
   "ops.akkuNoData": "There is no battery forecast for this municipality yet. It is created from {min} vehicles with a charge level in the next collector run, in about 20 minutes.",

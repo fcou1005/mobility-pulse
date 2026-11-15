@@ -13,7 +13,7 @@ import * as L from '../../lib/pulse-akku-learn.js';
 import { cellOf, dayOf } from '../../lib/pulse-track-rules.js';
 import * as SV from '../../lib/pulse-schema.js';
 
-export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 2; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen)
+export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 3; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen, 3: am Ort / gefahren getrennt)
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 
 export async function run(ctx) {
@@ -29,7 +29,7 @@ export async function run(ctx) {
     const lr = L.learnStep(st, ctx.akkuPrev?.snap || null, cur, { prevAt: ctx.akkuPrev?.at ?? null, now, floors });
     L.followForecast(st, cur);
     const ev = L.evaluateForecast(st, cur, now, { floors });
-    if (ev) { st.nights = [...(st.nights || []), ev].slice(-L.LEARN.keepNights); log(ev.late ? `Akku-Prognose ${ev.day}: Prüfung verpasst (kein Lauf bis ${L.LEARN.evalUntilHour} Uhr)` : `Akku-Prognose ${ev.day}: ${ev.tp} von ${ev.tp + ev.fp} Vorhersagen getroffen, ${ev.fn} übersehen (getauscht ${ev.swapped}, unbekannt ${ev.unknown})`); }
+    if (ev) { st.nights = [...(st.nights || []), ev].slice(-L.LEARN.keepNights); log(ev.late ? `Akku-Prognose ${ev.day}: Prüfung verpasst (kein Lauf bis ${L.LEARN.evalUntilHour} Uhr)` : `Akku-Prognose ${ev.day}: ${ev.tp} von ${ev.tp + ev.fp} Vorhersagen getroffen, ${ev.fn} übersehen (getauscht ${ev.swapped}, unbekannt ${ev.unknown}); am Ort ${ev.stay.tp}/${ev.stay.tp + ev.stay.fp} getroffen, ${ev.stay.fn} übersehen, gefahren ${ev.moved.tp + ev.moved.fn} darunter`); }
     const M = L.modelsOf(st);
     const fc = L.storeForecast(st, cur, now, M); if (fc) log(`Akku-Prognose für ${new Date(fc.target).toISOString()} abgelegt: ${Object.keys(fc.items).length} Fahrzeuge mit 20–49 %`);
     // je Gemeinde: Modell und Zonen aus dem aktuellen Bestand (dieselbe Rechnung wie die Disposition)
@@ -58,7 +58,7 @@ export async function run(ctx) {
         for (const line of gunzipSync(await readFile(path.join(gd, f))).toString('utf8').split('\n')) if (line.trim()) { try { runs.push(JSON.parse(line)); } catch { /* Zeile kaputt */ } }
       const bt = L.backtestGolden(runs, { skipOps: [...(ctx.rangeOnlyOps || [])] });
       st.backtest = { v: BACKTEST_V, day: today, at: now, skipOps: [...(ctx.rangeOnlyOps || [])], runs: bt.runs, from: bt.from, to: bt.to, floors: bt.floors, groups: bt.groups, nights: bt.nights, total: bt.total };
-      log(`Akku-Rückblick (goldene Tage, ${bt.runs} Läufe): ${bt.total.nights} Nächte, Treffer ${bt.total.precision == null ? '–' : `${(bt.total.precision * 100).toFixed(1)} %`}`);
+      log(`Akku-Rückblick (goldene Tage, ${bt.runs} Läufe): ${bt.total.nights} Nächte, Treffer ${bt.total.precision == null ? '–' : `${(bt.total.precision * 100).toFixed(1)} %`}, Abdeckung ${bt.total.recall == null ? '–' : `${(bt.total.recall * 100).toFixed(1)} %`} (am Ort ${bt.total.stay.recall == null ? '–' : `${(bt.total.stay.recall * 100).toFixed(1)} %`}, übersehen am Ort ${bt.total.stay.fn}, gefahren ${bt.total.moved.fn})`);
     }
     const models = Object.fromEntries(Object.entries(st.g).map(([k, a]) => [k, [a[1] > 0 ? r4(a[0] / a[1]) : null, a[3] > 0 ? r4(a[2] / a[3]) : null, Math.round(a[1]), Math.round(a[3])]]));
     const evDoc = { schemaVersion: SV.SCHEMA.akku, at: now, method: A.AKKU_METHOD, low: A.AKKU.low, targetHour: A.AKKU.targetHour, eveningHour: A.AKKU.eveningHour, pCut: A.AKKU.pCut,

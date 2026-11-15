@@ -19,7 +19,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.0 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
-| [akku](#akku) | 1.0 | `akku/<AGS>.json`, `akku/bewertung.json` |
+| [akku](#akku) | 1.1 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.1 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 
 ## status
@@ -481,7 +481,7 @@ Monatswerte je Gemeinde und Fahrzeugart über alle Anbieter; complete = Monat ab
 
 Akku-Prognose – Modell und Zonen je Gemeinde, Trefferquote (S6.5). akku/&lt;AGS&gt;.json (Modell je Anbieter und Fahrzeugart, Zonen mit Fahrzeugen, die bis zum nächsten Morgen 8 Uhr unter 20 % fallen) und akku/bewertung.json (Selbstprüfung je Nacht, Rückblick auf die goldenen Tage). Keine Fahrzeugkennungen.
 
-Version 1.0 · Schema: [schemas/akku.schema.json](../schemas/akku.schema.json)
+Version 1.1 · Schema: [schemas/akku.schema.json](../schemas/akku.schema.json)
 
 ### akku · ags
 
@@ -514,6 +514,9 @@ Ergebnis einer Nacht: Zählwerte (getroffen tp, falsch fp, übersehen fn, richti
 | `tn` |  | integer |
 | `precision` |  | number / null |
 | `recall` |  | number / null |
+| `stay` |  | object – ab 1.1: dieselben Zählwerte nur für Fahrzeuge, die am Morgen weniger als 200 m vom Abendort stehen (dazu ausgeblendete), mit precision, recall, base |
+| `moved` |  | object – ab 1.1: Zählwerte für gefahrene oder umgesetzte Fahrzeuge (≥ 200 m vom Abendort) |
+| `bins` |  | object – ab 1.1: je Anbieter und Abend-Ladestand \[am Ort, davon unter 20 %, gefahren, davon unter 20 %\] |
 
 ### akku · bewertung
 
