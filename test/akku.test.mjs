@@ -51,14 +51,14 @@ const berlin = (s) => Date.parse(s); // ISO mit Versatz
 // Voi mit stabilen Kennungen (bleibt bei der Fahrt im Feed), Dott mit rotierenden Kennungen und Ausblendung unter 14 %. Entladung 0,5 Punkte
 // je Stunde, 5 Punkte je Fahrt, Fahrten je Fahrzeugstunde nachts 0,01, tagsüber 0,08. Voi tauscht nachts (2–5 Uhr) einen Teil der leeren Akkus.
 let seed = 7; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
-function simulate(days, startIso, { day = 0.5, night = 0.5 } = {}) { // Entladung je Stunde tagsüber und nachts (20–8 Uhr)
+function simulate(days, startIso, { day = 0.5, night = 0.5, lowX = 1 } = {}) { // lowX: Faktor auf die Entladung unter 30 % // Entladung je Stunde tagsüber und nachts (20–8 Uhr)
   const t0 = berlin(startIso), runs = [], step = 15 * 60e3, fleet = [];
   let id = 0; const key = () => `k${(id++).toString(36)}`;
   for (let i = 0; i < 600; i++) fleet.push({ op: i < 300 ? 'Voi' : 'Dott', key: key(), lat: 48.76 + rnd() * 0.04, lon: 9.15 + rnd() * 0.06, bat: 15 + rnd() * 85, away: 0 });
   for (let t = t0; t < t0 + days * 86400e3; t += step) {
     const h = A.clockOf(t)[0], rate = h >= 0 && h < 6 ? 0.01 : 0.08;
     for (const v of fleet) {
-      v.bat -= (h >= 20 || h < 8 ? night : day) * step / 3600e3;
+      v.bat -= (h >= 20 || h < 8 ? night : day) * (v.bat < 30 ? lowX : 1) * step / 3600e3;
       if (v.away > 0) { v.away--; continue; }
       if (v.bat > 15 && rnd() < rate * step / 3600e3) { v.bat -= 4 + rnd() * 2; v.lat += (rnd() - 0.5) * 0.02; v.lon += (rnd() - 0.5) * 0.03; if (v.op === 'Dott') { v.away = 1; v.key = key(); } }
       if (v.op === 'Voi' && v.bat < 18 && h >= 2 && h < 5 && rnd() < 0.05) v.bat = 95 + rnd() * 5;
@@ -92,7 +92,7 @@ function simulate(days, startIso, { day = 0.5, night = 0.5 } = {}) { // Entladun
   assert(near(mv.trip, 5.5, 1.2) && mv.basisTrip === 'gruppe' && md.basisTrip === 'art' && near(md.trip, mv.trip, 1e-9), `Verbrauch je Fahrt: Voi aus stabilen Kennungen ${mv.trip.toFixed(1)}, Dott (rotierend) übernimmt den Wert der Art`);
   assert(mv.rate[3] < 0.03 && mv.rate[14] > 0.04 && md.rate[14] > 0.04, `Fahrten je Fahrzeugstunde: nachts ${mv.rate[3].toFixed(3)}, nachmittags ${mv.rate[14].toFixed(3)} (Voi), ${md.rate[14].toFixed(3)} (Dott)`);
   const packed = L.packModel(mv);
-  assert(packed.length === 52 && packed[2] === 'gruppe' && near(packed[28], mv.drain, 0.15), 'Modell gepackt: drain, trip, Herkunft ×2, 24 Raten, 24 Stundenwerte der Entladung');
+  assert(packed.length === 55 && packed[2] === 'gruppe' && near(packed[28], mv.drain, 0.15), 'Modell gepackt: drain, trip, Herkunft ×2, 24 Raten, 24 Stundenwerte der Entladung, 3 Faktoren nach Ladestand');
 }
 { // Nacht kälter (Rückblick Dott Stuttgart 13.–15.11.2026: nachts ~0,33 statt 0,16 Punkte je Stunde): Profil je Stunde lernen, Prognose am Ort trifft
   const runs = simulate(5, '2026-11-09T12:00:00+01:00', { day: 0.15, night: 0.35 }), bt = L.backtestGolden(runs), last = bt.nights.filter(n => !n.late).slice(-2);
@@ -103,6 +103,18 @@ function simulate(days, startIso, { day = 0.5, night = 0.5 } = {}) { // Entladun
   assert(stay.recall >= 0.85 && stay.precision >= 0.8, `nachts kälter: am Ort ${stay.tp} von ${stay.tp + stay.fn} erkannt (${(stay.recall * 100).toFixed(0)} %), Treffer ${(stay.precision * 100).toFixed(0)} % in den letzten zwei Nächten`);
   const g = { drain: m.drain, drainH: m.drainH }, { slots } = A.slotsUntil(Date.parse('2026-11-14T19:05:00Z')), flat = A.forecastVehicle(23, { drain: m.drain }, slots), prof = A.forecastVehicle(23, g, slots);
   assert(prof.morning < flat.morning - 1 && prof.p > flat.p, `23 % um 20 Uhr: morgens ${prof.morning.toFixed(1)} % mit Stundenprofil statt ${flat.morning.toFixed(1)} % mit dem Mittel`);
+}
+// ---------- Entladung nach Ladestand: unter 30 % doppelt so schnell (Rückblick Dott Stuttgart: 20–23 % am Abend fallen fast alle, 24 % keiner) ----------
+{
+  seed = 11;
+  const runs = simulate(5, '2026-11-09T12:00:00+01:00', { day: 0.17, night: 0.17, lowX: 2 }), bt = L.backtestGolden(runs), last = bt.nights.filter(n => !n.late).slice(-2);
+  const p = bt.profile['Voi|scooter'], stay = L.totalOf(last).stay;
+  assert(p && p.drainB[0] > 1.5 && p.drainB[0] < 2.3 && p.drainB[2] < 1 && p.bandHours[0] > 100, `Faktor je Band gelernt: unter 30 % ${p?.drainB[0].toFixed(2)}, ab 50 % ${p?.drainB[2].toFixed(2)}`);
+  assert(stay.recall >= 0.85 && stay.precision >= 0.8, `unter 30 % schneller: am Ort ${stay.tp} von ${stay.tp + stay.fn} erkannt (${(stay.recall * 100).toFixed(0)} %), Treffer ${(stay.precision * 100).toFixed(0)} %`);
+  const { slots } = A.slotsUntil(berlin('2026-11-14T20:05:00+01:00')), g = { drain: 0.17, drainH: new Array(24).fill(0.17) };
+  const flat = A.forecastVehicle(23, g, slots), band = A.forecastVehicle(23, { ...g, drainB: [2, 1, 0.8] }, slots), mid = A.forecastVehicle(31, { ...g, drainB: [2, 1, 0.8] }, slots);
+  assert(flat.p < 0.5 && band.p >= 0.5 && near(band.morning, 23 - 2 * 0.17 * 11.92, 0.1) && near(mid.morning, 31 - (1 / 0.17) * 0.17 - 2 * 0.17 * (11.92 - 1 / 0.17), 0.3), `23 % um 20 Uhr: ohne Band p ${flat.p.toFixed(2)}, mit Band ${band.p.toFixed(2)}; 31 % wechselt unterwegs das Band (morgens ${mid.morning.toFixed(1)} %)`);
+  assert(A.groupModel({ groups: { 'a|scooter': new Array(52).fill(0) } }, 'a', 'scooter').drainB === null, 'Format 1.2 ohne Bänder: Faktor 1');
 }
 // ---------- Autos: keine Prognose (Nacht 14./15.11.2026: 4 von 56 Vorhersagen für stadtmobil getroffen, sie laden an Stationen) ----------
 {
@@ -133,7 +145,7 @@ if (process.env.AKKU_PHASE !== "0") // ---------- Sammler-Phase: Zustand privat,
   }
   const doc = JSON.parse(await readFile(path.join(DATA, 'akku', '08111000.json'), 'utf8'));
   const ev = JSON.parse(await readFile(path.join(DATA, 'akku', 'bewertung.json'), 'utf8'));
-  assert(doc.schemaVersion === SV.SCHEMA.akku && doc.ags === '08111000' && doc.groups['Dott|scooter']?.length === 52 && doc.zones.rows.length > 0 && doc.totals.known > 0, `akku/<AGS>.json: Modell je Anbieter|Art und ${doc.zones.rows.length} Zonen`);
+  assert(doc.schemaVersion === SV.SCHEMA.akku && doc.ags === '08111000' && doc.groups['Dott|scooter']?.length === 55 && doc.zones.rows.length > 0 && doc.totals.known > 0, `akku/<AGS>.json: Modell je Anbieter|Art und ${doc.zones.rows.length} Zonen`);
   assert(!JSON.stringify(doc).includes('Dott:k') && !JSON.stringify(ev).includes('Dott:k'), 'keine Fahrzeugkennungen in den veröffentlichten Dateien');
   assert(ev.backtest && ev.backtest.nights.length >= 1 && ev.backtest.total.precision != null, `Bewertung: Rückblick auf die goldenen Tage (${ev.backtest.nights.length} Nacht, Treffer ${(ev.backtest.total.precision * 100).toFixed(0)} %)`);
   const st = JSON.parse((await import('node:zlib')).gunzipSync(await readFile(path.join(TRACK_DIR, 'akku-state.json.gz'))).toString('utf8'));

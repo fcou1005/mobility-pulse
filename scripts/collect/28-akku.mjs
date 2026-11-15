@@ -13,7 +13,7 @@ import * as L from '../../lib/pulse-akku-learn.js';
 import { cellOf, dayOf } from '../../lib/pulse-track-rules.js';
 import * as SV from '../../lib/pulse-schema.js';
 
-export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 5; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen, 3: am Ort / gefahren getrennt, 4: Entladung je Stunde, 5: Stundenprofil im Protokoll)
+export const MIN_VEHICLES = 20, DROP_MAX = 50, BACKTEST_V = 6; // BACKTEST_V: Rückblick neu rechnen, wenn sich seine Ausgabe ändert (2: nur ausgewertete Gruppen, 3: am Ort / gefahren getrennt, 4: Entladung je Stunde, 5: Stundenprofil im Protokoll, 6: Entladung je Ladestand-Band)
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 
 export async function run(ctx) {
@@ -59,7 +59,7 @@ export async function run(ctx) {
       const bt = L.backtestGolden(runs, { skipOps: [...(ctx.rangeOnlyOps || [])] });
       st.backtest = { v: BACKTEST_V, day: today, at: now, skipOps: [...(ctx.rangeOnlyOps || [])], runs: bt.runs, from: bt.from, to: bt.to, floors: bt.floors, groups: bt.groups, nights: bt.nights, total: bt.total };
       const mean = (a, hs) => hs.reduce((x, h) => x + a[h], 0) / hs.length, night = [20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7], day = [9, 10, 11, 12, 13, 14, 15, 16, 17];
-      for (const [k, p] of Object.entries(bt.profile || {})) log(`Akku-Rückblick Stundenprofil ${k}: ${p.hours} Standstunden, Entladung nachts (20–7 Uhr) ${mean(p.drainH, night).toFixed(3)}, tags (9–17 Uhr) ${mean(p.drainH, day).toFixed(3)} Punkte je Stunde`);
+      for (const [k, p] of Object.entries(bt.profile || {})) log(`Akku-Rückblick Stundenprofil ${k}: ${p.hours} Standstunden, Entladung nachts (20–7 Uhr) ${mean(p.drainH, night).toFixed(3)}, tags (9–17 Uhr) ${mean(p.drainH, day).toFixed(3)} Punkte je Stunde; Faktor je Ladestand unter 30 % ${p.drainB[0].toFixed(2)} (${p.bandHours[0]} h), 30–49 % ${p.drainB[1].toFixed(2)} (${p.bandHours[1]} h), ab 50 % ${p.drainB[2].toFixed(2)} (${p.bandHours[2]} h)`);
       log(`Akku-Rückblick (goldene Tage, ${bt.runs} Läufe): ${bt.total.nights} Nächte, Treffer ${bt.total.precision == null ? '–' : `${(bt.total.precision * 100).toFixed(1)} %`}, Abdeckung ${bt.total.recall == null ? '–' : `${(bt.total.recall * 100).toFixed(1)} %`} (am Ort ${bt.total.stay.recall == null ? '–' : `${(bt.total.stay.recall * 100).toFixed(1)} %`}, übersehen am Ort ${bt.total.stay.fn}, gefahren ${bt.total.moved.fn})`);
     }
     const models = Object.fromEntries(Object.entries(st.g).map(([k, a]) => [k, [a[1] > 0 ? r4(a[0] / a[1]) : null, a[3] > 0 ? r4(a[2] / a[3]) : null, Math.round(a[1]), Math.round(a[3])]]));

@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/akku.schema.json",
  "title": "Akku-Prognose – Modell und Zonen je Gemeinde, Trefferquote (S6.5)",
  "description": "akku/<AGS>.json (Modell je Anbieter und Fahrzeugart, Zonen mit Fahrzeugen, die bis zum nächsten Morgen 8 Uhr unter 20 % fallen) und akku/bewertung.json (Selbstprüfung je Nacht, Rückblick auf die goldenen Tage). Keine Fahrzeugkennungen.",
- "x-version": "1.2",
+ "x-version": "1.3",
  "$defs": {
   "ags": {
    "type": "object",
@@ -53,11 +53,11 @@
     },
     "groups": {
      "type": "object",
-     "description": "'Anbieter|Art' → [drain (Prozentpunkte je Stunde Standzeit), trip (Prozentpunkte je Fahrt), Herkunft drain, Herkunft trip ('gruppe' | 'art' | 'startwert'), Fahrten je verfügbarer Fahrzeugstunde für die Ortsstunden 0–23, ab 1.2 Entladung je Ortsstunde 0–23 (Prozentpunkte je Stunde, zum Mittel geglättet)]",
+     "description": "'Anbieter|Art' → [drain (Prozentpunkte je Stunde Standzeit), trip (Prozentpunkte je Fahrt), Herkunft drain, Herkunft trip ('gruppe' | 'art' | 'startwert'), Fahrten je verfügbarer Fahrzeugstunde für die Ortsstunden 0–23, ab 1.2 Entladung je Ortsstunde 0–23 (Prozentpunkte je Stunde, zum Mittel geglättet), ab 1.3 drei Faktoren auf diese Entladung nach Ladestand (unter 30 %, 30–49 %, ab 50 %)]",
      "additionalProperties": {
       "type": "array",
       "minItems": 28,
-      "maxItems": 52
+      "maxItems": 55
      }
     },
     "zones": {

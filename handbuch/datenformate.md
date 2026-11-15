@@ -19,7 +19,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.0 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.0 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
-| [akku](#akku) | 1.2 | `akku/<AGS>.json`, `akku/bewertung.json` |
+| [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.1 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 
 ## status
@@ -481,7 +481,7 @@ Monatswerte je Gemeinde und Fahrzeugart über alle Anbieter; complete = Monat ab
 
 Akku-Prognose – Modell und Zonen je Gemeinde, Trefferquote (S6.5). akku/&lt;AGS&gt;.json (Modell je Anbieter und Fahrzeugart, Zonen mit Fahrzeugen, die bis zum nächsten Morgen 8 Uhr unter 20 % fallen) und akku/bewertung.json (Selbstprüfung je Nacht, Rückblick auf die goldenen Tage). Keine Fahrzeugkennungen.
 
-Version 1.2 · Schema: [schemas/akku.schema.json](../schemas/akku.schema.json)
+Version 1.3 · Schema: [schemas/akku.schema.json](../schemas/akku.schema.json)
 
 ### akku · ags
 
@@ -496,7 +496,7 @@ Gemeinden mit mindestens 20 Fahrzeugen mit absolutem Ladestand; je Lauf neu
 | `targetHour` | ja | integer – Zielstunde Ortszeit Berlin (8) |
 | `target` | ja | number – nächster Zeitpunkt targetHour:00 (ms) |
 | `groupFields` |  | array von string |
-| `groups` | ja | object – 'Anbieter\|Art' → \[drain (Prozentpunkte je Stunde Standzeit), trip (Prozentpunkte je Fahrt), Herkunft drain, Herkunft trip ('gruppe' \| 'art' \| 'startwert'), Fahrten je verfügbarer Fahrzeugstunde für die Ortsstunden 0–23, ab 1.2 Entladung je Ortsstunde 0–23 (Prozentpunkte je Stunde, zum Mittel geglättet)\] |
+| `groups` | ja | object – 'Anbieter\|Art' → \[drain (Prozentpunkte je Stunde Standzeit), trip (Prozentpunkte je Fahrt), Herkunft drain, Herkunft trip ('gruppe' \| 'art' \| 'startwert'), Fahrten je verfügbarer Fahrzeugstunde für die Ortsstunden 0–23, ab 1.2 Entladung je Ortsstunde 0–23 (Prozentpunkte je Stunde, zum Mittel geglättet), ab 1.3 drei Faktoren auf diese Entladung nach Ladestand (unter 30 %, 30–49 %, ab 50 %)\] |
 | `zones` | ja | object |
 | `totals` | ja | object |
 
