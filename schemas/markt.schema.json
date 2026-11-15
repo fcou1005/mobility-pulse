@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/markt.schema.json",
  "title": "Markt – Deutschland-Index, Wirkung, Scout, Grafik der Woche, offene Daten (Sprint 7)",
  "description": "index/<JJJJ-MM>.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).",
- "x-version": "1.0",
+ "x-version": "1.1",
  "$defs": {
   "index": {
    "type": "object",
@@ -260,7 +260,16 @@
         "type": "integer"
        },
        "effect": {
-        "type": "integer"
+        "type": "integer",
+        "description": "Ist − Prognose, ab 1.1 bereinigt um die mittlere Abweichung der Prognose an den Vergleichstagen (bias)"
+       },
+       "raw": {
+        "type": "integer",
+        "description": "ab 1.1: Ist − Prognose ohne Bereinigung"
+       },
+       "bias": {
+        "type": "number",
+        "description": "ab 1.1: mittlere Abweichung Ist ÷ Prognose − 1 an den Vergleichstagen"
        },
        "rel": {
         "type": "number"

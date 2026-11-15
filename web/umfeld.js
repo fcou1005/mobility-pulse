@@ -97,12 +97,12 @@ async function runPlan(el, ctx, ags, demand) {
   // Abstell- und Fahrverbote aller Anbieter in der Gemeinde
   const idx = await load(ctx, `${ctx.CFG.DATA}zones/index.json`), mine = (idx?.zones || []).filter(z => (z.municipalities || []).includes(ags));
   const docs = (await Promise.all(mine.map(z => load(ctx, `${ctx.CFG.DATA}zones/${z.file}`)))).filter(Boolean);
-  const bans = Z.zonesFor(docs).filter(z => z.kind === 'no_park' || z.kind === 'no_ride').map(z => ({ g: z.geometry, bb: Z.bboxOf(z.geometry) }));
+  const zAll = Z.zonesFor(docs), isl = PL.parkingIslands(zAll), bans = zAll.filter(z => z.kind === 'no_park' || z.kind === 'no_ride').map(z => ({ g: z.geometry, bb: Z.bboxOf(z.geometry) }));
   const noPark = (la, lo) => bans.some(b => lo >= b.bb[0] && lo <= b.bb[2] && la >= b.bb[1] && la <= b.bb[3] && Z.contains(b.g, lo, la));
   const o = PL.parseOsm(osmJson), cands = PL.candidatesAlong(o.ways), res = PL.planSpots(demand.filter(d => d[0] >= bb[0] && d[0] <= bb[2] && d[1] >= bb[1] && d[1] <= bb[3]), cands, { k, noPark, stops: o.stops, cross: PL.crossings(o.roads) });
-  const share = PL.nearExisting(res.picks, o.existing, 50); for (const p of res.picks) p.near = o.existing.some(e => Math.hypot((e[0] - p.lat) * 111320, (e[1] - p.lon) * 111320 * Math.cos(p.lat * Math.PI / 180)) <= 50);
+  const have = [...o.existing, ...isl], share = PL.nearExisting(res.picks, have, 50); for (const p of res.picks) p.near = PL.isNear(p, have, 50);
   S.plan = res; /** @type {HTMLButtonElement} */ (el.querySelector('#geo-plan-csv')).disabled = !res.picks.length;
   const f = ctx.fmt;
-  st.textContent = t('geo.planDone', { k: f(res.picks.length), c: f(res.covered), tot: f(res.total), cand: f(res.usable), np: f(res.excluded.noPark), s: f(res.excluded.stop), x: f(res.excluded.cross), near: share == null ? '–' : `${f(share * 100, 0)} %`, ex: f(o.existing.length), zones: f(bans.length) });
+  st.textContent = t('geo.planDone', { k: f(res.picks.length), c: f(res.covered), tot: f(res.total), cand: f(res.usable), np: f(res.excluded.noPark), s: f(res.excluded.stop), x: f(res.excluded.cross), near: share == null ? '–' : `${f(share * 100, 0)} %`, ex: f(o.existing.length), isl: f(isl.length), zones: f(bans.length) });
   out.innerHTML = `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('geo.planTitle'))}"><table id="geo-plan"><thead><tr><th class="n">#</th><th>${t('geo.planSpot')}</th><th class="n">${t('geo.planCovered')}</th><th>${t('geo.planNear')}</th></tr></thead><tbody>${res.picks.map((p, i) => `<tr><td class="n">${i + 1}</td><td>${osm(p.lat, p.lon)}</td><td class="n">${f(p.covered)}</td><td>${p.near ? t('geo.yes') : t('geo.no')}</td></tr>`).join('')}</tbody></table></div>`;
 }

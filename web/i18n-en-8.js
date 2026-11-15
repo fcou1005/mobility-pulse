@@ -168,7 +168,7 @@ export default {
   "mk.openRows": "{tage} daily rows, {monat} monthly rows",
   "mk.noOpen": "The first package is created in the first collector run from the 1st of next month for the completed month.",
   "mk.evTitle": "Effect of events",
-  "mk.evSub": "Actual against the forecast issued the day before within the event's time window, with a 90 % band from the other days of the same city. {n} estimates. {mine}",
+  "mk.evSub": "Actual against the forecast issued the day before within the event's time window, adjusted for the forecast's mean deviation on the other days of the same city; the 90 % band is a prediction interval from those days. {n} estimates. {mine}",
   "mk.evNoneHere": "None yet for {name} – all cities shown.",
   "mk.day": "Day",
   "mk.event": "Event",

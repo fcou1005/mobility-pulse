@@ -73,7 +73,7 @@ export async function run(ctx) {
     const wFile = path.join(DATA, 'markt', 'wirkung.json'), wPrev = await rd(wFile);
     const series = await rd(path.join(DATA, 'forecast', 'series.json')), ev = (await rd(path.join(DATA, 'ereignisse.json')))?.ereignisse || [];
     const fresh = series ? K.eventEffects(series, ev, { today }) : [], keep = addDays(today, -K.WIRK.keepDays);
-    const byKey = new Map((wPrev?.events || []).filter(e => e.day >= keep).map(e => [e.key, e])); for (const e of fresh) byKey.set(e.key, e);
+    const byKey = new Map((wPrev?.version === K.WIRK.version ? wPrev.events || [] : []).filter(e => e.day >= keep).map(e => [e.key, e])); for (const e of fresh) byKey.set(e.key, e);
     const changes = K.priceChanges(await rd(path.join(DATA, 'pricing-log.json')));
     const pMonths = [...new Set(changes.flatMap(c => [K.prevMonth(c.day.slice(0, 7)), c.day.slice(0, 7), addDays(c.day, 10).slice(0, 7)]))].filter(m => arMonths.includes(m));
     const srcMunis = Object.fromEntries((latest?.sources || []).filter(s => Array.isArray(s.municipalities)).map(s => [s.id, s.municipalities]));

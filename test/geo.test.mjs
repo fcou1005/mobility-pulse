@@ -137,6 +137,8 @@ function gridOsm(n, stepDeg) {
   const noPark = (la, lo) => la > 48.7795 && lo > 9.1880; // Verbotszone über der Fußgängerzone
   const pl = PL.planSpots(demand, cands, { k: 3, noPark, stops: o.stops, cross: cr });
   assert(pl.picks.length >= 2 && !pl.picks.some(p => noPark(p.lat, p.lon)) && pl.excluded.noPark > 0 && pl.excluded.stop > 0 && pl.excluded.cross > 0, `kein Vorschlag in Verbotszone, an Haltestelle oder Kreuzung (${JSON.stringify(pl.excluded)})`);
+  { const isl = PL.parkingIslands([{ kind: 'allowed', area: 400, bbox: [9.1899, 48.78, 9.1901, 48.7802] }, { kind: 'allowed', area: 90000, bbox: [9.18, 48.77, 9.19, 48.78] }, { kind: 'no_park', area: 100, bbox: [9.18, 48.77, 9.19, 48.78] }]);
+    assert(isl.length === 1 && isl[0][2] === 10 && PL.isNear({ lat: 48.7801, lon: 9.19075 }, isl, 50) && !PL.isNear({ lat: 48.7801, lon: 9.1912 }, isl, 50) && PL.nearExisting([{ lat: 48.7801, lon: 9.19 }, { lat: 48.76, lon: 9.1 }], isl) === 0.5, 'Abstellinseln der Anbieter: nur kleine Zonen mit erlaubtem Abstellen, Abstand ab Rand'); }
   assert(pl.picks[0].covered === 12 && PL.nearExisting(pl.picks, o.existing, 50) > 0, `größte Nachfrage zuerst, Anteil an vorhandener Fläche ${PL.nearExisting(pl.picks, o.existing, 50)}`);
 }
 // ---------- Geo-Lauf mit Ersatz-Servern ----------

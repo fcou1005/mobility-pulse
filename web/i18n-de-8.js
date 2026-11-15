@@ -168,7 +168,7 @@ export default {
   "mk.openRows": "{tage} Tageszeilen, {monat} Monatszeilen",
   "mk.noOpen": "Das erste Paket entsteht im ersten Lauf des Sammlers ab 1. des nächsten Monats für den abgeschlossenen Monat.",
   "mk.evTitle": "Wirkung von Ereignissen",
-  "mk.evSub": "Ist gegen die am Vortag ausgegebene Prognose im Zeitfenster des Ereignisses, mit 90-%-Band aus den übrigen Tagen derselben Stadt. {n} Schätzungen. {mine}",
+  "mk.evSub": "Ist gegen die am Vortag ausgegebene Prognose im Zeitfenster des Ereignisses, bereinigt um die mittlere Abweichung der Prognose an den übrigen Tagen derselben Stadt; das 90-%-Band ist ein Vorhersageintervall aus diesen Tagen. {n} Schätzungen. {mine}",
   "mk.evNoneHere": "Für {name} liegt noch keine vor – gezeigt sind alle Städte.",
   "mk.day": "Tag",
   "mk.event": "Ereignis",

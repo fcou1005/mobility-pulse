@@ -69,5 +69,5 @@ Formate: [Datenformate](datenformate.md) (Familie `geo`).
 - Die 100-m-Zensuszellen werden als Rechtecke im Gradnetz angenähert (Drehung gegen LAEA unter 4°); für Anteile auf 250-m-Zellen reicht das.
 - Fahrtbeginne und -enden kommen aus dem Vergleich zweier Läufe: gebündelte Umsetzungen und Akkutausch sind herausgefiltert, einzelne Umsetzungen bei Anbietern mit wechselnder Kennung nicht, und Fahrten unter 20 Minuten zwischen zwei Läufen mit Rückkehr zum Startort fehlen.
 - Der Zubringer-Index hängt am Fahrplan eines Stichtags; in Ferien oder bei Bauarbeiten weicht er ab.
-- Der Planer hängt an der Vollständigkeit von OpenStreetMap (Gehweg-Tags, vorhandene Flächen) und an der Erreichbarkeit von Overpass.
+- Der Planer hängt an der Vollständigkeit von OpenStreetMap (Gehweg-Tags, vorhandene Flächen) und an der Erreichbarkeit von Overpass. Als vorhandene Fläche zählen seit 15.11.2026 auch die Abstellinseln der Anbieter (Zonen mit erlaubtem oder vorgeschriebenem Abstellen unter 2.000 m² aus `zones/`): OSM kennt in Stuttgart 69 Flächen, die Feeds 552 Inseln.
 - Die Adressen der Quelldateien (Destatis, Unfallatlas) sind im Code hinterlegt; ändern die Ämter sie, meldet der Geo-Lauf den Fehler und die Seite zeigt den letzten Stand.

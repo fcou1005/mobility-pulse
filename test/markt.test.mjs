@@ -54,6 +54,13 @@ const names = { '08111000': 'Stuttgart', '08416041': 'Tübingen', '08888888': 'K
   assert(ef.length === 2 && !ef.some(e => e.id === 's'), 'S7.2: nur abgeschlossene Tage mit Prognose (Streik am laufenden Tag fehlt)');
   assert(k && k.window.join() === '18,23' && k.effect === 200 && k.verdict === 'mehr' && k.band[0] > 0 && k.n === 7, `S7.2: Konzert +40 % im Fenster 18–23 Uhr: Wirkung ${k?.effect}, Band ${k?.band}, „mehr“`);
   assert(m && m.window.join() === '10,22' && m.hours === 11 && m.verdict === 'nicht unterscheidbar' && m.band[0] < 0 && m.band[1] > 0, `S7.2: Markt +1 % (Lücke in Stunde 12): Band enthält die Null → „nicht unterscheidbar“`);
+  { // Band als Vorhersageintervall: Vergleichstage −20 % bis +20 % (s ≈ 0,158), n = 5 → t 2,132 · s · √1,2 ≈ ±0,37; +30 % am Ereignistag bleibt „nicht unterscheidbar“ (das alte 5.–95. Perzentil endete bei +18 %)
+    const mk = (f) => ({ 'ags:08111000': { p: new Array(24).fill(100), a: new Array(24).fill(100 * f) } }), s2 = { days: { '2026-11-01': mk(0.8), '2026-11-02': mk(0.9), '2026-11-03': mk(1), '2026-11-04': mk(1.1), '2026-11-05': mk(1.2), '2026-11-06': mk(1.3) } };
+    const [x] = K.eventEffects(s2, [{ id: 'x', art: 'veranstaltung', von: '2026-11-06T18:00', bis: '2026-11-06T22:00', gebiet: { ags: ['08111000'] }, titel: 'x' }], { today: '2026-11-07' });
+    assert(x && x.n === 5 && x.verdict === 'nicht unterscheidbar' && x.bias === 0 && x.effect === 150 && x.raw === 150 && Math.abs(x.relBand[0] + 0.069) < 0.01 && Math.abs(x.relBand[1] - 0.669) < 0.01, `S7.2: 5 Vergleichstage ±20 %, Ereignis +30 % → Band ${x?.relBand} enthält die Null`);
+    const s3 = { days: Object.fromEntries(Object.entries(s2.days).map(([d, v], i) => [d, i < 5 ? mk(0.9 + 0.005 * i) : v])) };
+    const [y] = K.eventEffects(s3, [{ id: 'x', art: 'veranstaltung', von: '2026-11-06T18:00', bis: '2026-11-06T22:00', gebiet: { ags: ['08111000'] }, titel: 'x' }], { today: '2026-11-07' });
+    assert(y && y.verdict === 'mehr' && y.bias === -0.09 && y.raw === 150 && y.effect === 195 && y.band[0] > 150, `S7.2: Prognose sonst 9 % zu hoch → Wirkung bereinigt ${y?.effect} statt ${y?.raw}`); }
   assert(K.eventEffects(ser, ev, { today: '2026-11-09', minDays: 8 }).length === 0, 'S7.2: zu wenige Vergleichstage → keine Schätzung');
 }
 // ---------- S7.3 ----------
@@ -97,5 +104,5 @@ const names = { '08111000': 'Stuttgart', '08416041': 'Tübingen', '08888888': 'K
   await run({ DATA, latest, now: at + 18 * 60e3, log: (m) => logs.push(m) });
   assert((await stat(path.join(DATA, 'index', '2026-11.json'))).mtimeMs === m0 && logs.filter(l => /Index und Daten-Paket 2026-11/.test(l)).length === 1, 'S7.1: späterer Lauf schreibt den Monat nicht erneut');
   const g = JSON.parse(await readFile(path.join(DATA, 'grafik', 'index.json'), 'utf8'));
-  assert(g.weeks[0].week === '2026-W48' && g.schemaVersion === '1.0', `S7.5: Grafik der Woche entsteht von selbst (${g.weeks[0].week})`);
+  assert(g.weeks[0].week === '2026-W48' && g.schemaVersion === '1.1', `S7.5: Grafik der Woche entsteht von selbst (${g.weeks[0].week})`);
 }
