@@ -227,6 +227,15 @@ assert(O.noParkGeometries(fc).length === 1, 'nur Zonen mit Abstell- oder Fahrver
 const els = [{ type: 'node', lat: 1, lon: 2, tags: { amenity: 'kick-scooter_parking' } }, { type: 'way', center: { lat: 1, lon: 2 }, tags: { amenity: 'bicycle_parking' } }, { type: 'node', lat: 1, lon: 2, tags: { amenity: 'bicycle_rental', name: 'Station' } }, { type: 'node', lat: 1, lon: 2, tags: { highway: 'bus_stop' } }];
 const pk = O.parkingFromOsm(els), tr = O.transitFromOsm(els);
 assert(pk.map(p => p.cat).join() === 'escooter,rad,sharing' && tr.length === 1, 'OSM: E-Scooter-Fläche, Radabstellanlage, Sharing getrennt; Haltestelle als ÖPNV');
+// Umgebung im Sammler: Erneuerung gestreut, Zeitbudget, zuletzt erfolgreicher Spiegel zuerst
+{ const CX = O.CONTEXT, t = 1794800000000, day = 86400e3, agsL = Array.from({ length: 200 }, (_, i) => String(8111000 + i * 17).padStart(8, '0'));
+  assert(O.contextDue(null, '08111000', t) && !O.contextDue({ at: t - day }, '08111000', t) && O.contextDue({ at: t - 10 * day }, '08111000', t), 'Umgebung: ohne Eintrag fällig, nach 1 Tag nicht, nach 10 Tagen fällig');
+  assert(!O.contextDue({ at: t - 10 * day, failedAt: t - 3600e3 }, '08111000', t) && O.contextDue({ at: t - 10 * day, failedAt: t - 7 * 3600e3 }, '08111000', t), 'Umgebung: nach Fehlschlag erst nach retryH wieder');
+  const dueAt = agsL.map(a => { let h = 0; while (!O.contextDue({ at: t }, a, t + CX.maxAgeDays * day + h * 3600e3)) h++; return h; });
+  assert(Math.min(...dueAt) <= 2 && Math.max(...dueAt) >= CX.jitterH - 2 && Math.max(...dueAt) <= CX.jitterH + 1 && new Set(dueAt).size >= 30, `Umgebung: am selben Tag geholte Gemeinden laufen über ${CX.jitterH} h gestreut ab (${Math.min(...dueAt)}–${Math.max(...dueAt)} h)`);
+  assert(O.contextReqMs(CX.budgetMs) === CX.reqMs && O.contextReqMs(20e3) === 20e3 && O.contextReqMs(CX.minReqMs - 1) === 0, 'Umgebung: Abruf höchstens reqMs, Rest des Budgets, nichts unter minReqMs');
+  assert(O.contextMirrors(['a', 'b', 'c'], 'c').join() === 'c,a,b' && O.contextMirrors(['a', 'b'], 'x').join() === 'a,b' && O.contextMirrors(['a', 'b'], null).join() === 'a,b', 'Umgebung: zuletzt erfolgreicher Spiegel zuerst');
+  assert(CX.budgetMs <= 90e3, 'Umgebung: höchstens 90 s Overpass-Zeit je Lauf'); }
 // Stationsausgleich
 const ST = (name, lat, bookable, cap, extra = {}) => ({ name, lat, lon: 9.05, bookable, docks: cap - bookable, capacity: cap, renting: true, returning: true, ...extra });
 const sb = O.planStationBalance({ stations: [ST('Leer', 48.52, 0, 10), ST('Voll', 48.525, 10, 10), ST('Mitte', 48.53, 5, 10), ST('Halbleer', 48.535, 1, 10)], depot, vanCapacity: 20 });
@@ -727,6 +736,16 @@ assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('ca
     `Prognose-Faktor: Band beim nächsten Vorkommen (${fm?.day} ${fm?.from}–${fm?.to} Uhr, × ${fm?.raw}), ganzer Tag über 24 Stunden`);
   assert(O.forecastFactor(d, 'Z', 'day') === null && O.forecastFactor({ ...d, ags: { A: [d.ags.A[0], d.ags.A[1].map(() => 0.5)] } }, 'A', 'day') === null && O.forecastFactor({ ...d, ags: { A: [d.ags.A[0].map(() => 1000), d.ags.A[1]] } }, 'A', 'day').factor === 2,
     'Prognose-Faktor: ohne Gemeinde oder mit zu wenig Messung keiner, begrenzt auf 0,5 bis 2');
+  // Korrekturen: Stand der Freigabe und Faktor je gestörter Gemeinde; Wirkung in Fahrten aus der Prognose (eingerechnet: aus ihr herausgerechnet)
+  const gate = { on: false, why: 'few', n: 2, cases: 40, ratio: 0.97, p: 0.3, need: { minN: 7 } };
+  const lat2 = { ...latest, stoerung: { applied: false, gate, learnUntil: '2026-11-23', rule: { maxLeadH: 3, tauH: 2 }, now: { c: { A: [1.2, 50, 50, 50] } } }, nowcast: { applied: false, gate: { ...gate, why: 'learning' }, now: { ratio: 1.1 } } };
+  const d2 = O.dispoForecast(lat2, series), pc = O.ptCorrectionOf(d2, 'A'), lf = [1, Math.exp(-0.5), Math.exp(-1)].map(e => 1 + 0.2 * e);
+  assert(d2.corrections.stoerung.cities.A === 1.2 && !d2.corrections.stoerung.on && d2.corrections.stoerung.gate.why === 'few' && d2.corrections.nowcast.ratio === 1.1 && O.dispoCorrections({}).stoerung === null,
+    'Disposition: Korrekturen mit Stand der Freigabe und Faktor je gestörter Gemeinde');
+  const ex = d.ags.A[0].slice(0, 3).reduce((s, x, k) => s + x * (lf[k] - 1), 0);
+  assert(pc && !pc.on && Math.abs(pc.extra - Math.round(ex * 10) / 10) < 1e-9 && pc.hours === 3 && O.ptCorrectionOf(d2, 'B') === null, `Störungskorrektur angezeigt: +${pc?.extra} Fahrten in 3 Stunden (+${(pc?.share * 100).toFixed(1)} %)`);
+  const dOn = { ...d2, ags: { A: [d.ags.A[0].map((x, k) => (k < 3 ? x * lf[k] : x)), d.ags.A[1]] }, corrections: { ...d2.corrections, stoerung: { ...d2.corrections.stoerung, on: true } } }, pOn = O.ptCorrectionOf(dOn, 'A');
+  assert(pOn.on && Math.abs(pOn.extra - pc.extra) < 0.11, 'Störungskorrektur eingerechnet: Wirkung aus der Prognose herausgerechnet, gleiche Zahl');
   // ÖPNV-Ziele: Station mit eigenem Fahrzeug in 300 m und Station am Spot fallen weg, höchstens fünf, die stärkste Störung zuerst
   const rows = [['s1', 'Hbf', 48.53, 9.07, 40, 10, 10], ['s2', 'Uni', 48.54, 9.08, 30, 2, 20], ['s3', 'Mitte', base[0], base[1], 50, 30, 0], ['s4', 'Nord', 48.55, 9.10, 20, 1, 8]];
   const os = O.oepnvSpots(rows, { vehicles: [{ lat: 48.5401, lon: 9.0801 }], spots: [{ lat: base[0], lon: base[1] }], firstRank: 21 });

@@ -284,34 +284,41 @@ export async function run(ctx) {
       } catch (e) { log(`Ops-Flotte je Gemeinde: ${e.message}`); }
     }
     // Umgebung für die Disposition: ÖPNV-Haltepunkte und Abstellflächen aus OpenStreetMap, je Gemeinde.
-    // Wenige Gemeinden je Lauf (größte Flotten zuerst), gültig 7 Tage – der Browser muss Overpass dann nicht selbst fragen.
+    // Wenige Gemeinden je Lauf (größte Flotten zuerst), gültig 7 Tage plus Streuung je Gemeinde – der Browser muss Overpass dann nicht selbst fragen.
     if (process.env.SKIP_CONTEXT !== '1') {
       const dir = path.join(DATA, 'context'); await mkdir(dir, { recursive: true });
       const idxFile = path.join(dir, 'index.json');
       const cidx = existsSync(idxFile) ? JSON.parse(await readFile(idxFile, 'utf8')) : { munis: {} };
       const byAgs = new Map(); for (const v of dv.vehicles) { if (!v.ags) continue; if (!byAgs.has(v.ags)) byAgs.set(v.ags, []); byAgs.get(v.ags).push(v); }
-      const due = (a) => { const m = cidx.munis[a]; if (!m) return true; if (m.failedAt && now - m.failedAt < 6 * 3600e3) return false; return !m.at || now - m.at > 7 * 86400e3; };
-      const todo = [...byAgs].filter(([a, l]) => l.length >= 30 && due(a)).sort((a, b) => b[1].length - a[1].length).slice(0, +process.env.CONTEXT_PER_RUN || 2);
-      const t0 = Date.now(); const CATS = ['escooter', 'sharing', 'rad', 'official'];
+      // Zeitbudget für alle Abrufe des Laufs (OPS.CONTEXT, Begründung dort); fällig nach Alter mit Streuung je Gemeinde
+      const CX0 = OPS.CONTEXT, budget = process.env.CONTEXT_BUDGET_S != null ? +process.env.CONTEXT_BUDGET_S * 1e3 : CX0.budgetMs;
+      const todo = [...byAgs].filter(([a, l]) => l.length >= CX0.minVehicles && OPS.contextDue(cidx.munis[a], a, now)).sort((a, b) => b[1].length - a[1].length).slice(0, +process.env.CONTEXT_PER_RUN || CX0.perRun);
+      const t0 = Date.now(), left = () => budget - (Date.now() - t0); const CATS = ['escooter', 'sharing', 'rad', 'official'];
+      const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
       for (const [ags, list] of todo) {
-        if (Date.now() - t0 > 120e3) break;
+        // eine Gemeinde nur mit vollem ersten Abruf beginnen (ein abgebrochener Kurzversuch sperrte sie sonst für retryH Stunden)
+        if (left() < Math.min(CX0.reqMs, budget)) { log(`Umgebung: Zeitbudget ${Math.round(budget / 1e3)} s erreicht, ${ags} in einem späteren Lauf`); break; }
+        const t1 = Date.now();
         const qt = (arr, p) => { const x = arr.slice().sort((a, b) => a - b); return x[Math.floor(p * (x.length - 1))]; };
         const la = list.map(v => v.lat), lo = list.map(v => v.lon);
         const bbox = [qt(la, 0.02) - 0.004, qt(lo, 0.02) - 0.006, qt(la, 0.98) + 0.004, qt(lo, 0.98) + 0.006].map(x => +x.toFixed(4));
-        const q = `[out:json][timeout:110][bbox:${bbox.join(',')}];(nwr["amenity"~"^(kick-scooter_parking|small_vehicle_parking|small_electric_vehicle_parking|bicycle_rental|kick-scooter_rental|mobility_hub|bicycle_parking)$"];nwr["small_electric_vehicle"];node["highway"="bus_stop"];node["public_transport"="platform"];node["railway"~"^(tram_stop|station|halt)$"];);out center tags;`;
+        const qOf = (sec) => `[out:json][timeout:${sec}][bbox:${bbox.join(',')}];(nwr["amenity"~"^(kick-scooter_parking|small_vehicle_parking|small_electric_vehicle_parking|bicycle_rental|kick-scooter_rental|mobility_hub|bicycle_parking)$"];nwr["small_electric_vehicle"];node["highway"="bus_stop"];node["public_transport"="platform"];node["railway"~"^(tram_stop|station|halt)$"];);out center tags;`;
         let els = null, ep = null;
-        for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']) {
-          const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), 120e3);
-          try { const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: q }), headers: { 'User-Agent': UA }, signal: ctrl.signal }); if (r.ok) { const j = await r.json(); if (Array.isArray(j.elements) && !j.remark) { els = j.elements; ep = url; } } } catch { /* nächster Spiegel */ }
+        for (const url of OPS.contextMirrors(MIRRORS, cidx.mirror)) {
+          const ms = OPS.contextReqMs(left()); if (!ms) break;
+          const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), ms);
+          try { const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: qOf(Math.floor(ms / 1e3) - 5) }), headers: { 'User-Agent': UA }, signal: ctrl.signal }); if (r.ok) { const j = await r.json(); if (Array.isArray(j.elements) && !j.remark) { els = j.elements; ep = url; } } } catch { /* nächster Spiegel */ }
           clearTimeout(tm); if (els) break;
         }
-        if (!els) { cidx.munis[ags] = { ...(cidx.munis[ags] || {}), failedAt: now }; log(`Umgebung ${ags}: Overpass ohne Antwort`); continue; }
+        const sec = ((Date.now() - t1) / 1e3).toFixed(0);
+        if (!els) { cidx.munis[ags] = { ...(cidx.munis[ags] || {}), failedAt: now }; log(`Umgebung ${ags}: Overpass ohne Antwort (${sec} s)`); continue; }
+        cidx.mirror = ep;
         const parking = OPS.parkingFromOsm(els).map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5), CATS.indexOf(p.cat), p.cat === 'rad' ? null : (p.name || null)]);
         const transit = OPS.transitFromOsm(els).map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]);
         const doc = JSON.stringify({ at: now, ags, bbox, source: 'OpenStreetMap (ODbL) via Overpass', cats: CATS, parkingFields: 'lat,lon,kategorie,name', parking, transit });
         await writeFile(path.join(dir, `${ags}.json`), doc);
         cidx.munis[ags] = { at: now, parking: parking.length, transit: transit.length, bytes: doc.length };
-        log(`Umgebung ${ags}: ${parking.length} Abstellflächen, ${transit.length} Haltepunkte (${(doc.length / 1e3).toFixed(0)} kB, ${new URL(ep).host})`);
+        log(`Umgebung ${ags}: ${parking.length} Abstellflächen, ${transit.length} Haltepunkte (${(doc.length / 1e3).toFixed(0)} kB, ${new URL(ep).host}, ${sec} s)`);
       }
       await writeFile(idxFile, JSON.stringify(cidx));
     }

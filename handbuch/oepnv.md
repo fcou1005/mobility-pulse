@@ -32,6 +32,7 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Je Lauf: Stationen mit mindestens 8 Halten mit Echtzeit in den letzten 2 Stunden, von denen mindestens 30 % ausgefallen oder verspätet oder 15 % ausgefallen sind (`jetzt` in `oepnv/<AGS>.json`, seit Format 1.3, höchstens 40 je Gemeinde).
 - Die Seite zählt die verfügbaren Sharing-Fahrzeuge im Umkreis von 300 m (`ops-input/fleet/<AGS>.json`) und sortiert: kein Fahrzeug, höchstens zwei, genug vor Ort. Auf der Karte ein Kreis je Station, kräftig, wenn kein Fahrzeug in der Nähe steht.
 - Ein Hinweis für die Disposition, keine Prognose: wie stark Störungen die Nachfrage einer Stadt heben, steht unter Wirkung auf Sharing und ist nur in einzelnen Städten belegt.
+- Darunter (seit 16.11.2026 abends) die Prognose bei dieser Störung: Störungskorrektur der Prognose für die Stadt, in Prozent und Fahrtbeginnen für die nächsten 3 Stunden, aus `forecast/dispo.json` `corrections`. Solange sie in der Probe ist, steht dabei, dass sie noch nicht eingerechnet ist, mit Lernzeit oder bewerteten Tagen; Freigabe wie in [Prognose](prognose.md).
 
 ## Linien (`lib/pulse-oepnv-linien.js`)
 
@@ -55,7 +56,7 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Je Stunde zwischen 6 und 22 Uhr: Sharing-Fahrtbeginne ÷ Prognose des Vortags − 1. Je Gemeinde und Tag ein Wert: Mittel der gestörten Stunden minus Mittel der übrigen Stunden desselben Tages.
 - 90-%-Intervall (Student-t) aus den Tageswerten, je Gemeinde ab 3 Tagen mit Störung, über alle Gemeinden ab 5 Stadt-Tagen. Urteil „mehr“ oder „weniger“ nur, wenn das Intervall die Null nicht enthält.
 - Passives Lernen (`mergeDaily`, `learnEffects`, seit 16.11. abends): Die Tageswerte je Stadt bleiben im Zustand des Sammlers bis 60 Tage, über das 8-Tage-Fenster hinaus. Je Stadt: Mittel ihrer gestörten Tage, mit 5 Tagen zur Wirkung aller Städte gezogen (unter 5 Stadt-Tagen insgesamt zur Null). Spalte „gelernt“ in der Tabelle; die Prognose rechnet damit nur im Schatten ([Prognose](prognose.md)).
-- Zusammenhang, keine Ursache: Wetter und Großereignisse bewegen beide Seiten. Die Prognose nutzt die Störungsmerkmale erst, wenn sie im Schattenvergleich gewinnen ([Prognose](prognose.md)).
+- Zusammenhang, keine Ursache: Wetter und Großereignisse bewegen beide Seiten. Die Prognose zeigt die Störungskorrektur an und rechnet sie erst ein, wenn sie im gezielten Abgleich gewinnt ([Prognose](prognose.md), Freigabe der Korrekturen).
 
 ## Letzte Meile (`farMask`, `lastMile` in `lib/pulse-geo-cover.js`)
 

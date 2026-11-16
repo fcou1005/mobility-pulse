@@ -1,22 +1,26 @@
 // @ts-check
 // Mobility Pulse — Reiter ÖPNV, weitere Tafeln: Linien nach Zuverlässigkeit und Tagesgang ÖPNV gegen Sharing (Nachtnetz-Lücke).
-// Daten: oepnv/<AGS>.json (lines, profile; seit Format 1.1). Texte unter pt.* (Bereich oepnv).
-import { t } from './i18n.js';
+// Daten: oepnv/<AGS>.json (lines, profile; seit Format 1.1), Störungskorrektur aus forecast/dispo.json. Texte unter pt.* (Bereich oepnv).
+import { t, dateFmt } from './i18n.js';
 import { modeTxt as artTxt } from './oepnv-karte.js';
 
 const csvNum = (/** @type {number | null} */ x, d = 1) => (x == null ? '' : (+x).toFixed(d).replace('.', ','));
 const pct = (/** @type {any} */ ctx, /** @type {number | null} */ x, d = 1) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
 
 /** Jetzt gestört: Stationen mit Ausfällen und Verspätungen in den letzten Stunden und die Sharing-Fahrzeuge im Umkreis von 300 m */
-/** @param {any} ctx @param {any} doc @param {string} name @param {any[]} hints @param {any} mine */
-export function nowPanel(ctx, doc, name, hints, mine) {
+/** @param {any} ctx @param {any} doc @param {string} name @param {any[]} hints @param {any} mine @param {any} [corr] Störungskorrektur der Prognose (lib/pulse-ops-extern.js ptCorrectionOf) */
+export function nowPanel(ctx, doc, name, hints, mine, corr = null) {
   const J = doc?.jetzt, f = ctx.fmt; if (!doc || !J) return '';
   const none = hints.filter(x => x.level === 'none').length, few = hints.filter(x => x.level === 'few').length, known = hints.some(x => x.vehicles != null);
   const lvl = (/** @type {any} */ x) => (x.level === 'none' ? `▲ ${t('pt.nowNone')}` : x.level === 'few' ? `▲ ${t('pt.nowFew', { n: f(x.vehicles) })}` : x.level === 'ok' ? `○ ${t('pt.nowOk', { n: f(x.vehicles) })}` : '–');
   const eff = mine && (mine.verdict === 'mehr' || mine.verdict === 'weniger') ? t(mine.verdict === 'mehr' ? 'pt.nowEffMore' : 'pt.nowEffLess', { name, e: `${f(Math.abs(mine.effect) * 100, 1)} %` }) : t('pt.nowEffOpen', { name });
+  // Prognose: Störungskorrektur für diese Stadt (läuft mit, wirkt nach Freigabe – Prognose › Grundlagen › Korrekturen)
+  const g = corr?.gate, sgn = (/** @type {number} */ x, d = 1) => `${x >= 0 ? '+' : '−'}${f(Math.abs(x), d)}`;
+  const fcTxt = corr && corr.share != null ? `<p id="pt-now-fc">${t('pt.nowFc', { name, p: `<b>${sgn(corr.share * 100)} %</b>`, h: f(corr.hours), ex: sgn(corr.extra, 0) })} ${corr.on ? t('pt.nowFcOn', { d: g?.since ? dateFmt({ day: 'numeric', month: 'numeric' }).format(new Date(g.since)) : '–' })
+    : g?.why === 'learning' ? t('pt.nowFcLearn', { until: corr.learnUntil ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(new Date(`${corr.learnUntil}T12:00:00Z`)) : '–' }) : t('pt.nowFcProbe', { n: f(g?.n ?? 0), min: f(g?.need?.minN ?? 7) })} <a href="#prognose-basis">${t('pt.nowFcMore')}</a></p>` : '';
   return `<div class="panel" id="pt-now-panel"><div class="panel-head"><div><h2>${t('pt.nowTitle')}</h2><div class="sub">${t('pt.nowSub', { h: f(J.windowH) })}</div></div>
     <div class="panel-actions"><button class="chip" type="button" id="pt-now-csv"${hints.length ? '' : ' disabled'}>${t('pt.csv')}</button></div></div>
-    ${hints.length ? `<p>${t('pt.nowLead', { n: `<b>${f(hints.length)}</b>`, name, h: f(J.windowH) })} ${known ? t('pt.nowLeadVeh', { none: `<b>${f(none)}</b>`, few: f(few) }) : t('pt.nowLeadNoFleet')} ${eff}</p>
+    ${hints.length ? `<p>${t('pt.nowLead', { n: `<b>${f(hints.length)}</b>`, name, h: f(J.windowH) })} ${known ? t('pt.nowLeadVeh', { none: `<b>${f(none)}</b>`, few: f(few) }) : t('pt.nowLeadNoFleet')} ${eff}</p>${fcTxt}
     <div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.nowTitle'))}"><table id="pt-now"><thead><tr><th>${t('pt.colStation')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th>${t('pt.colNear')}</th></tr></thead><tbody>
     ${hints.slice(0, 15).map(x => `<tr><td><a href="https://www.openstreetmap.org/?mlat=${x.lat.toFixed(5)}&mlon=${x.lon.toFixed(5)}#map=17/${x.lat.toFixed(5)}/${x.lon.toFixed(5)}" target="_blank" rel="noopener">${ctx.esc(x.name)}</a></td><td class="n">${f(x.n)}</td><td class="n">${pct(ctx, x.skip / x.n, 0)}</td><td class="n">${pct(ctx, x.late / x.n, 0)}</td><td>${lvl(x)}</td></tr>`).join('')}</tbody></table></div>
     <p class="muted small">${t('pt.nowNote', { min: f(J.minN || 8) })}</p>` : `<p>${t('pt.nowCalm', { name, h: f(J.windowH) })}</p>`}</div>`;

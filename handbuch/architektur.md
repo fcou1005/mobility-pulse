@@ -44,12 +44,17 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `preise-zonen`, `konsistenz`, `dubletten` | Tarife und Zonen, Abgleich zwischen Quellen, Dubletten und Spiegel |
 | `betriebsgebiete`, `messbasis`, `obergrenzen`, `zonen-beobachtung` | Präsenz, `latest.json`, Messbasis, Obergrenzen, Zonen |
 | `kalender-wetter`, `verkehr`, `baustellen`, `oepnv` | Umgebung der Prognose |
-| `verfolgung`, `abdeckung`, `ereignisse` | Fahrten, Umsetzungen, Zellen, Ströme, Bestand je Land und Gemeinde, Daten nach Gebiet |
+| `verfolgung`, `abdeckung`, `ereignisse` | Fahrten, Umsetzungen, Zellen, Ströme, Bestand je Land und Gemeinde, Daten nach Gebiet, Umgebung aus OpenStreetMap (`context/`) |
 | `sport-termine`, `streiks`, `prognose`, `training` | Termine, Streiks, Prognose, Trainingsarchiv |
 | `kalibrierung`, `grenzen` | Kalibrierung, Gemeindegrenzen |
 | `gebiet` | Dateien je Gemeinde für die Disposition (`scripts/gebiet.mjs`): `latest-core.json`, `ops-input/cells`, `ops-input/area`, `ops-input/zones` |
 | `alarme` | Alarme je Gemeinde (Obergrenze, Quelle aus, Zonen, Preise, Flottensprung, ÖPNV gestört) → `auflagen/alarme.json`, Atom-Feeds `feeds/<AGS>.xml` |
 | `datenvertraege`, `abschluss` | Formatversion, Lizenzen und `status.json` |
+
+Die Umgebung der Disposition (`context/<AGS>.json`, Abstellflächen und Haltepunkte aus Overpass) hat ein festes Zeitbudget je Lauf
+(`CONTEXT` in `lib/pulse-ops-model.js`: 60 s für alle Abrufe, je Abruf höchstens 45 s, zuerst der zuletzt erfolgreiche Spiegel) und läuft je Gemeinde
+nach 7 Tagen plus 0 bis 48 Stunden Streuung ab. Bis 16.11.2026 durfte ein Abruf drei Spiegel je 120 s probieren, und die am 8. bis 10.11. geholten
+Gemeinden liefen gleichzeitig ab: Phase `ereignisse` 230 bis 310 s statt 70 s, Lauf 420 s statt 160 s.
 
 ## Startseite in Modulen
 

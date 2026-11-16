@@ -54,7 +54,7 @@ export async function run(ctx) {
         // getrennt in forecast/moped/ und forecast/car/; eine Familie ohne Fahrzeugminuten in den Tagesdateien wird übersprungen (keine Dateien)
         const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
         ctx.trainCtx = { curated: curatedAll, pending };
-        // Störungskorrektur im Schatten: letzte volle Stunde je Gemeinde (Phase oepnv) und belegte Wirkung (oepnv/wirkung.json)
+        // Störungskorrektur (angezeigt, nach Freigabe eingerechnet): letzte volle Stunde je Gemeinde (Phase oepnv) und belegte Wirkung (oepnv/wirkung.json)
         let ptIn = null; try { const w = ctx.ptNow ? await rd(path.join(DATA, 'oepnv', 'wirkung.json')) : null; if (w?.learn) ptIn = { now: ctx.ptNow, effect: Object.fromEntries(Object.entries(w.learn.cities || {}).map(([a, r]) => [a, r[1]])), pooled: w.learn.pooled?.effect ?? 0, since: w.learn.since, until: w.learn.until }; } catch { ptIn = null; }
         for (const fam of FC.FAMILIES) {
           try {
@@ -69,6 +69,8 @@ export async function run(ctx) {
             // Disposition: Prognose und gemessenes Mittel je Gemeinde und Horizont-Stunde (lib/pulse-ops-extern.js), nur Mikromobilität
             if (fam === 'micro' && res.latest.status === 'active') { const dp = OX.dispoForecast(res.latest, res.series); await writeFile(path.join(fdir, 'dispo.json'), JSON.stringify(SV.withSchema('forecast', dp))); }
             const l = res.latest;
+            // Korrekturen: Stand der Freigabe (lib/pulse-forecast-select.js CORR_GATE) – eine Zeile, damit der Wechsel im Lauf-Protokoll steht
+            if (fam === 'micro') { const gs = (k, x) => (x?.gate ? `${k} ${x.applied ? 'eingerechnet' : x.gate.on ? 'frei' : `Probe (${x.gate.why}, ${x.gate.n}/${x.gate.need?.minN ?? '?'}${x.gate.ratio != null ? `, ${x.gate.ratio}` : ''})`}` : `${k} –`); log(`Prognose-Korrekturen: ${gs('Tageskorrektur', l.nowcast)}, ${gs('Störungskorrektur', l.stoerung)}${l.stoerung?.now ? ` in ${Object.keys(l.stoerung.now.c).length} gestörten Gemeinden` : ''}`); }
             log(`Prognose${fam === 'micro' ? '' : ` (${fam})`}: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
           } catch (e) { if (fam === 'micro') throw e; log(`Prognose (${fam}): ${e.message} – alte Dateien bleiben`); }
         }

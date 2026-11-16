@@ -85,7 +85,7 @@ export async function computePlan() {
     const params = { topN, spacing, share, horizonH, van: num('#ops-van', 20), common: { depot, maxRuns: num('#ops-maxruns', 6), horizonH, maxRunMin: Math.round(num('#ops-maxh', 4) * 60), prioLambda: prioLambda() }, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
     // Prognose-Faktor des Bands (lib/pulse-ops-extern.js): skaliert die Nachfrage aller Spots und Zellen; ÖPNV-Ziele nach dem Spot-Ranking
     const fc0 = fcDoc ? O.forecastFactor(fcDoc, ags, band === 'day' ? 'day' : O.BANDS.find(x => x.id === band) || 'day') : null, fc = fc0 ? { ...fc0, days: fcDoc.baseDays?.length || 0 } : null;
-    const plan = { ags, op, type, noDemand, band, bandNote, model, cellDocs, share, fc, shareDemand: share * (fc?.factor ?? 1), ptDoc, ptSpots: [], depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
+    const plan = { ags, op, type, noDemand, band, bandNote, model, cellDocs, share, fc, shareDemand: share * (fc?.factor ?? 1), fcPt: fcDoc ? O.ptCorrectionOf(fcDoc, ags) : null, fcNc: !!fcDoc?.corrections?.nowcast?.on, ptDoc, ptSpots: [], depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
     if (!S.gf || S.gf.forOp !== op || S.gf.forAgs !== ags) S.gf = { ...GF0(), kind: S.gf?.kind || 'deploy', sort: S.gf?.sort || 'count', dir: S.gf?.dir || 'desc', op, forOp: op, forAgs: ags };
     // Rechenschritte nacheinander mit Status, dazwischen die Seite freigeben
     const steps = [
@@ -142,7 +142,10 @@ function extNote(p) {
   const f = p.fc, pct = f ? Math.round((f.raw - 1) * 100) : 0, when = f ? (p.band === 'day' ? t('ops.fcNext24') : t('ops.fcHours', { from: f.from, to: f.to })) : '';
   const a = f ? ` ${t(Math.abs(pct) < 3 ? 'ops.fcSame' : pct > 0 ? 'ops.fcMore' : 'ops.fcLess', { p: X.fmt(Math.abs(pct)), when, x: X.fmt(f.factor, 2), d: X.fmt(f.days || 7) })}` : '';
   const b = p.ptSpots?.length ? ` ${t('ops.ptTargets', { n: X.fmt(p.ptSpots.length), names: p.ptSpots.map(s => X.esc(s.oepnv.name)).join(', ') })}` : '';
-  return a || b ? `.${a}${b}` : '';
+  // Korrekturen der Prognose (forecast/dispo.json corrections): eingerechnet oder in der Probe nur angezeigt
+  const c = p.fcPt, sgn = (x) => `${x >= 0 ? '+' : '−'}${X.fmt(Math.abs(x * 100), 1)} %`;
+  const k = `${f && p.fcNc ? ` ${t('ops.fcNcOn')}` : ''}${c && c.share != null ? ` ${t(c.on ? 'ops.fcPtOn' : 'ops.fcPtProbe', { p: sgn(c.share), h: X.fmt(c.hours) })}` : ''}`;
+  return a || b || k ? `.${a}${k}${b}` : '';
 }
 export function planStatus(p) {
   const osm = p.osm, loading = $('#ops-osm').checked && !osm && S.osm[p.ags]?.state === 'loading';

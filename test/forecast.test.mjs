@@ -858,6 +858,55 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const mu = F.ptApply(Float64Array.from([100, 100, 100, 100]), (j) => ['a', 'a', 'a', 'x'][j], (j) => [0, 2, 3, 0][j], f);
   assert(Math.abs(mu[0] - 120) < 1e-9 && Math.abs(mu[1] - (100 + 20 * Math.exp(-1))) < 1e-9 && mu[2] === 100 && mu[3] === 100, 'Störungskorrektur: volle Wirkung zur Ausgabe, klingt mit 2 h ab, endet nach 3 h, andere Gemeinden unverändert');
 }
+// ---------- Freigabe der Korrekturen (CORR_GATE) und gezielter Abgleich der Störungskorrektur
+{
+  const sc = F.ptScoreAdd({}, { local: [['2026-11-20', 10], ['2026-11-20', 11], ['2026-11-20', 12]], c: { a: [1.2, 100, 100, 100], b: [1.1, 50, 50, 50] } }, (d, h, ags) => (ags === 'a' ? 120 : h === 10 ? 50 : null));
+  const ea = Math.abs(120 - 100 * (1 + 0.2 * Math.exp(-0.5))) + Math.abs(120 - 100 * (1 + 0.2 * Math.exp(-1)));
+  assert(sc['2026-11-20'].a[0] === 360 && sc['2026-11-20'].a[1] === 60 && Math.abs(sc['2026-11-20'].a[2] - Math.round(ea * 10) / 10) < 1e-9 && sc['2026-11-20'].a[3] === 3 && sc['2026-11-20'].b[3] === 1 && sc['2026-11-20'].b[2] === 5,
+    'Störungskorrektur gezielt: je Gemeinde und Ortstag Ist, Fehler ohne und mit Korrektur über die wirksamen Stunden; nicht beobachtete Stunden fehlen');
+  const U = (n, f) => Array.from({ length: n }, (_, i) => ({ b: 0.2 + 0.01 * (i % 3), a: (0.2 + 0.01 * (i % 3)) * f(i) }));
+  const G = F.CORR_GATE.nowcast, now = Date.parse('2026-11-25T10:00:00Z');
+  const few = F.corrGate(U(5, () => 0.9), G), ok = F.corrGate(U(12, (i) => 0.9 + 0.01 * (i % 2)), G, null, { now }), weak = F.corrGate(U(12, () => 0.995), G), unsure = F.corrGate(U(12, (i) => (i % 2 ? 1.2 : 0.7)), G);
+  assert(few.why === 'few' && !few.on && ok.on && ok.why === 'ok' && ok.since === new Date(now).toISOString() && weak.why === 'weak' && !weak.on && unsure.why === 'unsure' && !unsure.on && unsure.ratio <= G.maxRatio,
+    `Freigabe: erst ab ${G.minN} Einheiten, Fehler höchstens ${G.maxRatio} des Modells ohne Korrektur und Diebold-Mariano p ≤ ${G.p} (unsicher: p ${unsure.p})`);
+  assert(F.corrGate(U(12, () => 0.9), G, null, { ready: false }).why === 'learning', 'Freigabe: vor Ende der Lernzeit nicht');
+  const keep = F.corrGate(U(12, () => 0.9), G, { on: true, since: 'S' }), off = F.corrGate([...U(12, () => 0.8), ...U(8, () => 1.05)], G, { on: true, since: 'S' }, { now });
+  assert(keep.on && keep.since === 'S' && !off.on && off.why === 'worse' && off.offAt && off.ratio < 1, 'Freigabe: bleibt an, solange die letzten Einheiten nicht schlechter sind; aus, wenn die letzten 8 zusammen schlechter sind als ohne Korrektur');
+  const back = F.corrGate([...U(12, () => 0.8), ...U(8, () => 1.05)], G, off), again = F.corrGate([...U(12, () => 0.8), ...U(8, () => 1.05), ...U(8, () => 0.85)], G, off, { now });
+  assert(!back.on && back.why === 'weak' && again.on, 'Freigabe nach dem Abschalten erst wieder, wenn auch der jüngste Abschnitt gut ist');
+  const S = F.CORR_GATE.stoerung, units = F.ptUnits({ '2026-11-20': { a: [100, 10, 8, 3], b: [50, 5, 5, 3] }, '2026-11-19': { a: [100, 10, 9, 3] } });
+  assert(units.length === 2 && units[0].day === '2026-11-19' && units[1].a === 13 && units[1].b === 15 && units[1].n === 2 && F.corrGate(units, S).why === 'few', 'Störungskorrektur: Einheit = Ortstag über alle gestörten Gemeinden, dazu Mindestzahl Gemeinde-Tage');
+  assert(F.nowcastUnits({ 2: { model: 'm', models: { m: { w: 0.2 }, nowcast: { w: 0.18 } } }, 1: { model: 'm', models: { m: { w: 0.3 } } } }).map(u => u.a ?? null).join() === ',0.18', 'Tageskorrektur: Einheiten je Ausgabe in zeitlicher Folge');
+}
+{
+  // Ende zu Ende: gesperrt → nur angezeigt; freigegeben → in Gemeinde und Stundenreihe, Live-Abgleich der Modelle bleibt roh; danach gezielt bewertet
+  const NOW = Date.parse(`${addDays(DAY0, NDAY)}T10:00:00Z`), A0 = AGS[0], pt = { now: { [A0]: { flag: 1 } }, effect: { [A0]: 0.3 }, pooled: 0.1, since: '2026-10-01', until: '2026-10-08' };
+  const base = F.runForecast({ docs, calendar: null, weather: WX, prevLog: null, now: NOW }), off = F.runForecast({ docs, calendar: null, weather: WX, prevLog: null, now: NOW, pt });
+  const S0 = off.latest.stoerung, row = S0.now?.c?.[A0];
+  assert(row && row[0] === 1.3 && Math.abs(row[1] - base.latest.municipalities[A0][0]) < 0.2 && off.latest.corrections.length === 0 && JSON.stringify(off.latest.municipalities) === JSON.stringify(base.latest.municipalities) && S0.gate.why === 'few' && !S0.applied,
+    `Störungskorrektur gesperrt: Faktor und Prognose der gestörten Gemeinde angezeigt (${row?.slice(1).join(' / ')}), Prognose unverändert`);
+  assert(Object.keys(off.log.ptPending).length === 1 && S0.gate.need.minN === F.CORR_GATE.stoerung.minN, 'Störungskorrektur: Ausgabe zum gezielten Abgleich vorgemerkt');
+  const lg = JSON.parse(JSON.stringify(off.log)); lg.gates.stoerung = { on: true, since: '2026-11-01T00:00:00.000Z' };
+  const on = F.runForecast({ docs, calendar: null, weather: WX, prevLog: lg, now: NOW + 3600e3, pt, issueEveryMs: 1 }), rawOn = F.runForecast({ docs, calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(off.log)), now: NOW + 3600e3, pt, issueEveryMs: 1 });
+  const m1 = on.latest.municipalities, m0 = rawOn.latest.municipalities, iss = on.log.issued[NOW + 3600e3], A1 = AGS[1];
+  const opsA = Object.keys(iss.byOp).filter(op => iss.shadow.stoerung?.[op]?.[0] > iss.byOp[op][0] + 1e-6);
+  assert(on.latest.corrections.includes('stoerung') && on.latest.stoerung.applied && Math.abs(m1[A0][0] / m0[A0][0] - 1.3) < 0.03 && Math.abs(m1[A0][4] - m0[A0][4]) < 0.11 && JSON.stringify(m1[A1]) === JSON.stringify(m0[A1]),
+    `Störungskorrektur freigegeben: gestörte Gemeinde ×${(m1[A0][0] / m0[A0][0]).toFixed(3)} zur Ausgabe, nach 3 h und in anderen Gemeinden unverändert`);
+  assert(JSON.stringify(iss.byOp) === JSON.stringify(rawOn.log.issued[NOW + 3600e3].byOp) && opsA.length > 0 && on.latest.stoerung.gate.on && on.latest.stoerung.gate.since === '2026-11-01T00:00:00.000Z',
+    `Live-Abgleich der Modelle bleibt roh (byOp wie ohne Freigabe, Schatten höher für ${opsA.join(', ')})`);
+  const d12 = makeDoc(addDays(DAY0, NDAY)), later = F.runForecast({ docs: [...docs, d12], calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(off.log)), now: NOW + 7 * 3600e3, pt });
+  const sc = later.log.ptScore[addDays(DAY0, NDAY)]?.[A0];
+  assert(sc && sc[3] === 3 && sc[1] > 0 && !later.log.ptPending[Object.keys(off.log.ptPending)[0]] && later.latest.stoerung.gate.n === 1 && later.latest.stoerung.gate.cases === 1, `Störungskorrektur gezielt bewertet: 3 Stunden, Fehler ohne ${sc?.[1]}, mit ${sc?.[2]}`);
+  const learn = F.runForecast({ docs, calendar: null, weather: WX, prevLog: null, now: NOW, pt: { ...pt, until: '2099-01-01' } });
+  assert(learn.latest.stoerung.gate.why === 'learning' && learn.latest.nowcast.gate && 'applied' in learn.latest.nowcast, 'Störungskorrektur in der Lernzeit gesperrt; Tageskorrektur mit eigener Freigabe');
+  // Tageskorrektur: heute bisher 60 % mehr als üblich (bis 12 Uhr gezählt) → angezeigt; freigegeben → Rest des Tages höher, klingt ab
+  const dT = makeDoc(addDays(DAY0, NDAY), { level: 1.6, skipHours: Array.from({ length: 11 }, (_, i) => 13 + i) }), NOWn = Date.parse(`${addDays(DAY0, NDAY)}T12:00:00Z`);
+  const nOff = F.runForecast({ docs: [...docs, dT], calendar: null, weather: WX, prevLog: null, now: NOWn }), lgN = JSON.parse(JSON.stringify(nOff.log)); lgN.gates.nowcast = { on: true, since: '2026-11-01T00:00:00.000Z' };
+  const nOn = F.runForecast({ docs: [...docs, dT], calendar: null, weather: WX, prevLog: lgN, now: NOWn + 60e3 }), q = nOn.latest.totals[0] / nOff.latest.totals[0];
+  // (das Modell lernt die Stunden von heute schon mit, darum bleibt vom Mehr nur ein Teil fürs Verhältnis)
+  assert(nOff.latest.nowcast.now?.ratio > 1.05 && !nOff.latest.nowcast.applied && !nOff.latest.corrections.length && nOn.latest.corrections.includes('nowcast') && q > 1.02 && nOn.latest.totals[20] / nOff.latest.totals[20] < q,
+    `Tageskorrektur: heute ${nOff.latest.nowcast.now?.ratio} × des Modells angezeigt; freigegeben ×${q.toFixed(2)} zur Ausgabe, klingt ab`);
+}
 // ---------- Tageskorrektur (nowcast) und letzte Stunde des Tages
 {
   const hm = new Array(24).fill(60); hm[13] = 30;

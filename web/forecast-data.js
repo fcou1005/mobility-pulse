@@ -353,3 +353,44 @@ export function scopePanel(ctx, S0, sel, G, L) {
     + `${R.more ? `<div class="fv-sub">${t('fv.scMore', { n: n0(R.more) })}</div>` : ''}<div class="fv-sub">${esc(activeHow(L))}</div><div class="fv-sub">${t('fv.scHowCols', { much: XP.much, ok: XP.enough })}</div></div>`;
 }
 const jChipTxt = (k) => `<span class="fv-chip${k === 'own' ? ' A' : k === 'all' ? ' B' : ' D'}">${t(`fv.scBetter.${k}`)}</span>`;
+
+// ---------- Korrekturen der Prognose (16.11.2026): Tageskorrektur und Störungskorrektur ÖPNV laufen mit und werden angezeigt; in Prognose und
+// Disposition wirken sie erst nach Freigabe im Live-Abgleich (FC.CORR_GATE, Stand in latest.nowcast.gate und latest.stoerung.gate) ----------
+const dShort = (iso) => (iso ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(iso)) : '–');
+/** Stand der Freigabe als Satz (kind 'nowcast' | 'stoerung') */
+export function gateTxt(g, kind, L) {
+  const need = g?.need || FC.CORR_GATE[kind], unit = t(kind === 'stoerung' ? 'fv.gUnitDays' : 'fv.gUnitIssues');
+  const stand = g?.n ? t('fv.gStand', { n: n0(g.n), min: n0(need.minN), unit, cases: kind === 'stoerung' ? t('fv.gCases', { c: n0(g.cases || 0), cmin: n0(need.minCases) }) : '', r: pc(g.ratio, 1), p: g.p == null ? '' : t('fv.gP', { p: numFmt(2).format(g.p) }) })
+    : t('fv.gStandNone', { min: n0(need.minN), unit, cases: kind === 'stoerung' ? t('fv.gCasesNone', { cmin: n0(need.minCases) }) : '' });
+  if (g?.on) return t('fv.gOn', { d: dShort(g.since), k: n0(need.recentN), unit, stand });
+  if (g?.offAt && g.why !== 'learning') return t('fv.gWorse', { d: dShort(g.offAt), k: n0(need.recentN), unit, stand });
+  if (g?.why === 'learning') return t('fv.gLearn', { until: L?.stoerung?.learnUntil ? dateFmt({ day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${L.stoerung.learnUntil}T12:00:00Z`)) : '–', stand });
+  return t('fv.gProbe', { max: pc(need.maxRatio, 0), p: numFmt(2).format(need.p), stand });
+}
+/** Wirkung der Störungskorrektur je gestörter Gemeinde: [AGS, Faktor, Prognose der Wirkstunden ohne Korrektur, mehr oder weniger Fahrten] */
+export function ptRows(L) {
+  const S = L?.stoerung, c = S?.now?.c || {};
+  return Object.entries(c).map(([ags, r]) => { const b = r.slice(1), ex = b.reduce((s, x, k) => s + x * (FC.ptLeadFactor(r[0], k) - 1), 0); return [ags, r[0], b.reduce((s, x) => s + x, 0), ex]; }).sort((a, b) => Math.abs(b[3]) - Math.abs(a[3]));
+}
+/** Tafel „Korrekturen“: Stand jetzt und Freigabe je Korrektur, darunter die gestörten Gemeinden mit der größten Wirkung */
+export function corrPanel(ctx, L) {
+  const N = L?.nowcast, S = L?.stoerung; if (!N && !S) return '';
+  const rows = ptRows(L), sumEx = rows.reduce((s, r) => s + r[3], 0), sumB = rows.reduce((s, r) => s + r[2], 0), h = S?.rule?.maxLeadH ?? FC.PTADJ.maxLeadH;
+  const nNow = N?.now?.ratio != null ? t('fv.cNowNc', { r: numFmt(2).format(N.now.ratio), h: n0(N.now.hours?.length || 0), g: n0(N.now.groups || 0) }) : t('fv.cNowNcNone', { from: N?.rule?.fromHour ?? FC.NOWCAST.fromHour, min: N?.rule?.minHours ?? FC.NOWCAST.minHours });
+  const sNow = rows.length ? t('fv.cNowPt', { n: n0(rows.length), ex: `${sumEx >= 0 ? '+' : '−'}${n0(Math.abs(sumEx))}`, p: sg(sumB > 0 ? sumEx / sumB : null, 1), h: n0(h) }) : t('fv.cNowPtNone');
+  const st = (x) => (x?.applied ? `<span class="fv-chip A">${t('fv.cOn')}</span>` : `<span class="fv-chip D">${t('fv.cProbe')}</span>`);
+  const top = rows.slice(0, 10);
+  return `<div class="panel" id="fv-corr">${head(t('fv.cTitle'), t('fv.cSub'))}<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.cTitle'))}"><table><thead><tr><th>${t('fv.cColName')}</th><th>${t('fv.cColState')}</th><th>${t('fv.cColNow')}</th><th>${t('fv.cColGate')}</th></tr></thead><tbody>`
+    + (N ? `<tr><td>${ctx.esc(t('fc.model.nowcast'))}</td><td>${st(N)}</td><td class="wrap">${nNow}</td><td class="wrap">${gateTxt(N.gate, 'nowcast', L)}</td></tr>` : '')
+    + (S ? `<tr><td>${ctx.esc(t('fc.model.stoerung'))}</td><td>${st(S)}</td><td class="wrap">${sNow}</td><td class="wrap">${gateTxt(S.gate, 'stoerung', L)}</td></tr>` : '') + '</tbody></table></div>'
+    + (top.length ? `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.cCities'))}"><table id="fv-corr-cities" style="margin-top:var(--s3)"><caption class="fv-sub">${t('fv.cCities', { h: n0(h) })}</caption><thead><tr><th>${t('fv.cColCity')}</th><th class="n">${t('fv.cColF')}</th><th class="n">${t('fv.cColBase', { h: n0(h) })}</th><th class="n">${t('fv.cColEx')}</th></tr></thead><tbody>`
+      + top.map(([a, f, b, ex]) => `<tr><td>${ctx.esc(ctx.muniName?.(a) || a)}</td><td class="n">${numFmt(2).format(f)} ×</td><td class="n">${n0(b)}</td><td class="n">${ex >= 0 ? '+' : '−'}${numFmt(1).format(Math.abs(ex))}</td></tr>`).join('') + '</tbody></table></div>' : '')
+    + `<p class="fv-sub">${t('fv.cNote')}</p></div>`;
+}
+/** Hinweis über dem Verlauf: eingerechnet oder (gewählte Gemeinde gestört) erwartete Wirkung in der Probe */
+export function corrNote(ctx, L, sel) {
+  const done = (L?.corrections || []).map(k => t(`fc.model.${k}`));
+  const r = sel?.ags && sel.ags !== 'DE' ? ptRows(L).find(x => x[0] === sel.ags) : null;
+  const pt = r ? t(L.stoerung?.applied ? 'fv.nPtOn' : 'fv.nPtProbe', { name: ctx.esc(ctx.muniName?.(sel.ags) || sel.ags), p: sg(r[2] > 0 ? r[3] / r[2] : null, 1), h: n0(L.stoerung?.rule?.maxLeadH ?? FC.PTADJ.maxLeadH) }) : '';
+  return [done.length ? t('fv.nCorr', { list: done.join(', ') }) : '', pt].filter(Boolean).join(' ');
+}

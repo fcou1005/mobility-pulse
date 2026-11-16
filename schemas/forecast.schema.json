@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.1",
+ "x-version": "1.2",
  "$defs": {
   "latest": {
    "type": "object",
@@ -81,6 +81,21 @@
        "type": "null"
       }
      ]
+    },
+    "corrections": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "Seit 1.2: in die veröffentlichte Prognose eingerechnete Korrekturen (nowcast, stoerung), nur mit Freigabe (log.gates)"
+    },
+    "stoerung": {
+     "type": "object",
+     "description": "Störungskorrektur ÖPNV: Regel, Lernstand, Live-Abgleich; seit 1.2 gate (Freigabe: on, why, n, cases, ratio, p, need), now (gerade gestörte Gemeinden: Faktor und Prognose ohne Korrektur je Wirkstunde) und applied"
+    },
+    "nowcast": {
+     "type": "object",
+     "description": "Tageskorrektur: Regel, Live-Abgleich; seit 1.2 gate, now (Stunden, Gruppen, Verhältnis Ist ÷ Modell heute) und applied"
     }
    }
   },
@@ -109,6 +124,18 @@
     },
     "history": {
      "type": "array"
+    },
+    "gates": {
+     "type": "object",
+     "description": "Seit 1.2: Stand der Freigabe je Korrektur (lib/pulse-forecast-select.js CORR_GATE)"
+    },
+    "ptScore": {
+     "type": "object",
+     "description": "Seit 1.2: gezielter Abgleich der Störungskorrektur je Ortstag und Gemeinde [Ist, Fehler ohne, Fehler mit, Stunden]"
+    },
+    "ptPending": {
+     "type": "object",
+     "description": "Seit 1.2: vorgemerkte Prognosen gestörter Gemeinden für den gezielten Abgleich"
     }
    }
   },
@@ -235,6 +262,10 @@
        }
       }
      }
+    },
+    "corrections": {
+     "type": "object",
+     "description": "Seit 1.2: Korrekturen der Prognose – je Korrektur on (in prognose eingerechnet) und gate (Stand der Freigabe); Störungskorrektur mit cities (Faktor je gerade gestörter Gemeinde), maxLeadH, tauH, learnUntil; Tageskorrektur mit ratio"
     }
    }
   }

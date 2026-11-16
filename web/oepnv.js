@@ -2,12 +2,13 @@
 // Mobility Pulse — Reiter ÖPNV (16.11.2026): Live-Karte mit geschätzten Fahrzeugwegen (Sharing als zweite Ebene), Pünktlichkeit je Tag und Stunde,
 // Stationen mit den meisten Störungen, Wirkung von Störungen auf Sharing und Vorschläge für Sharing-Stationen. renderOepnv(el, ctx), ctx = rpCtx().
 // Daten aus dem Sammler (Phase „oepnv“, lib/pulse-oepnv-netz.js): oepnv/index.json, oepnv/wirkung.json, oepnv/<AGS>.json, oepnv/live/<AGS>.json;
-// dazu abstell/<AGS>.json (Fahrtenden), ops-input/fleet/<AGS>.json (Sharing-Bestand) und zones/ (Abstellinseln der Anbieter).
+// dazu abstell/<AGS>.json (Fahrtenden), ops-input/fleet/<AGS>.json (Sharing-Bestand), zones/ (Abstellinseln der Anbieter) und forecast/dispo.json
+// (Störungskorrektur der Prognose für die gestörte Stadt).
 // Die Fahrzeuge der Karte sind keine Ortung: der Echtzeit-Strom nennt Haltezeiten, die Lage dazwischen ist geschätzt (Luftlinie zwischen den Stationen).
 import * as NZ from './pulse-oepnv-karte.js';
 import * as PL from './pulse-geo-plan.js';
 import * as Z from './pulse-zones.js';
-import { decodeFleet } from './pulse-ops.js';
+import { decodeFleet, ptCorrectionOf } from './pulse-ops.js';
 import { t, dateFmt } from './i18n.js';
 import { putAnswer } from './answer.js';
 import { linesPanel, profilePanel, nowPanel, lastMilePanel, bindMehr } from './oepnv-mehr.js';
@@ -38,7 +39,7 @@ export async function renderOepnv(el, ctx) {
   const ags = ctx.state.scope, run = ++S.run, D = ctx.CFG.DATA, f = ctx.fmt, city = ags && ags !== 'DE';
   stopTimer(); el.innerHTML = `<div class="panel"><p class="muted">${t('pt.loading')}</p></div>`;
   const [idx, wirk] = await Promise.all(['oepnv/index.json', 'oepnv/wirkung.json'].map(x => load(ctx, D + x)));
-  const [doc, live, abs, fleetDoc, zIdx, ver] = city ? await Promise.all([load(ctx, `${D}oepnv/${ags}.json`), load(ctx, `${D}oepnv/live/${ags}.json`, true), load(ctx, `${D}abstell/${ags}.json`), load(ctx, `${D}ops-input/fleet/${ags}.json`), load(ctx, `${D}zones/index.json`), load(ctx, `${D}versorgung/${ags}.json`)]) : [null, null, null, null, null, null];
+  const [doc, live, abs, fleetDoc, zIdx, ver, fcDoc] = city ? await Promise.all([load(ctx, `${D}oepnv/${ags}.json`), load(ctx, `${D}oepnv/live/${ags}.json`, true), load(ctx, `${D}abstell/${ags}.json`), load(ctx, `${D}ops-input/fleet/${ags}.json`), load(ctx, `${D}zones/index.json`), load(ctx, `${D}versorgung/${ags}.json`), load(ctx, `${D}forecast/dispo.json`)]) : [null, null, null, null, null, null, null];
   if (run !== S.run) return;
   const name = city ? ctx.esc(ctx.muniName(ags)) : t('pt.germany');
   M.live = live; M.fleet = S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
@@ -111,7 +112,7 @@ export async function renderOepnv(el, ctx) {
   const cityList = !city ? `<div class="panel"><div class="panel-head"><div><h2>${t('pt.listTitle')}</h2><div class="sub">${t('pt.listSub')}</div></div></div>${idx?.cities && Object.keys(idx.cities).length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.listTitle'))}"><table><thead><tr><th>${t('pt.city')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colOk')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th class="n">${t('pt.kLive')}</th></tr></thead><tbody>
     ${Object.entries(idx.cities).sort((a, b) => b[1][1] - a[1][1]).slice(0, 40).map(([a, r]) => `<tr><td><button type="button" class="chip" data-ags="${a}">${ctx.esc(ctx.muniName(a))}</button></td><td class="n">${f(r[1])}</td><td class="n">${pct(ctx, r[1] ? (r[1] - r[2] - r[3]) / r[1] : null)}</td><td class="n">${pct(ctx, r[1] ? r[2] / r[1] : null, 1)}</td><td class="n">${pct(ctx, r[1] ? r[3] / r[1] : null, 1)}</td><td class="n">${f(r[4])}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${t('pt.listEmpty')}</div>`}</div>` : '';
 
-  el.innerHTML = `${mapPanel}${city ? nowPanel(ctx, doc, name, hints, mine) : ''}${cityList}${dash}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${city ? lastMilePanel(ctx, ver, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
+  el.innerHTML = `${mapPanel}${city ? nowPanel(ctx, doc, name, hints, mine, fcDoc ? ptCorrectionOf(fcDoc, ags) : null) : ''}${cityList}${dash}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${city ? lastMilePanel(ctx, ver, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
   for (const b of el.querySelectorAll('button[data-ags]')) b.addEventListener('click', () => { const sel = /** @type {HTMLSelectElement | null} */ (document.querySelector('#sel-scope')); if (sel) { sel.value = /** @type {HTMLElement} */ (b).dataset.ags || ''; sel.dispatchEvent(new Event('change', { bubbles: true })); } });
   el.querySelector('#pt-st-csv')?.addEventListener('click', () => download(`oepnv_stationen_${ags}.csv`, ['station;name;lat;lon;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(S.rows || []).map(r => [r[0], `"${String(r[1]).replace(/"/g, '""')}"`, csvNum(r[2], 5), csvNum(r[3], 5), csvNum(r[4] / days), csvNum(r[5] / r[4], 3), csvNum(r[6] / r[4], 3), csvNum(r[7])].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-hub-csv')?.addEventListener('click', () => S.hub && download(`sharing_stationen_${ags}.csv`, ['rang;station;name;lat;lon;halte_je_tag;gestoert_anteil;fahrtenden_150m;fahrzeuge_jetzt_150m;punkte', ...S.hub.rows.map((x, i) => [i + 1, x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), csvNum(x.perDay), csvNum(x.stoer, 3), x.ends, x.vehicles, csvNum(x.score, 3)].join(';'))].join('\n') + '\n'));

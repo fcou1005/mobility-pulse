@@ -44,15 +44,15 @@ export const MODELS = ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid', 'b
 // Wählbar wie jede Erweiterung (GATES.adGain bzw. Live-Regel), seit 13.11.2026 (S2.3) erst nach geprüftem Vorsprung (DM-Test über ≥ 14 Tage, siehe DM);
 // BLEND.activeFrom bleibt als Angabe im Dashboard. Chronos selbst ist unter derselben Bedingung wählbar.
 export const SHADOW_ONLY = ['chronos'];
-// Tageskorrektur „nowcast“ (seit 15.11.2026, nur im Schatten): das aktive Modell × Verhältnis Ist ÷ Modell der letzten beobachteten Stunden des
+// Tageskorrektur „nowcast“ (seit 15.11.2026): das aktive Modell × Verhältnis Ist ÷ Modell der letzten beobachteten Stunden des
 // Tages je Gruppe (mit k Fahrten zur 1 gezogen, begrenzt), klingt mit tauH Stunden Vorlauf ab. Rückblick 6.–14.11.2026 (8 Tage, Fehler je Gruppe und
 // Stunde der restlichen Stunden des Tages): Ausgabe um 14 Uhr 0,203 → 0,187, 16 Uhr 0,205 → 0,187, 18 Uhr 0,216 → 0,192, 20 Uhr 0,240 → 0,217;
 // mit Fenster am Morgen schlechter (8 Uhr 0,215 → 0,218, 10 Uhr 0,208 → 0,214; der Berufsverkehr sagt den Rest des Tages nicht voraus), daher erst
-// ab fromHour und nur Stunden ab minWindowHour. Wird nicht veröffentlicht, läuft im Live-Abgleich mit (log.live[…].models.nowcast).
-// Störungskorrektur „stoerung“ (seit 16.11.2026, nur im Schatten): Ist die letzte volle Stunde einer Gemeinde im ÖPNV gestört (Kennzeichen pt,
+// ab fromHour und nur Stunden ab minWindowHour. Läuft im Live-Abgleich mit (log.live[…].models.nowcast), in die Prognose erst mit Freigabe (CORR_GATE).
+// Störungskorrektur „stoerung“ (seit 16.11.2026): Ist die letzte volle Stunde einer Gemeinde im ÖPNV gestört (Kennzeichen pt,
 // lib/pulse-oepnv.js), wird die Prognose ihrer Gruppen für die nächsten maxLeadH Stunden um die gelernte Wirkung der Gemeinde verschoben
 // (oepnv/wirkung.json learn, zur Wirkung aller Städte gezogen; Städte ohne eigene Tage bekommen diese); sie klingt mit tauH ab. Seit dem
-// Abend des 16.11. für alle Städte, erst nur mitlaufend: frühestens nach 7 Tagen Lernzeit (learn.until) und 12 bewerteten Ausgaben einschalten.
+// Abend des 16.11. für alle Städte; angezeigt und gezielt bewertet, in die Prognose erst mit Freigabe (CORR_GATE, nach der Lernzeit learn.until).
 export const PTADJ = Object.freeze({ maxLeadH: 3, tauH: 2, min: 0.7, max: 1.5 });
 export const NOWCAST = Object.freeze({ fromHour: 12, windowH: 6, minWindowHour: 8, minHours: 4, k: 30, tauH: 6, min: 0.5, max: 2, models: ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid'] });
 export const BLEND = { activeFrom: Date.parse('2026-11-28T10:00:00+01:00') };
