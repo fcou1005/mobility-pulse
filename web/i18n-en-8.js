@@ -61,6 +61,7 @@ export default {
   "ops.driverHint": "The whole run is in the link: open it once with a connection, after that driver mode also works in flight mode. Ticks and reports stay on the phone until the driver shares them.",
   "ops.noteBattery": "battery {v0} %",
   "ops.noteOepnv": "Public transport disrupted: {name}",
+  "ops.shiftPtDropped": "{n} jobs to disrupted public transport stations left out: the disruption is probably over by the start of the shift.",
   "ops.fcMore": "Forecast: {p} % more trips than the average of the last {d} days ({when}), demand × {x}.",
   "ops.fcLess": "Forecast: {p} % fewer trips than the average of the last {d} days ({when}), demand × {x}.",
   "ops.fcSame": "Forecast: trips as in the average of the last {d} days ({when}).",

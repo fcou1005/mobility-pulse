@@ -83,17 +83,24 @@ async function openDriver(tour) {
   } catch { box.textContent = t('ops.driverQrTooLong'); }
 }
 
+/** Schichtbeginn (Minuten ab Mitternacht, Berlin) mehr als 2 Stunden nach dem Stand des Plans (oder mehr als 1 Stunde davor) */
+function shiftLater(fromMin, at) {
+  const p = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Berlin' }).formatToParts(new Date(at || Date.now()));
+  const nowMin = +(p.find(x => x.type === 'hour')?.value || 0) * 60 + +(p.find(x => x.type === 'minute')?.value || 0), d = ((fromMin - nowMin) % 1440 + 1440) % 1440;
+  return d > 120 && d < 1440 - 60;
+}
 function runShift() {
   const p = S.plan, out = $('#ops-shift-out'); if (!p || !out) return;
   const n = Math.max(1, Math.min(12, +(/** @type {HTMLInputElement} */ ($('#ops-shift-n')).value) || 2));
   const from = minOf(/** @type {HTMLInputElement} */ ($('#ops-shift-from')).value, 360), to0 = minOf(/** @type {HTMLInputElement} */ ($('#ops-shift-to')).value, 840), to = to0 <= from ? to0 + 1440 : to0;
-  const pr = p.params || {}, jobs = O.shiftJobs(p);
+  // ÖPNV-Ziele gelten für die nächsten Stunden: beginnt die Schicht später als 2 Stunden nach dem Plan, ist die Störung bis dahin meist vorbei
+  const pr = p.params || {}, all = O.shiftJobs(p), late = shiftLater(from, p.at), jobs = late ? all.filter(j => !j.d?.oepnv) : all, dropped = all.length - jobs.length;
   if (!jobs.length) { out.innerHTML = `<p class="muted">${t('ops.shiftNoJobs')}</p>`; return; }
   const sp = O.planShift(jobs, { drivers: n, startMin: from, endMin: to, depot: p.depot, vanCapacity: pr.van ?? O.DEFAULTS.vanCapacity, swapCapacity: pr.swapCapacity ?? O.DEFAULTS.swapCapacity });
   SH.plan = sp; /** @type {HTMLButtonElement} */ ($('#ops-shift-csv')).disabled = false;
   const f = X.fmt, esc = X.esc, LBL = { depot: t('ops.depot'), pickup: t('ops.pickUp'), drop: t('ops.dropOff'), swap: t('ops.swapBattery'), pickup_disabled: t('ops.shiftWorkshop') };
   const head = t('ops.shiftSummary', { planned: f(sp.planned), jobs: f(sp.jobs), km: f(sp.km, 1), base: f(sp.baselineKm, 1), save: f(Math.max(0, sp.savingKm), 1), drivers: f(n), from: hm(from), to: hm(to) });
-  const warn = sp.unplanned.length ? ` <span class="warn-text">${t('ops.shiftUnplanned', { n: f(sp.unplanned.length) })}</span>` : '';
+  const warn = (sp.unplanned.length ? ` <span class="warn-text">${t('ops.shiftUnplanned', { n: f(sp.unplanned.length) })}</span>` : '') + (dropped ? ` ${t('ops.shiftPtDropped', { n: f(dropped) })}` : '');
   out.innerHTML = `<p>${head}${warn}</p><div class="cards">${sp.drivers.map(d => `<div class="card"><b>${esc(d.id)}</b> · ${hm(d.startMin)}–${hm(d.endMin)} · ${f(d.km, 1)} km · ${t('ops.shiftDriverLine', { jobs: f(d.jobs), veh: f(d.vehicles), trips: f(d.trips) })}
     <details><summary>${t('ops.stopList')}</summary><ol class="small">${d.stops.map(s => `<li><span class="mono">${hm(s.eta)}</span> ${esc(LBL[s.type] || s.type)}${s.count ? ` × ${f(s.count)}` : ''}${s.type !== 'depot' ? ` <span class="muted">${esc(noteOf(s))}</span>` : ''}</li>`).join('')}</ol></details>
     <div class="foot"><button class="chip" type="button" data-shift-driver="${esc(d.id)}"${d.jobs ? '' : ' disabled'}>${t('ops.driverLink')}</button></div></div>`).join('')}</div>`;

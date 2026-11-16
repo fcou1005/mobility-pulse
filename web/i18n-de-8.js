@@ -61,6 +61,7 @@ export default {
   "ops.driverHint": "Die ganze Tour steht im Link: einmal mit Netz öffnen, danach geht der Fahrermodus auch im Flugmodus. Abhaken und Rückmeldungen bleiben im Handy, bis der Fahrer sie teilt.",
   "ops.noteBattery": "Akku {v0} %",
   "ops.noteOepnv": "ÖPNV gestört: {name}",
+  "ops.shiftPtDropped": "{n} Aufträge zu gestörten ÖPNV-Stationen ausgelassen: die Störung ist bis Schichtbeginn vermutlich vorbei.",
   "ops.fcMore": "Prognose: {p} % mehr Fahrten als im Schnitt der letzten {d} Tage ({when}), Bedarf × {x}.",
   "ops.fcLess": "Prognose: {p} % weniger Fahrten als im Schnitt der letzten {d} Tage ({when}), Bedarf × {x}.",
   "ops.fcSame": "Prognose: Fahrten wie im Schnitt der letzten {d} Tage ({when}).",
