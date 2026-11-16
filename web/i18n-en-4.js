@@ -162,6 +162,7 @@ export default {
   "fc.model.hybrid": "yesterday's level, model's daily shape",
   "fc.model.chronos": "Chronos-2 (AI, comparison only)",
   "fc.model.nowcast": "Intraday correction (comparison only)",
+  "fc.model.stoerung": "Public transport disruption correction (comparison only)",
   "fc.model.blend": "Chronos-2 + hybrid blend",
   "fv.mBlend": "Blends Chronos-2 and the hybrid model per group. The weight is learned from both models' errors on past days (for this Chronos re-computes every day what it would have forecast the evening before; recent days count more): where Chronos was closer it counts more, otherwise hybrid. Selectable from {from}; until then it only learns.",
   "fv.blendShare": "Learned so far: Chronos share {pct} (from {days} days, {n} groups rated).",

@@ -49,6 +49,11 @@ export const SHADOW_ONLY = ['chronos'];
 // Stunde der restlichen Stunden des Tages): Ausgabe um 14 Uhr 0,203 → 0,187, 16 Uhr 0,205 → 0,187, 18 Uhr 0,216 → 0,192, 20 Uhr 0,240 → 0,217;
 // mit Fenster am Morgen schlechter (8 Uhr 0,215 → 0,218, 10 Uhr 0,208 → 0,214; der Berufsverkehr sagt den Rest des Tages nicht voraus), daher erst
 // ab fromHour und nur Stunden ab minWindowHour. Wird nicht veröffentlicht, läuft im Live-Abgleich mit (log.live[…].models.nowcast).
+// Störungskorrektur „stoerung“ (seit 16.11.2026, nur im Schatten): Ist die letzte volle Stunde einer Gemeinde im ÖPNV gestört (Kennzeichen pt,
+// lib/pulse-oepnv.js) und hat die Gemeinde eine belegte Wirkung auf die Sharing-Fahrtbeginne (oepnv/wirkung.json, Urteil mehr oder weniger),
+// wird die Prognose ihrer Gruppen für die nächsten maxLeadH Stunden um diese Wirkung verschoben; sie klingt mit tauH ab. Gemeinden ohne
+// belegte Wirkung bleiben unverändert: über alle Städte lag die Wirkung am 16.11. bei +3,3 % und war nicht von null unterscheidbar.
+export const PTADJ = Object.freeze({ maxLeadH: 3, tauH: 2, min: 0.7, max: 1.5 });
 export const NOWCAST = Object.freeze({ fromHour: 12, windowH: 6, minWindowHour: 8, minHours: 4, k: 30, tauH: 6, min: 0.5, max: 2, models: ['profile', 'pooled', 'pooledWx', 'adaptive', 'hybrid'] });
 export const BLEND = { activeFrom: Date.parse('2026-11-28T10:00:00+01:00') };
 /** Wertung eines Modells an einem Tag: Mittel aus Abweichung je Gruppe und Tag (Niveau) und je Gruppe und Stunde (Tagesgang); ohne Stundenwert nur der Tageswert */

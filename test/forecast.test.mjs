@@ -849,6 +849,13 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const out = CX.venueEntries(rows, venues, { now: t - 86400e3 });
   assert(out.length === 1 && out[0].id === 'e3', `A14: abgesagte und VVK-Einträge verworfen (${out.map(x => x.id).join(', ')})`);
 }
+// ---------- Störungskorrektur (stoerung, nur im Schatten)
+{
+  const f = F.ptFactors({ now: { a: { flag: 1 }, b: { flag: 0 }, c: { flag: 1 }, d: { flag: 1 }, e: { flag: 1 } }, effect: { a: 0.2, b: 0.3, d: -0.9, e: 2 } });
+  assert(f.size === 3 && Math.abs(f.get('a') - 1.2) < 1e-12 && f.get('d') === 0.7 && f.get('e') === 1.5 && F.ptFactors(null).size === 0, 'Störungskorrektur: nur gestörte Gemeinden mit belegter Wirkung, Faktor begrenzt auf 0,7 bis 1,5');
+  const mu = F.ptApply(Float64Array.from([100, 100, 100, 100]), (j) => ['a', 'a', 'a', 'x'][j], (j) => [0, 2, 3, 0][j], f);
+  assert(Math.abs(mu[0] - 120) < 1e-9 && Math.abs(mu[1] - (100 + 20 * Math.exp(-1))) < 1e-9 && mu[2] === 100 && mu[3] === 100, 'Störungskorrektur: volle Wirkung zur Ausgabe, klingt mit 2 h ab, endet nach 3 h, andere Gemeinden unverändert');
+}
 // ---------- Tageskorrektur (nowcast) und letzte Stunde des Tages
 {
   const hm = new Array(24).fill(60); hm[13] = 30;

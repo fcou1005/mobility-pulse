@@ -53,11 +53,13 @@ export async function run(ctx) {
         // getrennt in forecast/moped/ und forecast/car/; eine Familie ohne Fahrzeugminuten in den Tagesdateien wird übersprungen (keine Dateien)
         const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
         ctx.trainCtx = { curated: curatedAll, pending };
+        // Störungskorrektur im Schatten: letzte volle Stunde je Gemeinde (Phase oepnv) und belegte Wirkung (oepnv/wirkung.json)
+        let ptIn = null; try { const w = ctx.ptNow ? await rd(path.join(DATA, 'oepnv', 'wirkung.json')) : null; if (w?.cities) ptIn = { now: ctx.ptNow, effect: Object.fromEntries(w.cities.filter(c => c.verdict === 'mehr' || c.verdict === 'weniger').map(c => [c.ags, c.effect])) }; } catch { ptIn = null; }
         for (const fam of FC.FAMILIES) {
           try {
             const fdocs = FC.familyDocs(docs, fam); if (fam !== 'micro' && !FC.familyHasData(fdocs)) continue;
             const fdir = path.join(DATA, FC.FAMILY_DIR[fam]), fL = path.join(fdir, 'latest.json'), fG = path.join(fdir, 'log.json'), fS = path.join(fdir, 'series.json');
-            const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, weatherFc, breaks: calibBreaks, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam });
+            const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, weatherFc, breaks: calibBreaks, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam, pt: ptIn });
             if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
             if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
             await mkdir(fdir, { recursive: true });
