@@ -491,8 +491,8 @@ assert(ev5.runs.slice(-1)[0][2] === 0 && ev5.gapHours.length >= 1 && h5.f.slice(
 {
   const al = JSON.parse(await readFile('test/out/auflagen/alarme.json', 'utf8')), led = JSON.parse(await readFile(`test/out/auflagen/verfuegbarkeit-${T.dayOf(Date.now()).slice(0, 4)}.json`, 'utf8'));
   const fx = (await readdir('test/out/feeds')).filter(f => f.endsWith('.xml')), withEntry = al.items.length ? await readFile(`test/out/feeds/${al.items[0].ags}.xml`, 'utf8').catch(() => '') : '';
-  assert(al.schemaVersion && al.items.length >= 1 && al.items.every(x => ['cap', 'source', 'zone', 'price', 'fleet'].includes(x.kind)) && withEntry.includes('<entry>') && fx.length % 6 === 0,
-    `Alarme: ${al.items.length} aus dem Vergleich der Läufe (${[...new Set(al.items.map(x => x.kind))].join(', ')}), im Atom-Feed der Gemeinde; ${fx.length} Feeds (je Gemeinde alle Themen + 5)`);
+  assert(al.schemaVersion && al.items.length >= 1 && al.items.every(x => ['cap', 'source', 'zone', 'price', 'fleet', 'oepnv'].includes(x.kind)) && withEntry.includes('<entry>') && fx.length % 7 === 0,
+    `Alarme: ${al.items.length} aus dem Vergleich der Läufe (${[...new Set(al.items.map(x => x.kind))].join(', ')}), im Atom-Feed der Gemeinde; ${fx.length} Feeds (je Gemeinde alle Themen + 6)`);
   assert(led.schemaVersion && Object.keys(led.sources).length >= 1 && Object.values(led.sources).every(e => Object.values(e.d).every(c => c.length === 3 && c[1] <= c[0])),
     `Jahresbuch: ${Object.keys(led.sources).length} Quellen mit [Läufe, verfügbar, Fehler] je Tag`);
 }
