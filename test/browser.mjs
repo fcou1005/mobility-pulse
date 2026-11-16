@@ -36,6 +36,7 @@ const CHECKS = {
   ausschreibungen: [['Kalender', /Fristenkalender/], ['Quelle', /Heidelberg[\s\S]*geprüft/]],
   marktindex: [['Antwort', /Im November 2026 \(vorläufig\) gab es in Stuttgart [\d.]+ Fahrten je Tag/], ['Rangliste', /1 Köln [\d.]+/], ['Wirkung', /Wirkung von Ereignissen[\s\S]*(mehr Fahrten|weniger Fahrten|nicht unterscheidbar)/], ['Scout', /Expansions-Scout[\s\S]*Leonberg/], ['Grafik der Woche', /Grafik der Woche/]],
   zonen: [['Antwort', /Dott hat in Stuttgart \d+ Zonen: \d+ Überlappungen/], ['Export geprüft', /Abstellverbot \d+ Zonen, [\d.]+ Stützpunkte ✓ Upload-Prüfung bestanden/], ['Änderungsverlauf', /Änderungsverlauf/]],
+  oepnv: [['Antwort mit Pünktlichkeit', /In Stuttgart waren am [\s\S]{3,30} bisher [\d,]+ % der [\d.]+ Halte mit Echtzeit pünktlich/], ['Live-Karte', /Live-Karte Stuttgart[\s\S]*\d+ Fahrzeuge unterwegs, davon \d+ mindestens 5 Minuten verspätet/], ['Pünktlichkeit je Tag', /Pünktlichkeit in Stuttgart[\s\S]*gestörte Stunden/], ['Stationen', /Stationen mit den meisten Störungen[\s\S]*\(synthetisch\)/], ['Wirkung', /Was Störungen mit Sharing machen[\s\S]*Über alle Städte: \+11,2 %/], ['Stationsvorschläge', /Wo eine Sharing-Station sinnvoll wäre[\s\S]*Halte je Tag/]],
   umfeld: [['Antwort mit Versorgung', /In Stuttgart steht für [\d,]+ % der Einwohner im Mittel zwischen 7 und 22 Uhr/], ['Versorgungstabelle', /Versorgung in Stuttgart[\s\S]*in 200 m/], ['Unfall-Schwerpunkte', /Schwerpunkte \(Getis-Ord Gi\*, FDR 5 %\)/], ['Zubringer', /Stuttgart: [\d,]+ Beginne und Enden je 100 Abfahrten/], ['Umwegfaktor', /Mittlerer Umwegfaktor [\d,]+/], ['Planer', /Abstellflächen-Planer[\s\S]*Vorschläge berechnen/]],
   begriffe: [['Begriffe', /Netto-Abfluss/], ['Erklärung', /Fahrtbeginne minus Fahrtenden/]],
   status: [['letzter Lauf', /LETZTER LAUF\s*\d\d:\d\d/i], ['Laufzeit mit Stufe', /LAUFZEIT\s*\d+ s/i], ['Verlauf', /Laufzeit der letzten 7 Tage/]],
@@ -43,7 +44,7 @@ const CHECKS = {
 const VIEWS = Object.keys(CHECKS).filter(v => !ONLY || ONLY.includes(v));
 // S4.1: Ansichten mit Antwort-Komponente – genau eine Antwort vor dem ersten Diagramm, drei Kennzahlen, Antwortwert = Tabellenwert,
 // auf dem Handy (390 × 844) die Kennzahlen im ersten Bildschirm
-const ANSWER_VIEWS = ['live', 'usage', 'ops', 'prognose', 'bericht', 'spots', 'vergleich', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'zonen', 'marktindex', 'umfeld'];
+const ANSWER_VIEWS = ['live', 'usage', 'ops', 'prognose', 'bericht', 'spots', 'vergleich', 'sources', 'stadt', 'auflagen', 'ausschreibungen', 'zonen', 'marktindex', 'umfeld', 'oepnv'];
 /** @param {import('playwright').Page} page @param {string} v @param {boolean} mobile */
 async function answerProblems(page, v, mobile) {
   return page.evaluate(([x, mob]) => {

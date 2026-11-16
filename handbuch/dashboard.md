@@ -31,6 +31,7 @@ Alle Karten sind per Tastatur bedienbar (`web/mapkeys.js`): Pfeiltasten verschie
 
 ## Umfeld (Sprint 8, 14.11.2026)
 
+- **Heute › ÖPNV (`#oepnv`, `web/oepnv.js`):** Live-Karte der Busse und Bahnen (geschätzt aus Haltezeiten), Pünktlichkeit je Tag und Stunde, Stationen mit den meisten Störungen, Wirkung von Störungen auf Sharing, Vorschläge für Sharing-Stationen ([ÖPNV](oepnv.md)).
 - **Auswerten › Umfeld (`#umfeld`, `web/umfeld.js`):** Versorgung der Einwohner mit Fahrzeugen in 150, 200 und 300 m, Unfall-Schwerpunkte, ÖPNV-Zubringer, Umwegfaktor und Abstellflächen-Planer (Methoden in [umfeld.md](umfeld.md)). Der Planer lädt OpenStreetMap erst auf Knopfdruck.
 
 ## Sprache

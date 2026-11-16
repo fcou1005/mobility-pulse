@@ -18,6 +18,7 @@ const FILES = {
   auflagen: ['auflagen/verfuegbarkeit-<Jahr>.json', 'auflagen/alarme.json'],
   markt: ['index/<JJJJ-MM>.json', 'index/laufend.json', 'index/index.json', 'markt/wirkung.json', 'markt/scout.json', 'grafik/index.json', 'offen/index.json'],
   akku: ['akku/<AGS>.json', 'akku/bewertung.json'],
+  oepnv: ['oepnv/<AGS>.json', 'oepnv/live/<AGS>.json', 'oepnv/wirkung.json', 'oepnv/index.json'],
   geo: ['versorgung/<AGS>.json', 'versorgung/index.json', 'zubringer/index.json', 'abstell/<AGS>.json', 'unfall/<AGS>.json', 'unfall/index.json', 'umweg/<AGS>.json', 'umweg/index.json', 'pop/index.json'],
 };
 

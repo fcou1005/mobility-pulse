@@ -2,8 +2,8 @@
 // Mobility Pulse — Prognose – Stundenreihen für das Prognose-Dashboard (aus pulse-forecast.js geschnitten; pulse-forecast.js bleibt die Fassade für alle Importe).
 import { hourOf, dayOf } from './pulse-track.js';
 import { CTX_KEYS, ctxLookup } from './pulse-context.js';
-import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, PEAK, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, sum } from './pulse-forecast-model.js';
-import { BIAS, DECIDE, DM, MIN_VOLUME, agsFactors, assignEras, biasFactorOf, buildFuture, chooseModel, dayFromDoc, evaluateDays, localToUtcMs, portableModel, predictAll, predictLag, predictNaive, shiftDay, typeFactors, volumeOf, wxLookup } from './pulse-forecast-select.js';
+import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, NOWCAST, PEAK, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, sum } from './pulse-forecast-model.js';
+import { BIAS, DECIDE, DM, MIN_VOLUME, agsFactors, assignEras, biasFactorOf, buildFuture, chooseModel, dayFromDoc, evaluateDays, localToUtcMs, nowcastApply, nowcastRatios, nowcastWindow, portableModel, predictAll, predictLag, predictNaive, shiftDay, typeFactors, volumeOf, wxLookup } from './pulse-forecast-select.js';
 
 // ---------- Stundenreihen für das Prognose-Dashboard (forecast/series.json) ----------
 // Je Gebiet (scope) und Ortstag drei Reihen zu 24 Stunden: p = Plan (Tagesprognose, mit Tagen < Tag gerechnet und beim ersten Lauf des Tags
@@ -59,7 +59,7 @@ export function lastExposure(days, beforeIdx = days.length, { target = null, mod
     for (const [k, g] of Object.entries(d.groups)) {
       if (!Array.isArray(g.vmin)) continue; let a = hist.get(k); if (!a) hist.set(k, a = Array.from({ length: 24 }, () => []));
       const c = byClass ? d.cls(k.split('|')[0]) : 0;
-      for (let h = 0; h < 24; h++) if (d.hourMin[h] >= GATES.hourMinObserved && (g.vmin[h] || 0) > 0) a[h].push([g.vmin[h] / 60, c]);
+      for (let h = 0; h < 24; h++) if (d.hourMin[h] >= (h === 23 ? GATES.lastHourMin : GATES.hourMinObserved) && (g.vmin[h] || 0) > 0) a[h].push([g.vmin[h] / 60, c]);
     }
   }
   const last = new Map();
@@ -304,9 +304,9 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day, chronosOf, fbC });
     try { portable = portableModel(PA.fitted(), R, { family: family || 'micro', now, trainDays: out.trainDays, active: out.active, days: days.map(d => d.day) }); } catch { portable = null; }
     // S2.8: Verzerrung je Art korrigieren (je Modell aus dessen Selbstprüfung; Vergleichswerte bleiben roh)
-    const biasCorr = {};
+    const biasCorr = {}, biasFn = {};
     for (const [m, arr] of PA.mu) { if (!BIAS.models.includes(m)) continue; const tf = typeFactors(log.evals, m); if (!Object.keys(tf).length) continue; const af = agsFactors(log.evals, m, tf);
-      biasCorr[m] = { ...tf, ...(Object.keys(af).length ? { ags: af } : {}) };
+      biasCorr[m] = { ...tf, ...(Object.keys(af).length ? { ags: af } : {}) }; biasFn[m] = (key) => biasFactorOf(key, tf, af);
       PA.mu.set(m, Float64Array.from(arr, (x, j) => x * biasFactorOf(R.keys[F.g[sel[j]]], tf, af))); }
     out.biasCorr = Object.keys(biasCorr).length ? biasCorr : null; out.breaks = broken;
     let mu = PA.mu.get(out.active), phi = PA.phi(out.active);
@@ -327,6 +327,14 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     if (issuing) {
       const opOf = (m) => { const o = new Map(); sel.forEach((i, j) => { if (F.fh[i] >= horizon) return; const op = R.keys[F.g[i]].split('|')[1]; let a = o.get(op); if (!a) o.set(op, a = new Array(horizon).fill(0)); a[F.fh[i]] += m[j]; }); return Object.fromEntries([...o].map(([k, a]) => [k, a.map(x => Math.round(x * 10) / 10)])); };
       const shadow = Object.fromEntries([...PA.mu].filter(([m]) => m !== out.active && cands.includes(m)).map(([m, v]) => [m, opOf(v)]));
+      // Tageskorrektur im Schatten (NOWCAST): das aktive Modell rechnet die letzten beobachteten Stunden von heute nach, das Verhältnis Ist ÷ Modell je Gruppe skaliert die Prognose
+      const tRec = dayBy.get(today), nh = fut[0].day === today && NOWCAST.models.includes(out.active) ? nowcastWindow(tRec?.hourMin, fut[0].h) : null;
+      if (nh) {
+        const Fp = buildFuture(R, nh.map(h => ({ day: today, h, cls: fut[0].cls, t: localToUtcMs(today, h) })), expo, wx, ctx), selP = Array.from({ length: Fp.n }, (_, i) => i);
+        const muP = predictAll(R, days, days.length, all, Fp, selP, new Set([out.active]), { envFit, fb, dayOfRow: () => today, fbC }).mu.get(out.active), bf = biasFn[out.active], pred = new Map(), obs = new Map();
+        selP.forEach((i, j) => { const key = R.keys[Fp.g[i]]; pred.set(key, (pred.get(key) || 0) + muP[j] * (bf ? bf(key) : 1)); obs.set(key, (obs.get(key) || 0) + (tRec.groups[key]?.start?.[Fp.hr[i]] || 0)); });
+        shadow.nowcast = opOf(nowcastApply(mu, (j) => R.keys[F.g[sel[j]]], (j) => F.fh[sel[j]], nowcastRatios(obs, pred)));
+      }
       // Chronos-Meta: Stand des Laufs, Alter bei Ausgabe, Anteil der Fahrten (aktives Modell) in Gruppen mit Chronos-Wert
       let extMeta = null;
       if (chronosOn) { let cov = 0, tot = 0; sel.forEach((i, j) => { if (F.fh[i] >= horizon) return; tot += mu[j]; if (Number.isFinite(chronosOf(i))) cov += mu[j]; }); extMeta = { chronos: { at: ext.at, ageH: +((t0 - Date.parse(ext.at)) / 3600e3).toFixed(1), cover: tot > 0 ? +(cov / tot).toFixed(3) : 0 } }; }
@@ -339,6 +347,9 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   } else log.history.push({ at: out.generatedAt, active: null, status: out.status, reason: out.status === 'small' ? out.reason : `${trainDays} Tage Daten – zu wenig` });
   log.history = log.history.slice(-60);
   out.memory = memorySummary(mem, today, out.phi ?? 1);
+  // Tageskorrektur: Stand im Live-Abgleich (Fehler ÷ Fehler des jeweils veröffentlichten Modells über dieselben Stunden)
+  { let a = 0, b = 0, n = 0; for (const v of Object.values(log.live)) { const x = v.models?.nowcast?.w, y = v.models?.[v.model]?.w; if (x != null && y > 0) { a += x; b += y; n++; } }
+    out.nowcast = { rule: { ...NOWCAST }, live: { n, ratio: n ? +(a / b).toFixed(4) : null } }; }
   out.live = Object.entries(log.live).sort((a, b) => +a[0] - +b[0]).slice(-12).map(([at, v]) => ({ at: +at, ...v }));
   // Stundenreihen für das Dashboard: Plan heute (und für noch nicht gespeicherte, abgeschlossene Tage), Ist, Live-Prognose bis Ende morgen
   const plans = new Map(), has = (d) => Object.values(prevSeries?.version === 1 ? prevSeries.days?.[d] || {} : {}).some(x => x.p), keepFrom = dayOf(now - (SERIES_KEEP_DAYS - 1) * 86400e3);

@@ -21,6 +21,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.1 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
+| [oepnv](#oepnv) | 1.0 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
 
@@ -642,3 +643,75 @@ S8.1 Zensus 2022 gegen VG250-EW je Gemeinde
 | `withinAdj` |  | integer – Gemeinden innerhalb ±maxDev nach Abzug des Landes-Medians von Zensus ÷ VG250-EW (Stichtagsunterschied); ab 1.1 |
 | `landFactor` |  | object – Land (zweistelliger AGS-Anfang) → Median von Zensus ÷ VG250-EW; ab 1.1 |
 | `n` |  | integer |
+
+## oepnv
+
+ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV). oepnv/&lt;AGS&gt;.json (Stationen und Stunden einer Gemeinde), oepnv/live/&lt;AGS&gt;.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.
+
+Version 1.0 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
+
+### oepnv · ags
+
+Stationen einer Gemeinde mit Flotte (höchstens 300, nach Halten) und Halte je Stunde der letzten 8 Tage; je Lauf neu
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `at` | ja | number – Zeit des Laufs (ms) |
+| `feedAt` |  | number / null – Zeit des Echtzeit-Stroms (ms) |
+| `license` |  | string |
+| `attribution` |  | string |
+| `halfLifeDays` |  | number – Halbwertszeit der Summen in Tagen |
+| `days` |  | number – Tage in der Summe (mit Halbwertszeit gewichtet); Halte je Tag = halte ÷ days |
+| `stations` |  | integer – Stationen der Gemeinde im Fahrplan |
+| `fields` | ja | array von string – Spalten von rows: station, name, lat, lon, halte, ausgefallen, verspaetet (ab 5 Minuten), verspaetung_min (Mittel der Halte mit Angabe), halte_heute, ausgefallen_heute, verspaetet_heute |
+| `rows` | ja | array von array |
+| `hours` | ja | object – je Tag 24 Ortsstunden: Halte mit Echtzeit, ausgefallen, verspätet, Kennzeichen gestört; cancel = ganz ausgefallene Fahrten des Tages |
+
+### oepnv · live
+
+Geschätzte Fahrzeugwege ab at für aheadMin Minuten; je Lauf neu
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `ags` | ja | string (Muster `^\d{8}$`) |
+| `at` | ja | number |
+| `feedAt` |  | number / null |
+| `aheadMin` | ja | number |
+| `license` |  | string |
+| `attribution` |  | string |
+| `fields` | ja | array von string – Spalten von trips: linie (oder null), art ('bus' \| 'tram' \| 'bahn' \| 'sonst'), verspaetung_s am nächsten Halt (oder null), weg = \[lat, lon, Sekunden nach at, …\] je Station |
+| `trips` | ja | array von array |
+
+### oepnv · wirkung
+
+Sharing-Fahrtbeginne in gestörten Stunden gegen die übrigen Stunden derselben Gemeinde
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` | ja | number |
+| `days` |  | array von string |
+| `rule` |  | string / null |
+| `pooled` |  | object / null |
+| `cities` | ja | array von object |
+
+### oepnv · index
+
+Übersicht je Gemeinde
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` | ja | number |
+| `feedAt` |  | number / null |
+| `license` |  | string |
+| `attribution` |  | string |
+| `aheadMin` |  | number |
+| `days` |  | number |
+| `trips` |  | integer – Fahrzeugwege im Lauf |
+| `withRoute` |  | integer – davon mit Linie |
+| `fields` | ja | array von string |
+| `cities` | ja | object |

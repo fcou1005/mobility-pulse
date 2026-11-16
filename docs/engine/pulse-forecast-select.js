@@ -3,7 +3,7 @@
 import * as E from './pulse-econ.js';
 import { hourOf, dayOf } from './pulse-track.js';
 import { CTX_KEYS } from './pulse-context.js';
-import { ALPHA, CLS, EFFECTS, GATES, I_CLS, I_CTX, I_HOUR, I_TH, I_WE, I_WX, MODELS, NE, NW, SHADOW_ONLY, TYPES, WE_CLS, WX_EFF, classOf, envOf, eta, feedbackUpdate, feedbackWeights, fitPooled, pos, predictAdaptive, predictPooled, predictProfile, scoreDay, scoreOf, sum, typeIx, wxFeatures } from './pulse-forecast-model.js';
+import { ALPHA, CLS, EFFECTS, GATES, I_CLS, I_CTX, I_HOUR, I_TH, I_WE, I_WX, MODELS, NE, NOWCAST, NW, SHADOW_ONLY, TYPES, WE_CLS, WX_EFF, classOf, envOf, eta, feedbackUpdate, feedbackWeights, fitPooled, pos, predictAdaptive, predictPooled, predictProfile, scoreDay, scoreOf, sum, typeIx, wxFeatures } from './pulse-forecast-model.js';
 import { lastExposure } from './pulse-forecast-series.js';
 
 // ---------- Hybrid: Niveau „wie gestern“, Tagesgang aus dem Modell (Kandidat „hybrid“) ----------
@@ -306,6 +306,23 @@ export function predictAll(R, days, before, trainSel, F, sel, want, { envFit = {
   for (const k of ['naive', 'week']) if (want.has(k)) { const b = predictBaseline(R, days, before, F, sel, k, dayOfRow), fill = out.get('hybrid'); out.set(k, Float64Array.from(b, (x, j) => (Number.isFinite(x) ? x : fill[j]))); }
   // Überstreuung je Modell für das 80-%-Band: gepoolt aus seinem Fit, Profil 1, sonst aus dem Modell mit Umgebung
   return { mu: out, phi: (m) => (m === 'pooled' ? phiP : m === 'profile' ? 1 : phiQ), fitted: () => mQ || mP };
+}
+
+// ---------- Tageskorrektur (Kandidat „nowcast“, nur im Schatten; Begründung bei NOWCAST) ----------
+/** Stunden des laufenden Tages für das Verhältnis: voll beobachtet, ab minWindowHour, höchstens windowH vor der Ausgabestunde c; null = keine Korrektur */
+export function nowcastWindow(hourMin, c, N = NOWCAST) {
+  if (!(c >= N.fromHour) || !hourMin) return null;
+  const hs = []; for (let h = Math.max(N.minWindowHour, c - N.windowH); h < c; h++) if (hourMin[h] >= GATES.hourMinObserved) hs.push(h);
+  return hs.length >= N.minHours ? hs : null;
+}
+/** Verhältnis je Gruppe aus Ist und Modell im Fenster (Maps Schlüssel → Summe): (Ist + k) ÷ (Modell + k), begrenzt auf min–max; ohne Modellwert 1 */
+export function nowcastRatios(obs, pred, N = NOWCAST) {
+  const out = new Map(); for (const [k, p] of pred) out.set(k, Math.min(N.max, Math.max(N.min, ((obs.get(k) || 0) + N.k) / (p + N.k))));
+  return out;
+}
+/** Prognose mu (Zeile j: Gruppe keyOf(j), Vorlauf leadOf(j) in Stunden ab der Ausgabe) mit dem Verhältnis, das mit tauH abklingt */
+export function nowcastApply(mu, keyOf, leadOf, ratios, N = NOWCAST) {
+  return Float64Array.from(mu, (x, j) => { const r = ratios.get(keyOf(j)); return r == null ? x : x * (1 + (r - 1) * Math.exp(-Math.max(0, leadOf(j)) / N.tauH)); });
 }
 
 // ---------- Vortrainiertes Modell zum Mitnehmen (forecast/model.json) ----------

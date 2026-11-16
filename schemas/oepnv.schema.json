@@ -1,0 +1,363 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/oepnv.schema.json",
+ "title": "ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV)",
+ "description": "oepnv/<AGS>.json (Stationen und Stunden einer Gemeinde), oepnv/live/<AGS>.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.",
+ "x-version": "1.0",
+ "$defs": {
+  "ags": {
+   "type": "object",
+   "description": "Stationen einer Gemeinde mit Flotte (höchstens 300, nach Halten) und Halte je Stunde der letzten 8 Tage; je Lauf neu",
+   "required": [
+    "schemaVersion",
+    "ags",
+    "at",
+    "fields",
+    "rows",
+    "hours"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "at": {
+     "type": "number",
+     "description": "Zeit des Laufs (ms)"
+    },
+    "feedAt": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "description": "Zeit des Echtzeit-Stroms (ms)"
+    },
+    "license": {
+     "type": "string"
+    },
+    "attribution": {
+     "type": "string"
+    },
+    "halfLifeDays": {
+     "type": "number",
+     "description": "Halbwertszeit der Summen in Tagen"
+    },
+    "days": {
+     "type": "number",
+     "description": "Tage in der Summe (mit Halbwertszeit gewichtet); Halte je Tag = halte ÷ days"
+    },
+    "stations": {
+     "type": "integer",
+     "description": "Stationen der Gemeinde im Fahrplan"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "Spalten von rows: station, name, lat, lon, halte, ausgefallen, verspaetet (ab 5 Minuten), verspaetung_min (Mittel der Halte mit Angabe), halte_heute, ausgefallen_heute, verspaetet_heute"
+    },
+    "rows": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11
+     }
+    },
+    "hours": {
+     "type": "object",
+     "description": "je Tag 24 Ortsstunden: Halte mit Echtzeit, ausgefallen, verspätet, Kennzeichen gestört; cancel = ganz ausgefallene Fahrten des Tages",
+     "required": [
+      "days",
+      "n",
+      "skip",
+      "late"
+     ],
+     "properties": {
+      "days": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "n": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 24,
+        "maxItems": 24,
+        "items": {
+         "type": "number"
+        }
+       }
+      },
+      "skip": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 24,
+        "maxItems": 24,
+        "items": {
+         "type": "number"
+        }
+       }
+      },
+      "late": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 24,
+        "maxItems": 24,
+        "items": {
+         "type": "number"
+        }
+       }
+      },
+      "flag": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 24,
+        "maxItems": 24,
+        "items": {
+         "type": "number"
+        }
+       }
+      },
+      "cancel": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       }
+      }
+     }
+    }
+   }
+  },
+  "live": {
+   "type": "object",
+   "description": "Geschätzte Fahrzeugwege ab at für aheadMin Minuten; je Lauf neu",
+   "required": [
+    "schemaVersion",
+    "ags",
+    "at",
+    "aheadMin",
+    "fields",
+    "trips"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "ags": {
+     "type": "string",
+     "pattern": "^\\d{8}$"
+    },
+    "at": {
+     "type": "number"
+    },
+    "feedAt": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "aheadMin": {
+     "type": "number"
+    },
+    "license": {
+     "type": "string"
+    },
+    "attribution": {
+     "type": "string"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "Spalten von trips: linie (oder null), art ('bus' | 'tram' | 'bahn' | 'sonst'), verspaetung_s am nächsten Halt (oder null), weg = [lat, lon, Sekunden nach at, …] je Station"
+    },
+    "trips": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4
+     }
+    }
+   }
+  },
+  "wirkung": {
+   "type": "object",
+   "description": "Sharing-Fahrtbeginne in gestörten Stunden gegen die übrigen Stunden derselben Gemeinde",
+   "required": [
+    "schemaVersion",
+    "at",
+    "cities"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "number"
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "rule": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "pooled": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "properties": {
+      "effect": {
+       "type": "number"
+      },
+      "ci": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       }
+      },
+      "cityDays": {
+       "type": "integer"
+      },
+      "hours": {
+       "type": "integer"
+      },
+      "cities": {
+       "type": "integer"
+      },
+      "verdict": {
+       "type": "string"
+      }
+     }
+    },
+    "cities": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "ags",
+       "days",
+       "hours",
+       "effect",
+       "verdict"
+      ],
+      "properties": {
+       "ags": {
+        "type": "string",
+        "pattern": "^\\d{8}$"
+       },
+       "days": {
+        "type": "integer"
+       },
+       "hours": {
+        "type": "integer"
+       },
+       "normalHours": {
+        "type": "integer"
+       },
+       "effect": {
+        "type": "number"
+       },
+       "ci": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "verdict": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  },
+  "index": {
+   "type": "object",
+   "description": "Übersicht je Gemeinde",
+   "required": [
+    "schemaVersion",
+    "at",
+    "fields",
+    "cities"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "number"
+    },
+    "feedAt": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "license": {
+     "type": "string"
+    },
+    "attribution": {
+     "type": "string"
+    },
+    "aheadMin": {
+     "type": "number"
+    },
+    "days": {
+     "type": "number"
+    },
+    "trips": {
+     "type": "integer",
+     "description": "Fahrzeugwege im Lauf"
+    },
+    "withRoute": {
+     "type": "integer",
+     "description": "davon mit Linie"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "cities": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+       "type": "number"
+      }
+     }
+    }
+   }
+  }
+ }
+}

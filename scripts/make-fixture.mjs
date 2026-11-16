@@ -119,6 +119,14 @@ if (geoReal) {
   const SYN = path.join(ROOT, 'test/fixtures/geo-synth'), rs = async (f) => JSON.parse(await readFile(path.join(SYN, f), 'utf8'));
   for (const d of [...GEO_DIRS, 'zubringer', 'pop']) if (existsSync(path.join(SYN, d))) for (const f of await readdir(path.join(SYN, d))) await put(`${d}/${f}`, await rs(`${d}/${f}`));
 }
+// Reiter ÖPNV: echte Dateien, sonst der synthetische Stand aus scripts/oepnv-fixture.mjs (test/fixtures/oepnv-synth)
+if (has('oepnv/wirkung.json')) {
+  await put('oepnv/wirkung.json', trim(await rd('oepnv/wirkung.json')));
+  for (const a of KEEP) for (const f of [`oepnv/${a}.json`, `oepnv/live/${a}.json`]) if (has(f)) await put(f, await rd(f));
+} else {
+  const SYN = path.join(ROOT, 'test/fixtures/oepnv-synth');
+  if (existsSync(SYN)) for (const f of ['index.json', 'wirkung.json', ...[...KEEP].flatMap(a => [`${a}.json`, `live/${a}.json`])]) if (existsSync(path.join(SYN, f))) await put(`oepnv/${f}`, JSON.parse(await readFile(path.join(SYN, f), 'utf8')));
+}
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
 

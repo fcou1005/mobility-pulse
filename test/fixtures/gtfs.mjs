@@ -17,7 +17,7 @@ export const pbStr = (f, s) => pbMsg(f, s);
 export function encodeFeed(trips, { ts = Date.now(), alerts = 0 } = {}) {
   const head = pbMsg(1, pbStr(1, '2.0'), pbInt(2, 0), pbInt(3, Math.floor(ts / 1000)));
   const ents = trips.map((tr, k) => pbMsg(2, pbStr(1, `e${k}`), pbMsg(3,
-    pbMsg(1, pbStr(1, tr.id || `t${k}`), ...(tr.startTime ? [pbStr(2, tr.startTime)] : []), ...(tr.startDate ? [pbStr(3, tr.startDate)] : []), ...(tr.canceled ? [pbInt(4, 3)] : [])),
+    pbMsg(1, pbStr(1, tr.id || `t${k}`), ...(tr.startTime ? [pbStr(2, tr.startTime)] : []), ...(tr.startDate ? [pbStr(3, tr.startDate)] : []), ...(tr.canceled ? [pbInt(4, 3)] : []), ...(tr.route ? [pbStr(5, tr.route)] : [])),
     ...tr.stops.map((s, i) => pbMsg(2, pbInt(1, i + 1),
       ...(s.t != null ? [pbMsg(2, pbInt(1, s.delay ?? 0), pbInt(2, Math.floor(s.t / 1000))), pbMsg(3, pbInt(1, s.delay ?? 0), pbInt(2, Math.floor(s.t / 1000)))] : []),
       pbStr(4, String(s.stop)), ...(s.skipped ? [pbInt(5, 1)] : []))))));

@@ -9,6 +9,7 @@
 | [Regeln](regeln.md) | wie Bestand, Fahrten, Umsetzungen und Messbasis gezählt werden |
 | [Kennzahlen](kennzahlen.md) | Umsatz, Obergrenzen, Marktanteil, CSV |
 | [Disposition](disposition.md) | Nachfragemodell, Spots, Touren |
+| [ÖPNV](oepnv.md) | Live-Karte der Busse und Bahnen, Pünktlichkeit, Wirkung von Störungen auf Sharing, Vorschläge für Sharing-Stationen |
 | [Umfeld](umfeld.md) | Versorgung der Einwohner, Unfälle, ÖPNV-Zubringer, Umwegfaktor, Abstellflächen-Planer |
 | [Prognose](prognose.md) | Modelle, Güte, Band, Selbstprüfung |
 | [Dashboard](dashboard.md) | Bedienung, Ansichten, Sprache |

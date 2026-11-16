@@ -72,5 +72,56 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(cd.get('2026-11-12').ptDay['08111000'].join() === '2,3' && cd.size === 1, 'ptDay: Maximum über die Läufe, kein neuer Tag ohne Grund');
 }
 
+// ---------- Reiter ÖPNV (lib/pulse-oepnv-netz.js): Stationen, Zählung, Fahrzeugwege, Wirkung, Vorschläge ----------
+{
+  const NZ = await import('../lib/pulse-oepnv-netz.js');
+  const stops = 'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nde:08111:10:1:1,Hauptbahnhof,48.7840,9.1820,,\nde:08111:10:2:3,Hauptbahnhof,48.7844,9.1824,,\nde:08111:20:0:1,Stadtmitte,48.7760,9.1730,,\np1,Uni,48.7500,9.1000,,par\nde:08416:5:0:1,Tübingen Hbf,48.5160,9.0550,,\n';
+  const ix = OE.stopIndex(stops, (lat) => (lat > 48.7 ? '08111000' : '08416041'), new Set(['08111000']));
+  assert(ix.st.id.join() === 'de:08111:10,de:08111:20,par' && ix.st.name[0] === 'Hauptbahnhof' && ix.st.lat[0] === 48.7842 && ix.s.join() === '0,0,1,2,-1' && OE.stationLookup(ix).size === 4 && OE.stationKey('abc') === 'abc',
+    'Stationen: Steige einer DELFI-Kennung zusammen, parent_station geht vor, Lage = Mittel, nur Gemeinden mit Flotte');
+  ix.routes = OE.routeIndex('route_id,route_short_name,route_long_name,route_type\nr1,U6,,400\nr2,,Stadtbus 42,3\n');
+  assert(ix.routes.r1.join() === 'U6,400' && ix.routes.r2[0] === 'Stadtbus 42' && NZ.typeClass(400) === 'bahn' && NZ.typeClass(3) === 'bus' && NZ.typeClass(900) === 'tram' && NZ.typeClass(null) === 'sonst', 'Linien: Kurzname, sonst Langname; Art aus route_type');
+  const now = Date.parse('2026-11-16T10:00:00Z'), m = 60e3; // 11 Uhr Ortszeit
+  const feed = encodeFeed([
+    { id: 'a', route: 'r1', stops: [{ stop: 'de:08111:10:1:1', t: now - 4 * m, delay: 360 }, { stop: 'de:08111:20:0:1', t: now + 6 * m, delay: 360 }, { stop: 'p1', t: now + 70 * m, delay: 300 }] },
+    { id: 'b', route: 'r2', stops: [{ stop: 'de:08111:20:0:1', t: now - 30 * m, delay: 0 }, { stop: 'de:08111:10:2:3', t: now - 20 * m, delay: 60 }] },
+    { id: 'c', canceled: true, stops: [{ stop: 'de:08111:10:1:1', t: now - 10 * m }, { stop: 'de:08111:20:0:1', t: now + 5 * m }] },
+    { id: 'd', stops: [{ stop: 'de:08111:10:1:1', t: now + 2 * m, delay: 0 }, { stop: 'zzz', t: now + 4 * m }, { stop: 'de:08111:20:0:1', t: null, skipped: true }, { stop: 'p1', t: now + 12 * m, delay: 0 }] },
+  ], { ts: now });
+  const lk = OE.stationLookup(ix), counter = NZ.stationCounter(lk, ix.st.id), paths = NZ.pathCollector(lk, ix, now);
+  OE.ptCounts(feed, OE.stopLookup(ix), now, { onStop: counter.onStop, onTrip: paths.onTrip });
+  const cnt = counter.result(), blk = cnt['2026-11-16|1'];
+  assert(Object.keys(cnt).join() === '2026-11-16|1' && blk['de:08111:10'].join() === '3,1,1,420,2' && blk['de:08111:20'].join() === '1,0,0,0,1', `Zählung je Station im Block 6–12 Uhr: Hbf 3 Halte, 1 ausgefallen, 1 verspätet (${JSON.stringify(blk)})`);
+  const pr = paths.result(), tr = pr.by.get('08111000');
+  assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'bahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
+    `Fahrzeugwege: laufende Fahrten ab dem letzten Halt, abgesagte und beendete fehlen, ausgefallener Halt und unbekannte Station übersprungen (${JSON.stringify(tr)})`);
+  const w = tr[0][3], p0 = NZ.positionAt(w, 0), pEnd = NZ.positionAt(w, 5000), d = tr[1][3];
+  assert(Math.abs(p0[0] - (48.7842 + (48.776 - 48.7842) * 0.4)) < 1e-9 && pEnd === null && NZ.positionAt(d, 0).join() === '48.7842,9.1822' && NZ.positionAt(d, -200) === null && NZ.positionAt(w, 360).join() === '48.776,9.173', 'Lage: 4 von 10 Minuten zwischen zwei Stationen, vor der Abfahrt höchstens 2 Minuten am ersten Halt, nach dem Ende weg');
+  // Zustand: je Block der Lauf mit den meisten Halten, nach 14 Stunden in die Summe, Summe altert
+  const st = NZ.emptyNetzState(); NZ.mergeCounts(st, cnt, now); NZ.mergeCounts(st, { '2026-11-16|1': { 'de:08111:10': [2, 0, 0, 0, 2], 'de:08111:20': [5, 1, 0, 60, 4] } }, now + 20 * m);
+  assert(st.open['2026-11-16|1']['de:08111:10'][0] === 3 && st.open['2026-11-16|1']['de:08111:20'][0] === 5 && st.days === 0, 'Zustand: je Block und Station gilt der Lauf mit den meisten Halten');
+  const t1 = NZ.stationTotals(st, '2026-11-16'), rows = NZ.stationRows(ix, NZ.stationsByAgs(ix).get('08111000'), t1);
+  assert(rows.length === 2 && rows[0][0] === 'de:08111:20' && rows[0].join() === 'de:08111:20,Stadtmitte,48.776,9.173,5,1,0,0.3,5,1,0' && rows[1][7] === 3.5, `Zeilen je Station, nach Halten (${rows[0].join()})`);
+  const r2 = NZ.mergeCounts(st, {}, Date.parse('2026-11-17T02:30:00Z'));
+  assert(r2.closed === 1 && !st.open['2026-11-16|1'] && Math.abs(st.tot['de:08111:10'][0] - 3) < 1e-9 && st.days === 0.25 && NZ.stationTotals(st, '2026-11-17').get('de:08111:10').day[0] === 0, 'Block 14 Stunden nach seinem Ende in der Summe (0,25 Tage)');
+  NZ.mergeCounts(st, {}, Date.parse('2026-11-24T10:00:00Z'));
+  assert(Math.abs(st.tot['de:08111:10'][0] - 1.5) < 1e-9 && Math.abs(st.days - 0.125) < 1e-9, 'Summe halbiert sich nach 7 Tagen');
+  // Stunden aus den Störungs-Dokumenten
+  const doc = (day, flagH, mult) => ({ ags: { '08111000': { ptN: new Array(24).fill(100), ptSkip: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 20 : 2)), ptLate: new Array(24).fill(5), pt: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 1 : 0)) } }, ptDay: { '08111000': [4, 30] }, mult });
+  const days = ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'], docs = new Map(days.map((d, i) => [d, doc(d, i < 3 ? [8, 9, 17] : [], 1)]));
+  const hrs = NZ.hoursOf(docs, '08111000', [...days, '2026-11-14']);
+  assert(hrs.days.length === 4 && hrs.skip[0][8] === 20 && hrs.flag[3][8] === 0 && hrs.cancel.join() === '4,4,4,4', 'Stunden je Tag aus den Störungs-Dokumenten, Tag ohne Daten fehlt');
+  // Wirkung: gestörte Stunden +20 % Fahrten gegen die Prognose, sonst ±0 (mit kleinem Rauschen je Tag)
+  const series = { days: Object.fromEntries(days.map((d, i) => [d, { 'ags:08111000': { p: new Array(24).fill(100), a: new Array(24).fill(0).map((_, h) => (i < 3 && [8, 9, 17].includes(h) ? 120 + i : 100 + (h % 3) - 1)) } }])) };
+  const eff = NZ.ptEffect(docs, series, { today: '2026-11-14' }), c = eff.cities[0];
+  assert(eff.cities.length === 1 && c.days === 3 && c.hours === 9 && c.verdict === 'mehr' && Math.abs(c.effect - 0.21) < 0.005 && c.ci[0] > 0.15 && eff.pooled === null, `Wirkung: +21 % in gestörten Stunden, je Tag ein Wert, Intervall über der Null (${JSON.stringify(c)})`);
+  assert(NZ.ptEffect(docs, series, { today: '2026-11-11' }).cities[0].verdict === 'zu wenig Tage' && NZ.ptEffect(new Map(), series).cities.length === 0, 'Wirkung: unter 3 gestörten Tagen kein Urteil');
+  // Vorschläge für Sharing-Stationen
+  const sr = [['a', 'Viel und gestört', 48.78, 9.18, 4000, 400, 800, 3, 0, 0, 0], ['b', 'Viel, pünktlich', 48.79, 9.19, 4000, 10, 40, 1, 0, 0, 0], ['c', 'Hat Fläche', 48.77, 9.17, 5000, 500, 900, 3, 0, 0, 0], ['d', 'Klein', 48.76, 9.16, 40, 0, 0, 0, 0, 0, 0]];
+  const hub = NZ.hubCandidates(sr, { days: 4, demand: [[48.7801, 9.1801, 50], [48.7901, 9.1901, 5], [48.90, 9.3, 999]], vehicles: [{ lat: 48.7802, lon: 9.1802 }, { lat: 48.5, lon: 9 }], existing: [[48.7701, 9.1701, 10]] });
+  assert(hub.rows.length === 2 && hub.rows[0].id === 'a' && hub.rows[0].ends === 50 && hub.rows[0].vehicles === 1 && hub.rows[0].perDay === 1000 && hub.rows[0].stoer === 0.3 && hub.withArea === 1 && hub.stations === 3 && hub.rows[0].score > hub.rows[1].score,
+    `Vorschläge: viel ÖPNV, oft gestört, Nachfrage vorhanden zuerst; Station mit Fläche zählt nicht, unter 30 Halten je Tag fällt weg (${hub.rows.map(x => x.id + ' ' + x.score).join(', ')})`);
+}
+
 console.log(`${oks} ok, ${fails} Fehler`);
 if (fails) process.exitCode = 1;
