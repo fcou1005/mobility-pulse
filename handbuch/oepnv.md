@@ -47,7 +47,7 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 
 ## Alarm „ÖPNV gestört“ (`lib/pulse-alarme.js`)
 
-- Thema `oepnv` in den Alarmen und Feeds je Gemeinde: Die letzte volle Stunde wechselt von normal auf gestört (Regel wie oben). Nur Gemeinden ab 100 Fahrzeugen und 150 Halten mit Echtzeit in der Stunde (mit 20 Fahrzeugen ohne Halte-Grenze kamen am 16.11. in drei Stunden 42 Alarme, 34 aus Kleinstädten), höchstens ein Alarm je Gemeinde in 6 Stunden, der erste Lauf meldet nichts.
+- Thema `oepnv` in den Alarmen und Feeds je Gemeinde: Die letzte volle Stunde wechselt auf stark gestört, das heißt mindestens 15 % der Halte ausgefallen oder 50 % verspätet (`PT_ALARM`; strenger als das Kennzeichen „gestört“, weil im Feierabendverkehr des 16.11. 13 Großstädte in einem Lauf bei 30 bis 44 % verspätet lagen). Nur Gemeinden ab 100 Fahrzeugen und 150 Halten mit Echtzeit in der Stunde (mit 20 Fahrzeugen ohne Halte-Grenze kamen am 16.11. in drei Stunden 42 Alarme, 34 aus Kleinstädten), höchstens ein Alarm je Gemeinde in 6 Stunden, der erste Lauf meldet nichts.
 - Der Text nennt Stunde, Anteile und die verfügbaren Sharing-Fahrzeuge im Stadtgebiet; Push über ntfy wie bei den anderen Themen.
 
 ## Wirkung auf Sharing (`ptEffect`)
