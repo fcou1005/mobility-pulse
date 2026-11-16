@@ -371,7 +371,7 @@ export default {
   "sd.kIdleCmp": "{n} von {all} Fahrzeugen",
   "sd.how": "Bestand = E-Scooter aller Anbieter in den offenen Feeds der Gemeinde (verfügbar, reserviert, gesperrt) gegen die amtliche Obergrenze aus data/reference.json. Feed-Verfügbarkeit = Anteil der Sammler-Läufe im Kalenderjahr, in denen der Feed des Anbieters aktuell oder leicht verzögert lieferte; gezeigt wird der schwächste Anbieter, Ziel {target}. Standzeit über 72 h = Fahrzeuge, die seit mehr als drei Tagen nicht bewegt wurden, an allen Fahrzeugen mit bekannter Standzeit.",
   "sd.alarmsTitle": "Alarme der letzten 7 Tage",
-  "sd.alarmsSub": "Obergrenze, Quelle aus, Zonen, Preise und Flottensprung – erkannt im Vergleich mit dem vorigen Lauf des Sammlers.",
+  "sd.alarmsSub": "Obergrenze, Quelle aus, Zonen, Preise, Flottensprung und ÖPNV-Störung – erkannt im Vergleich mit dem vorigen Lauf des Sammlers.",
   "sd.noAlarms": "Keine Alarme in den letzten 7 Tagen.",
   "sd.noAlarmsHint": "Geprüft wird bei jedem Lauf des Sammlers (etwa alle 18 Minuten).",
   "sd.toReport": "Kommunal-Bericht",

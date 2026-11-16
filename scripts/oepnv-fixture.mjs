@@ -7,6 +7,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NETZ, NETZ_LICENSE, NETZ_ATTRIBUTION, LIVE_FIELDS, STATION_FIELDS } from '../lib/pulse-oepnv-netz.js';
 import { SCHEMA } from '../lib/pulse-schema.js';
+import { LINE_FIELDS } from '../lib/pulse-oepnv-linien.js';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname), args = process.argv.slice(2);
 const OUT = path.resolve(ROOT, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'test/fixtures/oepnv-synth');
@@ -37,7 +38,10 @@ for (const ags of fx.ags) {
     }
     H.n.push(n); H.skip.push(sk); H.late.push(la); H.flag.push(fl); H.cancel.push(di === 1 ? 31 : 6);
   });
-  await put(`${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, ...head, halfLifeDays: NETZ.halfLifeDays, days, stations: nSt + 40, fields: STATION_FIELDS, rows, hours: H });
+  const lines = Array.from({ length: ags === '08111000' ? 18 : 4 }, (_, i) => { const art = ['bus', 'tram', 'bahn'][i % 3], h = Math.round((1400 - 60 * i) * (0.8 + 0.4 * rnd())), q = 0.03 + 0.25 * rnd() * (i % 4 === 0 ? 1.5 : 0.5); return [`${art === 'bahn' ? 'S' : art === 'tram' ? 'U' : ''}${i + 1}${art === 'bus' ? 0 : ''}`, art, h, Math.round(h * q * 0.3), Math.round(h * q * 0.7), Math.round((1 + 18 * q) * 10) / 10, Math.round(h / days * 0.7), 0, 0]; });
+  const pPt = Array.from({ length: 24 }, (_, h) => (h >= 5 ? Math.round(nSt * 14 * (h >= 7 && h <= 9 || h >= 16 && h <= 18 ? 1.5 : 1) * (h >= 22 ? 0.3 : 1)) : h === 0 ? Math.round(nSt * 2.5) : 0)), pSh = Array.from({ length: 24 }, (_, h) => Math.round((ags === '08111000' ? 60 : 8) * (h < 5 ? 0.25 : h >= 22 ? 0.6 : 0.5 + 0.5 * Math.sin((h - 5) / 17 * Math.PI)) * 10) / 10);
+  const pk = Math.max(...pPt), profile = { days: 2, pt: pPt, sharing: pSh, gap: pPt.map((x, h) => (x < 0.25 * pk && pSh[h] >= 3 ? h : -1)).filter(h => h >= 0), gapShare: 0.25, minSharing: 3 };
+  await put(`${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, ...head, halfLifeDays: NETZ.halfLifeDays, days, stations: nSt + 40, fields: STATION_FIELDS, rows, hours: H, lines: { fields: LINE_FIELDS, rows: lines }, profile });
   // Fahrzeugwege: je Fahrt 5 bis 8 Stationen in Folge, Start bis 10 Minuten vor dem Stand, Halte alle 2 bis 4 Minuten
   const trips = [], ARTEN = ['bus', 'bus', 'tram', 'bahn'];
   for (let k = 0; k < (ags === '08111000' ? 60 : 12); k++) {

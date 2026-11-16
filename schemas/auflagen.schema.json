@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/auflagen.schema.json",
  "title": "auflagen/ – Datenauflagen-Check und Alarme",
  "description": "Jahresbuch der Feed-Verfügbarkeit je Quelle (auflagen/verfuegbarkeit-<Jahr>.json, S5.1) und Alarmprotokoll je Gemeinde (auflagen/alarme.json, S5.2; daraus die Atom-Feeds feeds/<AGS>.xml).",
- "x-version": "1.0",
+ "x-version": "1.1",
  "$defs": {
   "ledger": {
    "type": "object",
@@ -142,7 +142,8 @@
          "source",
          "zone",
          "price",
-         "fleet"
+         "fleet",
+         "oepnv"
         ],
         "description": "Thema: Obergrenze, Quelle aus, Zonenänderung, Preisänderung, Flottensprung"
        },

@@ -48,7 +48,7 @@ von `run` aus, veränderliche Werte (`let`) stehen nur in `ctx` und werden dort 
 | `sport-termine`, `streiks`, `prognose`, `training` | Termine, Streiks, Prognose, Trainingsarchiv |
 | `kalibrierung`, `grenzen` | Kalibrierung, Gemeindegrenzen |
 | `gebiet` | Dateien je Gemeinde für die Disposition (`scripts/gebiet.mjs`): `latest-core.json`, `ops-input/cells`, `ops-input/area`, `ops-input/zones` |
-| `alarme` | Alarme je Gemeinde (Obergrenze, Quelle aus, Zonen, Preise, Flottensprung) → `auflagen/alarme.json`, Atom-Feeds `feeds/<AGS>.xml` |
+| `alarme` | Alarme je Gemeinde (Obergrenze, Quelle aus, Zonen, Preise, Flottensprung, ÖPNV gestört) → `auflagen/alarme.json`, Atom-Feeds `feeds/<AGS>.xml` |
 | `datenvertraege`, `abschluss` | Formatversion, Lizenzen und `status.json` |
 
 ## Startseite in Modulen

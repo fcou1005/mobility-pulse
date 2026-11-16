@@ -19,7 +19,7 @@ export async function run(ctx) {
     const pricing = await rd(path.join(DATA, 'pricing.json')).catch(() => null);
     const munis = latest?.municipalities || {};
     const name = (ags) => munis[ags]?.name || ags;
-    const cur = AL.snapshot({ latest, caps: ctx.caps || null, pricing });
+    const cur = AL.snapshot({ latest, caps: ctx.caps || null, pricing, pt: ctx.ptNow || null });
     const fresh = AL.detect(prev?.state || null, cur, { now, muniName: name });
     const doc = SV.withSchema('auflagen', AL.updateLog(prev, fresh, { now, state: cur }));
     await mkdir(path.join(DATA, 'auflagen'), { recursive: true });

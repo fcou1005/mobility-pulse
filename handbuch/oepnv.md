@@ -24,6 +24,23 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Grenzen: echte Strecke und echtes Tempo sind unbekannt; ein Fahrzeug kann auf der Karte quer über einen Häuserblock fahren. Nach dem Ende der 45 Minuten ohne neuen Lauf sagt die Karte das und zeigt keine Fahrzeuge mehr.
 - Verworfen: Fahrzeugpositionen von Transitous (nur für nicht-kommerzielle Open-Source-Projekte freigegeben).
 
+## Linien (`lib/pulse-oepnv-linien.js`)
+
+- Der Strom nennt je Fahrt nur `trip_id`. Die Linie kommt aus `trips.txt` des Fahrplans: bei jedem neuen Fahrplan baut der Sammler eine Tabelle Fahrt → Linie (zwei 32-Bit-Hashes je Fahrt, 12 Bytes je Fahrt) und legt sie im Zwischenspeicher ab (`TRACK_DIR/oepnv-fahrten.bin.gz`), nicht im Datenstand. Scheitert der Abruf, bleiben Fahrzeuge ohne Liniennamen bis zum nächsten Fahrplan.
+- Zählung je Linie wie je Station (Schlüssel Gemeinde, Art, Linienname; 6-Stunden-Blöcke, 7 Tage Halbwertszeit), nur Halte im Stadtgebiet. Veröffentlicht werden je Gemeinde 80 Linien (`lines` in `oepnv/<AGS>.json`). Linien gleichen Namens verschiedener Betreiber fallen zusammen.
+- Die Ansicht zeigt die 15 Linien mit dem höchsten Anteil ausgefallener und verspäteter Halte ab 40 Halten.
+
+## Tagesgang und Nachtnetz-Lücke (`dayProfile`)
+
+- Mittel je Ortsstunde über die vollen Tage im 8-Tage-Fenster: ÖPNV-Halte mit Echtzeit gegen Sharing-Fahrtbeginne (`forecast/series.json`).
+- Lücke: ÖPNV unter 25 % seines Tageshöchstwerts und mindestens 3 Sharing-Fahrtbeginne in der Stunde. Die Ansicht nennt die Stunden und den Anteil der Sharing-Fahrten darin.
+- Halte ohne Echtzeit fehlen; in Städten mit wenig Echtzeit wirkt der ÖPNV dünner, als er ist.
+
+## Alarm „ÖPNV gestört“ (`lib/pulse-alarme.js`)
+
+- Thema `oepnv` in den Alarmen und Feeds je Gemeinde: Die letzte volle Stunde wechselt von normal auf gestört (Regel wie oben). Nur Gemeinden ab 20 Fahrzeugen, höchstens ein Alarm je Gemeinde in 6 Stunden, der erste Lauf meldet nichts.
+- Der Text nennt Stunde, Anteile und die verfügbaren Sharing-Fahrzeuge im Stadtgebiet; Push über ntfy wie bei den anderen Themen.
+
 ## Wirkung auf Sharing (`ptEffect`)
 
 - Je Stunde zwischen 6 und 22 Uhr: Sharing-Fahrtbeginne ÷ Prognose des Vortags − 1. Je Gemeinde und Tag ein Wert: Mittel der gestörten Stunden minus Mittel der übrigen Stunden desselben Tages.

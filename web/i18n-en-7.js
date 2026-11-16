@@ -368,7 +368,7 @@ export default {
   "sd.kIdleCmp": "{n} of {all} vehicles",
   "sd.how": "Fleet = all operators' e-scooters in the municipality's open feeds (available, reserved, disabled) against the official cap from data/reference.json. Feed availability = share of collector runs in the calendar year in which the operator's feed delivered current or slightly delayed data; the weakest operator is shown, target {target}. Idle over 72 h = vehicles not moved for more than three days, out of all vehicles with a known idle time.",
   "sd.alarmsTitle": "Alerts of the last 7 days",
-  "sd.alarmsSub": "Cap, source down, zones, prices and fleet jump – detected by comparing with the collector's previous run.",
+  "sd.alarmsSub": "Cap, source down, zones, prices, fleet jump and public transport disruption – detected by comparing with the collector's previous run.",
   "sd.noAlarms": "No alerts in the last 7 days.",
   "sd.noAlarmsHint": "Checked on every collector run (about every 18 minutes).",
   "sd.toReport": "Municipal report",

@@ -20,6 +20,19 @@ assert(ev.find(x => x.kind === 'cap')?.op === 'Voi' && /470.*450/.test(ev.find(x
 assert(ev.filter(x => x.kind === 'source').length === 1, 'Quelle aus: nur die gezählte Quelle, nicht die Dublette');
 assert(ev.find(x => x.kind === 'fleet')?.op === 'Lime' && !ev.some(x => x.kind === 'fleet' && x.op === 'Voi'), 'Flottensprung: Lime −120 (−40 %), Voi +70 (+17,5 %) bleibt unter der Schwelle');
 assert(AL.detect(s1, s1, { now: 4 }).length === 0, 'Obergrenze bleibt überschritten: kein zweiter Alarm');
+// ÖPNV gestört (16.11.2026): Wechsel auf gestört, Ruhezeit 6 h, erster Lauf still, kleine Flotten nicht
+{
+  const H = 3600e3, lat = { sources: [], groups: { '08125000|Voi|scooter': { total: 400, available: 350 }, '08999999|Voi|scooter': { total: 5 } } };
+  const mk = (flag) => AL.snapshot({ latest: lat, pt: { '08125000': { day: '2026-11-16', hour: 16, n: 500, skip: flag ? 90 : 5, late: flag ? 110 : 30, flag }, '08999999': { day: '2026-11-16', hour: 16, n: 50, skip: 20, late: 0, flag: 1 } } });
+  const a0 = AL.snapshot({ latest: lat }), a1 = mk(0), a2 = mk(1), a3 = mk(0), a4 = mk(1), a5 = mk(1);
+  assert(AL.detect(a0, mk(1), { now: 10 * H }).length === 0, 'ÖPNV: erster Lauf mit ÖPNV-Zahlen meldet nichts');
+  const e2 = AL.detect(a1, a2, { now: 20 * H, muniName: () => 'Heilbronn' });
+  assert(e2.length === 1 && e2[0].kind === 'oepnv' && e2[0].ags === '08125000' && /18 % der 500 Halte/.test(e2[0].text) && /22 % waren/.test(e2[0].text) && /350 Sharing-Fahrzeuge/.test(e2[0].text), `ÖPNV: Wechsel auf gestört meldet einmal, mit Anteilen und Fahrzeugen (${e2[0]?.text})`);
+  assert(AL.detect(a2, a3, { now: 21 * H }).length === 0 && AL.detect(a3, a4, { now: 22 * H }).length === 0, 'ÖPNV: erneut gestört nach 2 h bleibt still (Ruhezeit 6 h)');
+  assert(AL.detect(a4, a5, { now: 23 * H }).length === 0, 'ÖPNV: bleibt gestört, kein zweiter Alarm');
+  const b0 = mk(0); AL.detect(a5, b0, { now: 24 * H }); assert(AL.detect(b0, mk(1), { now: 27 * H }).length === 1, 'ÖPNV: nach 7 h Ruhe wieder ein Alarm');
+  assert(!a2.pt['08999999'], 'ÖPNV: Gemeinden unter 20 Fahrzeugen ohne Alarm');
+}
 // Protokoll: neue zuerst, 60 Tage
 const log = AL.updateLog({ items: [{ id: 'alt', at: 3 - 61 * 864e5, ags: '08125000', kind: 'zone', title: 'x' }] }, ev, { now: 3, state: s1 });
 assert(log.items.length === ev.length && log.items[0].at === 3, 'Protokoll: neue Einträge vorn, älter als 60 Tage fällt weg');

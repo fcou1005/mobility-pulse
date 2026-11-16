@@ -123,5 +123,37 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     `Vorschläge: viel ÖPNV, oft gestört, Nachfrage vorhanden zuerst; Station mit Fläche zählt nicht, unter 30 Halten je Tag fällt weg (${hub.rows.map(x => x.id + ' ' + x.score).join(', ')})`);
 }
 
+// ---------- Linien aus trips.txt, Zählung je Linie, Tagesgang (lib/pulse-oepnv-linien.js) ----------
+{
+  const LN = await import('../lib/pulse-oepnv-linien.js'), NZ = await import('../lib/pulse-oepnv-netz.js');
+  const routes = OE.routeIndex('route_id,route_short_name,route_long_name,route_type\nr1,U6,,400\nr2,,Stadtbus 42,3\nr3,U6,,400\nr4,,,\n');
+  const many = Array.from({ length: 5000 }, (_, i) => `r${1 + i % 3},svc,trip-${i},"Ziel, mit Komma"`).join('\r\n');
+  const tt = LN.tripTable(Buffer.from(`﻿route_id,service_id,trip_id,trip_headsign\n${many}\nr4,svc,ohne-linie,x\nr9,svc,unbekannt,x\n`), routes);
+  const lk = LN.tripLookup(LN.packTrips(tt));
+  assert(tt.n === 5000 && tt.lines === 5002 && tt.routes.length === 2 && lk.n === 5000 && lk.of('trip-0').join() === 'U6,400' && lk.of('trip-1')[0] === 'Stadtbus 42' && lk.of('trip-2')[0] === 'U6' && lk.of('trip-4999')[0] === (4999 % 3 === 1 ? 'Stadtbus 42' : 'U6') && lk.of('ohne-linie') === null && lk.of('gibt-es-nicht') === null,
+    `Fahrten-Tabelle: 5.000 Fahrten gepackt und gefunden, gleiche Liniennamen zusammen, Linie ohne Namen und unbekannte Fahrt = null (${tt.n}, ${tt.routes.length})`);
+  let threw = false; try { LN.tripLookup(Buffer.from('XXXX0000')); } catch { threw = true; } assert(threw, 'Fahrten-Tabelle: fremdes Format wird abgelehnt');
+  const stops = 'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nde:08111:10:1:1,Hauptbahnhof,48.7840,9.1820,,\nde:08111:20:0:1,Stadtmitte,48.7760,9.1730,,\n';
+  const ix = OE.stopIndex(stops, () => '08111000', new Set(['08111000'])); ix.routes = {};
+  const now = Date.parse('2026-11-16T10:00:00Z'), m = 60e3, of = (id) => (id === 'a' ? ['U6', 400] : id === 'b' ? ['42', 3] : null);
+  const feed = encodeFeed([
+    { id: 'a', stops: [{ stop: 'de:08111:10:1:1', t: now - 20 * m, delay: 400 }, { stop: 'de:08111:20:0:1', t: now - 10 * m, delay: 60 }, { stop: 'de:08111:10:1:1', t: now + 10 * m, delay: 60 }] },
+    { id: 'b', stops: [{ stop: 'de:08111:10:1:1', t: now - 5 * m }, { stop: 'de:08111:20:0:1', t: null, skipped: true }] },
+    { id: 'c', stops: [{ stop: 'de:08111:10:1:1', t: now - 5 * m, delay: 0 }] },
+  ], { ts: now });
+  const sl = OE.stationLookup(ix), lines = LN.lineCounter(sl, ix, now, { routeOf: of }), paths = NZ.pathCollector(sl, ix, now, { routeOf: of });
+  OE.ptCounts(feed, OE.stopLookup(ix), now, { onTrip: (...a) => { lines.onTrip(...a); paths.onTrip(...a); } });
+  const st = NZ.emptyNetzState(); NZ.mergeCounts(st, lines.result(), now);
+  const rows = LN.lineRows(NZ.stationTotals(st, '2026-11-16')).get('08111000');
+  assert(lines.trips() === 2 && rows.length === 2 && rows[1].join() === 'U6,bahn,2,0,1,3.8,2,0,1' && rows[0].slice(0, 5).join() === '42,bus,2,1,0',
+    `Linien: nur vergangene Halte, Fahrt ohne Linie fällt weg, ausgefallener Halt zählt, verspätet ab 5 Minuten (${JSON.stringify(rows)})`);
+  assert(paths.result().withRoute === 1 && paths.result().by.get('08111000')[0][0] === 'U6', 'Fahrzeugwege: Linie aus der Fahrten-Tabelle, wenn der Strom keine nennt');
+  const day = (n, a) => ({ ags: { '08111000': { ptN: n } }, _a: a }), ptN = Array.from({ length: 24 }, (_, h) => (h >= 5 && h < 23 ? 400 : h === 23 ? 60 : 0)), sh = Array.from({ length: 24 }, (_, h) => (h < 2 ? 12 : h < 5 ? 1 : h === 23 ? 20 : 30));
+  const docs = new Map([['2026-11-14', day(ptN)], ['2026-11-15', day(ptN)], ['2026-11-16', day(ptN.map(x => x * 9))]]), series = { days: { '2026-11-14': { 'ags:08111000': { a: sh } }, '2026-11-15': { 'ags:08111000': { a: sh } } } };
+  const pf = LN.dayProfile(docs, series, '08111000', { today: '2026-11-16' });
+  assert(pf.days === 2 && pf.pt[8] === 400 && pf.sharing[0] === 12 && pf.gap.join() === '0,1,23' && LN.dayProfile(docs, null, '08111000') === null,
+    `Tagesgang: Mittel ohne den laufenden Tag; Lücke = ÖPNV unter 25 % des Höchstwerts und ≥ 3 Fahrtbeginne (${pf.gap.join()})`);
+}
+
 console.log(`${oks} ok, ${fails} Fehler`);
 if (fails) process.exitCode = 1;

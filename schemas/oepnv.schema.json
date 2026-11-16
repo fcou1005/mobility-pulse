@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/oepnv.schema.json",
  "title": "ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV)",
  "description": "oepnv/<AGS>.json (Stationen und Stunden einer Gemeinde), oepnv/live/<AGS>.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.",
- "x-version": "1.0",
+ "x-version": "1.1",
  "$defs": {
   "ags": {
    "type": "object",
@@ -135,6 +135,71 @@
        "items": {
         "type": "number"
        }
+      }
+     }
+    },
+    "lines": {
+     "type": "object",
+     "description": "Linien der Gemeinde (höchstens 80, nach Halten), Summe wie rows; seit 1.1",
+     "required": [
+      "fields",
+      "rows"
+     ],
+     "properties": {
+      "fields": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "Spalten von rows: linie, art ('bus' | 'tram' | 'bahn' | 'sonst'), halte, ausgefallen, verspaetet (ab 5 Minuten), verspaetung_min, halte_heute, ausgefallen_heute, verspaetet_heute"
+      },
+      "rows": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 9,
+        "maxItems": 9
+       }
+      }
+     }
+    },
+    "profile": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Tagesgang je Ortsstunde, Mittel der Tage vor heute: ÖPNV-Halte mit Echtzeit gegen Sharing-Fahrtbeginne; gap = Stunden mit ÖPNV unter gapShare des Höchstwerts und mindestens minSharing Fahrtbeginnen; seit 1.1",
+     "properties": {
+      "days": {
+       "type": "integer"
+      },
+      "pt": {
+       "type": "array",
+       "minItems": 24,
+       "maxItems": 24,
+       "items": {
+        "type": "number"
+       }
+      },
+      "sharing": {
+       "type": "array",
+       "minItems": 24,
+       "maxItems": 24,
+       "items": {
+        "type": "number"
+       }
+      },
+      "gap": {
+       "type": "array",
+       "items": {
+        "type": "integer"
+       }
+      },
+      "gapShare": {
+       "type": "number"
+      },
+      "minSharing": {
+       "type": "number"
       }
      }
     }
