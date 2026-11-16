@@ -715,3 +715,28 @@ assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('ca
   const ids = pr.runs.flatMap(r => r.stops).length >= 0 ? pr.needs.map(n => n.have) : [];
   assert(pr.needs.find(n => n.rank === 1).have + pr.needs.find(n => n.rank === 2).have === 2, `S2.11: zwei Fahrzeuge zwischen zwei Spots zählen je einmal (Bestand ${ids.join(' + ')})`);
 }
+// ---------- Disposition mit Prognose und ÖPNV (16.11.2026, lib/pulse-ops-extern.js) ----------
+{
+  const local = Array.from({ length: 24 }, (_, i) => [i < 6 ? '2026-11-16' : '2026-11-17', (18 + i) % 24]);
+  const latest = { generatedAt: 'x', horizon: { from: 1, local }, municipalities: { A: local.map((x) => (+x[1] >= 6 && +x[1] < 9 ? 120 : 50)), B: local.map(() => 1) } };
+  const act = Array.from({ length: 24 }, (_, h) => (h >= 6 && h < 9 ? 100 : 50)), series = { today: '2026-11-16', days: { '2026-11-14': { 'ags:A': { a: act } }, '2026-11-15': { 'ags:A': { a: act.map(x => x * 1.2) } }, '2026-11-16': { 'ags:A': { a: act.map(() => 999) } } } };
+  const d = O.dispoForecast(latest, series);
+  assert(d.baseDays.join() === '2026-11-14,2026-11-15' && Object.keys(d.ags).join() === 'A' && d.ags.A[1][12] === 110 && d.ags.A[0][12] === 120, 'Prognose für die Disposition: Mittel der gemessenen Tage ohne den laufenden, Gemeinde ohne Messung fehlt');
+  const fm = O.forecastFactor(d, 'A', O.BANDS.find(b => b.from === 6)), fd = O.forecastFactor(d, 'A', 'day');
+  assert(fm && fm.from === 6 && fm.to === 9 && fm.day === '2026-11-17' && Math.abs(fm.raw - 120 / 110) < 1e-3 && fd && fd.from === 18 && Math.abs(fd.factor - (3 * 120 + 21 * 50) / (3 * 110 + 21 * 55)) < 1e-3,
+    `Prognose-Faktor: Band beim nächsten Vorkommen (${fm?.day} ${fm?.from}–${fm?.to} Uhr, × ${fm?.raw}), ganzer Tag über 24 Stunden`);
+  assert(O.forecastFactor(d, 'Z', 'day') === null && O.forecastFactor({ ...d, ags: { A: [d.ags.A[0], d.ags.A[1].map(() => 0.5)] } }, 'A', 'day') === null && O.forecastFactor({ ...d, ags: { A: [d.ags.A[0].map(() => 1000), d.ags.A[1]] } }, 'A', 'day').factor === 2,
+    'Prognose-Faktor: ohne Gemeinde oder mit zu wenig Messung keiner, begrenzt auf 0,5 bis 2');
+  // ÖPNV-Ziele: Station mit eigenem Fahrzeug in 300 m und Station am Spot fallen weg, höchstens fünf, die stärkste Störung zuerst
+  const rows = [['s1', 'Hbf', 48.53, 9.07, 40, 10, 10], ['s2', 'Uni', 48.54, 9.08, 30, 2, 20], ['s3', 'Mitte', base[0], base[1], 50, 30, 0], ['s4', 'Nord', 48.55, 9.10, 20, 1, 8]];
+  const os = O.oepnvSpots(rows, { vehicles: [{ lat: 48.5401, lon: 9.0801 }], spots: [{ lat: base[0], lon: base[1] }], firstRank: 21 });
+  assert(os.map(s => `${s.cell}:${s.rank}`).join() === 'pt:s1:21,pt:s4:22' && os[0].target === 2 && os[0].oepnv.name === 'Hbf', `ÖPNV-Ziele: ${os.map(s => s.oepnv.name).join(', ')}`);
+  // durch Umsetzen und Schichtplan bis in die Fahrertour
+  const sp1 = { spots: [] }, veh = [{ id: 'v1', lat: base[0] + 0.02, lon: base[1] + 0.02, battery: 90, idleMin: 3000 }, { id: 'v2', lat: base[0] + 0.0201, lon: base[1] + 0.0201, battery: 90, idleMin: 3000 }];
+  const pr = O.planRebalance({ spots: sp1.spots, extraSpots: os, vehicles: veh, model: m, share: 0.5, depot });
+  const drops = pr.runs.flatMap(r => r.stops).filter(s => s.type === 'drop'), jobs = O.shiftJobs({ rebalance: pr });
+  assert(pr.moves === 2 && drops.length >= 1 && drops.every(s => s.oepnv === 'Hbf') && jobs.length === 1 && jobs[0].count === 2 && jobs[0].d.oepnv === 'Hbf',
+    `ÖPNV-Ziele laufen durch Umsetzen und Schichtplan: ${pr.moves} Fahrzeuge zur stärksten Störung (${[...new Set(drops.map(s => s.oepnv))].join(', ')})`);
+  const sh = O.planShift(jobs, { drivers: 1, depot });
+  assert(sh.planned === 1 && sh.drivers[0].stops.some(s => s.type === 'drop' && s.count === 2 && s.info?.oepnv === 'Hbf'), 'Schichtplan: Abladen an der ÖPNV-Station mit Hinweis für den Fahrer');
+}

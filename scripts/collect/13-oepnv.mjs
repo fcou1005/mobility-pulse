@@ -94,10 +94,13 @@ export async function run(ctx) {
         }
         // Wirkung auf Sharing: Prognose-Reihen des vorigen Laufs (forecast/series.json) gegen die Störungs-Stunden
         ctx.ptNow = ptNow;
-        const eff = series ? NZ.ptEffect(hist, series, { today }) : { rule: null, pooled: null, cities: [] };
-        await writeFile(path.join(dir, 'wirkung.json'), JSON.stringify(SV.withSchema('oepnv', { at: now, days: days8, ...eff })));
+        const { daily, ...eff } = series ? NZ.ptEffect(hist, series, { today }) : { daily: {}, rule: null, pooled: null, cities: [] };
+        // passives Lernen: Tageswerte je Stadt über das 8-Tage-Fenster hinaus im Zustand, Schätzung für alle Städte (Kandidat „stoerung“ der Prognose)
+        st.learn = NZ.mergeDaily(st.learn, daily, today); await writeFile(stFile, gzipSync(JSON.stringify(st)));
+        const learn = NZ.learnEffects(st.learn);
+        await writeFile(path.join(dir, 'wirkung.json'), JSON.stringify(SV.withSchema('oepnv', { at: now, days: days8, ...eff, learn })));
         await writeFile(path.join(dir, 'index.json'), JSON.stringify(SV.withSchema('oepnv', { at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, aheadMin: NZ.NETZ.aheadMin, days: Math.round(st.days * 100) / 100, trips: pr.trips, withRoute: pr.withRoute, fields: ['stationen', 'halte_heute', 'ausgefallen_heute', 'verspaetet_heute', 'fahrzeuge'], cities })));
-        log(`ÖPNV-Netz: ${files} Gemeinden, ${mc.stations} Stationen in der Summe (${mc.open} Blöcke offen, ${mc.closed} geschlossen), ${pr.trips} Fahrzeugwege (${pr.withRoute} mit Linie), ${ml.stations} Linien in der Summe, ${[...hot.values()].reduce((s, l) => s + l.length, 0)} Stationen jetzt gestört in ${hot.size} Gemeinden, ${vehicles} Einträge je Gemeinde, Wirkung ${eff.pooled ? `${(eff.pooled.effect * 100).toFixed(1)} % (${eff.pooled.cityDays} Stadt-Tage)` : '–'}, ${Date.now() - t2} ms`);
+        log(`ÖPNV-Netz: ${files} Gemeinden, ${mc.stations} Stationen in der Summe (${mc.open} Blöcke offen, ${mc.closed} geschlossen), ${pr.trips} Fahrzeugwege (${pr.withRoute} mit Linie), ${ml.stations} Linien in der Summe, ${[...hot.values()].reduce((s, l) => s + l.length, 0)} Stationen jetzt gestört in ${hot.size} Gemeinden, ${vehicles} Einträge je Gemeinde, Wirkung ${eff.pooled ? `${(eff.pooled.effect * 100).toFixed(1)} % (${eff.pooled.cityDays} Stadt-Tage)` : '–'}, gelernt ${Object.keys(learn.cities).length} Städte aus ${learn.pooled.cityDays} Stadt-Tagen seit ${learn.since}, ${Date.now() - t2} ms`);
       } catch (e) { log(`ÖPNV-Netz: ${e.message} – übersprungen`); }
     } catch (e) { log(`ÖPNV: ${e.message} – übersprungen`); }
   }

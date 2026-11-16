@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.0",
+ "x-version": "1.1",
  "$defs": {
   "latest": {
    "type": "object",
@@ -173,6 +173,67 @@
      },
      "additionalProperties": {
       "type": "object"
+     }
+    }
+   }
+  },
+  "dispo": {
+   "type": "object",
+   "description": "Für die Disposition (seit 1.1): je Gemeinde die Prognose der nächsten 24 Stunden und das Mittel der gemessenen Fahrtbeginne derselben Ortsstunde an den letzten Tagen (baseDays), beide aus derselben Quelle; Faktor eines Tageszeit-Bands = Summe Prognose ÷ Summe Mittel",
+   "required": [
+    "schemaVersion",
+    "local",
+    "ags"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$"
+    },
+    "at": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "from": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "local": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2
+     }
+    },
+    "baseDays": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "ags": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       }
+      }
      }
     }
    }

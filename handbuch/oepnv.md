@@ -54,6 +54,7 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 
 - Je Stunde zwischen 6 und 22 Uhr: Sharing-Fahrtbeginne ÷ Prognose des Vortags − 1. Je Gemeinde und Tag ein Wert: Mittel der gestörten Stunden minus Mittel der übrigen Stunden desselben Tages.
 - 90-%-Intervall (Student-t) aus den Tageswerten, je Gemeinde ab 3 Tagen mit Störung, über alle Gemeinden ab 5 Stadt-Tagen. Urteil „mehr“ oder „weniger“ nur, wenn das Intervall die Null nicht enthält.
+- Passives Lernen (`mergeDaily`, `learnEffects`, seit 16.11. abends): Die Tageswerte je Stadt bleiben im Zustand des Sammlers bis 60 Tage, über das 8-Tage-Fenster hinaus. Je Stadt: Mittel ihrer gestörten Tage, mit 5 Tagen zur Wirkung aller Städte gezogen (unter 5 Stadt-Tagen insgesamt zur Null). Spalte „gelernt“ in der Tabelle; die Prognose rechnet damit nur im Schatten ([Prognose](prognose.md)).
 - Zusammenhang, keine Ursache: Wetter und Großereignisse bewegen beide Seiten. Die Prognose nutzt die Störungsmerkmale erst, wenn sie im Schattenvergleich gewinnen ([Prognose](prognose.md)).
 
 ## Letzte Meile (`farMask`, `lastMile` in `lib/pulse-geo-cover.js`)

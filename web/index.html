@@ -542,6 +542,8 @@ svg[data-ct]{cursor:crosshair;touch-action:pan-y}svg[data-ct]:focus-visible{outl
           <label><span data-i18n="html.runsPerType">Touren je Art</span><input type="number" id="ops-maxruns" value="6" min="1" max="20"></label>
           <label><span data-i18n="html.timePerRunH">Einsatz je Tour (h)</span><input type="number" id="ops-maxh" value="4" min="1" max="12" step="0.5"></label>
           <label class="chk"><input type="checkbox" id="ops-osm" checked> <span data-i18n="html.publicTransportParkingAreas">ÖPNV &amp; Abstellflächen (OSM)</span></label>
+          <label class="chk" data-i18n-title="html.useForecastTip" title="Nachfrage der Tageszeit mit der Prognose skalieren: mehr oder weniger Fahrten als im Schnitt der letzten 7 Tage"><input type="checkbox" id="ops-fc" checked> <span data-i18n="html.useForecast">Prognose einbeziehen</span></label>
+          <label class="chk" data-i18n-title="html.useOepnvTip" title="Gestörte ÖPNV-Stationen ohne eigenes Fahrzeug in 300 m als zusätzliche Ziele, höchstens 5"><input type="checkbox" id="ops-pt" checked> <span data-i18n="html.useOepnv">ÖPNV-Störungen einplanen</span></label>
           <label class="chk"><input type="checkbox" id="ops-route"> <span data-i18n="html.roadRoutingKmByRoadOsrm">Straßenrouting (km nach Straße, OSRM)</span></label>
           <p id="ops-type-note" class="muted" hidden></p>
           <div class="ops-actions"><button data-i18n="html.setDepot" data-i18n-title="html.thenClickOnMap" id="ops-depot" title="Danach auf die Karte klicken">⌖ Depot setzen</button></div>

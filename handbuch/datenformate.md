@@ -16,12 +16,12 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [ops](#ops) | 1.4 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
-| [forecast](#forecast) | 1.0 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/moped/…`, `forecast/car/…` |
+| [forecast](#forecast) | 1.1 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.1 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.2 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
-| [oepnv](#oepnv) | 1.3 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
+| [oepnv](#oepnv) | 1.4 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
 
@@ -342,7 +342,7 @@ Version 1.0 · Schema: [schemas/calib.schema.json](../schemas/calib.schema.json)
 
 forecast/ – Prognose. latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.
 
-Version 1.0 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
+Version 1.1 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
 
 ### forecast · latest
 
@@ -382,6 +382,20 @@ Version 1.0 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema
 | `active` |  | string oder null |
 | `plans` |  | object |
 | `days` | ja | object |
+
+### forecast · dispo
+
+Für die Disposition (seit 1.1): je Gemeinde die Prognose der nächsten 24 Stunden und das Mittel der gemessenen Fahrtbeginne derselben Ortsstunde an den letzten Tagen (baseDays), beide aus derselben Quelle; Faktor eines Tageszeit-Bands = Summe Prognose ÷ Summe Mittel
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) |
+| `at` |  | string / null |
+| `from` |  | number / null |
+| `local` | ja | array von array |
+| `baseDays` |  | array von string |
+| `fields` |  | array von string |
+| `ags` | ja | object |
 
 ## auflagen
 
@@ -649,7 +663,7 @@ S8.1 Zensus 2022 gegen VG250-EW je Gemeinde
 
 ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV). oepnv/&lt;AGS&gt;.json (Stationen und Stunden einer Gemeinde), oepnv/live/&lt;AGS&gt;.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.
 
-Version 1.3 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
+Version 1.4 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
 
 ### oepnv · ags
 
@@ -701,6 +715,7 @@ Sharing-Fahrtbeginne in gestörten Stunden gegen die übrigen Stunden derselben 
 | `rule` |  | string / null |
 | `pooled` |  | object / null |
 | `cities` | ja | array von object |
+| `learn` |  | object – Passiv gelernte Wirkung je Stadt (seit 1.4): Tageswerte bis 60 Tage zurück, je Stadt mit k Tagen zur Gesamtwirkung gezogen; since = Beginn des Lernens, until = frühestens einschalten |
 
 ### oepnv · index
 

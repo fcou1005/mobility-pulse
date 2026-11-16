@@ -70,7 +70,7 @@ await rm(OUT, { recursive: true, force: true });
 const SINGLE = ['latest.json', 'status.json', 'runs.json', 'sources.json', 'coverage.json', 'consistency.json', 'reliability.json', 'idle.json', 'idle-long.json',
   'stations-quota.json', 'pricing.json', 'pricing-log.json', 'caps-log.json', 'calib.json', 'calendar.json', 'eingriffe.json', 'ereignisse.json', 'veranstaltungen.json',
   'sport.json', 'streiks.json', 'groups.json', 'groups/index.json', 'history/daily.json', 'forecast/latest.json', 'forecast/log.json', 'forecast/series.json',
-  'forecast/model.json', 'forecast/moped/latest.json', 'forecast/moped/series.json', 'forecast/car/latest.json', 'forecast/car/series.json', 'boundaries/index.json',
+  'forecast/model.json', 'forecast/dispo.json', 'forecast/moped/latest.json', 'forecast/moped/series.json', 'forecast/car/latest.json', 'forecast/car/series.json', 'boundaries/index.json',
   'oepnv/index.json', 'shadow/index.json', 'auflagen/alarme.json', 'feeds/index.json'];
 for (const f of SINGLE) if (has(f)) await put(f, trim(await rd(f)));
 // S5.1: Jahresbuch der Feed-Verfügbarkeit (je Kalenderjahr eine Datei)

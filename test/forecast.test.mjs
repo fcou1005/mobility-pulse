@@ -852,7 +852,9 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
 // ---------- Störungskorrektur (stoerung, nur im Schatten)
 {
   const f = F.ptFactors({ now: { a: { flag: 1 }, b: { flag: 0 }, c: { flag: 1 }, d: { flag: 1 }, e: { flag: 1 } }, effect: { a: 0.2, b: 0.3, d: -0.9, e: 2 } });
-  assert(f.size === 3 && Math.abs(f.get('a') - 1.2) < 1e-12 && f.get('d') === 0.7 && f.get('e') === 1.5 && F.ptFactors(null).size === 0, 'Störungskorrektur: nur gestörte Gemeinden mit belegter Wirkung, Faktor begrenzt auf 0,7 bis 1,5');
+  assert(f.size === 3 && Math.abs(f.get('a') - 1.2) < 1e-12 && f.get('d') === 0.7 && f.get('e') === 1.5 && F.ptFactors(null).size === 0, 'Störungskorrektur: nur gestörte Gemeinden, Faktor begrenzt auf 0,7 bis 1,5');
+  const fp = F.ptFactors({ now: { a: { flag: 1 }, c: { flag: 1 }, z: { flag: 0 } }, effect: { a: 0.2 }, pooled: 0.05 });
+  assert(fp.size === 2 && Math.abs(fp.get('c') - 1.05) < 1e-12 && Math.abs(fp.get('a') - 1.2) < 1e-12, 'Störungskorrektur: Stadt ohne eigene Werte bekommt die Wirkung aller Städte');
   const mu = F.ptApply(Float64Array.from([100, 100, 100, 100]), (j) => ['a', 'a', 'a', 'x'][j], (j) => [0, 2, 3, 0][j], f);
   assert(Math.abs(mu[0] - 120) < 1e-9 && Math.abs(mu[1] - (100 + 20 * Math.exp(-1))) < 1e-9 && mu[2] === 100 && mu[3] === 100, 'Störungskorrektur: volle Wirkung zur Ausgabe, klingt mit 2 h ab, endet nach 3 h, andere Gemeinden unverändert');
 }

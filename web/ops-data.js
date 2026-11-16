@@ -84,7 +84,7 @@ export function initOps(ctx) {
   $('#ops-run').addEventListener('click', () => computePlan());
   $('#ops-op').addEventListener('change', (e) => { S.op = e.target.value; computePlan(); });
   $('#ops-type').addEventListener('change', () => { applyTypePreset(); computePlan(); });
-  ['#ops-band', '#ops-days'].forEach(id => $(id).addEventListener('change', () => computePlan()));
+  ['#ops-band', '#ops-days', '#ops-fc', '#ops-pt'].forEach(id => $(id).addEventListener('change', () => computePlan()));
   // S2.12: Straßenrouting (OSRM-Demo-Server) nur auf ausdrücklichen Wunsch: Seitenaufruf löst keine Anfrage aus
   $('#ops-route').addEventListener('change', (e) => { if (e.target.checked && S.plan) routeRuns(); else renderTiles(); });
   $('#ops-depot').addEventListener('click', () => { S.pickDepot = !S.pickDepot; $('#ops-depot').classList.toggle('primary', S.pickDepot); status(S.pickDepot ? t('ops.clickOnMapToSetDepot') : ''); });

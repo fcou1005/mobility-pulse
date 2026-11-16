@@ -65,12 +65,14 @@ export async function computePlan() {
     status(t('ops.loadingZonesAndSurroundings'));
     const pre = O.scoreSpots(model, { topN: Math.min(80, topN * 3), minSpacingM: spacing * 0.6, bootDraws: 0 }); // Vorauswahl für Overpass: ohne Bootstrap
     const useOsm = $('#ops-osm').checked;
-    const [np, ctxDoc, official, groupRes, flowRes] = await Promise.all([
+    const [np, ctxDoc, official, groupRes, flowRes, fcDoc, ptDoc] = await Promise.all([
       loadNoPark(ags, op, b ? [b[0] - 0.02, b[1] - 0.02, b[2] + 0.02, b[3] + 0.02] : null),
       useOsm ? contextFor(ags) : Promise.resolve(null),
       officialData(ags),
       loadGroupDocs(ags),
       loadFlowDocs(cellDocs.map(d => d.day).filter(Boolean)),
+      $('#ops-fc').checked && !noDemand ? X.loadOnce('dispoFc', 'forecast/dispo.json', 20000).catch(() => null) : Promise.resolve(null),
+      $('#ops-pt').checked && !noDemand ? X.getJson(`${X.CFG.DATA}oepnv/${ags}.json?t=${Math.floor(Date.now() / 60000)}`, { timeout: 20000 }).then(r => (r?.ok ? r.json : null)).catch(() => null) : Promise.resolve(null),
     ]);
     if (stop()) return;
     O.attachFlows(model, flowRes.docs); // Ströme als Beleg für Abfluss/Zufluss je Zelle (cell.flow, model.flow)
@@ -81,11 +83,13 @@ export async function computePlan() {
     if (!S.depot[ags] && !S.depotUrlUsed) { const u = urlDepot(); S.depotUrlUsed = true; if (u && (!b || (u.lon >= b[0] - 0.2 && u.lon <= b[2] + 0.2 && u.lat >= b[1] - 0.2 && u.lat <= b[3] + 0.2))) S.depot[ags] = u; } // nur einmal, nur in der Nähe der Gemeinde
     const depot = S.depot[ags] || (b ? { lat: (b[1] + b[3]) / 2, lon: (b[0] + b[2]) / 2 } : centroid(vehicles));
     const params = { topN, spacing, share, horizonH, van: num('#ops-van', 20), common: { depot, maxRuns: num('#ops-maxruns', 6), horizonH, maxRunMin: Math.round(num('#ops-maxh', 4) * 60), prioLambda: prioLambda() }, swapCapacity: Math.min(50, num('#ops-swapcap', 50)), swapThreshold: num('#ops-swapthr', 20), swapRangeKm: num('#ops-swaprange', 5) };
-    const plan = { ags, op, type, noDemand, band, bandNote, model, cellDocs, share, depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
+    // Prognose-Faktor des Bands (lib/pulse-ops-extern.js): skaliert die Nachfrage aller Spots und Zellen; ÖPNV-Ziele nach dem Spot-Ranking
+    const fc0 = fcDoc ? O.forecastFactor(fcDoc, ags, band === 'day' ? 'day' : O.BANDS.find(x => x.id === band) || 'day') : null, fc = fc0 ? { ...fc0, days: fcDoc.baseDays?.length || 0 } : null;
+    const plan = { ags, op, type, noDemand, band, bandNote, model, cellDocs, share, fc, shareDemand: share * (fc?.factor ?? 1), ptDoc, ptSpots: [], depot, np, osm, official, params, groups: O.groupPlaces(groupRes.docs, { ags }), groupSrc: groupRes, flowSrc: flowRes, fleet: { vehicles, stations }, at: fleet.at, trackStart: fleet.trackStart ?? null, days: cellDocs.length };
     if (!S.gf || S.gf.forOp !== op || S.gf.forAgs !== ags) S.gf = { ...GF0(), kind: S.gf?.kind || 'deploy', sort: S.gf?.sort || 'count', dir: S.gf?.dir || 'desc', op, forOp: op, forAgs: ags };
     // Rechenschritte nacheinander mit Status, dazwischen die Seite freigeben
     const steps = [
-      [t('ops.scoringSpots'), () => { plan.spots = scoreFor(plan, osm); }],
+      [t('ops.scoringSpots'), () => { plan.spots = scoreFor(plan, osm); plan.ptSpots = ptSpotsFor(plan); }],
       [t('ops.runsRebalancing'), () => { plan.rebalance = rebalanceFor(plan); }],
       [t('ops.runsBatterySwap'), () => { plan.swaps = swapsFor(plan); }],
       [t('ops.runsWorkshop'), () => { plan.workshop = workshopFor(plan); }],
@@ -108,11 +112,12 @@ const centroid = (list) => list.length ? { lat: list.reduce((s, v) => s + v.lat,
 function scoreFor(p, osm) {
   const { topN, spacing, share, horizonH } = p.params, off = p.official;
   const parking = osm || off?.points.length ? [...(off?.points || []), ...(osm?.parking || [])] : null;
-  const spots = O.scoreSpots(p.model, { topN, minSpacingM: spacing, share, horizonH, noPark: p.np.geoms, mandatory: p.np.mandatory, officialNoPark: off?.noPark || [], stations: p.fleet.stations, transit: osm?.transit || null, parking });
+  const spots = O.scoreSpots(p.model, { topN, minSpacingM: spacing, share: p.shareDemand ?? share, horizonH, noPark: p.np.geoms, mandatory: p.np.mandatory, officialNoPark: off?.noPark || [], stations: p.fleet.stations, transit: osm?.transit || null, parking });
   if (!p.fleet.vehicles.length || p.noDemand) spots.spots = [];
   return spots;
 }
-const rebalanceFor = (p) => O.planRebalance({ spots: p.noDemand ? [] : p.spots.spots, vehicles: p.fleet.vehicles.filter(O.isAvailable), model: p.model, share: p.share, vanCapacity: p.params.van, ...p.params.common });
+const rebalanceFor = (p) => O.planRebalance({ spots: p.noDemand ? [] : p.spots.spots, extraSpots: p.noDemand ? [] : p.ptSpots || [], vehicles: p.fleet.vehicles.filter(O.isAvailable), model: p.model, share: p.shareDemand ?? p.share, vanCapacity: p.params.van, ...p.params.common });
+const ptSpotsFor = (p) => (p.noDemand || !p.ptDoc?.jetzt?.rows?.length || !p.fleet.vehicles.length ? [] : O.oepnvSpots(p.ptDoc.jetzt.rows, { vehicles: p.fleet.vehicles.filter(O.isAvailable), spots: p.spots.spots, firstRank: p.spots.spots.length + 1 }));
 const swapsFor = (p) => O.planSwaps({ vehicles: akkuVehicles(p, p.fleet.vehicles.filter(v => !v.reserved)), model: p.model, swapCapacity: p.params.swapCapacity, swapThreshold: p.params.swapThreshold, swapRangeKm: p.params.swapRangeKm, ...p.params.common });
 const workshopFor = (p) => O.planWorkshop({ vehicles: p.fleet.vehicles, workshopCapacity: p.params.van, ...p.params.common });
 const stationFor = (p) => { const sb = p.fleet.stations.length ? O.planStationBalance({ stations: p.fleet.stations, vanCapacity: p.params.van, ...p.params.common }) : null; return sb?.stations ? sb : null; };
@@ -132,10 +137,17 @@ export async function replanRuns() {
   } catch (e) { console.error(e); status(`<span class="warn-text">${t('ops.planCouldNotBeCalculated', { message: X.esc(e.message) })}</span>`); }
   finally { S.busy = false; if (S.again) { S.again = false; setTimeout(computePlan, 0); } }
 }
+/** Prognose-Faktor und ÖPNV-Ziele als Satz hinter dem Status (leer, wenn beides aus ist) */
+function extNote(p) {
+  const f = p.fc, pct = f ? Math.round((f.raw - 1) * 100) : 0, when = f ? (p.band === 'day' ? t('ops.fcNext24') : t('ops.fcHours', { from: f.from, to: f.to })) : '';
+  const a = f ? ` ${t(Math.abs(pct) < 3 ? 'ops.fcSame' : pct > 0 ? 'ops.fcMore' : 'ops.fcLess', { p: X.fmt(Math.abs(pct)), when, x: X.fmt(f.factor, 2), d: X.fmt(f.days || 7) })}` : '';
+  const b = p.ptSpots?.length ? ` ${t('ops.ptTargets', { n: X.fmt(p.ptSpots.length), names: p.ptSpots.map(s => X.esc(s.oepnv.name)).join(', ') })}` : '';
+  return a || b ? `.${a}${b}` : '';
+}
 export function planStatus(p) {
   const osm = p.osm, loading = $('#ops-osm').checked && !osm && S.osm[p.ags]?.state === 'loading';
   const osmNote = !$('#ops-osm').checked ? '' : osm ? `, ${t('ops.surroundingsOsm', { v0: osm.from === 'Sammler' ? t('ops.osmFromCollector', { v0: new Date(osm.at).toLocaleDateString(fmtLocale()) }) : X.esc(osm.from) })}` : loading ? `, ${t('ops.publicTransportAndParking')}` : '';
-  return t('ops.computedInFleetOfDemandFrom', { hhmm: p.hhmm, op: X.esc(p.op), muniName: X.esc(X.muniName(p.ags)), v3: new Date(p.at).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short' }), days: p.model.days, v5: p.model.days === 1 ? t('ops.day') : t('ops.days'), hours: X.fmt(p.model.hours, 1), v7: p.bandNote ? `, ${p.bandNote}` : '', osmNote });
+  return t('ops.computedInFleetOfDemandFrom', { hhmm: p.hhmm, op: X.esc(p.op), muniName: X.esc(X.muniName(p.ags)), v3: new Date(p.at).toLocaleString(fmtLocale(), { dateStyle: 'short', timeStyle: 'short' }), days: p.model.days, v5: p.model.days === 1 ? t('ops.day') : t('ops.days'), hours: X.fmt(p.model.hours, 1), v7: p.bandNote ? `, ${p.bandNote}` : '', osmNote }) + extNote(p);
 }
 /** Nach der Overpass-Antwort: nur Spots (ÖPNV, Abstellflächen) und das davon abhängige Umsetzen neu rechnen.
  *  Akkutausch, Werkstatt und Stationsausgleich hängen nicht von Spots ab und behalten Reihenfolge und Straßenrouting. */
@@ -363,7 +375,7 @@ function whyText(s) {
 // Stoppliste: Art, Anzahl, Spot/Station, Priorität mit Rang in der Tour, Grund, Strecke vom Depot bis hierher
 function stopItem(s, r) {
   const f = X.fmt, esc = X.esc, why = whyText(s);
-  const base = `${STOP_LABEL[s.type]} ${f(s.count)}${s.station ? `, ${esc(s.station)} (${esc(s.fill)})` : ''}${s.spotRank ? `, ${t('ops.spot2', { spotRank: s.spotRank, v1: s.need != null ? `, ${t('ops.shortfallNeedFleet', { need: f(s.need), target: f(s.target), have: f(s.have) })}` : '' })}` : ''}`;
+  const base = `${STOP_LABEL[s.type]} ${f(s.count)}${s.station ? `, ${esc(s.station)} (${esc(s.fill)})` : ''}${s.oepnv ? `, ${t('ops.noteOepnv', { name: esc(s.oepnv) })}` : s.spotRank ? `, ${t('ops.spot2', { spotRank: s.spotRank, v1: s.need != null ? `, ${t('ops.shortfallNeedFleet', { need: f(s.need), target: f(s.target), have: f(s.have) })}` : '' })}` : ''}`;
   if (s.prio == null) return `<li>${base}${s.battery?.length ? `, ${t('ops.battery2', { v0: s.battery.slice(0, 6).join('/') })}` : ''}${s.idleMaxH ? `, ${idleHText(s.idleMaxH)}` : ''}</li>`;
   const all = s.count > 1 && s.battery?.length > 1 ? `, ${t('ops.battery2', { v0: s.battery.slice(0, 6).join('/') })}` : '';
   const pr = t('ops.stopPrio', { prio: f(s.prio, 2), rank: s.rank, n: r.stops.length });

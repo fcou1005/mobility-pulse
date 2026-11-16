@@ -183,5 +183,21 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     'Hinweis: Sharing-Fahrzeuge in 300 m gezählt; ohne Fahrzeug zuerst, ohne Bestand nach gestörten Halten');
 }
 
+// ---------- Passives Lernen der Wirkung (Format 1.4) ----------
+{
+  const NZ2 = await import('../lib/pulse-oepnv-netz.js');
+  let L = NZ2.mergeDaily(null, { A: { '2026-11-12': [0.2, 3], '2026-11-13': [0.1, 2], '2026-11-16': [0.9, 1] }, B: { '2026-11-13': [-0.1, 4] } }, '2026-11-16');
+  L = NZ2.mergeDaily(L, { A: { '2026-11-13': [0.3, 2] }, C: { '2026-11-14': [0, 2], '2026-11-15': [0.1, 1] } }, '2026-11-17');
+  assert(L.since === '2026-11-16' && Object.keys(L.days.A).join() === '2026-11-12,2026-11-13' && L.days.A['2026-11-13'][0] === 0.3 && !L.days.A['2026-11-16'],
+    'Lernen: Tageswerte über das Fenster hinaus, neuer Wert desselben Tags ersetzt den alten, der laufende Tag zählt nicht');
+  const old = NZ2.mergeDaily(JSON.parse(JSON.stringify(L)), {}, '2027-01-20');
+  assert(!Object.keys(old.days).length && old.since === '2026-11-16', 'Lernen: Tage älter als 60 Tage fallen weg');
+  const E = NZ2.learnEffects(L), M = (0.2 + 0.3 - 0.1 + 0 + 0.1) / 5;
+  assert(E.since === '2026-11-16' && E.until === '2026-11-23' && Math.abs(E.pooled.effect - M) < 1e-3 && E.pooled.cityDays === 5
+    && Math.abs(E.cities.A[1] - (2 * 0.25 + 5 * M) / 7) < 1e-3 && E.cities.A[0] === 2 && E.cities.A[2] === 0.25 && Math.abs(E.cities.B[1] - (-0.1 + 5 * M) / 6) < 1e-3,
+    `Lernen: je Stadt mit 5 Tagen zur Wirkung aller Städte gezogen, frühestens einschalten nach 7 Tagen (${JSON.stringify(E.cities)})`);
+  assert(NZ2.learnEffects(NZ2.mergeDaily(null, { A: { '2026-11-12': [0.4, 1] } }, '2026-11-16')).cities.A[1] === Math.round(0.4 / 6 * 1000) / 1000, 'Lernen: unter 5 Stadt-Tagen zieht die Schätzung zu null');
+}
+
 console.log(`${oks} ok, ${fails} Fehler`);
 if (fails) process.exitCode = 1;

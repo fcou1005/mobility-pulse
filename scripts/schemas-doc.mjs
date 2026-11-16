@@ -14,7 +14,7 @@ const FILES = {
   events: ['events/index.json', 'events/<Tag>.json', 'events/<Tag>/<Land>.json', 'events/hour-totals.json', 'events/daily-summary.json'],
   cells: ['cells/<Tag>/<Land>.json'], ops: ['ops/<Land>.json', 'ops-input/<AGS>.json', 'ops-input/index.json', 'ops-input/fleet/<AGS>.json', 'ops-input/fleet/index.json'],
   boundaries: ['boundaries/index.json', 'boundaries/<Land>.json'], calib: ['calib.json'],
-  forecast: ['forecast/latest.json', 'forecast/log.json', 'forecast/series.json', 'forecast/moped/…', 'forecast/car/…'],
+  forecast: ['forecast/latest.json', 'forecast/log.json', 'forecast/series.json', 'forecast/dispo.json', 'forecast/moped/…', 'forecast/car/…'],
   auflagen: ['auflagen/verfuegbarkeit-<Jahr>.json', 'auflagen/alarme.json'],
   markt: ['index/<JJJJ-MM>.json', 'index/laufend.json', 'index/index.json', 'markt/wirkung.json', 'markt/scout.json', 'grafik/index.json', 'offen/index.json'],
   akku: ['akku/<AGS>.json', 'akku/bewertung.json'],

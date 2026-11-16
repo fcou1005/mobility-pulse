@@ -146,4 +146,6 @@ export default {
   "pt.colGap": "ohne beides",
   "pt.lmNote": "Einwohner aus dem Zensus 2022 im 100-m-Gitter, Haltestellen aus dem Fahrplan von gtfs.de (Luftlinie, Abfahrten am Stichtag). Der Anteil mit Fahrzeug ist das Mittel über {runs} Läufe des laufenden Tages. Sortiert nach Einwohnern ohne beides. Anbieter ohne offenen Feed fehlen, dort steht also mehr, als die Zahl zeigt.",
   "pt.lmEmpty": "Für {name} fehlen Haltestellen aus dem Fahrplan oder Läufe zwischen 7 und 22 Uhr. Der Wert erscheint mit dem nächsten Stundenwechsel am Tag.",
+  "pt.colLearned": "gelernt",
+  "pt.effLearn": "Gelernt (für die Prognose, passiv seit {since}): je Stadt der Mittelwert ihrer gestörten Tage, mit {k} Tagen zur Wirkung aller Städte gezogen ({e} aus {days} Stadt-Tagen); {n} Städte. Die Prognose rechnet damit nur im Vergleich, frühestens ab {until} käme ein Einschalten in Frage.",
 };

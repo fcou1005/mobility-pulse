@@ -53,7 +53,7 @@ export function renderShiftPanels() {
 
 function noteOf(s) {
   const i = s.info || {};
-  if (s.type === 'drop') return i.spotRank != null ? `Spot ${i.spotRank}` : '';
+  if (s.type === 'drop') return i.oepnv ? t('ops.noteOepnv', { name: i.oepnv }) : i.spotRank != null ? `Spot ${i.spotRank}` : '';
   if (s.type === 'swap') return i.battery?.length ? t('ops.noteBattery', { v0: i.battery.slice(0, 4).join('/') }) : '';
   if (s.type === 'pickup_disabled') return i.idleMaxH != null ? t('ops.noteLocked', { v0: X.fmt(i.idleMaxH) }) : '';
   return i.idleMaxH ? t('ops.noteIdle', { v0: X.fmt(i.idleMaxH) }) : '';
@@ -64,7 +64,7 @@ function shiftTour(id) {
   return makeTour({ id: d.id, title: titleOf(), at: S.plan.at || Date.now(), day: DAY_BERLIN.format(new Date()), stops: d.stops.map(s => ({ ...s, note: s.type === 'depot' ? '' : noteOf(s) })) });
 }
 function runTour(r) {
-  const note = (s) => (s.type === 'drop' && s.spotRank != null ? `Spot ${s.spotRank}` : s.type === 'swap' && s.battery?.length ? t('ops.noteBattery', { v0: s.battery.slice(0, 4).join('/') }) : '');
+  const note = (s) => (s.type === 'drop' && s.oepnv ? t('ops.noteOepnv', { name: s.oepnv }) : s.type === 'drop' && s.spotRank != null ? `Spot ${s.spotRank}` : s.type === 'swap' && s.battery?.length ? t('ops.noteBattery', { v0: s.battery.slice(0, 4).join('/') }) : '');
   return makeTour({ id: r.id, title: titleOf(), at: S.plan.at || Date.now(), day: DAY_BERLIN.format(new Date()), depot: S.plan.depot, stops: r.stops.map(s => ({ type: s.type, lat: s.lat, lon: s.lon, count: s.count, note: note(s) })) });
 }
 async function openDriver(tour) {

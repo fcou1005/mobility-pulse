@@ -55,7 +55,8 @@ for (const ags of fx.ags) {
   cities[ags] = [nSt + 40, sum(H.n[today]), sum(H.skip[today]), sum(H.late[today]), trips.length];
   wirk.push(ags === '08111000' ? { ags, days: 4, hours: 9, effect: 0.137, ci: [0.021, 0.253], verdict: 'mehr' } : { ags, days: 1, hours: 2, effect: 0.06, verdict: 'zu wenig Tage' });
 }
-await put('wirkung.json', { schemaVersion: sv, at: fx.at, days: fx.days, rule: 'synthetisch', pooled: { effect: 0.112, ci: [0.018, 0.206], cityDays: 5, hours: 11, cities: wirk.length, verdict: 'mehr' }, cities: wirk });
+await put('wirkung.json', { schemaVersion: sv, at: fx.at, days: fx.days, rule: 'synthetisch', pooled: { effect: 0.112, ci: [0.018, 0.206], cityDays: 5, hours: 11, cities: wirk.length, verdict: 'mehr' }, cities: wirk,
+  learn: { since: fx.days.at(-1), until: '2026-11-20', k: 5, pooled: { effect: 0.09, cityDays: 5 }, fields: ['tage', 'wirkung', 'mittel_stadt'], cities: { '08111000': [4, 0.116, 0.137], '08416041': [1, 0.085, 0.06] } } });
 await put('index.json', { schemaVersion: sv, at: fx.at, feedAt: fx.at - 40e3, ...head, aheadMin: NETZ.aheadMin, days: 2.6, fields: ['stationen', 'halte_heute', 'ausgefallen_heute', 'verspaetet_heute', 'fahrzeuge'], cities, trips: Object.values(cities).reduce((s, r) => s + r[4], 0), withRoute: Object.values(cities).reduce((s, r) => s + r[4], 0) - 7 });
 await writeFile(path.join(OUT, 'README.md'), '# Synthetischer ÖPNV-Stand\n\nErzeugt von `scripts/oepnv-fixture.mjs`. Stationen, Stunden, Fahrzeugwege und Wirkung sind ausgedacht; nur für die Browser-Tests.\n');
 console.log(`ÖPNV-Fixture: ${Object.keys(cities).length} Gemeinden → ${path.relative(ROOT, OUT)}/`);

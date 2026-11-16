@@ -4,6 +4,7 @@ import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as FC from '../../lib/pulse-forecast.js';
+import * as OX from '../../lib/pulse-ops-extern.js';
 import * as CX from '../../lib/pulse-context.js';
 import * as CH from '../../lib/pulse-chronos.js';
 import * as TMN from '../../lib/pulse-termine.js';
@@ -54,7 +55,7 @@ export async function run(ctx) {
         const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
         ctx.trainCtx = { curated: curatedAll, pending };
         // Störungskorrektur im Schatten: letzte volle Stunde je Gemeinde (Phase oepnv) und belegte Wirkung (oepnv/wirkung.json)
-        let ptIn = null; try { const w = ctx.ptNow ? await rd(path.join(DATA, 'oepnv', 'wirkung.json')) : null; if (w?.cities) ptIn = { now: ctx.ptNow, effect: Object.fromEntries(w.cities.filter(c => c.verdict === 'mehr' || c.verdict === 'weniger').map(c => [c.ags, c.effect])) }; } catch { ptIn = null; }
+        let ptIn = null; try { const w = ctx.ptNow ? await rd(path.join(DATA, 'oepnv', 'wirkung.json')) : null; if (w?.learn) ptIn = { now: ctx.ptNow, effect: Object.fromEntries(Object.entries(w.learn.cities || {}).map(([a, r]) => [a, r[1]])), pooled: w.learn.pooled?.effect ?? 0, since: w.learn.since, until: w.learn.until }; } catch { ptIn = null; }
         for (const fam of FC.FAMILIES) {
           try {
             const fdocs = FC.familyDocs(docs, fam); if (fam !== 'micro' && !FC.familyHasData(fdocs)) continue;
@@ -65,6 +66,8 @@ export async function run(ctx) {
             await mkdir(fdir, { recursive: true });
             await writeFile(fL, JSON.stringify(SV.withSchema('forecast', res.latest))); await writeFile(fG, JSON.stringify(SV.withSchema('forecast', res.log))); await writeFile(fS, JSON.stringify(SV.withSchema('forecast', res.series)));
             if (res.model) await writeFile(path.join(fdir, 'model.json'), JSON.stringify(res.model)); // vortrainiertes Modell zum Mitnehmen (tools/prognose-modell.mjs)
+            // Disposition: Prognose und gemessenes Mittel je Gemeinde und Horizont-Stunde (lib/pulse-ops-extern.js), nur Mikromobilität
+            if (fam === 'micro' && res.latest.status === 'active') { const dp = OX.dispoForecast(res.latest, res.series); await writeFile(path.join(fdir, 'dispo.json'), JSON.stringify(SV.withSchema('forecast', dp))); }
             const l = res.latest;
             log(`Prognose${fam === 'micro' ? '' : ` (${fam})`}: ${l.status}${l.active ? ` (${l.active}${l.weather.used ? ', mit Wetter' : ''}${l.env?.active?.length ? `, mit ${l.env.active.join(', ')}` : ''})` : ''}, ${l.trainDays} Tage Training, ${l.evalDays} ausgewertet, ${Object.keys(l.groups).length} Gruppen, Gedächtnis ${l.memory?.days ?? 0} Tage, ${Date.now() - t0} ms`);
           } catch (e) { if (fam === 'micro') throw e; log(`Prognose (${fam}): ${e.message} – alte Dateien bleiben`); }

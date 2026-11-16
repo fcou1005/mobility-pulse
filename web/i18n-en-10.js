@@ -146,4 +146,6 @@ export default {
   "pt.colGap": "with neither",
   "pt.lmNote": "Residents from the 2022 census on a 100 m grid, stops from the gtfs.de timetable (straight-line distance, departures on the reference day). The share with a vehicle is the mean over {runs} runs of the current day. Sorted by residents with neither. Operators without an open feed are missing, so more vehicles stand there than the figure shows.",
   "pt.lmEmpty": "{name} lacks stops from the timetable or runs between 7 am and 10 pm. The value appears with the next change of hour during the day.",
+  "pt.colLearned": "learned",
+  "pt.effLearn": "Learned (for the forecast, passive since {since}): per city the mean of its disrupted days, pulled towards the effect across all cities with {k} days ({e} from {days} city-days); {n} cities. The forecast only uses it for comparison; switching it on would be considered no earlier than {until}.",
 };
