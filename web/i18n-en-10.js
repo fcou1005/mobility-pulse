@@ -137,4 +137,13 @@ export default {
   "pt.nowCalm": "No station in {name} was disrupted in the last {h} hours. The list is recalculated with every collector run.",
   "pt.nowTip": "{bad} of {n} stops cancelled or late",
   "pt.legHot": "Station disrupted (300 m)",
+  "pt.lmTitle": "Last mile: far from public transport and without sharing",
+  "pt.lmSub": "Residents living more than {stop} m from any stop with at least {dep} departures a day, and whether an available sharing vehicle stands within {veh} m between 7 am and 10 pm.",
+  "pt.lmLead": "In {name}, {far} residents ({p}) live more than {stop} m from a stop. {served} of them have a sharing vehicle within {veh} m during the day on average, {gap} have none.",
+  "pt.colCell": "Cell (250 m)",
+  "pt.colFar": "Residents far from public transport",
+  "pt.colWithVeh": "with vehicle",
+  "pt.colGap": "with neither",
+  "pt.lmNote": "Residents from the 2022 census on a 100 m grid, stops from the gtfs.de timetable (straight-line distance, departures on the reference day). The share with a vehicle is the mean over {runs} runs of the current day. Sorted by residents with neither. Operators without an open feed are missing, so more vehicles stand there than the figure shows.",
+  "pt.lmEmpty": "{name} lacks stops from the timetable or runs between 7 am and 10 pm. The value appears with the next change of hour during the day.",
 };

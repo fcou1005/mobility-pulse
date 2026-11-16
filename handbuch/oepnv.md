@@ -56,6 +56,13 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - 90-%-Intervall (Student-t) aus den Tageswerten, je Gemeinde ab 3 Tagen mit Störung, über alle Gemeinden ab 5 Stadt-Tagen. Urteil „mehr“ oder „weniger“ nur, wenn das Intervall die Null nicht enthält.
 - Zusammenhang, keine Ursache: Wetter und Großereignisse bewegen beide Seiten. Die Prognose nutzt die Störungsmerkmale erst, wenn sie im Schattenvergleich gewinnen ([Prognose](prognose.md)).
 
+## Letzte Meile (`farMask`, `lastMile` in `lib/pulse-geo-cover.js`)
+
+- Fern vom ÖPNV heißt: weiter als 400 m Luftlinie von jeder Haltestelle mit mindestens 20 Abfahrten am Stichtag des Fahrplans (gebündelte Haltestellen aus dem Branch `geo`). Gezählt werden die Einwohner des Zensus 2022 im 100-m-Gitter.
+- Für diese Einwohner zählt der Anteil der Läufe zwischen 7 und 22 Uhr, in denen ein verfügbares Sharing-Fahrzeug in 200 m stand (dieselben Zählfelder wie die Versorgung in [Umfeld](umfeld.md)). Einwohner „ohne beides“ = fern vom ÖPNV × (1 − dieser Anteil).
+- Die Sammler-Phase `geo` schreibt den Wert des laufenden Tages mit jedem Stundenwechsel nach `versorgung/<AGS>.json` (`letzteMeile`, Familie `geo` 1.2), dazu die 40 Zellen (250 m) mit den meisten Einwohnern ohne beides.
+- Grenzen: Luftlinie statt Fußweg; Anbieter ohne offenen Feed fehlen, dort steht mehr, als die Zahl zeigt; Rufbusse und Haltestellen unter 20 Abfahrten zählen nicht als Angebot.
+
 ## Vorschläge für Sharing-Stationen (`hubCandidates`)
 
 - Kandidaten: Stationen ab 30 Halten je Tag ohne Abstellinsel eines Anbieters in 50 m (Inseln aus den Zonen-Feeds, `parkingIslands`).

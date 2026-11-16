@@ -62,7 +62,7 @@ export async function run(ctx) {
     const vdir = path.join(DATA, 'versorgung'); await mkdir(vdir, { recursive: true });
     const vIndex = (await readJson(path.join(vdir, 'index.json'))) || { schemaVersion: SV.SCHEMA.geo, ags: {} };
     const writeHour = st.lastHour !== `${day}T${hour}`; st.lastHour = `${day}T${hour}`;
-    let covered = 0, points = 0;
+    let covered = 0, points = 0, lastMileN = 0;
     for (const ags of active) {
       const pa = popDocs[stateOf(ags)]?.ags?.[ags]; if (!pa) continue;
       const prep = C.prepareAgs(unpackPts(pa.pts), cellOf); points += prep.n;
@@ -75,7 +75,8 @@ export async function run(ctx) {
       st.cover[ags] = { acc: C.accToJson(acc) };
       if (writeHour || fresh || !existsSync(docFile)) {
         const today = C.finalizeDay(prep, acc), mo = C.missingOperators(refCaps, ags, opsByAgs.get(ags));
-        doc = { ...doc, schemaVersion: SV.SCHEMA.geo, at: now, today: { ...today, cells: undefined }, missingOps: mo.missing, missingCount: mo.countGap, attribution: 'Einwohner: Zensus 2022 © Destatis (dl-de/by-2-0); Fahrzeuge: offene Feeds der Anbieter' };
+        const stopsOf = gtfsDocs[stateOf(ags)]?.ags?.[ags], lm = stopsOf?.length ? C.lastMile(prep, acc, C.farMask(prep, stopsOf)) : null; if (lm) lastMileN++;
+        doc = { ...doc, schemaVersion: SV.SCHEMA.geo, at: now, letzteMeile: lm, today: { ...today, cells: undefined }, missingOps: mo.missing, missingCount: mo.countGap, attribution: 'Einwohner: Zensus 2022 © Destatis (dl-de/by-2-0); Fahrzeuge: offene Feeds der Anbieter' };
         await writeFile(docFile, JSON.stringify(doc));
         const last = doc.days.at(-1) || today;
         vIndex.ags[ags] = [last.day, Math.round(prep.pop), ...last.share.map(r4), ...last.time50.map(r4), r4(last.gini), r4(last.diffPP), mo.missing.length];

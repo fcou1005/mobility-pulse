@@ -20,7 +20,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [auflagen](#auflagen) | 1.1 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
-| [geo](#geo) | 1.1 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
+| [geo](#geo) | 1.2 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 | [oepnv](#oepnv) | 1.3 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
@@ -536,7 +536,7 @@ Ergebnis einer Nacht: Zählwerte (getroffen tp, falsch fp, übersehen fn, richti
 
 Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8). Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.
 
-Version 1.1 · Schema: [schemas/geo.schema.json](../schemas/geo.schema.json)
+Version 1.2 · Schema: [schemas/geo.schema.json](../schemas/geo.schema.json)
 
 ### geo · versorgung
 
@@ -552,6 +552,7 @@ S8.2 je Gemeinde: Einwohneranteil mit Fahrzeug in 150/200/300 m, mindestens 50 %
 | `today` |  | object / null |
 | `cells` |  | object |
 | `missingOps` |  | array von string – Anbieter mit Genehmigung ohne offenen Feed: Versorgung unterschätzt |
+| `letzteMeile` |  | object / null – Letzte Meile (seit 1.2): Einwohner weiter als stopM von jeder Haltestelle mit mindestens minDep Abfahrten am Stichtag, Anteil davon mit Sharing-Fahrzeug in vehM (Mittel der Läufe 7–22 Uhr des Tages day), Einwohner ohne beides, Zellen mit den meisten unversorgten Einwohnern |
 
 ### geo · versorgungIndex
 

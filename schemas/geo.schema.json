@@ -3,7 +3,7 @@
   "$id": "https://github.com/fcou1005/mobility-pulse/schemas/geo.schema.json",
   "title": "Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8)",
   "description": "Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.",
-  "x-version": "1.1",
+  "x-version": "1.2",
   "$defs": {
     "versorgung": {
       "type": "object",
@@ -84,6 +84,73 @@
             "type": "string"
           },
           "description": "Anbieter mit Genehmigung ohne offenen Feed: Versorgung unterschätzt"
+        },
+        "letzteMeile": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Letzte Meile (seit 1.2): Einwohner weiter als stopM von jeder Haltestelle mit mindestens minDep Abfahrten am Stichtag, Anteil davon mit Sharing-Fahrzeug in vehM (Mittel der Läufe 7–22 Uhr des Tages day), Einwohner ohne beides, Zellen mit den meisten unversorgten Einwohnern",
+          "properties": {
+            "day": {
+              "type": "string"
+            },
+            "stopM": {
+              "type": "number"
+            },
+            "vehM": {
+              "type": "number"
+            },
+            "minDep": {
+              "type": "number"
+            },
+            "runs": {
+              "type": "integer"
+            },
+            "pop": {
+              "type": "integer"
+            },
+            "farPop": {
+              "type": "integer"
+            },
+            "farShare": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "servedShare": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "gapPop": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "cells": {
+              "type": "object",
+              "properties": {
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

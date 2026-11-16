@@ -21,6 +21,21 @@ export function nowPanel(ctx, doc, name, hints, mine) {
     ${hints.slice(0, 15).map(x => `<tr><td><a href="https://www.openstreetmap.org/?mlat=${x.lat.toFixed(5)}&mlon=${x.lon.toFixed(5)}#map=17/${x.lat.toFixed(5)}/${x.lon.toFixed(5)}" target="_blank" rel="noopener">${ctx.esc(x.name)}</a></td><td class="n">${f(x.n)}</td><td class="n">${pct(ctx, x.skip / x.n, 0)}</td><td class="n">${pct(ctx, x.late / x.n, 0)}</td><td>${lvl(x)}</td></tr>`).join('')}</tbody></table></div>
     <p class="muted small">${t('pt.nowNote', { min: f(J.minN || 8) })}</p>` : `<p>${t('pt.nowCalm', { name, h: f(J.windowH) })}</p>`}</div>`;
 }
+/** Letzte Meile: Einwohner fern vom ÖPNV und ob dort tagsüber ein Sharing-Fahrzeug steht (versorgung/<AGS>.json letzteMeile, Phase geo) */
+/** @param {any} ctx @param {any} ver @param {string} name */
+export function lastMilePanel(ctx, ver, name) {
+  const M = ver?.letzteMeile, f = ctx.fmt; if (!ver) return '';
+  if (!M || !M.runs) return `<div class="panel" id="pt-lm-panel"><div class="panel-head"><div><h2>${t('pt.lmTitle')}</h2></div></div><div class="empty">${t('pt.lmEmpty', { name })}</div></div>`;
+  const rows = (M.cells?.rows || []).filter((/** @type {any[]} */ r) => r[1] * (1 - (r[2] ?? 0)) >= 1).slice(0, 15);
+  // Mittelpunkt der Zelle: Schlüssel = gerundete Breite ÷ 0,0025 : Länge ÷ 0,0035 (lib/pulse-track-rules.js cellCenter)
+  const mid = (/** @type {string} */ c) => { const [a, b] = c.split(':').map(Number); return [a * 0.0025, b * 0.0035]; };
+  return `<div class="panel" id="pt-lm-panel"><div class="panel-head"><div><h2>${t('pt.lmTitle')}</h2><div class="sub">${t('pt.lmSub', { stop: f(M.stopM), dep: f(M.minDep), veh: f(M.vehM) })}</div></div>
+    <div class="panel-actions"><button class="chip" type="button" id="pt-lm-csv"${rows.length ? '' : ' disabled'}>${t('pt.csv')}</button></div></div>
+    <p>${t('pt.lmLead', { name, far: `<b>${f(M.farPop)}</b>`, p: pct(ctx, M.farShare), stop: f(M.stopM), served: pct(ctx, M.servedShare, 0), veh: f(M.vehM), gap: `<b>${f(M.gapPop)}</b>` })}</p>
+    ${rows.length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.lmTitle'))}"><table id="pt-lm"><thead><tr><th>${t('pt.colCell')}</th><th class="n">${t('pt.colFar')}</th><th class="n">${t('pt.colWithVeh')}</th><th class="n">${t('pt.colGap')}</th></tr></thead><tbody>
+    ${rows.map((/** @type {any[]} */ r) => { const [la, lo] = mid(r[0]); return `<tr><td><a href="https://www.openstreetmap.org/?mlat=${la.toFixed(5)}&mlon=${lo.toFixed(5)}#map=16/${la.toFixed(5)}/${lo.toFixed(5)}" target="_blank" rel="noopener">${la.toFixed(4).replace('.', ',')} N, ${lo.toFixed(4).replace('.', ',')} O</a></td><td class="n">${f(r[1])}</td><td class="n">${pct(ctx, r[2], 0)}</td><td class="n">${f(Math.round(r[1] * (1 - (r[2] ?? 0))))}</td></tr>`; }).join('')}</tbody></table></div>` : ''}
+    <p class="muted small">${t('pt.lmNote', { runs: f(M.runs) })}</p></div>`;
+}
 /** Linien mit dem höchsten Anteil ausgefallener oder verspäteter Halte (ab 40 Halten in der Summe) */
 /** @param {any} ctx @param {any} doc @param {number} days */
 export function linesPanel(ctx, doc, days) {
@@ -49,8 +64,9 @@ export function profilePanel(ctx, doc, name) {
     ${P.pt.map((/** @type {number} */ n, /** @type {number} */ h) => `<tr><td>${h}–${h + 1} h</td><td class="n">${f(n)}</td><td aria-hidden="true">${bar(n, peak, 'var(--muted)')}</td><td class="n">${f(P.sharing[h], 1)}</td><td aria-hidden="true">${bar(P.sharing[h], peakS, 'var(--accent)')}</td><td>${P.gap.includes(h) ? `▲ ${t('pt.pfIsGap')}` : ''}</td></tr>`).join('')}</tbody></table></div>
     <p class="muted small">${t('pt.pfNote', { share: pct(ctx, P.gapShare, 0), min: f(P.minSharing) })}</p></div>`;
 }
-/** @param {HTMLElement} el @param {any} doc @param {string} ags @param {number} days @param {(name: string, text: string) => void} download @param {any[]} [hints] */
-export function bindMehr(el, doc, ags, days, download, hints = /** @type {any[]} */ ([])) {
+/** @param {HTMLElement} el @param {any} doc @param {string} ags @param {number} days @param {(name: string, text: string) => void} download @param {any[]} [hints] @param {any} [ver] */
+export function bindMehr(el, doc, ags, days, download, hints = /** @type {any[]} */ ([]), ver = /** @type {any} */ (null)) {
+  el.querySelector('#pt-lm-csv')?.addEventListener('click', () => download(`letzte_meile_${ags}.csv`, ['zelle;einwohner_fern_vom_oepnv;anteil_mit_fahrzeug;einwohner_ohne_beides', ...(ver?.letzteMeile?.cells?.rows || []).map((/** @type {any[]} */ r) => [r[0], r[1], csvNum(r[2], 3), Math.round(r[1] * (1 - (r[2] ?? 0)))].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-now-csv')?.addEventListener('click', () => download(`oepnv_jetzt_gestoert_${ags}.csv`, ['station;name;lat;lon;halte;ausgefallen;verspaetet;sharing_fahrzeuge_300m', ...hints.map(x => [x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), x.n, x.skip, x.late, x.vehicles ?? ''].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-ln-csv')?.addEventListener('click', () => download(`oepnv_linien_${ags}.csv`, ['linie;art;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(doc?.lines?.rows || []).map((/** @type {any[]} */ r) => [`"${String(r[0]).replace(/"/g, '""')}"`, r[1], csvNum(r[2] / days), csvNum(r[3] / r[2], 3), csvNum(r[4] / r[2], 3), csvNum(r[5])].join(';'))].join('\n') + '\n'));
 }

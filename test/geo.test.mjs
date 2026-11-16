@@ -57,6 +57,16 @@ function censusCsv() {
   assert(d.share[0] > 0.2 && d.share[0] < d.share[1] && d.share[1] < d.share[2] && d.share[2] <= 1, `Versorgung: Einwohneranteil 150/200/300 m ${d.share.map(x => (x * 100).toFixed(1)).join(' / ')} %`);
   assert(d.runsDay === 45 && d.runsDay3 === 15 && d.diffPP != null && d.diffPP < 5, `jeder dritte Lauf: Abweichung ${d.diffPP.toFixed(2)} Punkte`);
   assert(d.gini != null && d.gini > 0 && d.gini < 1 && d.cells.length === prep.cells.length, `Gini auf 1 km ${d.gini.toFixed(3)}, Zellwerte je 250-m-Zelle`);
+  // Letzte Meile: Haltestelle in der Südwestecke (genug Abfahrten) und eine ohne Betrieb; Fahrzeuge nur im Nordosten und nur in jedem zweiten Lauf
+  {
+    const p2 = C.prepareAgs(pts, cellOf), a2 = C.emptyAcc(p2, '2026-11-14'), far = C.farMask(p2, [[48.75, 9.15, 200], [48.776, 9.19, 3]]);
+    const nFar = far.reduce((x, y) => x + y, 0), cornerNear = far[0] === 0, otherFar = far[far.length - 1] === 1;
+    for (let run = 0; run < 10; run++) C.coverRun(p2, a2, run % 2 ? [[48.75 + 29 * 0.0009, 9.15 + 29 * 0.00137]] : [], { hour: 10, runIdx: run });
+    const lm = C.lastMile(p2, a2, far), top = lm.cells.rows[0];
+    assert(cornerNear && otherFar && nFar > 700 && nFar < 900 && lm.farPop === nFar * 10 && near(lm.farShare, nFar / 900, 1e-3), `Letzte Meile: ${lm.farPop} von 9.000 Einwohnern weiter als 400 m von einer Haltestelle mit Betrieb (Haltestelle mit 3 Abfahrten zählt nicht)`);
+    assert(lm.servedShare > 0 && lm.servedShare < 0.05 && Math.abs(lm.gapPop - lm.farPop * (1 - lm.servedShare)) < 10, `Letzte Meile: Fahrzeug in jedem zweiten Lauf zählt halb (${(lm.servedShare * 100).toFixed(1)} % versorgt, ${lm.gapPop} ohne beides)`);
+    assert(lm.cells.rows.length <= 40 && top[1] > 0 && (top[2] === 0 || top[2] === 0.5 || top[2] < 0.5) && C.lastMile(p2, C.emptyAcc(p2, 'x'), far).gapPop === null, 'Letzte Meile: Zellen nach unversorgten Einwohnern, ohne Läufe kein Wert');
+  }
   assert(near(C.gini([1, 1, 1, 1], [5, 5, 5, 5]), 0, 1e-12) && C.gini([1, 1, 1, 1], [0, 0, 0, 20]) > 0.7, 'Gini: gleich verteilt 0, alles in einer Zelle nahe 1');
   const j = JSON.parse(JSON.stringify(C.accToJson(acc))), back = C.accFromJson(j, prep);
   assert(back && back.pt[1][17] === acc.pt[1][17] && back.k1veh.length === acc.k1veh.length && C.accFromJson(j, C.prepareAgs(pts.slice(1), cellOf)) === null, 'Zähler privat gespeichert und geladen; anderer Zensus → neu');

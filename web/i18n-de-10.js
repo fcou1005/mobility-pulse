@@ -137,4 +137,13 @@ export default {
   "pt.nowCalm": "In {name} war in den letzten {h} Stunden keine Station gestört. Die Liste rechnet mit jedem Lauf des Sammlers neu.",
   "pt.nowTip": "{bad} von {n} Halten ausgefallen oder verspätet",
   "pt.legHot": "Station gestört (300 m)",
+  "pt.lmTitle": "Letzte Meile: fern vom ÖPNV und ohne Sharing",
+  "pt.lmSub": "Einwohner, die weiter als {stop} m von jeder Haltestelle mit mindestens {dep} Abfahrten am Tag wohnen, und ob dort zwischen 7 und 22 Uhr ein verfügbares Sharing-Fahrzeug in {veh} m steht.",
+  "pt.lmLead": "In {name} wohnen {far} Einwohner ({p}) weiter als {stop} m von einer Haltestelle. {served} von ihnen haben tagsüber im Mittel ein Sharing-Fahrzeug in {veh} m, {gap} haben keins.",
+  "pt.colCell": "Zelle (250 m)",
+  "pt.colFar": "Einwohner fern vom ÖPNV",
+  "pt.colWithVeh": "mit Fahrzeug",
+  "pt.colGap": "ohne beides",
+  "pt.lmNote": "Einwohner aus dem Zensus 2022 im 100-m-Gitter, Haltestellen aus dem Fahrplan von gtfs.de (Luftlinie, Abfahrten am Stichtag). Der Anteil mit Fahrzeug ist das Mittel über {runs} Läufe des laufenden Tages. Sortiert nach Einwohnern ohne beides. Anbieter ohne offenen Feed fehlen, dort steht also mehr, als die Zahl zeigt.",
+  "pt.lmEmpty": "Für {name} fehlen Haltestellen aus dem Fahrplan oder Läufe zwischen 7 und 22 Uhr. Der Wert erscheint mit dem nächsten Stundenwechsel am Tag.",
 };
