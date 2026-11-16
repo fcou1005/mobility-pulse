@@ -142,7 +142,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     { id: 'c', stops: [{ stop: 'de:08111:10:1:1', t: now - 5 * m, delay: 0 }] },
   ], { ts: now });
   const sl = OE.stationLookup(ix), lines = LN.lineCounter(sl, ix, now, { routeOf: of }), paths = NZ.pathCollector(sl, ix, now, { routeOf: of });
-  OE.ptCounts(feed, OE.stopLookup(ix), now, { onTrip: (...a) => { lines.onTrip(...a); paths.onTrip(...a); } });
+  OE.ptCounts(feed, OE.stopLookup(ix), now, { onTrip: (id, rid, canc, stu) => { lines.onTrip(id, rid, canc, stu); paths.onTrip(id, rid, canc, stu); } });
   const st = NZ.emptyNetzState(); NZ.mergeCounts(st, lines.result(), now);
   const rows = LN.lineRows(NZ.stationTotals(st, '2026-11-16')).get('08111000');
   assert(lines.trips() === 2 && rows.length === 2 && rows[1].join() === 'U6,bahn,2,0,1,3.8,2,0,1' && rows[0].slice(0, 5).join() === '42,bus,2,1,0',
