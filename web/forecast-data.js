@@ -377,7 +377,7 @@ export function corrPanel(ctx, L) {
   const N = L?.nowcast, S = L?.stoerung; if (!N && !S) return '';
   const rows = ptRows(L), sumEx = rows.reduce((s, r) => s + r[3], 0), sumB = rows.reduce((s, r) => s + r[2], 0), h = S?.rule?.maxLeadH ?? FC.PTADJ.maxLeadH;
   const nNow = N?.now?.ratio != null ? t('fv.cNowNc', { r: numFmt(2).format(N.now.ratio), h: n0(N.now.hours?.length || 0), g: n0(N.now.groups || 0) }) : t('fv.cNowNcNone', { from: N?.rule?.fromHour ?? FC.NOWCAST.fromHour, min: N?.rule?.minHours ?? FC.NOWCAST.minHours });
-  const sNow = rows.length ? t('fv.cNowPt', { n: n0(rows.length), ex: `${sumEx >= 0 ? '+' : '−'}${n0(Math.abs(sumEx))}`, p: sg(sumB > 0 ? sumEx / sumB : null, 1), h: n0(h) }) : t('fv.cNowPtNone');
+  const sNow = rows.length ? t('fv.cNowPt', { n: n0(rows.length), ex: `${sumEx >= 0 ? '+' : '−'}${Math.abs(sumEx) < 10 ? numFmt(1).format(Math.abs(sumEx)) : n0(Math.abs(sumEx))}`, p: sg(sumB > 0 ? sumEx / sumB : null, 1), h: n0(h) }) : t('fv.cNowPtNone');
   const st = (x) => (x?.applied ? `<span class="fv-chip A">${t('fv.cOn')}</span>` : `<span class="fv-chip D">${t('fv.cProbe')}</span>`);
   const top = rows.slice(0, 10);
   return `<div class="panel" id="fv-corr">${head(t('fv.cTitle'), t('fv.cSub'))}<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.cTitle'))}"><table><thead><tr><th>${t('fv.cColName')}</th><th>${t('fv.cColState')}</th><th>${t('fv.cColNow')}</th><th>${t('fv.cColGate')}</th></tr></thead><tbody>`
