@@ -93,7 +93,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const cnt = counter.result(), blk = cnt['2026-11-16|1'];
   assert(Object.keys(cnt).join() === '2026-11-16|1' && blk['de:08111:10'].join() === '3,1,1,420,2' && blk['de:08111:20'].join() === '1,0,0,0,1', `Zählung je Station im Block 6–12 Uhr: Hbf 3 Halte, 1 ausgefallen, 1 verspätet (${JSON.stringify(blk)})`);
   const pr = paths.result(), tr = pr.by.get('08111000');
-  assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'bahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
+  assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'ubahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
     `Fahrzeugwege: laufende Fahrten ab dem letzten Halt, abgesagte und beendete fehlen, ausgefallener Halt und unbekannte Station übersprungen (${JSON.stringify(tr)})`);
   const w = tr[0][3], p0 = NZ.positionAt(w, 0), pEnd = NZ.positionAt(w, 5000), d = tr[1][3];
   assert(Math.abs(p0[0] - (48.7842 + (48.776 - 48.7842) * 0.4)) < 1e-9 && pEnd === null && NZ.positionAt(d, 0).join() === '48.7842,9.1822' && NZ.positionAt(d, -200) === null && NZ.positionAt(w, 360).join() === '48.776,9.173', 'Lage: 4 von 10 Minuten zwischen zwei Stationen, vor der Abfahrt höchstens 2 Minuten am ersten Halt, nach dem Ende weg');
@@ -145,7 +145,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   OE.ptCounts(feed, OE.stopLookup(ix), now, { onTrip: (id, rid, canc, stu) => { lines.onTrip(id, rid, canc, stu); paths.onTrip(id, rid, canc, stu); } });
   const st = NZ.emptyNetzState(); NZ.mergeCounts(st, lines.result(), now);
   const rows = LN.lineRows(NZ.stationTotals(st, '2026-11-16')).get('08111000');
-  assert(lines.trips() === 2 && rows.length === 2 && rows[1].join() === 'U6,bahn,2,0,1,3.8,2,0,1' && rows[0].slice(0, 5).join() === '42,bus,2,1,0',
+  assert(lines.trips() === 2 && rows.length === 2 && rows[1].join() === 'U6,ubahn,2,0,1,3.8,2,0,1' && rows[0].slice(0, 5).join() === '42,bus,2,1,0',
     `Linien: nur vergangene Halte, Fahrt ohne Linie fällt weg, ausgefallener Halt zählt, verspätet ab 5 Minuten (${JSON.stringify(rows)})`);
   assert(paths.result().withRoute === 1 && paths.result().by.get('08111000')[0][0] === 'U6', 'Fahrzeugwege: Linie aus der Fahrten-Tabelle, wenn der Strom keine nennt');
   const day = (n, a) => ({ ags: { '08111000': { ptN: n } }, _a: a }), ptN = Array.from({ length: 24 }, (_, h) => (h >= 5 && h < 23 ? 400 : h === 23 ? 60 : 0)), sh = Array.from({ length: 24 }, (_, h) => (h < 2 ? 12 : h < 5 ? 1 : h === 23 ? 20 : 30));
@@ -153,6 +153,17 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const pf = LN.dayProfile(docs, series, '08111000', { today: '2026-11-16' });
   assert(pf.days === 2 && pf.pt[8] === 400 && pf.sharing[0] === 12 && pf.gap.join() === '0,1,23' && LN.dayProfile(docs, null, '08111000') === null,
     `Tagesgang: Mittel ohne den laufenden Tag; Lücke = ÖPNV unter 25 % des Höchstwerts und ≥ 3 Fahrtbeginne (${pf.gap.join()})`);
+}
+
+// ---------- Verkehrsmittel und Linienwege (Format 1.2) ----------
+{
+  const K = await import('../lib/pulse-oepnv-karte.js'), mc = K.modeClass;
+  assert(mc(3, '42') === 'bus' && mc(700, 'X60') === 'bus' && mc(900, '4') === 'tram' && mc(0, 'U2') === 'ubahn' && mc(400, 'U6') === 'ubahn' && mc(1, '5') === 'ubahn' && mc(109, 'S1') === 'sbahn' && mc(2, 'S 60') === 'sbahn'
+    && mc(2, 'RE1') === 'regio' && mc(106, 'MEX13') === 'regio' && mc(100, 'RB 16') === 'regio' && mc(2, 'IC87') === 'fern' && mc(101, '') === 'fern' && mc(2, 'ICE 512') === 'fern' && mc(null, 'RE5') === 'regio' && mc(null, 'Fähre') === 'sonst' && mc(3, 'S1') === 'bus',
+    'Verkehrsmittel: Bus, Straßenbahn, U-/Stadtbahn, S-Bahn, Regionalbahn, Fernverkehr aus route_type und Linienname');
+  const seg = K.segmentsOf([['U6', 'ubahn', 0, [1, 1, 0, 2, 2, 60, 3, 3, 120]], ['U7', 'ubahn', 0, [3, 3, 0, 2, 2, 60, 2, 2, 90]], ['42', 'bus', 0, [1, 1, 0, 2, 2, 60]]]);
+  assert(seg.get('ubahn').length === 2 && seg.get('ubahn').find(s => s.a[0] === 2).lines.join() === 'U6,U7' && seg.get('bus').length === 1,
+    'Linienwege: jede Verbindung einmal je Verkehrsmittel, beide Richtungen zusammen, Halt am selben Ort zählt nicht');
 }
 
 console.log(`${oks} ok, ${fails} Fehler`);

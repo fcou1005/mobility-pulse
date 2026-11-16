@@ -8,12 +8,12 @@ import * as NZ from './pulse-oepnv-karte.js';
 import * as PL from './pulse-geo-plan.js';
 import * as Z from './pulse-zones.js';
 import { decodeFleet } from './pulse-ops.js';
-import { HIT, MODEL } from './tokens.js';
 import { t, dateFmt } from './i18n.js';
 import { putAnswer } from './answer.js';
 import { linesPanel, profilePanel, bindMehr } from './oepnv-mehr.js';
+import { M, KARTE_CSS, mapPanel as mapPanelHtml, setupMap, stopTimer } from './oepnv-karte.js';
 
-const cache = new Map(), S = { run: 0, map: null, layer: null, share: null, timer: 0, live: null, fleet: null, showShare: false, hub: null, rows: null };
+const cache = new Map(), S = { run: 0, fleet: null, hub: null, rows: null };
 const load = (ctx, url, fresh = false) => { if (fresh || !cache.has(url)) cache.set(url, ctx.getJson(url, { timeout: 30000 }).then(r => (r?.ok ? r.json : null)).catch(() => null)); return cache.get(url); };
 const pct = (ctx, x, d = 0) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
 const osm = (lat, lon, text) => `<a href="https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lon.toFixed(5)}#map=17/${lat.toFixed(5)}/${lon.toFixed(5)}" target="_blank" rel="noopener">${text}</a>`;
@@ -22,9 +22,6 @@ const timeTxt = (ms) => (ms ? dateFmt({ hour: '2-digit', minute: '2-digit', time
 const sum = (a) => (a || []).reduce((x, y) => x + (y || 0), 0);
 const download = (name, text) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0); };
 const csvNum = (x, d = 1) => (x == null ? '' : (+x).toFixed(d).replace('.', ','));
-const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
-const delayColor = (d) => (d == null ? HIT.none : d >= 300 ? HIT.miss : d >= 120 ? MODEL.blend : HIT.ok);
-const ART = () => ({ bus: t('pt.artBus'), tram: t('pt.artTram'), bahn: t('pt.artBahn'), sonst: t('pt.artSonst') });
 const VERDICT = () => ({ mehr: t('pt.vMore'), weniger: t('pt.vLess'), 'nicht unterscheidbar': t('pt.vNone'), 'zu wenig Tage': t('pt.vFew') });
 export const OEPNV_CSS = `.pt-map{height:440px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel-2)}
 .pt-bar{display:flex;flex-wrap:wrap;gap:var(--s3);align-items:center;margin:var(--s3) 0}
@@ -34,44 +31,7 @@ export const OEPNV_CSS = `.pt-map{height:440px;border:1px solid var(--line);bord
 .pt-bar-cell{display:inline-block;width:90px;height:8px;background:var(--panel-2);border-radius:4px;overflow:hidden;vertical-align:middle}
 .pt-bar-cell i{display:block;height:100%;border-radius:4px}
 @media (max-width:640px){.pt-map{height:320px}}`;
-function ensureCss() { if (document.getElementById('pt-css')) return; const s = document.createElement('style'); s.id = 'pt-css'; s.textContent = OEPNV_CSS; document.head.appendChild(s); }
-
-// ---------- Live-Karte ----------
-function stopTimer() { if (S.timer) { clearInterval(S.timer); S.timer = 0; } }
-function drawVehicles(ctx, el) {
-  const live = S.live, st = el.querySelector('#pt-map-status'); if (!S.map || !S.layer) return;
-  S.layer.clearLayers(); S.share?.clearLayers();
-  const dt = live ? (Date.now() - live.at) / 1000 : Infinity, stale = !live || dt > (live.aheadMin || 45) * 60;
-  let n = 0, late = 0; const art = ART();
-  if (live && !stale) for (const [line, kind, delay, w] of live.trips || []) {
-    const p = NZ.positionAt(w, dt); if (!p) continue; n++; if (delay != null && delay >= 300) late++;
-    const label = `${ctx.esc(line || t('pt.noLine'))} (${art[kind] || art.sonst})${delay == null ? `, ${t('pt.noDelay')}` : `, ${delay >= 60 ? t('pt.delayMin', { n: ctx.fmt(Math.round(delay / 60)) }) : t('pt.onTime')}`}`;
-    L.circleMarker(/** @type {[number, number]} */ (p), { radius: kind === 'bahn' ? 6 : 5, color: delayColor(delay), weight: 1, fillColor: delayColor(delay), fillOpacity: 0.85 }).bindTooltip(label).addTo(S.layer);
-  }
-  if (S.showShare && S.share && S.fleet) for (const v of S.fleet) L.rectangle([[v.lat - 0.00006, v.lon - 0.00009], [v.lat + 0.00006, v.lon + 0.00009]], { color: HIT.over, weight: 1, fillOpacity: 0.7, interactive: false }).addTo(S.share);
-  if (st) st.textContent = !live ? t('pt.mapNone') : stale ? t('pt.mapStale', { time: timeTxt(live.at), min: live.aheadMin || 45 }) : t('pt.mapStatus', { n: ctx.fmt(n), late: ctx.fmt(late), time: timeTxt(live.at), share: S.showShare && S.fleet ? t('pt.mapShare', { n: ctx.fmt(S.fleet.length) }) : '' });
-}
-function setupMap(ctx, el, rows) {
-  const box = el.querySelector('#pt-map'); if (!box || typeof L === 'undefined') return;
-  S.map?.remove(); S.map = null;
-  const still = reduced();
-  S.map = L.map(/** @type {HTMLElement} */ (box), { zoomControl: false, zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, preferCanvas: true });
-  L.control.zoom({ zoomInTitle: t('common.zoomIn'), zoomOutTitle: t('common.zoomOut') }).addTo(S.map);
-  S.map.attributionControl?.setPrefix(`<a href="https://leafletjs.com" title="${t('common.leafletTitle')}" lang="en">Leaflet</a>`);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: `${t('app.openstreetmapContributors')}, ${ctx.esc(S.live?.attribution || NZ.NETZ_ATTRIBUTION)}` }).addTo(S.map);
-  S.share = L.layerGroup().addTo(S.map); S.layer = L.layerGroup().addTo(S.map);
-  const pts = (rows || []).slice(0, 60).map(r => [r[2], r[3]]);
-  if (pts.length) S.map.fitBounds(L.latLngBounds(pts).pad(0.05)); else S.map.setView([51.2, 10.4], 6);
-  drawVehicles(ctx, el); stopTimer();
-  // Lage alle 5 Sekunden neu (ruhig gestellt: alle 30), neue Wege alle 5 Minuten; endet, wenn die Ansicht den Kasten nicht mehr zeigt
-  let ticks = 0; const every = still ? 30000 : 5000, ags = ctx.state.scope;
-  S.timer = window.setInterval(async () => {
-    if (!document.body.contains(box) || ctx.state.scope !== ags) { stopTimer(); return; }
-    if (/** @type {HTMLElement} */ (box).offsetParent === null) return;
-    if (++ticks % Math.round(300000 / every) === 0) { const nl = await load(ctx, `${ctx.CFG.DATA}oepnv/live/${ags}.json`, true); if (nl?.at > (S.live?.at || 0)) S.live = nl; }
-    drawVehicles(ctx, el);
-  }, every);
-}
+function ensureCss() { if (document.getElementById('pt-css')) return; const s = document.createElement('style'); s.id = 'pt-css'; s.textContent = OEPNV_CSS + KARTE_CSS; document.head.appendChild(s); }
 
 export async function renderOepnv(el, ctx) {
   ensureCss();
@@ -81,7 +41,7 @@ export async function renderOepnv(el, ctx) {
   const [doc, live, abs, fleetDoc, zIdx] = city ? await Promise.all([load(ctx, `${D}oepnv/${ags}.json`), load(ctx, `${D}oepnv/live/${ags}.json`, true), load(ctx, `${D}abstell/${ags}.json`), load(ctx, `${D}ops-input/fleet/${ags}.json`), load(ctx, `${D}zones/index.json`)]) : [null, null, null, null, null];
   if (run !== S.run) return;
   const name = city ? ctx.esc(ctx.muniName(ags)) : t('pt.germany');
-  S.live = live; S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
+  M.live = live; M.fleet = S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
   const H = doc?.hours, last = H?.days?.length ? H.days.length - 1 : -1;
   const dayRow = (i) => { const n = sum(H.n[i]), sk = sum(H.skip[i]), la = sum(H.late[i]); return { day: H.days[i], n, sk, la, ok: n ? (n - sk - la) / n : null, flag: sum(H.flag?.[i]), cancel: H.cancel?.[i] ?? 0 }; };
   const today = last >= 0 ? dayRow(last) : null, liveN = live ? (live.trips || []).length : 0;
@@ -98,11 +58,7 @@ export async function renderOepnv(el, ctx) {
   } else putAnswer(el, { id: 'oepnv', sentence: t('pt.answerNone', { name }), kpis: [{ label: t('pt.kOk'), value: '–' }, { label: t('pt.kSkip'), value: '–' }, { label: t('pt.kLive'), value: '–' }], how: t('pt.how') });
 
   // ---------- Live-Karte ----------
-  const mapPanel = city ? `<div class="panel"><div class="panel-head"><div><h2>${t('pt.mapTitle', { name })}</h2><div class="sub">${t('pt.mapSub')}</div></div></div>
-    ${live ? `<div class="pt-bar"><label><input type="checkbox" id="pt-share"${S.showShare ? ' checked' : ''}${S.fleet ? '' : ' disabled'}> ${t('pt.shareToggle')}</label>
-      <span class="pt-legend"><span><i style="background:${HIT.ok}"></i>${t('pt.legOk')}</span><span><i style="background:${MODEL.blend}"></i>${t('pt.legLate2')}</span><span><i style="background:${HIT.miss}"></i>${t('pt.legLate5')}</span><span><i style="background:${HIT.none}"></i>${t('pt.legNone')}</span><span><i class="sq" style="background:${HIT.over}"></i>${t('pt.legShare')}</span></span></div>
-      <div id="pt-map" class="pt-map" role="application" aria-label="${ctx.esc(t('pt.mapTitle', { name }))}"></div><p class="small" id="pt-map-status" aria-live="polite"></p>
-      <p class="muted small">${t('pt.mapNote', { min: live.aheadMin || 45 })}</p>` : `<div class="empty">${t('pt.mapEmpty')}</div>`}</div>` : '';
+  const mapPanel = city ? mapPanelHtml(ctx, name, live) : '';
 
   // ---------- Verspätungs-Dashboard ----------
   let dash = '';
@@ -156,9 +112,8 @@ export async function renderOepnv(el, ctx) {
 
   el.innerHTML = `${mapPanel}${cityList}${dash}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
   for (const b of el.querySelectorAll('button[data-ags]')) b.addEventListener('click', () => { const sel = /** @type {HTMLSelectElement | null} */ (document.querySelector('#sel-scope')); if (sel) { sel.value = /** @type {HTMLElement} */ (b).dataset.ags || ''; sel.dispatchEvent(new Event('change', { bubbles: true })); } });
-  el.querySelector('#pt-share')?.addEventListener('change', (e) => { S.showShare = /** @type {HTMLInputElement} */ (e.target).checked; drawVehicles(ctx, el); });
   el.querySelector('#pt-st-csv')?.addEventListener('click', () => download(`oepnv_stationen_${ags}.csv`, ['station;name;lat;lon;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(S.rows || []).map(r => [r[0], `"${String(r[1]).replace(/"/g, '""')}"`, csvNum(r[2], 5), csvNum(r[3], 5), csvNum(r[4] / days), csvNum(r[5] / r[4], 3), csvNum(r[6] / r[4], 3), csvNum(r[7])].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-hub-csv')?.addEventListener('click', () => S.hub && download(`sharing_stationen_${ags}.csv`, ['rang;station;name;lat;lon;halte_je_tag;gestoert_anteil;fahrtenden_150m;fahrzeuge_jetzt_150m;punkte', ...S.hub.rows.map((x, i) => [i + 1, x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), csvNum(x.perDay), csvNum(x.stoer, 3), x.ends, x.vehicles, csvNum(x.score, 3)].join(';'))].join('\n') + '\n'));
   bindMehr(el, doc, ags, days, download);
-  if (city && live) setupMap(ctx, el, R);
+  if (city && live) setupMap(ctx, el, R, () => load(ctx, `${D}oepnv/live/${ags}.json?t=${Math.floor(Date.now() / 60000)}`, true));
 }

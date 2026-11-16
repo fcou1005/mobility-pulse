@@ -2,9 +2,9 @@
 // Mobility Pulse — Reiter ÖPNV, weitere Tafeln: Linien nach Zuverlässigkeit und Tagesgang ÖPNV gegen Sharing (Nachtnetz-Lücke).
 // Daten: oepnv/<AGS>.json (lines, profile; seit Format 1.1). Texte unter pt.* (Bereich oepnv).
 import { t } from './i18n.js';
+import { modeTxt as artTxt } from './oepnv-karte.js';
 
 const csvNum = (/** @type {number | null} */ x, d = 1) => (x == null ? '' : (+x).toFixed(d).replace('.', ','));
-const artTxt = (/** @type {string} */ a) => (a === 'bus' ? t('pt.artBus') : a === 'tram' ? t('pt.artTram') : a === 'bahn' ? t('pt.artBahn') : t('pt.artSonst'));
 const pct = (/** @type {any} */ ctx, /** @type {number | null} */ x, d = 1) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
 
 /** Linien mit dem höchsten Anteil ausgefallener oder verspäteter Halte (ab 40 Halten in der Summe) */

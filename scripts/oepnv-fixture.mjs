@@ -38,17 +38,17 @@ for (const ags of fx.ags) {
     }
     H.n.push(n); H.skip.push(sk); H.late.push(la); H.flag.push(fl); H.cancel.push(di === 1 ? 31 : 6);
   });
-  const lines = Array.from({ length: ags === '08111000' ? 18 : 4 }, (_, i) => { const art = ['bus', 'tram', 'bahn'][i % 3], h = Math.round((1400 - 60 * i) * (0.8 + 0.4 * rnd())), q = 0.03 + 0.25 * rnd() * (i % 4 === 0 ? 1.5 : 0.5); return [`${art === 'bahn' ? 'S' : art === 'tram' ? 'U' : ''}${i + 1}${art === 'bus' ? 0 : ''}`, art, h, Math.round(h * q * 0.3), Math.round(h * q * 0.7), Math.round((1 + 18 * q) * 10) / 10, Math.round(h / days * 0.7), 0, 0]; });
+  const lines = Array.from({ length: ags === '08111000' ? 18 : 4 }, (_, i) => { const art = ['bus', 'tram', 'sbahn'][i % 3], h = Math.round((1400 - 60 * i) * (0.8 + 0.4 * rnd())), q = 0.03 + 0.25 * rnd() * (i % 4 === 0 ? 1.5 : 0.5); return [`${art === 'sbahn' ? 'S' : art === 'tram' ? 'U' : ''}${i + 1}${art === 'bus' ? 0 : ''}`, art, h, Math.round(h * q * 0.3), Math.round(h * q * 0.7), Math.round((1 + 18 * q) * 10) / 10, Math.round(h / days * 0.7), 0, 0]; });
   const pPt = Array.from({ length: 24 }, (_, h) => (h >= 5 ? Math.round(nSt * 14 * (h >= 7 && h <= 9 || h >= 16 && h <= 18 ? 1.5 : 1) * (h >= 22 ? 0.3 : 1)) : h === 0 ? Math.round(nSt * 2.5) : 0)), pSh = Array.from({ length: 24 }, (_, h) => Math.round((ags === '08111000' ? 60 : 8) * (h < 5 ? 0.25 : h >= 22 ? 0.6 : 0.5 + 0.5 * Math.sin((h - 5) / 17 * Math.PI)) * 10) / 10);
   const pk = Math.max(...pPt), profile = { days: 2, pt: pPt, sharing: pSh, gap: pPt.map((x, h) => (x < 0.25 * pk && pSh[h] >= 3 ? h : -1)).filter(h => h >= 0), gapShare: 0.25, minSharing: 3 };
   await put(`${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, ...head, halfLifeDays: NETZ.halfLifeDays, days, stations: nSt + 40, fields: STATION_FIELDS, rows, hours: H, lines: { fields: LINE_FIELDS, rows: lines }, profile });
   // Fahrzeugwege: je Fahrt 5 bis 8 Stationen in Folge, Start bis 10 Minuten vor dem Stand, Halte alle 2 bis 4 Minuten
-  const trips = [], ARTEN = ['bus', 'bus', 'tram', 'bahn'];
+  const trips = [], ARTEN = ['bus', 'bus', 'ubahn', 'sbahn', 'bus', 'regio', 'tram', 'fern'];
   for (let k = 0; k < (ags === '08111000' ? 60 : 12); k++) {
     const len = 5 + Math.floor(rnd() * 4), from = Math.floor(rnd() * nSt), step = 1 + Math.floor(rnd() * 3), w = []; let dt = -Math.round(rnd() * 600);
     for (let j = 0; j < len; j++) { const s = st[(from + j * step) % nSt]; w.push(s.lat, s.lon, dt); dt += 120 + Math.round(rnd() * 120); }
-    const art = ARTEN[k % 4], dl = k % 9 === 0 ? null : k % 5 === 0 ? 300 + Math.round(rnd() * 400) : k % 3 === 0 ? 130 + Math.round(rnd() * 100) : Math.round(rnd() * 60);
-    trips.push([k % 11 === 0 ? null : `${art === 'bahn' ? 'S' : art === 'tram' ? 'U' : ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w]);
+    const art = ARTEN[k % 8], dl = k % 9 === 0 ? null : k % 5 === 0 ? 300 + Math.round(rnd() * 400) : k % 3 === 0 ? 130 + Math.round(rnd() * 100) : Math.round(rnd() * 60);
+    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w]);
   }
   await put(`live/${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, aheadMin: NETZ.aheadMin, ...head, fields: LIVE_FIELDS, trips });
   const today = fx.days.length - 1, sum = (/** @type {number[]} */ a) => a.reduce((s, x) => s + x, 0);

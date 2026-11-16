@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/oepnv.schema.json",
  "title": "ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV)",
  "description": "oepnv/<AGS>.json (Stationen und Stunden einer Gemeinde), oepnv/live/<AGS>.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.",
- "x-version": "1.1",
+ "x-version": "1.2",
  "$defs": {
   "ags": {
    "type": "object",
@@ -151,7 +151,7 @@
        "items": {
         "type": "string"
        },
-       "description": "Spalten von rows: linie, art ('bus' | 'tram' | 'bahn' | 'sonst'), halte, ausgefallen, verspaetet (ab 5 Minuten), verspaetung_min, halte_heute, ausgefallen_heute, verspaetet_heute"
+       "description": "Spalten von rows: linie, art ('bus' | 'tram' | 'ubahn' | 'sbahn' | 'regio' | 'fern' | 'sonst'; bis 1.1 'bahn' für alle Bahnen), halte, ausgefallen, verspaetet (ab 5 Minuten), verspaetung_min, halte_heute, ausgefallen_heute, verspaetet_heute"
       },
       "rows": {
        "type": "array",
@@ -249,7 +249,7 @@
      "items": {
       "type": "string"
      },
-     "description": "Spalten von trips: linie (oder null), art ('bus' | 'tram' | 'bahn' | 'sonst'), verspaetung_s am nächsten Halt (oder null), weg = [lat, lon, Sekunden nach at, …] je Station"
+     "description": "Spalten von trips: linie (oder null), art ('bus' | 'tram' | 'ubahn' | 'sbahn' | 'regio' | 'fern' | 'sonst'; bis 1.1 'bahn' für alle Bahnen), verspaetung_s am nächsten Halt (oder null), weg = [lat, lon, Sekunden nach at, …] je Station"
     },
     "trips": {
      "type": "array",
