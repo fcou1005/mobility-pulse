@@ -7,6 +7,20 @@ import { modeTxt as artTxt } from './oepnv-karte.js';
 const csvNum = (/** @type {number | null} */ x, d = 1) => (x == null ? '' : (+x).toFixed(d).replace('.', ','));
 const pct = (/** @type {any} */ ctx, /** @type {number | null} */ x, d = 1) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
 
+/** Jetzt gestört: Stationen mit Ausfällen und Verspätungen in den letzten Stunden und die Sharing-Fahrzeuge im Umkreis von 300 m */
+/** @param {any} ctx @param {any} doc @param {string} name @param {any[]} hints @param {any} mine */
+export function nowPanel(ctx, doc, name, hints, mine) {
+  const J = doc?.jetzt, f = ctx.fmt; if (!doc || !J) return '';
+  const none = hints.filter(x => x.level === 'none').length, few = hints.filter(x => x.level === 'few').length, known = hints.some(x => x.vehicles != null);
+  const lvl = (/** @type {any} */ x) => (x.level === 'none' ? `▲ ${t('pt.nowNone')}` : x.level === 'few' ? `▲ ${t('pt.nowFew', { n: f(x.vehicles) })}` : x.level === 'ok' ? `○ ${t('pt.nowOk', { n: f(x.vehicles) })}` : '–');
+  const eff = mine && (mine.verdict === 'mehr' || mine.verdict === 'weniger') ? t(mine.verdict === 'mehr' ? 'pt.nowEffMore' : 'pt.nowEffLess', { name, e: `${f(Math.abs(mine.effect) * 100, 1)} %` }) : t('pt.nowEffOpen', { name });
+  return `<div class="panel" id="pt-now-panel"><div class="panel-head"><div><h2>${t('pt.nowTitle')}</h2><div class="sub">${t('pt.nowSub', { h: f(J.windowH) })}</div></div>
+    <div class="panel-actions"><button class="chip" type="button" id="pt-now-csv"${hints.length ? '' : ' disabled'}>${t('pt.csv')}</button></div></div>
+    ${hints.length ? `<p>${t('pt.nowLead', { n: `<b>${f(hints.length)}</b>`, name, h: f(J.windowH) })} ${known ? t('pt.nowLeadVeh', { none: `<b>${f(none)}</b>`, few: f(few) }) : t('pt.nowLeadNoFleet')} ${eff}</p>
+    <div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.nowTitle'))}"><table id="pt-now"><thead><tr><th>${t('pt.colStation')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th>${t('pt.colNear')}</th></tr></thead><tbody>
+    ${hints.slice(0, 15).map(x => `<tr><td><a href="https://www.openstreetmap.org/?mlat=${x.lat.toFixed(5)}&mlon=${x.lon.toFixed(5)}#map=17/${x.lat.toFixed(5)}/${x.lon.toFixed(5)}" target="_blank" rel="noopener">${ctx.esc(x.name)}</a></td><td class="n">${f(x.n)}</td><td class="n">${pct(ctx, x.skip / x.n, 0)}</td><td class="n">${pct(ctx, x.late / x.n, 0)}</td><td>${lvl(x)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="muted small">${t('pt.nowNote', { min: f(J.minN || 8) })}</p>` : `<p>${t('pt.nowCalm', { name, h: f(J.windowH) })}</p>`}</div>`;
+}
 /** Linien mit dem höchsten Anteil ausgefallener oder verspäteter Halte (ab 40 Halten in der Summe) */
 /** @param {any} ctx @param {any} doc @param {number} days */
 export function linesPanel(ctx, doc, days) {
@@ -35,7 +49,8 @@ export function profilePanel(ctx, doc, name) {
     ${P.pt.map((/** @type {number} */ n, /** @type {number} */ h) => `<tr><td>${h}–${h + 1} h</td><td class="n">${f(n)}</td><td aria-hidden="true">${bar(n, peak, 'var(--muted)')}</td><td class="n">${f(P.sharing[h], 1)}</td><td aria-hidden="true">${bar(P.sharing[h], peakS, 'var(--accent)')}</td><td>${P.gap.includes(h) ? `▲ ${t('pt.pfIsGap')}` : ''}</td></tr>`).join('')}</tbody></table></div>
     <p class="muted small">${t('pt.pfNote', { share: pct(ctx, P.gapShare, 0), min: f(P.minSharing) })}</p></div>`;
 }
-/** @param {HTMLElement} el @param {any} doc @param {string} ags @param {number} days @param {(name: string, text: string) => void} download */
-export function bindMehr(el, doc, ags, days, download) {
+/** @param {HTMLElement} el @param {any} doc @param {string} ags @param {number} days @param {(name: string, text: string) => void} download @param {any[]} [hints] */
+export function bindMehr(el, doc, ags, days, download, hints = /** @type {any[]} */ ([])) {
+  el.querySelector('#pt-now-csv')?.addEventListener('click', () => download(`oepnv_jetzt_gestoert_${ags}.csv`, ['station;name;lat;lon;halte;ausgefallen;verspaetet;sharing_fahrzeuge_300m', ...hints.map(x => [x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), x.n, x.skip, x.late, x.vehicles ?? ''].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-ln-csv')?.addEventListener('click', () => download(`oepnv_linien_${ags}.csv`, ['linie;art;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(doc?.lines?.rows || []).map((/** @type {any[]} */ r) => [`"${String(r[0]).replace(/"/g, '""')}"`, r[1], csvNum(r[2] / days), csvNum(r[3] / r[2], 3), csvNum(r[4] / r[2], 3), csvNum(r[5])].join(';'))].join('\n') + '\n'));
 }

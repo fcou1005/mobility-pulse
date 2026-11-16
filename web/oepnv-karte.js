@@ -8,7 +8,7 @@ import { t, dateFmt } from './i18n.js';
 
 /** Zustand der Karte; web/oepnv.js setzt live und fleet vor setupMap */
 export const M = { map: /** @type {any} */ (null), veh: /** @type {any} */ (null), share: /** @type {any} */ (null), paths: /** @type {any} */ (null), hi: /** @type {any} */ (null), timer: 0, live: /** @type {any} */ (null), fleet: /** @type {any[] | null} */ (null),
-  showShare: false, showPaths: true, off: /** @type {Set<string>} */ (new Set()), marks: /** @type {any[]} */ ([]), status: '' };
+  hot: /** @type {any[]} */ ([]), showShare: false, showPaths: true, off: /** @type {Set<string>} */ (new Set()), marks: /** @type {any[]} */ ([]), status: '' };
 const MODE_KEY = { bus: 'pt.artBus', tram: 'pt.artTram', ubahn: 'pt.artUbahn', sbahn: 'pt.artSbahn', regio: 'pt.artRegio', fern: 'pt.artFern', bahn: 'pt.artBahn', sonst: 'pt.artSonst' };
 export const modeTxt = (/** @type {string} */ a) => t(MODE_KEY[/** @type {keyof typeof MODE_KEY} */ (a)] || 'pt.artSonst');
 const MODE_ORDER = ['bus', 'tram', 'ubahn', 'sbahn', 'regio', 'fern', 'bahn', 'sonst'];
@@ -34,7 +34,7 @@ export function mapPanel(ctx, name, live) {
   return `<div class="panel"><div class="panel-head"><div><h2>${t('pt.mapTitle', { name })}</h2><div class="sub">${t('pt.mapSub')}</div></div></div>
     <fieldset class="pt-modes" id="pt-modes"><legend class="small muted">${t('pt.modesLegend')}</legend>${modes.map(a => `<label><input type="checkbox" data-mode="${a}"${M.off.has(a) ? '' : ' checked'}><i style="background:${modeColor(a)}"></i>${modeTxt(a)} (${ctx.fmt(cnt[a])})</label>`).join('')}</fieldset>
     <div class="pt-bar"><label><input type="checkbox" id="pt-paths"${M.showPaths ? ' checked' : ''}> ${t('pt.pathsToggle')}</label><label><input type="checkbox" id="pt-share"${M.showShare ? ' checked' : ''}${M.fleet ? '' : ' disabled'}> ${t('pt.shareToggle')}</label>
-      <span class="pt-legend"><span><i style="background:${HIT.ok}"></i>${t('pt.legOk')}</span><span><i style="background:${MODEL.blend}"></i>${t('pt.legLate2')}</span><span><i style="background:${HIT.miss}"></i>${t('pt.legLate5')}</span><span><i style="background:${HIT.none}"></i>${t('pt.legNone')}</span><span><i class="sq" style="background:${HIT.over}"></i>${t('pt.legShare')}</span></span></div>
+      <span class="pt-legend"><span><i style="background:${HIT.ok}"></i>${t('pt.legOk')}</span><span><i style="background:${MODEL.blend}"></i>${t('pt.legLate2')}</span><span><i style="background:${HIT.miss}"></i>${t('pt.legLate5')}</span><span><i style="background:${HIT.none}"></i>${t('pt.legNone')}</span><span><i class="sq" style="background:${HIT.over}"></i>${t('pt.legShare')}</span><span><i style="background:transparent;border:2px solid ${HIT.miss}"></i>${t('pt.legHot')}</span></span></div>
     <div id="pt-map" class="pt-map" role="application" aria-label="${ctx.esc(t('pt.mapTitle', { name }))}"></div><p class="small" id="pt-map-status" aria-live="polite"></p>
     <p class="muted small">${t('pt.mapNote', { min: live.aheadMin || 45 })}</p></div>`;
 }
@@ -44,6 +44,8 @@ function rebuild(ctx) {
   if (!M.map) return; M.veh.clearLayers(); M.paths.clearLayers(); M.hi.clearLayers(); M.marks = [];
   const trips = (M.live?.trips || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]));
   if (M.showPaths) for (const [art, segs] of NZ.segmentsOf(trips)) for (const s of segs) L.polyline(/** @type {any} */ ([s.a, s.b]), { color: modeColor(art), weight: art === 'bus' ? 1.5 : 2.5, opacity: 0.55, interactive: false }).addTo(M.paths);
+  // gestörte Stationen der letzten Stunden: Kreis mit 300 m, kräftiger, wenn kein Sharing-Fahrzeug in der Nähe steht
+  for (const h of M.hot || []) L.circle(/** @type {any} */ ([h.lat, h.lon]), { radius: 300, color: HIT.miss, weight: h.level === 'none' ? 3 : 1.5, dashArray: h.level === 'none' ? undefined : '4 4', fillOpacity: h.level === 'none' ? 0.18 : 0.06 }).bindTooltip(`${ctx.esc(h.name)}: ${t('pt.nowTip', { bad: ctx.fmt(h.bad), n: ctx.fmt(h.n) })}`).addTo(M.paths);
   for (const r of trips) {
     const [line, kind, delay, w] = r, rail = kind !== 'bus' && kind !== 'tram';
     const tip = `${ctx.esc(line || t('pt.noLine'))} (${modeTxt(kind)})${delay == null ? `, ${t('pt.noDelay')}` : `, ${delay >= 60 ? t('pt.delayMin', { n: ctx.fmt(Math.round(delay / 60)) }) : t('pt.onTime')}`}`;

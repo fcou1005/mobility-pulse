@@ -166,5 +166,20 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     'Linienwege: jede Verbindung einmal je Verkehrsmittel, beide Richtungen zusammen, Halt am selben Ort zählt nicht');
 }
 
+// ---------- Jetzt gestört (Format 1.3) ----------
+{
+  const LN = await import('../lib/pulse-oepnv-linien.js'), K = await import('../lib/pulse-oepnv-karte.js');
+  const stops = 'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nA,Alpha,48.7800,9.1800,,\nB,Beta,48.7900,9.1900,,\nC,Gamma,48.8000,9.2000,,\n';
+  const ix = OE.stopIndex(stops, () => '08111000', new Set(['08111000'])), now = Date.parse('2026-11-16T10:00:00Z'), m = 60e3, rc = LN.recentCounter(OE.stationLookup(ix), now);
+  for (let i = 0; i < 10; i++) { rc.onStop('A', now - (5 + i) * m, i < 2, i < 5 ? 400 : 0); rc.onStop('B', now - (5 + i) * m, false, i < 2 ? 400 : 0); }
+  for (let i = 0; i < 5; i++) rc.onStop('C', now - 10 * m, true, null); rc.onStop('A', now - 3 * 3600e3, true, null); rc.onStop('A', now + m, true, null);
+  const hot = LN.hotspots(ix, rc.result()).get('08111000');
+  assert(hot.length === 1 && hot[0].join() === 'A,Alpha,48.78,9.18,10,2,3', `Jetzt gestört: nur Halte der letzten 2 Stunden, ab 8 Halten und 30 % (${JSON.stringify(hot)})`);
+  const rows = [['A', 'Alpha', 48.78, 9.18, 10, 2, 3], ['B', 'Beta', 48.79, 9.19, 20, 6, 6], ['C', 'Gamma', 48.80, 9.20, 12, 4, 0]];
+  const h = K.hotspotHints(rows, [{ lat: 48.7801, lon: 9.1801 }, { lat: 48.7802, lon: 9.1802 }, { lat: 48.7803, lon: 9.18 }, { lat: 48.7902, lon: 9.19 }]);
+  assert(h.map(x => `${x.id}${x.vehicles}${x.level}`).join() === 'C0none,B1few,A3ok' && K.hotspotHints(rows, null)[0].level === 'unknown' && K.hotspotHints(rows, null)[0].id === 'B',
+    'Hinweis: Sharing-Fahrzeuge in 300 m gezählt; ohne Fahrzeug zuerst, ohne Bestand nach gestörten Halten');
+}
+
 console.log(`${oks} ok, ${fails} Fehler`);
 if (fails) process.exitCode = 1;

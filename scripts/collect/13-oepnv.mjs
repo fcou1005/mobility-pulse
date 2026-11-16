@@ -62,8 +62,8 @@ export async function run(ctx) {
       if (!rr.ok) throw new Error(`Echtzeit: HTTP ${rr.status}`);
       if (buf.length > OE.OEPNV.maxBytes) throw new Error(`Echtzeit: ${(buf.length / 1e6).toFixed(0)} MB, zu groß`);
       let routeOf = null; if (tripFile && existsSync(tripFile)) try { routeOf = LN.tripLookup(gunzipSync(await readFile(tripFile))).of; } catch (e) { log(`ÖPNV-Fahrten: ${e.message} – Tabelle wird neu gebaut`); await rm(tripFile, { force: true }); }
-      const stLk = OE.stationLookup(ix), counter = NZ.stationCounter(stLk, ix.st?.id || []), paths = NZ.pathCollector(stLk, ix, now, { routeOf }), lines = LN.lineCounter(stLk, ix, now, { routeOf, backH: OE.OEPNV.backH });
-      const { by, cancel, stats } = OE.ptCounts(buf, OE.stopLookup(ix), now, { keep, onStop: counter.onStop, onTrip: (id, rid, canc, stu) => { paths.onTrip(id, rid, canc, stu); lines.onTrip(id, rid, canc, stu); } });
+      const stLk = OE.stationLookup(ix), counter = NZ.stationCounter(stLk, ix.st?.id || []), paths = NZ.pathCollector(stLk, ix, now, { routeOf }), lines = LN.lineCounter(stLk, ix, now, { routeOf, backH: OE.OEPNV.backH }), recent = LN.recentCounter(stLk, now);
+      const { by, cancel, stats } = OE.ptCounts(buf, OE.stopLookup(ix), now, { keep, onStop: (s, t, sk, d) => { counter.onStop(s, t, sk, d); recent.onStop(s, t, sk, d); }, onTrip: (id, rid, canc, stu) => { paths.onTrip(id, rid, canc, stu); lines.onTrip(id, rid, canc, stu); } });
       // alle Tage laden, die addPt berührt (Fenster der Halte, ganz ausgefallene Fahrten gestern bis morgen), sonst überschriebe ein leeres Dokument die Datei
       const docs = await incidentDocs([T.dayOf(now - OE.OEPNV.backH * 3600e3), T.dayOf(now - 86400e3), T.dayOf(now - 12 * 3600e3), T.dayOf(now), T.dayOf(now + 86400e3)]), w = OE.addPt(docs, by, cancel);
       const src = { at: new Date(now).toISOString(), feedAt: stats.ts ? new Date(stats.ts).toISOString() : null, bytes: buf.length, ms: Date.now() - t1, trips: stats.trips, stops: stats.stops, matched: stats.matched, unmatched: stats.unmatched, noTime: stats.noTime, inWindow: stats.inWindow, ags: stats.ags, flagged: w.flagged, cancelTrips: stats.cancelTrips, cancelAgs: stats.cancelAgs, stopsFeed: ix.lastModified || null };
@@ -77,7 +77,7 @@ export async function run(ctx) {
         if (st?.v !== NZ.NETZ.version) st = NZ.emptyNetzState();
         const mc = NZ.mergeCounts(st, counter.result(), now); st.lines ||= NZ.emptyNetzState(); const ml = NZ.mergeCounts(st.lines, lines.result(), now); await writeFile(stFile, gzipSync(JSON.stringify(st)));
         const today = T.dayOf(now), totals = NZ.stationTotals(st, today), byAgs = NZ.stationsByAgs(ix), pr = paths.result();
-        const days8 = Array.from({ length: 8 }, (_, i) => T.dayOf(now - (7 - i) * 86400e3)), hist = await incidentDocs(days8), lineBy = LN.lineRows(NZ.stationTotals(st.lines, today));
+        const days8 = Array.from({ length: 8 }, (_, i) => T.dayOf(now - (7 - i) * 86400e3)), hist = await incidentDocs(days8), lineBy = LN.lineRows(NZ.stationTotals(st.lines, today)), hot = LN.hotspots(ix, recent.result());
         let series = null; try { series = JSON.parse(await readFile(path.join(DATA, 'forecast', 'series.json'), 'utf8')); } catch { series = null; }
         const ptNow = {}, hNow = T.hourOf(now - 3600e3), dNow = T.dayOf(now - 3600e3); // letzte volle Ortsstunde je Gemeinde für die Alarme (Phase alarme)
         const liveDir = path.join(dir, 'live'); await mkdir(liveDir, { recursive: true });
@@ -87,7 +87,7 @@ export async function run(ctx) {
           if (!rows.length && !hours.days.length && !trips.length) continue;
           const lr = lineBy.get(ags) || [], profile = series ? LN.dayProfile(hist, series, ags, { today }) : null;
           const aN = hist.get(dNow)?.ags?.[ags]; if (aN?.ptN?.[hNow] >= NZ.NETZ.minHourN) ptNow[ags] = { day: dNow, hour: hNow, n: aN.ptN[hNow], skip: aN.ptSkip?.[hNow] || 0, late: aN.ptLate?.[hNow] || 0, flag: aN.pt?.[hNow] ? 1 : 0 };
-          await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(st.days * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile })));
+          await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(st.days * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile, jetzt: { windowH: LN.JETZT.windowH, minN: LN.JETZT.minN, fields: LN.JETZT_FIELDS, rows: hot.get(ags) || [] } })));
           await writeFile(path.join(liveDir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, aheadMin: NZ.NETZ.aheadMin, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, fields: NZ.LIVE_FIELDS, trips })));
           const td = hours.days.at(-1) === today ? hours.days.length - 1 : -1, sum = (a) => (td < 0 ? 0 : a[td].reduce((x, y) => x + y, 0));
           cities[ags] = [rows.length, sum(hours.n), sum(hours.skip), sum(hours.late), trips.length]; files++; vehicles += trips.length;
@@ -97,7 +97,7 @@ export async function run(ctx) {
         const eff = series ? NZ.ptEffect(hist, series, { today }) : { rule: null, pooled: null, cities: [] };
         await writeFile(path.join(dir, 'wirkung.json'), JSON.stringify(SV.withSchema('oepnv', { at: now, days: days8, ...eff })));
         await writeFile(path.join(dir, 'index.json'), JSON.stringify(SV.withSchema('oepnv', { at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, aheadMin: NZ.NETZ.aheadMin, days: Math.round(st.days * 100) / 100, trips: pr.trips, withRoute: pr.withRoute, fields: ['stationen', 'halte_heute', 'ausgefallen_heute', 'verspaetet_heute', 'fahrzeuge'], cities })));
-        log(`ÖPNV-Netz: ${files} Gemeinden, ${mc.stations} Stationen in der Summe (${mc.open} Blöcke offen, ${mc.closed} geschlossen), ${pr.trips} Fahrzeugwege (${pr.withRoute} mit Linie), ${ml.stations} Linien in der Summe, ${vehicles} Einträge je Gemeinde, Wirkung ${eff.pooled ? `${(eff.pooled.effect * 100).toFixed(1)} % (${eff.pooled.cityDays} Stadt-Tage)` : '–'}, ${Date.now() - t2} ms`);
+        log(`ÖPNV-Netz: ${files} Gemeinden, ${mc.stations} Stationen in der Summe (${mc.open} Blöcke offen, ${mc.closed} geschlossen), ${pr.trips} Fahrzeugwege (${pr.withRoute} mit Linie), ${ml.stations} Linien in der Summe, ${[...hot.values()].reduce((s, l) => s + l.length, 0)} Stationen jetzt gestört in ${hot.size} Gemeinden, ${vehicles} Einträge je Gemeinde, Wirkung ${eff.pooled ? `${(eff.pooled.effect * 100).toFixed(1)} % (${eff.pooled.cityDays} Stadt-Tage)` : '–'}, ${Date.now() - t2} ms`);
       } catch (e) { log(`ÖPNV-Netz: ${e.message} – übersprungen`); }
     } catch (e) { log(`ÖPNV: ${e.message} – übersprungen`); }
   }

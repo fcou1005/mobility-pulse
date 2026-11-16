@@ -21,7 +21,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.1 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
-| [oepnv](#oepnv) | 1.2 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
+| [oepnv](#oepnv) | 1.3 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
 
@@ -648,7 +648,7 @@ S8.1 Zensus 2022 gegen VG250-EW je Gemeinde
 
 ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV). oepnv/&lt;AGS&gt;.json (Stationen und Stunden einer Gemeinde), oepnv/live/&lt;AGS&gt;.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.
 
-Version 1.2 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
+Version 1.3 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
 
 ### oepnv · ags
 
@@ -670,6 +670,7 @@ Stationen einer Gemeinde mit Flotte (höchstens 300, nach Halten) und Halte je S
 | `hours` | ja | object – je Tag 24 Ortsstunden: Halte mit Echtzeit, ausgefallen, verspätet, Kennzeichen gestört; cancel = ganz ausgefallene Fahrten des Tages |
 | `lines` |  | object – Linien der Gemeinde (höchstens 80, nach Halten), Summe wie rows; seit 1.1 |
 | `profile` |  | object / null – Tagesgang je Ortsstunde, Mittel der Tage vor heute: ÖPNV-Halte mit Echtzeit gegen Sharing-Fahrtbeginne; gap = Stunden mit ÖPNV unter gapShare des Höchstwerts und mindestens minSharing Fahrtbeginnen; seit 1.1 |
+| `jetzt` |  | object – Stationen, die in den letzten windowH Stunden gestört waren (ab minN Halten, mindestens 30 % ausgefallen oder verspätet oder 15 % ausgefallen); seit 1.3 |
 
 ### oepnv · live
 

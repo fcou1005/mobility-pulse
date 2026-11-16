@@ -10,7 +10,7 @@ import * as Z from './pulse-zones.js';
 import { decodeFleet } from './pulse-ops.js';
 import { t, dateFmt } from './i18n.js';
 import { putAnswer } from './answer.js';
-import { linesPanel, profilePanel, bindMehr } from './oepnv-mehr.js';
+import { linesPanel, profilePanel, nowPanel, bindMehr } from './oepnv-mehr.js';
 import { M, KARTE_CSS, mapPanel as mapPanelHtml, setupMap, stopTimer } from './oepnv-karte.js';
 
 const cache = new Map(), S = { run: 0, fleet: null, hub: null, rows: null };
@@ -106,14 +106,15 @@ export async function renderOepnv(el, ctx) {
       <p class="muted small">${t('pt.hubNote', { isl: f(isl.length), abs: abs ? t('pt.hubAbsYes') : t('pt.hubAbsNo') })}</p></div>`;
   }
 
+  const hints = city ? NZ.hotspotHints(doc?.jetzt?.rows || [], S.fleet) : []; M.hot = hints;
   // ---------- Städte (ohne Auswahl) ----------
   const cityList = !city ? `<div class="panel"><div class="panel-head"><div><h2>${t('pt.listTitle')}</h2><div class="sub">${t('pt.listSub')}</div></div></div>${idx?.cities && Object.keys(idx.cities).length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.listTitle'))}"><table><thead><tr><th>${t('pt.city')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colOk')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th class="n">${t('pt.kLive')}</th></tr></thead><tbody>
     ${Object.entries(idx.cities).sort((a, b) => b[1][1] - a[1][1]).slice(0, 40).map(([a, r]) => `<tr><td><button type="button" class="chip" data-ags="${a}">${ctx.esc(ctx.muniName(a))}</button></td><td class="n">${f(r[1])}</td><td class="n">${pct(ctx, r[1] ? (r[1] - r[2] - r[3]) / r[1] : null)}</td><td class="n">${pct(ctx, r[1] ? r[2] / r[1] : null, 1)}</td><td class="n">${pct(ctx, r[1] ? r[3] / r[1] : null, 1)}</td><td class="n">${f(r[4])}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${t('pt.listEmpty')}</div>`}</div>` : '';
 
-  el.innerHTML = `${mapPanel}${cityList}${dash}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
+  el.innerHTML = `${mapPanel}${city ? nowPanel(ctx, doc, name, hints, mine) : ''}${cityList}${dash}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
   for (const b of el.querySelectorAll('button[data-ags]')) b.addEventListener('click', () => { const sel = /** @type {HTMLSelectElement | null} */ (document.querySelector('#sel-scope')); if (sel) { sel.value = /** @type {HTMLElement} */ (b).dataset.ags || ''; sel.dispatchEvent(new Event('change', { bubbles: true })); } });
   el.querySelector('#pt-st-csv')?.addEventListener('click', () => download(`oepnv_stationen_${ags}.csv`, ['station;name;lat;lon;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(S.rows || []).map(r => [r[0], `"${String(r[1]).replace(/"/g, '""')}"`, csvNum(r[2], 5), csvNum(r[3], 5), csvNum(r[4] / days), csvNum(r[5] / r[4], 3), csvNum(r[6] / r[4], 3), csvNum(r[7])].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-hub-csv')?.addEventListener('click', () => S.hub && download(`sharing_stationen_${ags}.csv`, ['rang;station;name;lat;lon;halte_je_tag;gestoert_anteil;fahrtenden_150m;fahrzeuge_jetzt_150m;punkte', ...S.hub.rows.map((x, i) => [i + 1, x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), csvNum(x.perDay), csvNum(x.stoer, 3), x.ends, x.vehicles, csvNum(x.score, 3)].join(';'))].join('\n') + '\n'));
-  bindMehr(el, doc, ags, days, download);
+  bindMehr(el, doc, ags, days, download, hints);
   if (city && live) setupMap(ctx, el, R, () => load(ctx, `${D}oepnv/live/${ags}.json?t=${Math.floor(Date.now() / 60000)}`, true));
 }

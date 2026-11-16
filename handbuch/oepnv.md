@@ -27,6 +27,12 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Grenzen: echte Strecke und echtes Tempo sind unbekannt; ein Fahrzeug kann auf der Karte quer über einen Häuserblock fahren. Nach dem Ende der 45 Minuten ohne neuen Lauf sagt die Karte das und zeigt keine Fahrzeuge mehr.
 - Verworfen: Fahrzeugpositionen von Transitous (nur für nicht-kommerzielle Open-Source-Projekte freigegeben).
 
+## Jetzt gestört (`recentCounter`, `hotspots`, `hotspotHints`)
+
+- Je Lauf: Stationen mit mindestens 8 Halten mit Echtzeit in den letzten 2 Stunden, von denen mindestens 30 % ausgefallen oder verspätet oder 15 % ausgefallen sind (`jetzt` in `oepnv/<AGS>.json`, seit Format 1.3, höchstens 40 je Gemeinde).
+- Die Seite zählt die verfügbaren Sharing-Fahrzeuge im Umkreis von 300 m (`ops-input/fleet/<AGS>.json`) und sortiert: kein Fahrzeug, höchstens zwei, genug vor Ort. Auf der Karte ein Kreis je Station, kräftig, wenn kein Fahrzeug in der Nähe steht.
+- Ein Hinweis für die Disposition, keine Prognose: wie stark Störungen die Nachfrage einer Stadt heben, steht unter Wirkung auf Sharing und ist nur in einzelnen Städten belegt.
+
 ## Linien (`lib/pulse-oepnv-linien.js`)
 
 - Der Strom nennt je Fahrt nur `trip_id`. Die Linie kommt aus `trips.txt` des Fahrplans: bei jedem neuen Fahrplan baut der Sammler eine Tabelle Fahrt → Linie (zwei 32-Bit-Hashes je Fahrt, 12 Bytes je Fahrt) und legt sie im Zwischenspeicher ab (`TRACK_DIR/oepnv-fahrten.bin.gz`), nicht im Datenstand. Scheitert der Abruf, bleiben Fahrzeuge ohne Liniennamen bis zum nächsten Fahrplan.
