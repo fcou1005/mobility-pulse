@@ -18,13 +18,13 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 
 ## Live-Karte (`lib/pulse-oepnv-karte.js`)
 
-- Der Strom enthält Haltezeiten, keine Fahrzeugpositionen. Der Sammler schreibt je Fahrt die Stationen der nächsten 45 Minuten mit Ankunftszeit inklusive Verspätung (`oepnv/live/<AGS>.json`, höchstens 1.500 Fahrten je Gemeinde, 14 Punkte je Fahrt).
+- Der Strom enthält Haltezeiten, keine Fahrzeugpositionen. Der Sammler schreibt je Fahrt die Stationen der nächsten 70 Minuten mit Ankunftszeit inklusive Verspätung (`oepnv/live/<AGS>.json`, höchstens 1.500 Fahrten je Gemeinde, 24 Punkte je Fahrt).
 - Die Seite setzt das Fahrzeug zwischen zwei Stationen gleichmäßig auf die Luftlinie (`positionAt`) und rechnet die Lage jede Sekunde neu (bei „Bewegung reduzieren“ alle 15 Sekunden, bei verdecktem Fenster gar nicht). Jede Minute fragt sie nach einer neueren Meldung; der Sammler liefert etwa alle 20 Minuten eine.
 - Fahrzeuge sind Schildchen mit dem Liniennamen (`web/oepnv-karte.js`), Rand nach Verspätung am nächsten Halt: pünktlich, ab 2 Minuten, ab 5 Minuten, ohne Angabe. Unter Zoomstufe 13 werden daraus Punkte. Klick zeigt die gemeldeten nächsten Halte des Fahrzeugs.
 - Verkehrsmittel (`modeClass`, seit Format 1.2) aus `route_type` und Linienname: Bus, Straßenbahn, U- und Stadtbahn, S-Bahn, Regionalbahn, Fernverkehr; je Verkehrsmittel ein Schalter.
-- Linienwege (`segmentsOf`): jede Verbindung Station → Station aus den Fahrzeugwegen der letzten Meldung als Luftlinie, Farbe nach Verkehrsmittel. Es sind nur die Abschnitte, die in den nächsten 45 Minuten befahren werden; die Gleis- und Straßenführung (`shapes.txt`) lädt der Sammler nicht.
+- Linienwege (`segmentsOf`): jede Verbindung Station → Station aus den Fahrzeugwegen der letzten Meldung als Luftlinie, Farbe nach Verkehrsmittel. Es sind nur die Abschnitte, die in den nächsten 70 Minuten befahren werden; die Gleis- und Straßenführung (`shapes.txt`) lädt der Sammler nicht.
 - Sharing-Fahrzeuge lassen sich einblenden (`ops-input/fleet/<AGS>.json`).
-- Grenzen: echte Strecke und echtes Tempo sind unbekannt; ein Fahrzeug kann auf der Karte quer über einen Häuserblock fahren. Nach dem Ende der 45 Minuten ohne neuen Lauf sagt die Karte das und zeigt keine Fahrzeuge mehr.
+- Grenzen: echte Strecke und echtes Tempo sind unbekannt; ein Fahrzeug kann auf der Karte quer über einen Häuserblock fahren. Nach dem Ende der 70 Minuten ohne neuen Lauf sagt die Karte das und zeigt keine Fahrzeuge mehr.
 - Verworfen: Fahrzeugpositionen von Transitous (nur für nicht-kommerzielle Open-Source-Projekte freigegeben).
 
 ## Jetzt gestört (`recentCounter`, `hotspots`, `hotspotHints`)

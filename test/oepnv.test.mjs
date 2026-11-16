@@ -147,6 +147,8 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const rows = LN.lineRows(NZ.stationTotals(st, '2026-11-16')).get('08111000');
   assert(lines.trips() === 2 && rows.length === 2 && rows[1].join() === 'U6,ubahn,2,0,1,3.8,2,0,1' && rows[0].slice(0, 5).join() === '42,bus,2,1,0',
     `Linien: nur vergangene Halte, Fahrt ohne Linie fällt weg, ausgefallener Halt zählt, verspätet ab 5 Minuten (${JSON.stringify(rows)})`);
+  const alt = new Map([['08111000|bahn|S1', { tot: [10, 1, 2, 300, 5], day: [0, 0, 0, 0, 0] }], ['08111000|sbahn|S1', { tot: [6, 0, 1, 60, 6], day: [6, 0, 1, 60, 6] }], ['08111000|bahn|RE5', { tot: [4, 0, 0, 0, 4], day: [0, 0, 0, 0, 0] }]]), lr = LN.lineRows(alt).get('08111000');
+  assert(lr.length === 2 && lr[0].join() === 'S1,sbahn,16,1,3,0.5,6,0,1' && lr[1].slice(0, 2).join() === 'RE5,regio', `Linien: alte Summen mit Art „bahn“ zählen zur Art aus dem Namen, keine Linie doppelt (${JSON.stringify(lr)})`);
   assert(paths.result().withRoute === 1 && paths.result().by.get('08111000')[0][0] === 'U6', 'Fahrzeugwege: Linie aus der Fahrten-Tabelle, wenn der Strom keine nennt');
   const day = (n, a) => ({ ags: { '08111000': { ptN: n } }, _a: a }), ptN = Array.from({ length: 24 }, (_, h) => (h >= 5 && h < 23 ? 400 : h === 23 ? 60 : 0)), sh = Array.from({ length: 24 }, (_, h) => (h < 2 ? 12 : h < 5 ? 1 : h === 23 ? 20 : 30));
   const docs = new Map([['2026-11-14', day(ptN)], ['2026-11-15', day(ptN)], ['2026-11-16', day(ptN.map(x => x * 9))]]), series = { days: { '2026-11-14': { 'ags:08111000': { a: sh } }, '2026-11-15': { 'ags:08111000': { a: sh } } } };
