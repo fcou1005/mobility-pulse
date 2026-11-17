@@ -32,7 +32,13 @@ export const KARTE_CSS = `.pt-veh{display:inline-block;transform:translate(-50%,
 .pt-x{display:inline-block;transform:translate(-50%,-50%);font-weight:700;font-size:.875rem;line-height:1;color:var(--x);text-shadow:0 0 2px var(--panel),0 0 2px var(--panel)}
 .pt-legend i.ring{background:transparent!important;border:2px solid var(--x)}
 .pt-legend i.dash{width:16px;height:0;border-radius:0;border-top:2px dashed var(--x);background:transparent!important}
-.pt-legend b.x{color:var(--x);margin-right:6px}`;
+.pt-legend b.x{color:var(--x);margin-right:6px}
+.pt-dest{display:none;font-weight:500}
+.pt-near .pt-dest{display:inline}
+.pt-pop{font-size:.8125rem;line-height:1.4}
+.pt-pop ol{margin:4px 0 0;padding-left:0;list-style:none}
+.pt-pop li{display:flex;gap:8px}
+.pt-pop li b{font-variant-numeric:tabular-nums;min-width:3.2em}`;
 
 export function stopTimer() { if (M.timer) { clearInterval(M.timer); M.timer = 0; } }
 /** Tafel der Karte: Schalter, Legende, Kasten, Statuszeile */
@@ -63,9 +69,10 @@ function cancelSummary(ctx, live) {
 /** Satz zu den Linienwegen: Anteil im Streckenverlauf (gezählt beim Zeichnen) oder Luftlinie */
 /** @param {any} ctx @param {string} name */
 function pathsNote(ctx, name) {
+  const c = M.cover;
   if (!M.wege) return t('pt.pathsAir', { name });
-  const c = M.cover; if (!c || !(c.hit + c.miss)) return t('pt.pathsGeo');
-  return t('pt.pathsShare', { p: ctx.fmt(Math.round(100 * c.hit / (c.hit + c.miss))), n: ctx.fmt(c.hit + c.miss) });
+  if (!c || !(c.hit + c.miss)) return t('pt.pathsGeo');
+  return t('pt.pathsShare', { p: ctx.fmt(Math.round(100 * c.hit / (c.hit + c.miss))), n: ctx.fmt(c.hit + c.miss) }) + (c.miss ? ` ${t('pt.pathsHidden', { n: ctx.fmt(c.miss) })}` : '');
 }
 /** Streckenverlauf je Abschnitt eines Wegs [lat, lon, dt, …] (Index i = Abschnitt von Station i−1 nach i) oder null */
 /** @param {string} art @param {number[]} w */
@@ -74,16 +81,39 @@ function geomOf(art, w) {
   for (let i = 1; i < n; i++) { const g = M.wege ? M.wege.get(art, w[3 * i - 3], w[3 * i - 2], w[3 * i], w[3 * i + 1]) : null; out.push(g ? { pts: g, cum: WG.cumLen(g) } : null); }
   return out;
 }
+/** Index des nächsten Halts eines Wegs zum jetzigen Zeitpunkt (erster Punkt nach jetzt) oder −1 */
+/** @param {number[]} w */
+const nextIx = (w) => { const dt = (Date.now() - (M.live?.at || 0)) / 1000; for (let i = 0; i < w.length / 3; i++) if (w[3 * i + 2] > dt) return i; return -1; };
+/** Kopfzeile eines Fahrzeugs: Linie, Ziel, Verkehrsmittel */
+/** @param {any} ctx @param {any[]} r */
+const vehHead = (ctx, r) => `<b>${ctx.esc(r[0] || t('pt.noLine'))}</b>${r[5] ? ` → ${ctx.esc(r[5])}` : ''} (${modeTxt(r[1])})`;
+/** Hinweis beim Darüberfahren: Ziel, nächster Halt mit Uhrzeit, Verspätung, ausgefallene Halte */
+/** @param {any} ctx @param {any[]} r */
+function vehTip(ctx, r) {
+  const [, , delay, w, skipped, , hix] = r, names = M.live?.names || [], i = nextIx(w), ns = skipped ? skipped.length / 2 : 0;
+  const next = i >= 0 ? t('pt.vehNext', { name: ctx.esc(names[hix?.[i]] ?? '?'), time: timeTxt((M.live?.at || 0) + w[3 * i + 2] * 1000) }) : t('pt.vehEnd');
+  const late = delay == null ? t('pt.noDelay') : delay >= 60 ? t('pt.delayMin', { n: ctx.fmt(Math.round(delay / 60)) }) : t('pt.onTime');
+  return `${vehHead(ctx, r)}<br>${next}<br>${late}${ns ? `<br>${t('pt.skipTip', { n: ctx.fmt(ns) })}` : ''}`;
+}
+/** Klick: die nächsten Halte mit Uhrzeit (aus den gemeldeten Haltezeiten, Verspätung eingerechnet) */
+/** @param {any} ctx @param {any[]} r */
+function vehPopup(ctx, r) {
+  const w = r[3], hix = r[6] || [], names = M.live?.names || [], i0 = nextIx(w), rows = [];
+  if (i0 < 0) return `<div class="pt-pop">${vehHead(ctx, r)}<div class="muted small">${t('pt.vehEnd')}</div></div>`;
+  for (let i = i0; i < w.length / 3 && rows.length < 10; i++) rows.push(`<li><b>${timeTxt((M.live?.at || 0) + w[3 * i + 2] * 1000)}</b><span>${ctx.esc(names[hix[i]] ?? '?')}</span></li>`);
+  return `<div class="pt-pop">${vehHead(ctx, r)}<div class="muted small">${t('pt.vehStops')}</div><ol>${rows.join('')}</ol></div>`;
+}
 /** Schildchen, Linienwege und Ausfälle aus M.live neu aufbauen (neue Meldung, Filter geändert) */
 /** @param {any} ctx */
 function rebuild(ctx) {
   if (!M.map) return; M.veh.clearLayers(); M.paths.clearLayers(); M.hi.clearLayers(); M.marks = [];
   const trips = (M.live?.trips || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1])), cc = ptCancelColor();
   if (M.showPaths) {
+    // nur im Streckenverlauf (Gleise, für Busse Straßen); Luftlinien von Halt zu Halt ergaben ein unlesbares Strichgewirr, die Fahrzeuge fahren dort trotzdem
     let hit = 0, miss = 0;
     for (const [art, segs] of NZ.segmentsOf(trips)) for (const s of segs) {
-      const g = M.wege ? M.wege.get(art, s.a[0], s.a[1], s.b[0], s.b[1]) : null; if (g) hit++; else miss++;
-      L.polyline(/** @type {any} */ (g || [s.a, s.b]), { color: modeColor(art), weight: art === 'bus' ? 1.5 : 2.5, opacity: 0.55, interactive: false }).addTo(M.paths);
+      const g = M.wege ? M.wege.get(art, s.a[0], s.a[1], s.b[0], s.b[1]) : null; if (!g) { miss++; continue; } hit++;
+      L.polyline(/** @type {any} */ (g), { color: modeColor(art), weight: art === 'bus' ? 2 : 3, opacity: art === 'bus' ? 0.55 : 0.75, interactive: false }).addTo(M.paths);
     }
     M.cover = { hit, miss };
   }
@@ -94,18 +124,18 @@ function rebuild(ctx) {
       .bindTooltip(`${ctx.esc(h.name)}: ${t(skip ? 'pt.nowTipSkip' : 'pt.nowTipLate', { skip: ctx.fmt(h.skip), late: ctx.fmt(h.late), n: ctx.fmt(h.n) })}`).addTo(M.paths);
   }
   // ganz ausgefallene Fahrten mit Zeit im Fenster: gestrichelt auf ihrem Weg
-  if (M.showCancel) for (const [line, art, w] of (M.live?.ausfall?.rows || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]))) {
+  if (M.showCancel) for (const [line, art, w, ziel] of (M.live?.ausfall?.rows || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]))) {
     if (!w || w.length < 6) continue; const geo = geomOf(art, w);
-    L.polyline(/** @type {any} */ (WG.pathPoints(w, (i) => geo[i])), { color: cc, weight: 3, opacity: 0.85, dashArray: '6 6' }).bindTooltip(t('pt.cancelTip', { line: ctx.esc(line || t('pt.noLine')), art: modeTxt(art), time: timeTxt((M.live.at || 0) + w[2] * 1000) })).addTo(M.paths);
+    L.polyline(/** @type {any} */ (WG.pathPoints(w, (i) => geo[i])), { color: cc, weight: 3, opacity: 0.85, dashArray: '6 6' }).bindTooltip(t('pt.cancelTip', { line: `${ctx.esc(line || t('pt.noLine'))}${ziel ? ` → ${ctx.esc(ziel)}` : ''}`, art: modeTxt(art), time: timeTxt((M.live.at || 0) + w[2] * 1000) })).addTo(M.paths);
   }
   /** @type {Map<string, { p: number[], lines: Set<string> }>} */ const gone = new Map();
   for (const r of trips) {
-    const [line, kind, delay, w, skipped] = r, rail = kind !== 'bus' && kind !== 'tram', ns = skipped ? skipped.length / 2 : 0;
-    const tip = `${ctx.esc(line || t('pt.noLine'))} (${modeTxt(kind)})${delay == null ? `, ${t('pt.noDelay')}` : `, ${delay >= 60 ? t('pt.delayMin', { n: ctx.fmt(Math.round(delay / 60)) }) : t('pt.onTime')}`}${ns ? `, ${t('pt.skipTip', { n: ctx.fmt(ns) })}` : ''}`;
-    const mk = L.marker(/** @type {any} */ ([w[0], w[1]]), { icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<span class="pt-veh${rail ? ' rail' : ''}${ns ? ' skip' : ''}" style="--c:${delayColor(delay)};--x:${cc}">${ctx.esc(line || '?')}</span>` }), keyboard: false, zIndexOffset: rail ? 200 : 0 }).bindTooltip(tip);
+    const [line, kind, delay, w, skipped, ziel] = r, rail = kind !== 'bus' && kind !== 'tram', ns = skipped ? skipped.length / 2 : 0;
+    const mk = L.marker(/** @type {any} */ ([w[0], w[1]]), { icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<span class="pt-veh${rail ? ' rail' : ''}${ns ? ' skip' : ''}" style="--c:${delayColor(delay)};--x:${cc}">${ctx.esc(line || '?')}${ziel ? `<span class="pt-dest"> → ${ctx.esc(ziel)}</span>` : ''}</span>` }), keyboard: false, zIndexOffset: rail ? 200 : 0 })
+      .bindTooltip(() => vehTip(ctx, r)).bindPopup(() => vehPopup(ctx, r), { maxWidth: 300 });
     const geo = geomOf(kind, w);
     // Klick: Weg dieses Fahrzeugs hervorheben (bis zu den gemeldeten nächsten Halten, im Streckenverlauf)
-    mk.on('click', () => { M.hi.clearLayers(); L.polyline(/** @type {any} */ (WG.pathPoints(w, (i) => geo[i])), { color: delayColor(delay), weight: 5, opacity: 0.9, interactive: false }).addTo(M.hi); for (let i = 0; i + 2 < w.length; i += 3) L.circleMarker(/** @type {any} */ ([w[i], w[i + 1]]), { radius: 3, color: delayColor(delay), weight: 2, fillOpacity: 1, interactive: false }).addTo(M.hi); });
+    mk.on('click', () => { mk.closeTooltip(); M.hi.clearLayers(); L.polyline(/** @type {any} */ (WG.pathPoints(w, (i) => geo[i])), { color: delayColor(delay), weight: 5, opacity: 0.9, interactive: false }).addTo(M.hi); for (let i = 0; i + 2 < w.length; i += 3) L.circleMarker(/** @type {any} */ ([w[i], w[i + 1]]), { radius: 3, color: delayColor(delay), weight: 2, fillOpacity: 1, interactive: false }).addTo(M.hi); });
     M.marks.push({ mk, w, geo, delay, on: false });
     if (skipped) for (let i = 0; i + 1 < skipped.length; i += 2) { const k = `${skipped[i]},${skipped[i + 1]}`; let g = gone.get(k); if (!g) gone.set(k, g = { p: [skipped[i], skipped[i + 1]], lines: new Set() }); g.lines.add(line || t('pt.noLine')); }
   }
@@ -137,7 +167,7 @@ export function setupMap(ctx, el, rows, reload) {
   M.map.attributionControl?.setPrefix(`<a href="https://leafletjs.com" title="${t('common.leafletTitle')}" lang="en">Leaflet</a>`);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: `${t('app.openstreetmapContributors')}, ${ctx.esc(M.live?.attribution || NZ.NETZ_ATTRIBUTION)}` }).addTo(M.map);
   M.paths = L.layerGroup().addTo(M.map); M.share = L.layerGroup().addTo(M.map); M.hi = L.layerGroup().addTo(M.map); M.veh = L.layerGroup().addTo(M.map);
-  const far = () => box.classList.toggle('pt-far', M.map.getZoom() < 13); M.map.on('zoomend', far);
+  const far = () => { box.classList.toggle('pt-far', M.map.getZoom() < 13); box.classList.toggle('pt-near', M.map.getZoom() >= 15); }; M.map.on('zoomend', far);
   const pts = /** @type {any[]} */ ((rows || []).slice(0, 60).map(r => [r[2], r[3]]));
   if (pts.length) M.map.fitBounds(L.latLngBounds(pts).pad(0.05)); else M.map.setView([51.2, 10.4], 6);
   const notes = () => { const a = el.querySelector('#pt-cancel-sum'), b = el.querySelector('#pt-paths-note'), nm = ctx.muniName?.(ctx.state.scope) || ctx.state.scope; if (a) a.innerHTML = cancelSummary(ctx, M.live); if (b) b.textContent = pathsNote(ctx, nm); };

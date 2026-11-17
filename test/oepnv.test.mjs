@@ -98,7 +98,12 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'ubahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
     `Fahrzeugwege: laufende Fahrten ab dem letzten Halt, abgesagte und beendete fehlen, ausgefallener Halt und unbekannte Station übersprungen (${JSON.stringify(tr)})`);
   const cd = NZ.cancelDoc(pr.cancel.get('08111000'));
-  assert(tr[0].length === 4 && tr[1][4]?.join() === '48.776,9.173' && pr.skipped === 1, `Ausgefallene Halte einer fahrenden Fahrt im Fenster als eigenes Feld (${JSON.stringify(tr[1][4])})`);
+  assert(tr[0].length === 7 && tr[0][4] === null && tr[1][4]?.join() === '48.776,9.173' && pr.skipped === 1, `Ausgefallene Halte einer fahrenden Fahrt im Fenster als eigenes Feld (${JSON.stringify(tr[1][4])})`);
+  const lr = NZ.liveRows(tr, ix);
+  assert(tr[0][5] === 'Uni' && tr[0][6].join() === '0,1,2' && lr.names.join() === 'Hauptbahnhof,Stadtmitte,Uni' && lr.trips[0][6].join() === '0,1,2' && lr.trips[1][6].join() === '0,2' && lr.trips[1][5] === 'Uni',
+    `Ziel ohne Fahrtziel im Fahrplan = letzter Halt im Strom; Stationen je Punkt als Index in die Namen der Datei (${JSON.stringify(lr.names)})`);
+  { const P2 = NZ.pathCollector(lk, ix, now, { routeOf: (id) => (id === 'a' ? ['U6', 400, 'Uni über Stadtmitte'] : null) }); OE.ptCounts(feed, OE.stopLookup(ix), now, { onTrip: P2.onTrip });
+    assert(P2.result().by.get('08111000')[0][5] === 'Uni über Stadtmitte', 'Ziel aus der Fahrten-Tabelle (trip_headsign) geht vor'); }
   assert(pr.canceled === 3 && cd.rows.length === 1 && cd.rows[0][0] === null && cd.rows[0][2].join() === '48.7842,9.1822,-600,48.776,9.173,300' && cd.lines.map(l => l.join(':')).join() === 'Stadtbus 42:bus:1:1,U6:ubahn:1:1,:sonst:1:0' && NZ.cancelDoc(undefined) === null,
     `Ganz ausgefallene Fahrten: abgesagt oder jeder Halt ausgefallen (wie gtfs.de), mit Zeit im Fenster als Weg, alle je Linie gezählt, ohne Zeit gesondert (${JSON.stringify(cd)})`);
   const w = tr[0][3], p0 = NZ.positionAt(w, 0), pEnd = NZ.positionAt(w, 5000), d = tr[1][3];
@@ -136,8 +141,8 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const many = Array.from({ length: 5000 }, (_, i) => `r${1 + i % 3},svc,trip-${i},"Ziel, mit Komma"`).join('\r\n');
   const tt = LN.tripTable(Buffer.from(`﻿route_id,service_id,trip_id,trip_headsign\n${many}\nr4,svc,ohne-linie,x\nr9,svc,unbekannt,x\n`), routes);
   const lk = LN.tripLookup(LN.packTrips(tt));
-  assert(tt.n === 5000 && tt.lines === 5002 && tt.routes.length === 2 && lk.n === 5000 && lk.of('trip-0').join() === 'U6,400' && lk.of('trip-1')[0] === 'Stadtbus 42' && lk.of('trip-2')[0] === 'U6' && lk.of('trip-4999')[0] === (4999 % 3 === 1 ? 'Stadtbus 42' : 'U6') && lk.of('ohne-linie') === null && lk.of('gibt-es-nicht') === null,
-    `Fahrten-Tabelle: 5.000 Fahrten gepackt und gefunden, gleiche Liniennamen zusammen, Linie ohne Namen und unbekannte Fahrt = null (${tt.n}, ${tt.routes.length})`);
+  assert(tt.n === 5000 && tt.lines === 5002 && tt.routes.length === 2 && lk.n === 5000 && lk.of('trip-0').join('|') === 'U6|400|Ziel, mit Komma' && tt.headsigns === 5000 && lk.of('trip-1')[0] === 'Stadtbus 42' && lk.of('trip-2')[0] === 'U6' && lk.of('trip-4999')[0] === (4999 % 3 === 1 ? 'Stadtbus 42' : 'U6') && lk.of('ohne-linie') === null && lk.of('gibt-es-nicht') === null,
+    `Fahrten-Tabelle: 5.000 Fahrten gepackt und gefunden, mit Fahrtziel (trip_headsign, Komma in Anführungszeichen), gleiche Linie und gleiches Ziel zusammen, Linie ohne Namen und unbekannte Fahrt = null (${tt.n}, ${tt.routes.length})`);
   let threw = false; try { LN.tripLookup(Buffer.from('XXXX0000')); } catch { threw = true; } assert(threw, 'Fahrten-Tabelle: fremdes Format wird abgelehnt');
   const stops = 'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nde:08111:10:1:1,Hauptbahnhof,48.7840,9.1820,,\nde:08111:20:0:1,Stadtmitte,48.7760,9.1730,,\n';
   const ix = OE.stopIndex(stops, () => '08111000', new Set(['08111000'])); ix.routes = {};

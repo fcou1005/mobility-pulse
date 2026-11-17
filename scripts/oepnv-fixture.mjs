@@ -46,17 +46,18 @@ for (const ags of fx.ags) {
   // Fahrzeugwege: je Fahrt 5 bis 8 Stationen in Folge, Start bis 10 Minuten vor dem Stand, Halte alle 2 bis 4 Minuten
   const trips = [], ARTEN = ['bus', 'bus', 'ubahn', 'sbahn', 'bus', 'regio', 'tram', 'fern'];
   for (let k = 0; k < (ags === '08111000' ? 60 : 12); k++) {
-    const len = 5 + Math.floor(rnd() * 4), from = Math.floor(rnd() * nSt), step = 1 + Math.floor(rnd() * 3), w = []; let dt = -Math.round(rnd() * 600);
-    for (let j = 0; j < len; j++) { const s = st[(from + j * step) % nSt]; w.push(s.lat, s.lon, dt); dt += 120 + Math.round(rnd() * 120); }
+    const len = 5 + Math.floor(rnd() * 4), from = Math.floor(rnd() * nSt), step = 1 + Math.floor(rnd() * 3), w = [], qs = []; let dt = -Math.round(rnd() * 600);
+    for (let j = 0; j < len; j++) { const s = st[(from + j * step) % nSt]; qs.push((from + j * step) % nSt); w.push(s.lat, s.lon, dt); dt += 120 + Math.round(rnd() * 120); }
     const art = ARTEN[k % 8], dl = k % 9 === 0 ? null : k % 5 === 0 ? 300 + Math.round(rnd() * 400) : k % 3 === 0 ? 130 + Math.round(rnd() * 100) : Math.round(rnd() * 60);
     // seit Format 1.5: jede siebte Fahrt mit einem ausgefallenen Halt (Station zwischen erstem und letztem Punkt; ohne Zufallszahl, damit der übrige Stand gleich bleibt)
     const gone = k % 7 === 3 ? [[st[(from + 1) % nSt].lat, st[(from + 1) % nSt].lon]].flat() : null;
-    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w, ...(gone ? [gone] : [])]);
+    // seit 1.6: Ziel (jede sechste ohne) und je Punkt die Station als Index in names (hier: alle Stationen der Stadt)
+    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w, gone, k % 6 === 5 ? null : st[qs[qs.length - 1]].name, qs]);
   }
   // ganz ausgefallene Fahrten: zwei mit Zeit im Fenster (gestrichelt), drei ohne Uhrzeit im Strom
   const cw = (/** @type {number} */ from, /** @type {number} */ dt0) => st.slice(from, from + 4).flatMap((s, j) => [s.lat, s.lon, dt0 + j * 180]);
-  const ausfall = ags === '08111000' ? { fields: ['linie', 'art', 'weg'], rows: [['U5', 'ubahn', cw(2, 240)], ['S3', 'sbahn', cw(10, -300)]], lineFields: ['linie', 'art', 'fahrten', 'ohne_zeit'], lines: [['U5', 'ubahn', 2, 1], ['42', 'bus', 2, 2], ['S3', 'sbahn', 1, 0]] } : null;
-  await put(`live/${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, aheadMin: NETZ.aheadMin, ...head, fields: LIVE_FIELDS, trips, ausfall });
+  const ausfall = ags === '08111000' ? { fields: ['linie', 'art', 'weg', 'ziel'], rows: [['U5', 'ubahn', cw(2, 240), st[5].name], ['S3', 'sbahn', cw(10, -300), null]], lineFields: ['linie', 'art', 'fahrten', 'ohne_zeit'], lines: [['U5', 'ubahn', 2, 1], ['42', 'bus', 2, 2], ['S3', 'sbahn', 1, 0]] } : null;
+  await put(`live/${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, aheadMin: NETZ.aheadMin, ...head, fields: LIVE_FIELDS, trips, names: st.map(x => x.name), ausfall });
   // Streckenverläufe (wege/, Geo-Lauf): je Abschnitt ein Bogen über einen versetzten Mittelpunkt, jeder fünfte Abschnitt fehlt (dann Luftlinie)
   if (ags === '08111000') {
     const segs = /** @type {Record<string, string>} */ ({}); let m = 0;

@@ -21,7 +21,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
-| [oepnv](#oepnv) | 1.5 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
+| [oepnv](#oepnv) | 1.6 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
 
@@ -694,7 +694,7 @@ Seit 1.3: Übersicht der Streckenverläufe je Stadt (Verbindungen, mit Verlauf, 
 
 ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV). oepnv/&lt;AGS&gt;.json (Stationen und Stunden einer Gemeinde), oepnv/live/&lt;AGS&gt;.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.
 
-Version 1.5 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
+Version 1.6 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
 
 ### oepnv · ags
 
@@ -731,9 +731,10 @@ Geschätzte Fahrzeugwege ab at für aheadMin Minuten; je Lauf neu
 | `aheadMin` | ja | number |
 | `license` |  | string |
 | `attribution` |  | string |
-| `fields` | ja | array von string – Spalten von trips: linie (oder null), art ('bus' \| 'tram' \| 'ubahn' \| 'sbahn' \| 'regio' \| 'fern' \| 'sonst'; bis 1.1 'bahn' für alle Bahnen), verspaetung_s am nächsten Halt (oder null), weg = \[lat, lon, Sekunden nach at, …\] je Station; seit 1.5 ausgefallene_halte = \[lat, lon, …\] der ausgefallenen Halte zwischen erstem und letztem Punkt des Wegs (nur wenn welche) |
+| `fields` | ja | array von string – Spalten von trips: linie (oder null), art ('bus' \| 'tram' \| 'ubahn' \| 'sbahn' \| 'regio' \| 'fern' \| 'sonst'; bis 1.1 'bahn' für alle Bahnen), verspaetung_s am nächsten Halt (oder null), weg = \[lat, lon, Sekunden nach at, …\] je Station; seit 1.5 ausgefallene_halte = \[lat, lon, …\] der ausgefallenen Halte zwischen erstem und letztem Punkt des Wegs (nur wenn welche); seit 1.6 ziel (Fahrtziel aus trip_headsign, sonst letzter Halt im Strom, oder null) und halte (je Punkt des Wegs der Index in names) |
 | `trips` | ja | array von array |
-| `ausfall` |  | object / null – Seit 1.5: ganz ausgefallene Fahrten laut Echtzeit-Strom. rows = \[linie, art, weg\] für Fahrten mit Zeit im Fenster (30 Minuten zurück bis aheadMin voraus); lines = \[linie, art, fahrten, ohne_zeit\] je Linie über alle abgesagten Fahrten im Strom (ohne_zeit: nur Fahrt und Betriebstag bekannt) |
+| `ausfall` |  | object / null – Seit 1.5: ganz ausgefallene Fahrten laut Echtzeit-Strom. rows = \[linie, art, weg\] für Fahrten mit Zeit im Fenster (30 Minuten zurück bis aheadMin voraus); lines = \[linie, art, fahrten, ohne_zeit\] je Linie über alle abgesagten Fahrten im Strom (ohne_zeit: nur Fahrt und Betriebstag bekannt); seit 1.6 rows mit ziel als viertem Feld |
+| `names` |  | array von string – Seit 1.6: Namen der Stationen, auf die halte in trips zeigt |
 
 ### oepnv · wirkung
 

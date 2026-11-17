@@ -38,6 +38,12 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCo
   assert(g.n === 6 && g.off[g.n] === 1 + 2 + 1 + 6 && g.adj.length === 10, `Gerichteter Graph: ${g.n} Knoten (doppelter Knoten einmal), ${g.off[g.n]} Kanten`);
   const A = [48.0, 9.0], D = [48.0, 9.015], ab = r.route(A, [{ key: 'ab', b: D }], 50).get('ab'), ba = r.route(D, [{ key: 'ba', b: A }], 50).get('ba');
   assert(ab.pts.length === 4 && ab.pts[1][1] === 9.005 && Math.abs(ab.len - distM(48, 9, 48, 9.015)) < 1 && ba.pts.length === 4 && ba.pts[1][0] === 48.003, `Ostwärts über die Hauptstraße (${Math.round(ab.len)} m), westwärts über die Umgehung (${Math.round(ba.len)} m)`);
+  // Straßenart: Bus nimmt die etwas längere Hauptstraße statt der Wohnstraße, bei großem Umweg aber die Wohnstraße
+  const mk = (dLat) => [N(1, 48.0, 9.0), N(2, 48.0, 9.01), N(3, 48 + dLat, 9.005), { type: 'way', id: 1, nodes: [1, 2], tags: { highway: 'residential' } }, { type: 'way', id: 2, nodes: [1, 3, 2], tags: { highway: 'primary' } }];
+  const via = (dLat) => W.makeRouter(W.buildNet(mk(dLat), { directed: true })).route([48, 9], [{ key: 'k', b: [48, 9.01] }], 30).get('k');
+  const near = via(0.002), far = via(0.006);
+  assert(W.costOf({ highway: 'residential' }) === 1.4 && W.costOf({ highway: 'service', bus: 'designated' }) === 0.8 && W.costOf({ highway: 'primary', 'bus:lanes': 'designated|' }) === 0.9 && W.costOf({ highway: 'track' }) === 1.5 && W.costOf(undefined) === 1
+    && near?.pts.length === 3 && far?.pts.length === 2 && Math.round(near.len) > Math.round(far.len), `Straßenart: Hauptstraße bei ${Math.round(near?.len)} m statt 745 m Wohnstraße, bei ${Math.round(distM(48, 9, 48.006, 9.005) * 2)} m Umweg die Wohnstraße`);
   // Bahnhof mit zwei Gleisen: die Station liegt zwischen ihnen; Mehrfachstart wählt das Gleis, das zum Ziel führt
   const R = [N(1, 50.0, 8.0), N(2, 50.0, 8.02), N(3, 50.0006, 8.0), N(4, 50.0006, 8.0), N(5, 50.01, 8.03), { type: 'way', id: 1, nodes: [1, 2] }, { type: 'way', id: 2, nodes: [3, 5] }];
   const gr = W.buildNet(R), rr = W.makeRouter(gr), st = [50.0003, 8.0], hit = rr.route(st, [{ key: 'x', b: [50.01, 8.03] }, { key: 'y', b: [50.0, 8.02] }], 300);
