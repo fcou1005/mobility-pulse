@@ -1,0 +1,65 @@
+// Streckenverläufe für die Live-Karte (17.11.2026): lib/pulse-geo-wege.js (Geo-Lauf) und lib/pulse-oepnv-wege.js (Browser) mit kleinen Netzen
+import * as W from '../lib/pulse-geo-wege.js';
+import * as K from '../lib/pulse-oepnv-wege.js';
+import { distM } from '../lib/pulse-geo-proj.js';
+const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
+
+// ---------- Polyline, Schlüssel, Nachschlagen ----------
+{
+  const pts = [[48.78300, 9.17981], [48.78412, 9.18001], [48.77052, 9.15787], [-0.00001, 179.99999]];
+  const enc = K.encodePolyline(pts), dec = K.decodePolyline(enc);
+  assert(K.encodePolyline([[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]) === '_p~iF~ps|U_ulLnnqC_mqNvxq`@' && dec.length === 4 && dec.every((p, i) => Math.abs(p[0] - pts[i][0]) < 1e-9 && Math.abs(p[1] - pts[i][1]) < 1e-9),
+    `Polyline wie Google (Referenzbeispiel), hin und zurück verlustfrei (${enc.length} Zeichen)`);
+  assert(K.segKey('r', 48.783, 9.17981, 48.77052, 9.15787) === 'r:48.783,9.17981|48.77052,9.15787' && K.netOf('bus') === 's' && K.netOf('sbahn') === 'r' && K.netOf('tram') === 'r' && K.netOf('sonst') === null, 'Schlüssel wie die Fahrzeugwege, Netz je Verkehrsmittel');
+  const doc = { segs: { [K.segKey('r', 1, 1, 2, 2)]: K.encodePolyline([[1, 1], [1.5, 1.2], [2, 2]]), [K.segKey('s', 3, 3, 4, 4)]: K.encodePolyline([[3, 3], [3.2, 3.9], [4, 4]]) } };
+  const lk = K.wegeLookup(doc), f = lk.get('ubahn', 1, 1, 2, 2), r = lk.get('ubahn', 2, 2, 1, 1), s = lk.get('sonst', 3, 3, 4, 4), no = lk.get('bus', 1, 1, 2, 2);
+  assert(lk.size === 2 && f.length === 3 && r[0].join() === '2,2' && r[2].join() === '1,1' && s?.length === 3 && no === null && lk.stats().hit === 3 && lk.stats().miss === 1,
+    'Nachschlagen: Richtung, Gegenrichtung umgedreht, „sonst“ sucht in beiden Netzen, Bus nicht auf Gleisen');
+}
+// ---------- Lage entlang des Verlaufs ----------
+{
+  const w = [48.0, 9.0, 0, 48.0, 9.02, 600, 48.01, 9.02, 900]; // Station A, B (10 min), C (5 min)
+  const bend = [[48.0, 9.0], [48.005, 9.0], [48.005, 9.02], [48.0, 9.02]], cum = K.cumLen(bend);
+  const geom = (i) => (i === 1 ? { pts: bend, cum } : null);
+  const half = K.positionAlong(w, 300, geom), q = K.positionAlong(w, 750, geom), path = K.pathPoints(w, geom);
+  assert(Math.abs(half[0] - 48.005) < 1e-6 && Math.abs(half[1] - 9.01) < 1e-4 && Math.abs(q[0] - 48.005) < 1e-9 && Math.abs(q[1] - 9.02) < 1e-9 && path.length === 5 && K.positionAlong(w, 2000, geom) === null,
+    `Fahrzeug fährt den Bogen statt der Luftlinie (Mitte ${half.map(x => x.toFixed(4))}), ohne Verlauf Luftlinie; Weg mit allen Punkten`);
+}
+// ---------- Netz, Einbahn, Router ----------
+{
+  // Straßenleiter: Hauptstraße 0–1–2–3 (Einbahn ostwärts), Umgehung 0–4–5–3 beidseitig; Bus darf im Abschnitt 1–2 auch zurück (oneway:bus=no)
+  const N = (id, lat, lon) => ({ type: 'node', id, lat, lon });
+  const el = [N(1, 48.0, 9.0), N(2, 48.0, 9.005), N(3, 48.0, 9.010), N(4, 48.0, 9.015), N(5, 48.003, 9.0), N(6, 48.003, 9.015),
+    { type: 'way', id: 10, nodes: [1, 2], tags: { highway: 'primary', oneway: 'yes' } }, { type: 'way', id: 11, nodes: [2, 3], tags: { highway: 'primary', oneway: 'yes', 'oneway:bus': 'no' } },
+    { type: 'way', id: 12, nodes: [3, 4], tags: { highway: 'primary', oneway: 'yes' } }, { type: 'way', id: 13, nodes: [1, 5, 6, 4], tags: { highway: 'secondary' } }, N(1, 48.0, 9.0)];
+  assert(W.onewayOf({ oneway: 'yes' }) === 1 && W.onewayOf({ oneway: '-1' }) === -1 && W.onewayOf({ junction: 'roundabout' }) === 1 && W.onewayOf({ oneway: 'yes', 'oneway:psv': 'no' }) === 0 && W.onewayOf({ highway: 'motorway' }) === 1 && W.onewayOf(undefined) === 0,
+    'Einbahn: oneway, Kreisverkehr, Autobahn; Busse frei bei oneway:bus/psv = no');
+  const g = W.buildNet(el, { directed: true }), r = W.makeRouter(g, { ...W.WEGE_GEO, penalty: 2 });
+  assert(g.n === 6 && g.off[g.n] === 1 + 2 + 1 + 6 && g.adj.length === 10, `Gerichteter Graph: ${g.n} Knoten (doppelter Knoten einmal), ${g.off[g.n]} Kanten`);
+  const A = [48.0, 9.0], D = [48.0, 9.015], ab = r.route(A, [{ key: 'ab', b: D }], 50).get('ab'), ba = r.route(D, [{ key: 'ba', b: A }], 50).get('ba');
+  assert(ab.pts.length === 4 && ab.pts[1][1] === 9.005 && Math.abs(ab.len - distM(48, 9, 48, 9.015)) < 1 && ba.pts.length === 4 && ba.pts[1][0] === 48.003, `Ostwärts über die Hauptstraße (${Math.round(ab.len)} m), westwärts über die Umgehung (${Math.round(ba.len)} m)`);
+  // Bahnhof mit zwei Gleisen: die Station liegt zwischen ihnen; Mehrfachstart wählt das Gleis, das zum Ziel führt
+  const R = [N(1, 50.0, 8.0), N(2, 50.0, 8.02), N(3, 50.0006, 8.0), N(4, 50.0006, 8.0), N(5, 50.01, 8.03), { type: 'way', id: 1, nodes: [1, 2] }, { type: 'way', id: 2, nodes: [3, 5] }];
+  const gr = W.buildNet(R), rr = W.makeRouter(gr), st = [50.0003, 8.0], hit = rr.route(st, [{ key: 'x', b: [50.01, 8.03] }, { key: 'y', b: [50.0, 8.02] }], 300);
+  assert(hit.get('x')?.pts[0][0] === 50.0006 && hit.get('y')?.pts[0][0] === 50.0 && rr.route([10, 10], [{ key: 'z', b: [50, 8] }], 300).size === 0, 'Bahnhof: je Ziel das passende Gleis; ohne Netz in der Nähe kein Weg');
+}
+// ---------- Verbindungen aus dem Fahrplan und Routen einer Stadt ----------
+{
+  const trips = new Map([['t1', 'r'], ['t2', 's']]), st = new Map([['a1', 0], ['a2', 0], ['b', 1], ['c', 2], ['x', 3]]);
+  const pc = W.pairCollector(trips, st);
+  for (const [t, s, q] of [['t1', 3, 'c'], ['t2', 1, 'b'], ['t1', 1, 'a1'], ['t9', 1, 'a1'], ['t1', 2, 'a2'], ['t1', 4, 'zz'], ['t1', 5, 'b'], ['t2', 2, 'x'], ['t1', 6, 'b']]) pc.add(String(t), Number(s), String(q));
+  const res = pc.result();
+  assert([...res.pairs].map(([k, n]) => `${k}:${n}`).sort().join() === 'r|0|2:1,r|2|1:1,s|1|3:1' && res.rows === 9 && res.used === 7 && res.trips === 2,
+    `Verbindungen: unsortierte stop_times nach Fahrt und Halt geordnet, gleiche Station zusammen, Halte ohne Station übersprungen (${[...res.pairs.keys()].join(' ')})`);
+  assert(W.netOfRoute(3, '42') === 's' && W.netOfRoute(109, 'S1') === 'r' && W.netOfRoute(900, '1') === 'r' && W.netOfRoute(4, 'Fähre') === null, 'Netz je Linie: Bus Straße, Bahnen Schiene, Fähre keins');
+  const N = (id, lat, lon) => ({ type: 'node', id, lat, lon }), el = [N(1, 48.0, 9.0), N(2, 48.004, 9.006), N(3, 48.0, 9.012), N(4, 48.0, 9.040), { type: 'way', id: 1, nodes: [1, 2, 3] }];
+  const rt = W.makeRouter(W.buildNet(el));
+  const out = W.routePairs([{ net: 'r', a: [48.0, 9.0], b: [48.0, 9.012] }, { net: 'r', a: [48.0, 9.0], b: [48.0, 9.0005] }, { net: 'r', a: [48.0, 9.012], b: [48.0, 9.04] }, { net: 's', a: [48, 9], b: [48, 9.012] }], (n) => (n === 'r' ? rt : null));
+  const line = K.decodePolyline(out.segs[K.segKey('r', 48, 9, 48, 9.012)]);
+  assert(out.stats.routed === 1 && out.stats.short === 1 && out.stats.noPath === 1 && out.stats.noNet === 1 && line.length === 3 && line[1][0] === 48.004,
+    `Stadt: Bogen über den Mittelknoten, zu kurz und ohne Netz bleiben Luftlinie (${JSON.stringify(out.stats)})`);
+  const tl = W.railTiles([48.6, 8.9, 48.95, 9.4]);
+  assert(tl.length === 2 && tl[0].key === '97:11' && tl[1].bb.join() === '48.5,9,49,9.75', `Gleisnetz in Kacheln (${tl.map(x => x.key).join(', ')})`);
+  const zig = [[48, 9], [48.00001, 9.001], [48, 9.002], [48.002, 9.003]], sz = W.simplify(zig, 4);
+  assert(sz.length === 3 && sz[1].join() === '48,9.002', 'Vereinfachen: Zacken unter 4 m fallen weg, Ecken bleiben');
+}

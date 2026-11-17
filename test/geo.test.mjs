@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { execFileSync, spawn } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
+import { decodePolyline } from '../lib/pulse-oepnv-wege.js';
 import * as P from '../lib/pulse-geo-proj.js';
 import * as Z from '../lib/pulse-geo-pop.js';
 import * as C from '../lib/pulse-geo-cover.js';
@@ -164,9 +166,13 @@ function gridOsm(n, stepDeg) {
   const gd = path.join(SRV, 'g'); await mkdir(gd);
   await writeFile(path.join(gd, 'calendar.txt'), 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nwk,1,1,1,1,1,0,0,20200101,20301231\n');
   await writeFile(path.join(gd, 'trips.txt'), 'route_id,service_id,trip_id\nr,wk,t1\nr,wk,t2\n');
+  await writeFile(path.join(gd, 'routes.txt'), 'route_id,route_short_name,route_type\nr,42,3\n');
   await writeFile(path.join(gd, 'stops.txt'), 'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nA,"Hauptbahnhof, Stuttgart",48.7840,9.1820,0,\nB,Rathaus,48.7758,9.1829,0,\n');
   await writeFile(path.join(gd, 'stop_times.txt'), 'trip_id,arrival_time,departure_time,stop_id,stop_sequence\nt1,08:00:00,08:00:00,A,1\nt1,08:05:00,08:05:00,B,2\nt2,09:00:00,09:00:00,A,1\n');
-  execFileSync('zip', ['-qj', path.join(SRV, 'gtfs.zip'), ...['calendar.txt', 'trips.txt', 'stops.txt', 'stop_times.txt'].map(f => path.join(gd, f))]);
+  execFileSync('zip', ['-qj', path.join(SRV, 'gtfs.zip'), ...['calendar.txt', 'trips.txt', 'routes.txt', 'stops.txt', 'stop_times.txt'].map(f => path.join(gd, f))]);
+  // Stationsindex des Sammlers (oepnv/haltestellen.json.gz) für die Streckenverläufe
+  await mkdir(path.join(DATA, 'oepnv'), { recursive: true });
+  await writeFile(path.join(DATA, 'oepnv', 'haltestellen.json.gz'), gzipSync(JSON.stringify({ version: 2, ags: ['08111000'], id: ['A', 'B'], a: [0, 0], s: [0, 1], st: { id: ['A', 'B'], name: ['Hauptbahnhof', 'Rathaus'], lat: [48.784, 48.7758], lon: [9.182, 9.1829], a: [0, 0] } })));
   const osm = JSON.stringify(gridOsm(60, 0.0018));
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, 'http://x');
@@ -175,7 +181,7 @@ function gridOsm(n, stepDeg) {
     try { const b = await readFile(path.join(SRV, u.pathname.slice(1))); res.end(b); } catch { res.statusCode = 404; res.end(); }
   });
   await new Promise(r => server.listen(8795, '127.0.0.1', () => r(null)));
-  const env = { ...process.env, GEO_FORCE: '1', GEO_ZENSUS_URL: 'http://127.0.0.1:8795/zensus.zip', GEO_UNFALL_URL: 'http://127.0.0.1:8795/unfall-{y}.zip', GEO_GTFS_URL: 'http://127.0.0.1:8795/gtfs.zip', GEO_OVERPASS: 'http://127.0.0.1:8795/overpass', GEO_ROUTER: 'http://127.0.0.1:8795/route', GEO_UMWEG_CITIES: '1', GEO_PAUSE_MS: '0' };
+  const env = { ...process.env, GEO_FORCE: '1', GEO_ZENSUS_URL: 'http://127.0.0.1:8795/zensus.zip', GEO_UNFALL_URL: 'http://127.0.0.1:8795/unfall-{y}.zip', GEO_GTFS_URL: 'http://127.0.0.1:8795/gtfs.zip', GEO_OVERPASS: 'http://127.0.0.1:8795/overpass', GEO_ROUTER: 'http://127.0.0.1:8795/route', GEO_UMWEG_CITIES: '1', GEO_WEGE_CITIES: '1', GEO_PAUSE_MS: '0' };
   const out = await new Promise((res) => { let s = ''; const p = spawn(process.execPath, ['scripts/geo.mjs', DATA, OUT], { env }); p.stdout.on('data', d => { s += d; }); p.stderr.on('data', d => { s += d; }); p.on('close', (c) => res({ c, s })); });
   server.close();
   const files = (await readdir(OUT, { recursive: true })).map(String).sort();
@@ -188,4 +194,8 @@ function gridOsm(n, stepDeg) {
   assert(!un.landsByYear['2016'].includes('08') && un.landsByYear['2016'].includes('09') && us.years.join() === '2020,2024' && un.ags['08111000'].years.join() === '2020,2024', `Geo-Lauf: Jahr ohne Baden-Württemberg zählt für Stuttgart nicht (${us.years.join(', ')})`);
   assert(gt.ags['08111000']?.length === 2 && gt.ags['08111000'][0][2] === 2 && gt.ags['08111000'][0][3] === 'Hauptbahnhof, Stuttgart', 'Geo-Lauf: Haltestellen mit Abfahrten am Dienstag');
   const st = um.cities['08111000']; assert(st && st.cells > 10 && st.samples.length >= 1 && st.median > 1, `Geo-Lauf: Umwegfaktor Stuttgart Median ${st?.median?.toFixed(2)}, Stichproben ${st?.samples?.map(s => s.dev).join('/')}`);
+  const wi = JSON.parse(await readFile(path.join(OUT, 'wege', 'index.json'), 'utf8')), wd = JSON.parse(await readFile(path.join(OUT, 'wege', '08111000.json'), 'utf8'));
+  const wk = 's:48.784,9.182|48.7758,9.1829', wl = wd.segs[wk] ? decodePolyline(wd.segs[wk]) : [];
+  assert(wi.cities['08111000']?.routed === 1 && wi.cities['08111000'].road === 1 && wl.length > 2 && wl[0].join() === '48.784,9.182' && wl.at(-1).join() === '48.7758,9.1829' && !files.includes('gtfs.zip'),
+    `Geo-Lauf: Streckenverlauf Bus 42 Hauptbahnhof → Rathaus auf dem Straßennetz (${wl.length} Punkte), Fahrplan-ZIP nach dem Lauf gelöscht`);
 }

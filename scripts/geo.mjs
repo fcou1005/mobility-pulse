@@ -1,7 +1,7 @@
 // Geo-Lauf (Sprint 8): erzeugt den Branch „geo“ (Workflow „Geo“, Vorlage scripts/geo-workflow.yml, monatlich am 2.).
 //   node scripts/geo.mjs <Checkout des Branches data> <Ausgabe = Checkout des Branches geo>
-//   GEO_ONLY=zensus,unfall,gtfs,umweg (Vorgabe: was fällig ist) · GEO_FORCE=1 rechnet alles neu
-// Fällig: Zensus fehlt oder älter als 330 Tage, Unfallatlas einmal im Jahr (oder wenn ein Jahr fehlt), GTFS und Umweg einmal im Monat.
+//   GEO_ONLY=zensus,unfall,gtfs,umweg,wege (Vorgabe: was fällig ist) · GEO_FORCE=1 rechnet alles neu
+// Fällig: Zensus fehlt oder älter als 330 Tage, Unfallatlas einmal im Jahr (oder wenn ein Jahr fehlt), GTFS, Umweg und Streckenverläufe (wege) einmal im Monat.
 import { readFile, writeFile, mkdir, mkdtemp } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import { runZensus } from './geo/zensus.mjs';
 import { runUnfall } from './geo/unfall.mjs';
 import { runGtfs } from './geo/gtfs.mjs';
 import { runUmweg } from './geo/umweg.mjs';
+import { runWege } from './geo/wege.mjs';
 
 const [DATA, OUT] = process.argv.slice(2);
 if (!DATA || !OUT) { console.error('Aufruf: node scripts/geo.mjs <Datenstand> <Ausgabe>'); process.exit(2); }
@@ -19,12 +20,12 @@ await mkdir(OUT, { recursive: true });
 const ixFile = path.join(OUT, 'index.json'), ix = existsSync(ixFile) ? JSON.parse(await readFile(ixFile, 'utf8')) : { schemaVersion: '1.0', parts: {} };
 const only = (process.env.GEO_ONLY || '').split(',').map(s => s.trim()).filter(Boolean), force = process.env.GEO_FORCE === '1';
 const age = (p) => (ix.parts?.[p]?.at ? (now - ix.parts[p].at) / 86400e3 : Infinity);
-const due = { zensus: age('zensus') > 330, unfall: age('unfall') > 330 || (ix.parts?.unfall?.missing || []).length > 0, gtfs: age('gtfs') > 27, umweg: age('umweg') > 27 };
+const due = { zensus: age('zensus') > 330, unfall: age('unfall') > 330 || (ix.parts?.unfall?.missing || []).length > 0, gtfs: age('gtfs') > 27, umweg: age('umweg') > 27, wege: age('wege') > 27 };
 const want = (p) => (only.length ? only.includes(p) : force || due[p]);
 const bounds = await loadBoundaries(DATA), top = await fleetByAgs(DATA), active = top.filter(([, n]) => n >= 20).map(([a]) => a);
 log(`Geo-Lauf: ${bounds.features.length} aktive Gemeinden, ${active.length} mit mindestens 20 Fahrzeugen; fällig ${Object.entries(due).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nichts'}${only.length ? `, angefragt ${only.join(', ')}` : ''}`);
 /** @type {Array<[string, () => Promise<any>]>} */
-const parts = [['zensus', () => runZensus({ OUT, TMP, bounds, log, now })], ['unfall', () => runUnfall({ OUT, TMP, bounds, log, now, keep: active })], ['gtfs', () => runGtfs({ OUT, TMP, bounds, log, now })], ['umweg', () => runUmweg({ OUT, bounds, log, now, top })]];
+const parts = [['zensus', () => runZensus({ OUT, TMP, bounds, log, now })], ['unfall', () => runUnfall({ OUT, TMP, bounds, log, now, keep: active })], ['gtfs', () => runGtfs({ OUT, TMP, bounds, log, now, keepZip: want('wege') })], ['umweg', () => runUmweg({ OUT, bounds, log, now, top })], ['wege', () => runWege({ OUT, TMP, DATA, bounds, log, now, top })]];
 let failed = 0;
 for (const [name, fn] of parts) {
   if (!want(name)) continue;

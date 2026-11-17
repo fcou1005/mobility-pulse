@@ -8,6 +8,7 @@ import path from 'node:path';
 import { NETZ, NETZ_LICENSE, NETZ_ATTRIBUTION, LIVE_FIELDS, STATION_FIELDS } from '../lib/pulse-oepnv-netz.js';
 import { SCHEMA } from '../lib/pulse-schema.js';
 import { LINE_FIELDS, JETZT, JETZT_FIELDS } from '../lib/pulse-oepnv-linien.js';
+import { encodePolyline, segKey, netOf } from '../lib/pulse-oepnv-wege.js';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname), args = process.argv.slice(2);
 const OUT = path.resolve(ROOT, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'test/fixtures/oepnv-synth');
@@ -48,9 +49,23 @@ for (const ags of fx.ags) {
     const len = 5 + Math.floor(rnd() * 4), from = Math.floor(rnd() * nSt), step = 1 + Math.floor(rnd() * 3), w = []; let dt = -Math.round(rnd() * 600);
     for (let j = 0; j < len; j++) { const s = st[(from + j * step) % nSt]; w.push(s.lat, s.lon, dt); dt += 120 + Math.round(rnd() * 120); }
     const art = ARTEN[k % 8], dl = k % 9 === 0 ? null : k % 5 === 0 ? 300 + Math.round(rnd() * 400) : k % 3 === 0 ? 130 + Math.round(rnd() * 100) : Math.round(rnd() * 60);
-    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w]);
+    // seit Format 1.5: jede siebte Fahrt mit einem ausgefallenen Halt (Station zwischen erstem und letztem Punkt; ohne Zufallszahl, damit der übrige Stand gleich bleibt)
+    const gone = k % 7 === 3 ? [[st[(from + 1) % nSt].lat, st[(from + 1) % nSt].lon]].flat() : null;
+    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w, ...(gone ? [gone] : [])]);
   }
-  await put(`live/${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, aheadMin: NETZ.aheadMin, ...head, fields: LIVE_FIELDS, trips });
+  // ganz ausgefallene Fahrten: zwei mit Zeit im Fenster (gestrichelt), drei ohne Uhrzeit im Strom
+  const cw = (/** @type {number} */ from, /** @type {number} */ dt0) => st.slice(from, from + 4).flatMap((s, j) => [s.lat, s.lon, dt0 + j * 180]);
+  const ausfall = ags === '08111000' ? { fields: ['linie', 'art', 'weg'], rows: [['U5', 'ubahn', cw(2, 240)], ['S3', 'sbahn', cw(10, -300)]], lineFields: ['linie', 'art', 'fahrten', 'ohne_zeit'], lines: [['U5', 'ubahn', 2, 1], ['42', 'bus', 2, 2], ['S3', 'sbahn', 1, 0]] } : null;
+  await put(`live/${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, aheadMin: NETZ.aheadMin, ...head, fields: LIVE_FIELDS, trips, ausfall });
+  // Streckenverläufe (wege/, Geo-Lauf): je Abschnitt ein Bogen über einen versetzten Mittelpunkt, jeder fünfte Abschnitt fehlt (dann Luftlinie)
+  if (ags === '08111000') {
+    const segs = /** @type {Record<string, string>} */ ({}); let m = 0;
+    for (const row of [...trips, ...ausfall.rows.map(r => [r[0], r[1], null, r[2]])]) { const art = /** @type {string} */ (row[1]), w = /** @type {number[]} */ (row[3]); for (let i = 3; i + 2 < w.length; i += 3) {
+      const a = [w[i - 3], w[i - 2]], b = [w[i], w[i + 1]], key = segKey(netOf(art) || 'r', a[0], a[1], b[0], b[1]); if (segs[key] || (m++ % 5) === 4) continue;
+      const mid = [r5((a[0] + b[0]) / 2 + (b[1] - a[1]) * 0.25), r5((a[1] + b[1]) / 2 - (b[0] - a[0]) * 0.25)]; segs[key] = encodePolyline([a, mid, b]);
+    } }
+    await put(`wege/${ags}.json`, { schemaVersion: SCHEMA.geo, ags, at: fx.at, day: '20261117', attribution: '© OpenStreetMap-Mitwirkende (ODbL); Fahrplan: gtfs.de (DELFI e. V. u. a.), CC BY 4.0 (synthetisch)', license: 'ODbL 1.0', stats: { pairs: Object.keys(segs).length, routed: Object.keys(segs).length }, segs });
+  }
   const today = fx.days.length - 1, sum = (/** @type {number[]} */ a) => a.reduce((s, x) => s + x, 0);
   cities[ags] = [nSt + 40, sum(H.n[today]), sum(H.skip[today]), sum(H.late[today]), trips.length];
   wirk.push(ags === '08111000' ? { ags, days: 4, hours: 9, effect: 0.137, ci: [0.021, 0.253], verdict: 'mehr' } : { ags, days: 1, hours: 2, effect: 0.06, verdict: 'zu wenig Tage' });

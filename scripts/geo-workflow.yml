@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: 'Nur diese Teile (zensus,unfall,gtfs,umweg), leer = was fällig ist'
+        description: 'Nur diese Teile (zensus,unfall,gtfs,umweg,wege), leer = was fällig ist'
         required: false
         default: ''
       force:

@@ -3,7 +3,7 @@
   "$id": "https://github.com/fcou1005/mobility-pulse/schemas/geo.schema.json",
   "title": "Geo – Versorgung, Zubringer, Abstellorte, Unfälle, Umwegfaktor, Zensus-Abgleich (Sprint 8)",
   "description": "Vom Sammler (Phase geo) aus dem Branch geo (Workflow „Geo“) und den privaten Positionen eines Laufs. Keine Fahrzeugkennungen, Fahrtenden je 50-m-Zelle erst ab 3.",
-  "x-version": "1.2",
+  "x-version": "1.3",
   "$defs": {
     "versorgung": {
       "type": "object",
@@ -400,6 +400,65 @@
         },
         "n": {
           "type": "integer"
+        }
+      }
+    },
+    "wege": {
+      "type": "object",
+      "description": "Seit 1.3: Streckenverläufe für die Live-Karte im Reiter ÖPNV – je Verbindung Station → Station des Fahrplans der kürzeste Weg im OpenStreetMap-Netz (ODbL). segs: Schlüssel „Netz:latA,lonA|latB,lonB“ (r = Schiene, s = Straße; Lage wie in oepnv/live) → Polyline (Google-Kodierung, 5 Nachkommastellen); fehlende Verbindungen zeigt die Karte als Luftlinie",
+      "required": [
+        "schemaVersion",
+        "ags",
+        "segs"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "ags": {
+          "type": "string",
+          "pattern": "^\\d{8}$"
+        },
+        "at": {
+          "type": "number"
+        },
+        "day": {
+          "type": "string"
+        },
+        "attribution": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "stats": {
+          "type": "object"
+        },
+        "segs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "wegeIndex": {
+      "type": "object",
+      "description": "Seit 1.3: Übersicht der Streckenverläufe je Stadt (Verbindungen, mit Verlauf, zu kurz, ohne Weg, zu lang, Größe)",
+      "required": [
+        "schemaVersion",
+        "cities"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^1\\.\\d+$",
+          "description": "Formatversion MAJOR.MINOR"
+        },
+        "cities": {
+          "type": "object"
         }
       }
     }

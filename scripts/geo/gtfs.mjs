@@ -5,7 +5,7 @@ import * as G from '../../lib/pulse-geo-gtfs.js';
 import { muniLocator } from '../../lib/pulse-geo-pop.js';
 import { download, zipAll, zipLines, zipNames } from './common.mjs';
 
-export async function runGtfs({ OUT, TMP, bounds, log, now }) {
+export async function runGtfs({ OUT, TMP, bounds, log, now, keepZip = false }) {
   const t0 = Date.now(), zip = path.join(TMP, 'gtfs.zip'), url = process.env.GEO_GTFS_URL || G.GTFS.url, dl = await download(url, zip, { timeoutMs: 30 * 60e3 });
   const names = zipNames(zip), has = (n) => names.includes(n);
   const ymd = G.nextTuesday(now), on = G.activeServices(has('calendar.txt') ? await zipAll(zip, 'calendar.txt') : [], has('calendar_dates.txt') ? await zipAll(zip, 'calendar_dates.txt') : [], ymd);
@@ -22,6 +22,6 @@ export async function runGtfs({ OUT, TMP, bounds, log, now }) {
     await writeFile(path.join(OUT, 'gtfs', `${st}.json`), JSON.stringify({ schemaVersion: '1.0', state: st, at: now, day: ymd, attribution: G.GTFS.attribution, license: G.GTFS.license, fields: ['lat', 'lon', 'abfahrten', 'name'], ags }));
   }
   await writeFile(path.join(OUT, 'gtfs', 'index.json'), JSON.stringify({ schemaVersion: '1.0', at: now, day: ymd, source: url, lastModified: dl.lastModified, bytes: dl.bytes, services: on.size, trips: trips.size, stopTimes: rows, departures: used, stops: stops.length, bundles: bundles.length, municipalities: by.size, attribution: G.GTFS.attribution, license: G.GTFS.license }));
-  await rm(zip, { force: true });
+  if (!keepZip) await rm(zip, { force: true }); // Streckenverläufe (wege) lesen dieselbe Datei
   log(`GTFS ${ymd}: ${trips.size} Fahrten, ${used} von ${rows} Halten als Abfahrt, ${bundles.length} Bündel, ${by.size} Gemeinden (${(Date.now() - t0) / 1000} s)`);
 }

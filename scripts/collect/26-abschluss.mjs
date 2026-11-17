@@ -33,6 +33,7 @@ export async function run(ctx) {
       '## Grundlagen', '',
       `- Gemeindegrenzen: ${md(ctx.boundaries?.attribution || '© GeoBasis-DE / BKG, VG250')} – Lizenz Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0).`,
       '- Umgebung (`context/`: ÖPNV-Haltepunkte, Abstellflächen): © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL, https://opendatacommons.org/licenses/odbl/1-0/).',
+      '- Streckenverläufe der ÖPNV-Karte (`wege/`, aufbereitet im Branch `geo`): kürzester Weg im Netz von OpenStreetMap je Verbindung des Fahrplans, © OpenStreetMap-Mitwirkende, Open Database License 1.0 (ODbL); Stationen aus dem Fahrplan von gtfs.de (CC BY 4.0).',
       '- Wetter-Cache (`weather/<Tag>.json`): Beobachtungen und Vorhersage (MOSMIX) des Deutschen Wetterdienstes (DWD Open Data), abgerufen über Bright Sky (https://brightsky.dev). Quelle: Deutscher Wetterdienst; Nutzungsbedingungen des DWD gelten (Quellenvermerk-Wortlaut noch nicht amtlich geprüft).',
       '- Umgebungsereignisse (`incidents/<Tag>.json`, nur Kennzeichen je Gemeinde und Stunde, keine Meldungstexte): Wetterwarnungen des Deutschen Wetterdienstes (DWD Open Data, über Bright Sky); Sperrungen und Staus auf Autobahnen aus der Verkehrsinformation der Autobahn GmbH des Bundes (verkehr.autobahn.de; ausdrückliche Nutzungsbedingungen der Schnittstelle nicht gefunden, Quelle: Die Autobahn GmbH des Bundes). Streiks und Veranstaltungen aus der gepflegten Liste `data/ereignisse.json` im Code-Zweig (je Eintrag mit Quelle).',
       '- Termine aus den Quellenseiten (Branch `termine`, `termine.json`; in `ereignisse.json` mit `auto: true`): offizielle Seiten von Volksfesten, Messen, Stadien und Festen aus `data/termin-quellen.json`, wöchentlich im Workflow „Termine“ gelesen (Regeln, sonst ein kleines lokales Sprachmodell); je Termin der Link zur Quelle.',
@@ -57,7 +58,7 @@ export async function run(ctx) {
       ...cuByOp.map(([op, c]) => `| ${md(op)} | ${c.n} | ${c.ja} | ${c.nein} | ${c.ungeklaert} | ${c.nein ? 'nein' : c.ja === c.n ? 'ja' : c.ja ? 'teils' : 'ungeklärt'} |`),
       '', '## Weitergabe unter gleichen Bedingungen', '',
       sa.length ? `${sa.length} Quellen stehen unter CC BY-SA (${[...new Set(sa.map(r => md(r.operator)))].join(', ')}). Daten, die aus diesen Quellen abgeleitet sind (Bestände, Ereignisse, Zellen, Archiv der betroffenen Gebiete und Anbieter), stehen unter CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).` : 'In diesem Stand liefert keine Quelle Daten unter CC BY-SA.',
-      'Aus OpenStreetMap abgeleitete Datenbankteile (`context/`) stehen unter der ODbL 1.0.',
+      'Aus OpenStreetMap abgeleitete Datenbankteile (`context/`, `wege/`) stehen unter der ODbL 1.0.',
       '', `Quellen ohne Lizenzangabe sind oben als „ohne Angabe“ geführt (${noLic.length}${noLic.length ? `: ${[...new Set(noLic.map(r => md(r.operator)))].join(', ')}` : ''}). Ihre Lizenz ist ungeklärt; sie gelten hier nicht als gemeinfrei (CC0). Maßgeblich sind die Nutzungsbedingungen des jeweiligen Betreibers bzw. Verzeichnisses.`,
       ...(badLic.length ? [`Bei ${badLic.length} Quelle${badLic.length === 1 ? '' : 'n'} (${[...new Set(badLic.map(r => md(r.operator)))].join(', ')}) führt der Lizenz-Link zu einer Datenschutzerklärung, nicht zu einer Lizenz: Lizenz ebenfalls ungeklärt.`] : []), '',
     ];

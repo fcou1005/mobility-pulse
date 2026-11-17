@@ -8,7 +8,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCo
 let seed = 5; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
 
 const T = await mkdtemp(path.join(tmpdir(), 'geo-s-')), GEOB = path.join(T, 'geo'), DATA = path.join(T, 'data'), TRACK = path.join(T, 'track');
-for (const d of ['pop', 'gtfs', 'unfall', 'umweg']) await mkdir(path.join(GEOB, d), { recursive: true });
+for (const d of ['pop', 'gtfs', 'unfall', 'umweg', 'wege']) await mkdir(path.join(GEOB, d), { recursive: true });
 await mkdir(DATA, { recursive: true }); await mkdir(TRACK, { recursive: true });
 // Zensus: 900 Punkte in Stuttgart
 const acc = Z.popAccumulator(() => '08111000'); for (let i = 0; i < 30; i++) for (let j = 0; j < 30; j++) acc.add({ lat: 48.75 + i * 0.0009, lon: 9.15 + j * 0.00137, ew: 12 });
@@ -20,6 +20,8 @@ await writeFile(path.join(GEOB, 'unfall', 'index.json'), JSON.stringify({ schema
 await writeFile(path.join(GEOB, 'unfall', '08111000.json'), JSON.stringify({ schemaVersion: '1.0', ags: '08111000', years: [2023, 2024], fields: [], rows: [['19510:2623', 5]] }));
 await writeFile(path.join(GEOB, 'umweg', 'index.json'), JSON.stringify({ schemaVersion: '1.0', cities: { '08111000': { median: 1.31 } } }));
 await writeFile(path.join(GEOB, 'umweg', '08111000.json'), JSON.stringify({ schemaVersion: '1.0', ags: '08111000', fields: [], rows: [[48.75, 9.15, 1.3, 8]], median: 1.31 }));
+await writeFile(path.join(GEOB, 'wege', 'index.json'), JSON.stringify({ schemaVersion: '1.0', cities: { '08111000': { routed: 1 }, '09162000': { error: 'x' } } }));
+await writeFile(path.join(GEOB, 'wege', '08111000.json'), JSON.stringify({ schemaVersion: '1.0', ags: '08111000', segs: { 's:48.784,9.182|48.7758,9.1829': '_ouiH_ab{@nCQ' } }));
 await writeFile(path.join(GEOB, 'index.json'), JSON.stringify({ schemaVersion: '1.0', at: 1794600000000, parts: {} }));
 process.env.GEO_BASE = GEOB;
 const { run } = await import('../scripts/collect/29-geo.mjs');
@@ -44,4 +46,6 @@ assert(c && c.dep === 500 && c.last && c.last.near > 0 && c.last.index > 0 && c.
 const a = JSON.parse(await readFile(path.join(DATA, 'abstell', '08111000.json'), 'utf8'));
 assert(a.month === '2026-11' && a.cells.rows.every(r => r[1] >= 3) && a.cells.rows.length >= 1, `Fahrtenden je 50-m-Zelle: ${a.cells.rows.length} Zellen ab 3 (am Hauptbahnhof)`);
 assert(existsSync(path.join(DATA, 'unfall', '08111000.json')) && !JSON.parse(await readFile(path.join(DATA, 'unfall', 'index.json'), 'utf8')).ags['09162000'] && existsSync(path.join(DATA, 'umweg', '08111000.json')), 'Unfälle und Umwegfaktor aus geo kopiert, nur aktive Gemeinden');
+{ const wd = JSON.parse(await readFile(path.join(DATA, 'wege', '08111000.json'), 'utf8')), wi = JSON.parse(await readFile(path.join(DATA, 'wege', 'index.json'), 'utf8'));
+  assert(Object.keys(wd.segs).length === 1 && /^1\.\d+$/.test(wd.schemaVersion) && wi.cities['08111000'] && !wi.cities['09162000'], 'Streckenverläufe aus geo kopiert, nur aktive Städte'); }
 assert(existsSync(path.join(TRACK, 'geo-state.json.gz')) && !JSON.stringify(v).includes('Dott:v'), 'Zustand privat, keine Kennungen veröffentlicht');

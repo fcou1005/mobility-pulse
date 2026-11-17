@@ -32,6 +32,8 @@ export const IDLE = Object.freeze({ light: '#7c3aed', dark: '#c084fc' }); // lan
 // Prognose: Modelle (Reihen ohne Anbieter) und Trefferbilanz
 export const MODEL = Object.freeze({ chronos: '#14b8a6', blend: '#f59e0b', hybrid: '#8b5cf6' });
 export const HIT = Object.freeze({ miss: '#e3703d', ok: '#2fa36b', over: '#4f8fe0', none: '#8a949e' });
+// ÖPNV-Karte (17.11.2026): Ausfälle eigene Farbe neben „verspätet“ (HIT.miss), dazu eigene Form (×, gestrichelt) – nie Farbe allein
+export const PT_CANCEL = Object.freeze({ light: '#b3245e', dark: '#f0609a' });
 // Druck (Bericht): helle Werte wie @media print in index.html
 export const PRINT = Object.freeze({ accent: '#0f766e', panel: '#ffffff' });
 // Zonen-Beobachtung: Reihen je Zone (kleine Vielfache, höchstens sechs)
@@ -39,6 +41,8 @@ export const ZONE_SERIES = Object.freeze(['#0f766e', '#c2410c', '#6d28d9', '#a16
 
 const dark = () => typeof document !== 'undefined' && (document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches));
 const mode = () => (dark() ? 'dark' : 'light');
+/** Farbe für Ausfälle auf der ÖPNV-Karte */
+export const ptCancelColor = () => PT_CANCEL[mode()];
 /** Farbe eines Anbieters: fester Platz oder Grau („Weitere“) */
 export const slotColor = (op) => (Object.hasOwn(OP_SLOT, op) ? MP7[mode()][OP_SLOT[op]] : MORE[mode()]);
 /** i-te Reihe ohne Anbieter: Plätze der Reihe nach, ab dem achten Grau */

@@ -87,6 +87,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     { id: 'b', route: 'r2', stops: [{ stop: 'de:08111:20:0:1', t: now - 30 * m, delay: 0 }, { stop: 'de:08111:10:2:3', t: now - 20 * m, delay: 60 }] },
     { id: 'c', canceled: true, stops: [{ stop: 'de:08111:10:1:1', t: now - 10 * m }, { stop: 'de:08111:20:0:1', t: now + 5 * m }] },
     { id: 'd', stops: [{ stop: 'de:08111:10:1:1', t: now + 2 * m, delay: 0 }, { stop: 'zzz', t: now + 4 * m }, { stop: 'de:08111:20:0:1', t: null, skipped: true }, { stop: 'p1', t: now + 12 * m, delay: 0 }] },
+    { id: 'e', route: 'r2', canceled: true, stops: [{ stop: 'de:08111:20:0:1', t: null }, { stop: 'p1', t: null }] },
   ], { ts: now });
   const lk = OE.stationLookup(ix), counter = NZ.stationCounter(lk, ix.st.id), paths = NZ.pathCollector(lk, ix, now);
   OE.ptCounts(feed, OE.stopLookup(ix), now, { onStop: counter.onStop, onTrip: paths.onTrip });
@@ -95,6 +96,10 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const pr = paths.result(), tr = pr.by.get('08111000');
   assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'ubahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
     `Fahrzeugwege: laufende Fahrten ab dem letzten Halt, abgesagte und beendete fehlen, ausgefallener Halt und unbekannte Station übersprungen (${JSON.stringify(tr)})`);
+  const cd = NZ.cancelDoc(pr.cancel.get('08111000'));
+  assert(tr[0].length === 4 && tr[1][4]?.join() === '48.776,9.173' && pr.skipped === 1, `Ausgefallene Halte einer fahrenden Fahrt im Fenster als eigenes Feld (${JSON.stringify(tr[1][4])})`);
+  assert(pr.canceled === 2 && cd.rows.length === 1 && cd.rows[0][0] === null && cd.rows[0][2].join() === '48.7842,9.1822,-600,48.776,9.173,300' && cd.lines.map(l => l.join(':')).join() === 'Stadtbus 42:bus:1:1,:sonst:1:0' && NZ.cancelDoc(undefined) === null,
+    `Ganz ausgefallene Fahrten: mit Zeit im Fenster als Weg, alle je Linie gezählt, ohne Zeit gesondert (${JSON.stringify(cd)})`);
   const w = tr[0][3], p0 = NZ.positionAt(w, 0), pEnd = NZ.positionAt(w, 5000), d = tr[1][3];
   assert(Math.abs(p0[0] - (48.7842 + (48.776 - 48.7842) * 0.4)) < 1e-9 && pEnd === null && NZ.positionAt(d, 0).join() === '48.7842,9.1822' && NZ.positionAt(d, -200) === null && NZ.positionAt(w, 360).join() === '48.776,9.173', 'Lage: 4 von 10 Minuten zwischen zwei Stationen, vor der Abfahrt höchstens 2 Minuten am ersten Halt, nach dem Ende weg');
   // Zustand: je Block der Lauf mit den meisten Halten, nach 14 Stunden in die Summe, Summe altert

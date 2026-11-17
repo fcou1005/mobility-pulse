@@ -2,7 +2,7 @@
 // auf den privaten Positionen: Versorgung (S8.2), Fahrtbeginne/-enden an Haltestellen (S8.5), Fahrtenden je 50-m-Zelle (S8.4).
 // Zustand privat in TRACK_DIR/geo-state.json.gz, Geo-Dateien zwischengespeichert in TRACK_DIR/geo/. Veröffentlicht im Branch data:
 //   versorgung/<AGS>.json, versorgung/index.json, zubringer/index.json, abstell/<AGS>.json (Zellen ab 3 Fahrtenden),
-//   unfall/<AGS>.json, unfall/index.json, umweg/<AGS>.json, umweg/index.json, pop/index.json (Kopien aus geo für aktive Gemeinden)
+//   unfall/<AGS>.json, unfall/index.json, umweg/<AGS>.json, umweg/index.json, wege/<AGS>.json, wege/index.json, pop/index.json (Kopien aus geo für aktive Gemeinden)
 import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -35,6 +35,9 @@ async function syncGeo(cacheDir, st, { states, agsList, log, now }) {
   const files = ['index.json', 'pop/index.json', 'unfall/index.json', 'umweg/index.json', 'gtfs/index.json', ...states.flatMap(s => [`pop/${s}.json`, `gtfs/${s}.json`]), ...agsList.flatMap(a => [`unfall/${a}.json`, `umweg/${a}.json`])];
   let got = 0;
   for (const f of files) { try { const t = await getText(f); await mkdir(path.dirname(path.join(cacheDir, f)), { recursive: true }); await writeFile(path.join(cacheDir, f), t); got++; } catch { /* Teil fehlt (z. B. Umweg nur für 30 Städte) */ } }
+  // Streckenverläufe (wege/, Geo-Teil „wege“): nur die Städte aus wege/index.json
+  try { const wi = JSON.parse(await getText('wege/index.json')); await mkdir(path.join(cacheDir, 'wege'), { recursive: true }); await writeFile(path.join(cacheDir, 'wege', 'index.json'), JSON.stringify(wi)); got++;
+    const want = new Set(agsList); for (const a of Object.keys(wi.cities || {}).filter(x => want.has(x) && !wi.cities[x].error)) { try { await writeFile(path.join(cacheDir, 'wege', `${a}.json`), await getText(`wege/${a}.json`)); got++; } catch { /* fehlt */ } } } catch { /* noch kein Lauf mit Streckenverläufen */ }
   st.geoAt = at; log(`Geo: ${got} Dateien aus dem Branch geo (${new Date(at).toISOString()})`);
   return true;
 }
@@ -140,8 +143,8 @@ export async function run(ctx) {
       }
     }
     // ---------- Kopien aus geo: Unfälle, Umwegfaktor, Zensus-Abgleich ----------
-    if (fresh || !existsSync(path.join(DATA, 'unfall', 'index.json'))) {
-      for (const sub of ['unfall', 'umweg']) {
+    if (fresh || !existsSync(path.join(DATA, 'unfall', 'index.json')) || (existsSync(path.join(cacheDir, 'wege', 'index.json')) && !existsSync(path.join(DATA, 'wege', 'index.json')))) {
+      for (const sub of ['unfall', 'umweg', 'wege']) {
         const ix = await readJson(path.join(cacheDir, sub, 'index.json')); if (!ix) continue;
         await mkdir(path.join(DATA, sub), { recursive: true });
         const keep = new Set(active);

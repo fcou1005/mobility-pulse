@@ -127,6 +127,9 @@ if (has('oepnv/wirkung.json')) {
   const SYN = path.join(ROOT, 'test/fixtures/oepnv-synth');
   if (existsSync(SYN)) for (const f of ['index.json', 'wirkung.json', ...[...KEEP].flatMap(a => [`${a}.json`, `live/${a}.json`])]) if (existsSync(path.join(SYN, f))) await put(`oepnv/${f}`, JSON.parse(await readFile(path.join(SYN, f), 'utf8')));
 }
+// Streckenverläufe (wege/, Geo-Lauf): echte Dateien, sonst der synthetische Stand
+{ const SYN = path.join(ROOT, 'test/fixtures/oepnv-synth');
+  for (const a of KEEP) if (has(`wege/${a}.json`)) await put(`wege/${a}.json`, await rd(`wege/${a}.json`)); else if (existsSync(path.join(SYN, 'wege', `${a}.json`))) await put(`wege/${a}.json`, JSON.parse(await readFile(path.join(SYN, 'wege', `${a}.json`), 'utf8'))); }
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
 

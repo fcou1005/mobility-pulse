@@ -3,9 +3,10 @@
 // Stationen mit den meisten Störungen, Wirkung von Störungen auf Sharing und Vorschläge für Sharing-Stationen. renderOepnv(el, ctx), ctx = rpCtx().
 // Daten aus dem Sammler (Phase „oepnv“, lib/pulse-oepnv-netz.js): oepnv/index.json, oepnv/wirkung.json, oepnv/<AGS>.json, oepnv/live/<AGS>.json;
 // dazu abstell/<AGS>.json (Fahrtenden), ops-input/fleet/<AGS>.json (Sharing-Bestand), zones/ (Abstellinseln der Anbieter) und forecast/dispo.json
-// (Störungskorrektur der Prognose für die gestörte Stadt).
+// (Störungskorrektur der Prognose für die gestörte Stadt) und wege/<AGS>.json (Streckenverläufe aus dem Geo-Lauf, OpenStreetMap).
 // Die Fahrzeuge der Karte sind keine Ortung: der Echtzeit-Strom nennt Haltezeiten, die Lage dazwischen ist geschätzt (Luftlinie zwischen den Stationen).
 import * as NZ from './pulse-oepnv-karte.js';
+import * as WG from './pulse-oepnv-wege.js';
 import * as PL from './pulse-geo-plan.js';
 import * as Z from './pulse-zones.js';
 import { decodeFleet, ptCorrectionOf } from './pulse-ops.js';
@@ -39,10 +40,10 @@ export async function renderOepnv(el, ctx) {
   const ags = ctx.state.scope, run = ++S.run, D = ctx.CFG.DATA, f = ctx.fmt, city = ags && ags !== 'DE';
   stopTimer(); el.innerHTML = `<div class="panel"><p class="muted">${t('pt.loading')}</p></div>`;
   const [idx, wirk] = await Promise.all(['oepnv/index.json', 'oepnv/wirkung.json'].map(x => load(ctx, D + x)));
-  const [doc, live, abs, fleetDoc, zIdx, ver, fcDoc] = city ? await Promise.all([load(ctx, `${D}oepnv/${ags}.json`), load(ctx, `${D}oepnv/live/${ags}.json`, true), load(ctx, `${D}abstell/${ags}.json`), load(ctx, `${D}ops-input/fleet/${ags}.json`), load(ctx, `${D}zones/index.json`), load(ctx, `${D}versorgung/${ags}.json`), load(ctx, `${D}forecast/dispo.json`)]) : [null, null, null, null, null, null, null];
+  const [doc, live, abs, fleetDoc, zIdx, ver, fcDoc, wege] = city ? await Promise.all([load(ctx, `${D}oepnv/${ags}.json`), load(ctx, `${D}oepnv/live/${ags}.json`, true), load(ctx, `${D}abstell/${ags}.json`), load(ctx, `${D}ops-input/fleet/${ags}.json`), load(ctx, `${D}zones/index.json`), load(ctx, `${D}versorgung/${ags}.json`), load(ctx, `${D}forecast/dispo.json`), load(ctx, `${D}wege/${ags}.json`)]) : [null, null, null, null, null, null, null, null];
   if (run !== S.run) return;
   const name = city ? ctx.esc(ctx.muniName(ags)) : t('pt.germany');
-  M.live = live; M.fleet = S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
+  M.live = live; M.wege = wege?.segs ? WG.wegeLookup(wege) : null; M.cover = null; M.fleet = S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
   const H = doc?.hours, last = H?.days?.length ? H.days.length - 1 : -1;
   const dayRow = (i) => { const n = sum(H.n[i]), sk = sum(H.skip[i]), la = sum(H.late[i]); return { day: H.days[i], n, sk, la, ok: n ? (n - sk - la) / n : null, flag: sum(H.flag?.[i]), cancel: H.cancel?.[i] ?? 0 }; };
   const today = last >= 0 ? dayRow(last) : null, liveN = live ? (live.trips || []).length : 0;
