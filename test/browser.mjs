@@ -101,6 +101,8 @@ async function pass(run, { scope, viewport, checks, tag, lang = null }) {
     const res = [];
     if (txt.length < 300) res.push(`zu wenig Inhalt (${txt.length} Zeichen)`);
     if (BAD_TEXT.test(txt)) res.push(`Ladefehler im Text: „${txt.match(BAD_TEXT)[0]}“`);
+    // offene Platzhalter aus dem Wörterbuch ({d}, {unit} …): Text mit falschem Schlüssel oder ohne Werte gezeichnet (16.11.2026: Urteil „schlechter“)
+    { const ph = txt.match(/\{[a-zA-Z][\w$]{0,20}\}/g); if (ph) res.push(`offene Platzhalter: ${[...new Set(ph)].slice(0, 5).join(' ')}`); }
     if (checks) for (const [name, re] of CHECKS[v]) if (!re.test(txt)) res.push(`fehlt: ${name}`);
     // S4.8: jeder Leerzustand nennt eine Handlung (Knopf, Link, Auswahl) oder eine Zeitangabe
     if (!lang) for (const p of await page.evaluate((x) => [...document.querySelectorAll(`#view-${x} div.empty, #view-${x} p.empty, #view-${x} td.empty[colspan]`)].filter(e => /** @type {HTMLElement} */ (e).offsetParent !== null && !e.querySelector('a, button, select')

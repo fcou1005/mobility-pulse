@@ -359,13 +359,13 @@ const jChipTxt = (k) => `<span class="fv-chip${k === 'own' ? ' A' : k === 'all' 
 const dShort = (iso) => (iso ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(iso)) : '–');
 /** Stand der Freigabe als Satz (kind 'nowcast' | 'stoerung') */
 export function gateTxt(g, kind, L) {
-  const need = g?.need || FC.CORR_GATE[kind], unit = t(kind === 'stoerung' ? 'fv.gUnitDays' : 'fv.gUnitIssues');
-  const stand = g?.n ? t('fv.gStand', { n: n0(g.n), min: n0(need.minN), unit, cases: kind === 'stoerung' ? t('fv.gCases', { c: n0(g.cases || 0), cmin: n0(need.minCases) }) : '', r: pc(g.ratio, 1), p: g.p == null ? '' : t('fv.gP', { p: numFmt(2).format(g.p) }) })
-    : t('fv.gStandNone', { min: n0(need.minN), unit, cases: kind === 'stoerung' ? t('fv.gCasesNone', { cmin: n0(need.minCases) }) : '' });
-  if (g?.on) return t('fv.gOn', { d: dShort(g.since), k: n0(need.recentN), unit, stand });
-  if (g?.offAt && g.why !== 'learning') return t('fv.gWorse', { d: dShort(g.offAt), k: n0(need.recentN), unit, stand });
-  if (g?.why === 'learning') return t('fv.gLearn', { until: L?.stoerung?.learnUntil ? dateFmt({ day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${L.stoerung.learnUntil}T12:00:00Z`)) : '–', stand });
-  return t('fv.gProbe', { max: pc(need.maxRatio, 0), p: numFmt(2).format(need.p), stand });
+  const need = g?.need || FC.CORR_GATE[kind], unit = t(kind === 'stoerung' ? 'fv.gateUnitDays' : 'fv.gateUnitIssues');
+  const stand = g?.n ? t('fv.gateStand', { n: n0(g.n), min: n0(need.minN), unit, cases: kind === 'stoerung' ? t('fv.gateCases', { c: n0(g.cases || 0), cmin: n0(need.minCases) }) : '', r: pc(g.ratio, 1), p: g.p == null ? '' : t('fv.gateP', { p: numFmt(2).format(g.p) }) })
+    : t('fv.gateStandNone', { min: n0(need.minN), unit, cases: kind === 'stoerung' ? t('fv.gateCasesNone', { cmin: n0(need.minCases) }) : '' });
+  if (g?.on) return t('fv.gateOn', { d: dShort(g.since), k: n0(need.recentN), unit, stand });
+  if (g?.offAt && g.why !== 'learning') return t('fv.gateWorse', { d: dShort(g.offAt), k: n0(need.recentN), unit, stand });
+  if (g?.why === 'learning') return t('fv.gateLearn', { until: L?.stoerung?.learnUntil ? dateFmt({ day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${L.stoerung.learnUntil}T12:00:00Z`)) : '–', stand });
+  return t('fv.gateProbe', { max: pc(need.maxRatio, 0), p: numFmt(2).format(need.p), stand });
 }
 /** Wirkung der Störungskorrektur je gestörter Gemeinde: [AGS, Faktor, Prognose der Wirkstunden ohne Korrektur, mehr oder weniger Fahrten] */
 export function ptRows(L) {

@@ -14,6 +14,13 @@ const badPh = de.filter(k => ph(DICT.de[k]) !== ph(DICT.en[k])), badTags = de.fi
 assert(!badPh.length, `gleiche Platzhalter in de und en${badPh.length ? ': ' + badPh.slice(0, 5).join(', ') : ''}`);
 assert(!badTags.length, `gleiche HTML-Tags in de und en${badTags.length ? ': ' + badTags.slice(0, 5).join(', ') : ''}`);
 assert(de.every(k => /^[a-z]+(\.[\p{L}\w-]+)+$/iu.test(k) && String(DICT.en[k]).trim() !== ''), 'Schlüssel „bereich.name“, kein leerer englischer Text');
+// jeder Schlüssel in genau einem Teil (web/i18n-dict.js fügt die Teile mit Spread zusammen: ein späterer Teil überschreibt still einen früheren –
+// 16.11.2026: „fv.gWorse“ aus Teil 10 ersetzte „schlechter“ aus Teil 4, das Urteil zeigte einen Satz mit offenen Platzhaltern)
+for (const L of ['de', 'en']) {
+  const seen = new Map(), dup = [];
+  for (const f of readdirSync(new URL('../web/', import.meta.url)).filter(f => new RegExp(`^i18n-${L}-\\d+\\.js$`).test(f)).sort()) for (const k of Object.keys((await import(`../web/${f}`)).default)) { if (seen.has(k)) dup.push(`${k} (${seen.get(k)}, ${f})`); else seen.set(k, f); }
+  assert(!dup.length, `Wörterbuch ${L}: jeder Schlüssel in genau einem Teil${dup.length ? ' – doppelt: ' + dup.slice(0, 5).join(', ') : ''}`);
+}
 // verwendete Schlüssel (alle Module in web/ und statisches HTML) existieren – neue Panels/Module werden automatisch mitgeprüft
 const used = new Set();
 for (const f of readdirSync(new URL('../web/', import.meta.url)).filter(f => f.endsWith('.js'))) for (const m of readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8').matchAll(/\bt(?:In)?\((?:'(?:de|en)', |l, |sug, )?'([\w.$-]+)'/g)) used.add(m[1]);
