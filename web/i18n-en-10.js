@@ -194,6 +194,7 @@ export default {
   "pt.cancelNone": "According to real-time data, no trip is cancelled entirely right now.",
   "pt.cancelMore": "{n} more lines",
   "pt.cancelSum": "Cancelled entirely according to real-time data: {n} trips ({list}). {w} of them fall between half an hour ago and {min} minutes ahead and are drawn dashed; for {nt} the feed gives no time, so they are missing from the map.",
+  "pt.cancelSumNoTime": "Cancelled entirely according to real-time data: {n} trips ({list}). The feed gives no time for {nt} of them, so they are not on the map.",
   "pt.pathsAir": "Line paths as straight lines from station to station: there are no route shapes for {name} yet (the monthly geo run calculates them for the cities with the largest fleets).",
   "pt.pathsGeo": "Line paths follow the route from OpenStreetMap where known, otherwise straight lines.",
   "pt.pathsShare": "Line paths: {p} % of {n} sections follow the route from OpenStreetMap (© OpenStreetMap contributors, ODbL), the rest are straight lines.",

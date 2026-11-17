@@ -58,7 +58,7 @@ function cancelSummary(ctx, live) {
   const lines = (A.lines || []).filter((/** @type {any[]} */ l) => !M.off.has(l[1])), rows = (A.rows || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]));
   const n = lines.reduce((x, l) => x + l[2], 0), nt = lines.reduce((x, l) => x + l[3], 0); if (!n) return t('pt.cancelNone');
   const list = lines.slice(0, 8).map((/** @type {any[]} */ l) => `${ctx.esc(l[0] || t('pt.noLine'))}${l[2] > 1 ? ` (${ctx.fmt(l[2])})` : ''}`).join(', ') + (lines.length > 8 ? `, ${t('pt.cancelMore', { n: ctx.fmt(lines.length - 8) })}` : '');
-  return t('pt.cancelSum', { n: `<b>${ctx.fmt(n)}</b>`, list, w: ctx.fmt(rows.length), min: ctx.fmt(live.aheadMin || 45), nt: ctx.fmt(nt) });
+  return t(rows.length ? 'pt.cancelSum' : 'pt.cancelSumNoTime', { n: `<b>${ctx.fmt(n)}</b>`, list, w: ctx.fmt(rows.length), min: ctx.fmt(live.aheadMin || 45), nt: ctx.fmt(nt) });
 }
 /** Satz zu den Linienwegen: Anteil im Streckenverlauf (gezählt beim Zeichnen) oder Luftlinie */
 /** @param {any} ctx @param {string} name */

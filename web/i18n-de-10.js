@@ -194,6 +194,7 @@ export default {
   "pt.cancelNone": "Laut Echtzeit fällt gerade keine Fahrt ganz aus.",
   "pt.cancelMore": "{n} weitere Linien",
   "pt.cancelSum": "Ganz ausgefallen laut Echtzeit: {n} Fahrten ({list}). {w} davon fallen zwischen einer halben Stunde zurück und {min} Minuten voraus und sind gestrichelt eingezeichnet; bei {nt} nennt der Strom keine Uhrzeit, sie fehlen auf der Karte.",
+  "pt.cancelSumNoTime": "Ganz ausgefallen laut Echtzeit: {n} Fahrten ({list}). Der Strom nennt für {nt} davon keine Uhrzeit, darum stehen sie nicht auf der Karte.",
   "pt.pathsAir": "Linienwege als Luftlinie von Station zu Station: Für {name} gibt es noch keine Streckenverläufe (der monatliche Geo-Lauf rechnet sie für die Städte mit den größten Flotten).",
   "pt.pathsGeo": "Linienwege im Streckenverlauf aus OpenStreetMap, wo bekannt, sonst als Luftlinie.",
   "pt.pathsShare": "Linienwege: {p} % von {n} Abschnitten im Streckenverlauf aus OpenStreetMap (© OpenStreetMap-Mitwirkende, ODbL), der Rest als Luftlinie.",
