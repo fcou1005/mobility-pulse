@@ -495,7 +495,7 @@ export default {
   "st.trendSub": "median of the last {n} runs {r} s vs {b} s ({d} days)",
   "st.trendNone": "too few runs yet",
   "st.sources": "Sources current",
-  "st.sourcesSub": "of {n} sources",
+  "st.sourcesSub": "of {n} counted sources",
   "st.alarm": "The collector is running clearly slower than usual ({r}× the weekly median, limit {f}×). The workflow opens a “laufzeit” issue.",
   "st.phasesTitle": "Time per step",
   "st.phasesSub": "last run, {s} s in total; steps under 0.1 s hidden",

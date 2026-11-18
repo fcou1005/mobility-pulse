@@ -1,6 +1,8 @@
 // Mobility Pulse — Wörterbuch Englisch, Teil 2 von 7 (web/i18n-dict.js fügt die Teile in dieser Reihenfolge zusammen).
 export default {
   "app.anomalies": "anomalies",
+  "app.anomaliesCrit": "{n} critical anomalies",
+  "app.anomalyCrit1": "1 critical anomaly",
   "app.disabled": "<strong>{disabled}</strong> disabled",
   "app.noVehicleData": "no vehicle data",
   "app.vehiclesAvailable": "<b>{place}{v1}:</b> <strong>{available}</strong> vehicles available, {v3}, {v4}",

@@ -20,6 +20,17 @@ assert(ev.find(x => x.kind === 'cap')?.op === 'Voi' && /470.*450/.test(ev.find(x
 assert(ev.filter(x => x.kind === 'source').length === 1, 'Quelle aus: nur die gezählte Quelle, nicht die Dublette');
 assert(ev.find(x => x.kind === 'fleet')?.op === 'Lime' && !ev.some(x => x.kind === 'fleet' && x.op === 'Voi'), 'Flottensprung: Lime −120 (−40 %), Voi +70 (+17,5 %) bleibt unter der Schwelle');
 assert(AL.detect(s1, s1, { now: 4 }).length === 0, 'Obergrenze bleibt überschritten: kein zweiter Alarm');
+// wiederkehrende Tarife (Lime: Wochenend- und Aktionstarif): nur ein nie gesehener Tarif löst den Alarm aus
+{ const D = 86400e3, pr = (rate) => ({ plans: [{ sourceId: 'voi_hn', plans: plan(rate) }] }), snap = (rate) => AL.snapshot({ latest: lat0, caps: caps0, pricing: pr(rate) });
+  const a = snap(0.19); AL.carryPriceSeen(null, a, 0);
+  const b = snap(0.25), eb = AL.detect(a, b, { now: D }); AL.carryPriceSeen(a, b, D);
+  const c = snap(0.19), ec = AL.detect(b, c, { now: 2 * D }); AL.carryPriceSeen(b, c, 2 * D);
+  const d = snap(0.25), ed = AL.detect(c, d, { now: 3 * D }); AL.carryPriceSeen(c, d, 3 * D);
+  const e = snap(0.29), ee = AL.detect(d, e, { now: 4 * D });
+  const old = { ...a }; delete old.priceSeen; delete old.plans; const eo = AL.detect(old, snap(0.19), { now: 5 * D });
+  assert(eb.filter(x => x.kind === 'price').length === 1 && !ec.some(x => x.kind === 'price') && !ed.some(x => x.kind === 'price') && ee.filter(x => x.kind === 'price').length === 1 && !eo.some(x => x.kind === 'price') && Object.keys(d.priceSeen.voi_hn).length === 2,
+    'Preise: neuer Tarif meldet, Rückkehr zu bekanntem Tarif nicht, älterer Zustand ohne Tarifliste zählt seine Tarife als bekannt');
+  const late = snap(0.19); AL.carryPriceSeen(d, late, 3 * D + AL.PRICE_KEEP_DAYS * D + 1); assert(Object.keys(late.priceSeen.voi_hn).length === 1, 'Tarife, die über 35 Tage fehlen, fallen aus der Liste'); }
 // ÖPNV gestört (16.11.2026): Wechsel auf gestört, Ruhezeit 6 h, erster Lauf still, kleine Flotten nicht
 {
   const H = 3600e3, lat = { sources: [], groups: { '08125000|Voi|scooter': { total: 400, available: 350 }, '08999999|Voi|scooter': { total: 50 }, '08125001|Voi|scooter': { total: 400 } } };

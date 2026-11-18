@@ -497,7 +497,7 @@ export default {
   "st.trendSub": "Median der letzten {n} Läufe {r} s gegen {b} s ({d} Tage)",
   "st.trendNone": "noch zu wenige Läufe",
   "st.sources": "Quellen aktuell",
-  "st.sourcesSub": "von {n} Quellen",
+  "st.sourcesSub": "von {n} gezählten Quellen",
   "st.alarm": "Der Sammler läuft deutlich langsamer als üblich ({r}× des Wochenmedians, Grenze {f}×). Der Workflow legt dazu ein Issue „laufzeit“ an.",
   "st.phasesTitle": "Zeit je Arbeitsschritt",
   "st.phasesSub": "letzter Lauf, {s} s gesamt; Schritte unter 0,1 s ausgeblendet",

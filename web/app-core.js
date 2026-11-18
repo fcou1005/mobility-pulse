@@ -51,6 +51,8 @@ export const timeText = (ms) => ms ? dateFmt({ hour: '2-digit', minute: '2-digit
 export const dateTimeText = (ms, opts = { dateStyle: 'medium', timeStyle: 'short' }) => dateFmt({ timeZone: BERLIN, ...opts }).format(new Date(ms));
 // Beschriftungen aus lib/pulse-core.js je Code in der Sprache der Seite (Fahrzeugart, Frische)
 export const TYPE = tMap('type', C.VEHICLE_TYPE_LABEL);
+/** Aktiver Anbieter- und Artfilter als Text für Kernsätze („Voi, E-Scooter“), leer ohne Filter */
+export const filterText = () => [state.operator !== 'all' ? state.operator : null, state.type !== 'all' ? TYPE[state.type] : null].filter(Boolean).join(', ');
 export const STATUS = tMap('fresh', { ...C.FRESHNESS_LABEL, collector: 1 });
 export const DIRS = { get mobilitydata() { return t('app.mobilitydataOperators'); }, mobidata_bw: 'MobiData BW', mobidrom_nrw: 'MOBIDROM NRW', citybikes: 'CityBikes', get dott_direct() { return t('app.dottDirectFeed'); }, get lime_direct() { return t('app.limeDirectFeed'); }, get zeus_direct() { return t('app.zeusDirectFeed'); }, get bird_direct() { return t('app.birdDirectFeed'); }, db_api: 'DB API Marketplace' };
 // Farben aus web/tokens.js (S4.3): Palette MP-7 mit festem Platz je Anbieter, alle übrigen grau als „Weitere“; Reihen ohne Anbieter der

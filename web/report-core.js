@@ -454,7 +454,7 @@ function reportAnswer(ctx, rep, meta, C) {
   const { esc } = ctx, tq = rep.totals, client = isClient();
   const rd = C?.ridesDay ?? tq.ridesDay, rvd = C?.rvd ?? tq.rvd;
   return ({ id: 'bericht',
-    sentence: t('ans.report', { name: `<b>${esc(meta.name)}</b>`, fleet: `<strong>${num(ctx, tq.fleet)}</strong>`, rides: rd == null ? '–' : num(ctx, rd), days: plural(rep.days.length, t('rep.day'), t('rep.days')) }),
+    sentence: t('ans.report', { name: `<b>${esc(meta.name)}</b>`, filt: [ctx.state.operator !== 'all' ? ctx.state.operator : null, ctx.state.type !== 'all' ? typeName(ctx.state.type) : null].filter(Boolean).map(x => ` (${esc(x)})`).join('').replace(') (', ', '), fleet: `<strong>${num(ctx, tq.fleet)}</strong>`, rides: rd == null ? '–' : num(ctx, rd), days: plural(rep.days.length, t('rep.day'), t('rep.days')) }),
     kpis: [
       { label: t('rep.avgFleet'), value: num(ctx, tq.fleet), n: tq.fleet == null ? null : Math.round(tq.fleet), cmp: rep.pop ? t('ans.kPer1000', { v: num(ctx, tq.per1000Fleet, 1) }) : t('rep.populationMissing'), eq: '.rp-report table td.fleet', eqSum: true },
       { label: t('ans.kRidesDay'), value: num(ctx, rd), cmp: C && C.lo != null ? t('ans.kRange', { lo: num(ctx, C.lo), hi: num(ctx, C.hi) }) : client ? '' : t('ans.kMeasuredRides', { n: num(ctx, tq.rides) }) },

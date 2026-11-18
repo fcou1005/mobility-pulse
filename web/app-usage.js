@@ -5,7 +5,7 @@ import * as UI from './ui-shared.js';
 import * as R from './pulse-report.js';
 import { t, tx, lang, dateFmt } from './i18n.js';
 import { totalsDoc, usageDayCandidates } from './pulse-split.js';
-import { $, $$, GLOSS, QS, TYPE, abbr, dateTimeText, esc, flagText, fmt, foldSeries, isClient, opColor, palette, pctf, sig2, state, timeText } from './app-core.js';
+import { $, $$, GLOSS, QS, TYPE, abbr, filterText, dateTimeText, esc, flagText, fmt, foldSeries, isClient, opColor, palette, pctf, sig2, state, timeText } from './app-core.js';
 import { FC_dayOfNow, cached, emptyRow, failedText, loadDaily, loadHistory, setChips } from './app-load.js';
 import { muniName } from './app-scope.js';
 import { mod, rpCtx } from './app-router.js';
@@ -84,7 +84,7 @@ export async function renderUsage() {
   ].join('');
   // S4.1: Antwort oben – Satz, drei Kennzahlen (Fahrten = Summe der Tabelle je Anbieter), „Wie gerechnet?“, Stand
   const place = state.scope === 'DE' ? t('app.germany') : muniName(state.scope), dayTxt = `${day.slice(8)}.${day.slice(5, 7)}.${day.slice(0, 4)}`;
-  setAnswer($('#usage-answer'), { id: 'usage', sentence: t('ans.usage', { n: `<strong>${fmt(starts)}</strong>`, place: `<b>${esc(place)}</b>`, day: esc(dayTxt), obs: esc(durText(observedMs)) }) + (day === run ? ` ${esc(t('app.usagePartialDay', { h: runH }))}.` : ''),
+  setAnswer($('#usage-answer'), { id: 'usage', sentence: t('ans.usage', { n: `<strong>${fmt(starts)}</strong>`, place: `<b>${esc(place)}</b>`, filt: filterText() ? ` (${esc(filterText())})` : '', day: esc(dayTxt), obs: esc(durText(observedMs)) }) + (day === run ? ` ${esc(t('app.usagePartialDay', { h: runH }))}.` : ''),
     kpis: [
       { label: t('ans.kTrips'), value: fmt(starts), n: starts, cmp: t('ans.kTripsCmp', { ends: fmt(ends) }), eq: '#tbl-usage tbody tr td:nth-child(2)', eqSum: true },
       { label: t('app.rebalancing'), value: fmt(reloc), n: reloc, cmp: starts ? t('ans.per100Trips', { v: fmt(100 * reloc / starts, 1) }) : t('ans.noTrips'), eq: '#tbl-usage tbody tr td:nth-child(4)', eqSum: true },
@@ -112,7 +112,7 @@ export async function renderIdle(days) {
   const labels0 = idle.buckets || ['<2 h', '2–8 h', '8–24 h', '1–2 Tage', '>2 Tage'], nb = labels0.length;
   const ib = new Array(nb).fill(0), ic = new Array(nb).fill(0); let in_ = 0;
   for (const [k, a] of Object.entries(idle.groups || {})) { if (!groupInScope(k)) continue; for (let i = 0; i < nb; i++) ib[i] += a[i] || 0; in_ += a[nb] || 0; const c = idle.censored?.[k]; if (c) for (let i = 0; i < nb; i++) ic[i] += c[i] || 0; }
-  const labels = labels0.map(l => l === '2–3 Tage' ? t('trk.idle23d') : l === '> 72 h' ? t('trk.idle72h') : tx(l)); // Beschriftungen aus idle.json (Sammler, deutsch)
+  const labels = labels0.map(l => l === '2–3 Tage' ? t('trk.idle23d') : l === '1–2 Tage' ? t('trk.idle12d') : l === '> 72 h' ? t('trk.idle72h') : tx(l)); // Beschriftungen aus idle.json (Sammler, deutsch)
   const imax = Math.max(1, ...ib), cn = ic.reduce((a, b) => a + b, 0);
   // Anteil der Mindestwerte hell am Ende des Balkens
   const bg = (i) => { const col = i >= 3 ? 'var(--warn)' : 'var(--accent)', cs = ib[i] ? ic[i] / ib[i] : 0, p = ((1 - cs) * 100).toFixed(1); return cs ? `linear-gradient(90deg,${col} ${p}%,color-mix(in srgb,${col} 35%,transparent) ${p}%)` : col; };

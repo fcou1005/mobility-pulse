@@ -92,8 +92,8 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   ], { ts: now });
   const lk = OE.stationLookup(ix), counter = NZ.stationCounter(lk, ix.st.id), paths = NZ.pathCollector(lk, ix, now);
   OE.ptCounts(feed, OE.stopLookup(ix), now, { onStop: counter.onStop, onTrip: paths.onTrip });
-  const cnt = counter.result(), blk = cnt['2026-11-16|1'];
-  assert(Object.keys(cnt).join() === '2026-11-16|1' && blk['de:08111:10'].join() === '3,1,1,420,2' && blk['de:08111:20'].join() === '1,0,0,0,1', `Zählung je Station im Block 6–12 Uhr: Hbf 3 Halte, 1 ausgefallen, 1 verspätet (${JSON.stringify(blk)})`);
+  const cnt = counter.result(), blk = cnt['2026-11-16|10'];
+  assert(Object.keys(cnt).join() === '2026-11-16|10' && blk['de:08111:10'].join() === '3,1,1,420,2' && blk['de:08111:20'].join() === '1,0,0,0,1', `Zählung je Station in der Stunde 10–11 Uhr: Hbf 3 Halte, 1 ausgefallen, 1 verspätet (${JSON.stringify(blk)})`);
   const pr = paths.result(), tr = pr.by.get('08111000');
   assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'ubahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
     `Fahrzeugwege: laufende Fahrten ab dem letzten Halt, abgesagte und beendete fehlen, ausgefallener Halt und unbekannte Station übersprungen (${JSON.stringify(tr)})`);
@@ -108,15 +108,22 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     `Ganz ausgefallene Fahrten: abgesagt oder jeder Halt ausgefallen (wie gtfs.de), mit Zeit im Fenster als Weg, alle je Linie gezählt, ohne Zeit gesondert (${JSON.stringify(cd)})`);
   const w = tr[0][3], p0 = NZ.positionAt(w, 0), pEnd = NZ.positionAt(w, 5000), d = tr[1][3];
   assert(Math.abs(p0[0] - (48.7842 + (48.776 - 48.7842) * 0.4)) < 1e-9 && pEnd === null && NZ.positionAt(d, 0).join() === '48.7842,9.1822' && NZ.positionAt(d, -200) === null && NZ.positionAt(w, 360).join() === '48.776,9.173', 'Lage: 4 von 10 Minuten zwischen zwei Stationen, vor der Abfahrt höchstens 2 Minuten am ersten Halt, nach dem Ende weg');
-  // Zustand: je Block der Lauf mit den meisten Halten, nach 14 Stunden in die Summe, Summe altert
-  const st = NZ.emptyNetzState(); NZ.mergeCounts(st, cnt, now); NZ.mergeCounts(st, { '2026-11-16|1': { 'de:08111:10': [2, 0, 0, 0, 2], 'de:08111:20': [5, 1, 0, 60, 4] } }, now + 20 * m);
-  assert(st.open['2026-11-16|1']['de:08111:10'][0] === 3 && st.open['2026-11-16|1']['de:08111:20'][0] === 5 && st.days === 0, 'Zustand: je Block und Station gilt der Lauf mit den meisten Halten');
+  // Zustand: je Stunde der Lauf mit den meisten Halten, 3 Stunden nach ihrem Ende in die Summe, Summe altert
+  const st = NZ.emptyNetzState(); NZ.mergeCounts(st, cnt, now); NZ.mergeCounts(st, { '2026-11-16|10': { 'de:08111:10': [2, 0, 0, 0, 2], 'de:08111:20': [5, 1, 0, 60, 4] } }, now + 20 * m);
+  assert(st.open['2026-11-16|10']['de:08111:10'][0] === 3 && st.open['2026-11-16|10']['de:08111:20'][0] === 5 && st.days === 0 && Math.abs(NZ.netzDays(st, now + 20 * m) - 1 / 24) < 1e-9, 'Zustand: je Block und Station gilt der Lauf mit den meisten Halten');
   const t1 = NZ.stationTotals(st, '2026-11-16'), rows = NZ.stationRows(ix, NZ.stationsByAgs(ix).get('08111000'), t1);
   assert(rows.length === 2 && rows[0][0] === 'de:08111:20' && rows[0].join() === 'de:08111:20,Stadtmitte,48.776,9.173,5,1,0,0.3,5,1,0' && rows[1][7] === 3.5, `Zeilen je Station, nach Halten (${rows[0].join()})`);
   const r2 = NZ.mergeCounts(st, {}, Date.parse('2026-11-17T02:30:00Z'));
-  assert(r2.closed === 1 && !st.open['2026-11-16|1'] && Math.abs(st.tot['de:08111:10'][0] - 3) < 1e-9 && st.days === 0.25 && NZ.stationTotals(st, '2026-11-17').get('de:08111:10').day[0] === 0, 'Block 14 Stunden nach seinem Ende in der Summe (0,25 Tage)');
+  assert(r2.closed === 1 && !st.open['2026-11-16|10'] && Math.abs(st.tot['de:08111:10'][0] - 3) < 1e-9 && Math.abs(st.days - 1 / 24) < 1e-9 && NZ.stationTotals(st, '2026-11-17').get('de:08111:10').day[0] === 0, 'Stunde 3 Stunden nach ihrem Ende in der Summe (1/24 Tag)');
+  NZ.mergeCounts(st, { '2026-11-16|10': { 'de:08111:10': [9, 0, 0, 0, 9] } }, Date.parse('2026-11-17T02:50:00Z'));
+  assert(!st.open['2026-11-16|10'] && Math.abs(st.tot['de:08111:10'][0] - 3) < 1e-9, 'Eine Stunde, die schon in der Summe steht, zählt kein zweites Mal');
   NZ.mergeCounts(st, {}, Date.parse('2026-11-24T10:00:00Z'));
-  assert(Math.abs(st.tot['de:08111:10'][0] - 1.5) < 1e-9 && Math.abs(st.days - 0.125) < 1e-9, 'Summe halbiert sich nach 7 Tagen');
+  assert(Math.abs(st.tot['de:08111:10'][0] - 1.5) < 1e-9 && Math.abs(st.days - 1 / 48) < 1e-9, 'Summe halbiert sich nach 7 Tagen');
+  // Lücken im Echtzeit-Strom (Sa 14.11.2026 Stuttgart): Stunden unter einem Viertel des Medians der übrigen Tage
+  { const day = (v) => new Array(24).fill(0).map((_, h) => (h >= 6 ? v : 0)), lowSat = day(4000).map((x, h) => (h >= 11 && h < 19 ? 360 : x)), today = day(4000).map((x, h) => (h > 17 ? 0 : h === 17 ? 900 : x));
+    const g = NZ.gapHours([day(4000), day(4200), lowSat, day(3900), today]);
+    assert(g[2].slice(11, 19).every(x => x === 1) && g[2][10] === 0 && g[0].every(x => x === 0) && g[4][18] === 0 && g[4][17] === 1 && NZ.gapHours([lowSat, day(4000)])[0][12] === 0,
+      `Lücken: 8 Stunden am Samstag erkannt, leere Stunden (noch nicht vorbei) zählen nicht, erst ab 3 Vergleichstagen (${g[2].join('')})`); }
   // Stunden aus den Störungs-Dokumenten
   const doc = (day, flagH, mult) => ({ ags: { '08111000': { ptN: new Array(24).fill(100), ptSkip: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 20 : 2)), ptLate: new Array(24).fill(5), pt: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 1 : 0)) } }, ptDay: { '08111000': [4, 30] }, mult });
   const days = ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'], docs = new Map(days.map((d, i) => [d, doc(d, i < 3 ? [8, 9, 17] : [], 1)]));

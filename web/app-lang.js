@@ -135,11 +135,12 @@ export function renderLede() {
   const el = $('#live-lede'); if (!el) return;
   if (!state.latest && !state.live) { setAnswer(el, { id: 'live', sentence: esc(t('app.noDataSnapshotLoadedYet')), kpis: [] }); return; }
   const st = sumStats([...scopeGroups().values()]); const h = dataHealth();
-  const sig = computeSignals().filter(s => s.sev !== 'info').length;
+  // Deutschland: nur kritische zählen (sonst „dazu 430 Auffälligkeiten“), Gemeinde: kritische und auffällige
+  const sig = computeSignals().filter(s => (state.scope === 'DE' ? s.sev === 'bad' : s.sev !== 'info')).length;
   const place = state.scope === 'DE' ? t('app.germany') : muniName(state.scope);
   const filt = [state.operator !== 'all' ? state.operator : null, state.type !== 'all' ? TYPE[state.type] : null].filter(Boolean).join(', ');
   const dataTxt = h.level === 'ok' ? t('app.dataCurrent') : h.staleRun ? t('app.old', { v0: cl(t('app.collectorSnapshot'), t('app.data2')), v1: ageText(Date.now() - state.latest.at) }) : h.level === 'warn' ? t('app.dataPartlyDelayed') : h.level === 'bad' ? t('app.dataIncomplete') : cl(t('app.noSources'), t('app.noData2'));
-  const sigTxt = `${fmt(sig)} ${sig === 1 ? t('app.anomaly') : t('app.anomalies')}`;
+  const sigTxt = state.scope === 'DE' ? t(sig === 1 ? 'app.anomalyCrit1' : 'app.anomaliesCrit', { n: fmt(sig) }) : `${fmt(sig)} ${sig === 1 ? t('app.anomaly') : t('app.anomalies')}`;
   const sentence = t('ans.live', { available: `<strong>${fmt(st.available)}</strong>`, place: `<b>${esc(place)}</b>`, filt: filt ? ` (${esc(filt)})` : '', sig: isClient() ? sigTxt : `<a href="#signals">${sigTxt}</a>` })
     + ` <span class="health ${h.level}" title="${esc(isClient() ? gl('fresh') : h.detail)}"><i></i>${dataTxt}</span>`;
   const disShare = st.total ? st.disabled / st.total : null, at = state.mode === 'live' && state.live ? Date.now() : state.latest?.at;

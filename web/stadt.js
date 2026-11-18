@@ -71,7 +71,7 @@ export async function renderStadt(el, ctx) {
     <div class="panel c8"><div class="panel-head"><div><h2>${t('sd.alarmsTitle')}</h2><div class="sub">${t('sd.alarmsSub')}</div></div></div>${alarmList}
       <div class="sd-links"><a class="chip" href="#bericht">${t('sd.toReport')}</a><a class="chip" href="#auflagen">${t('sd.toAuflagen')}</a><a class="chip" href="#ausschreibungen">${t('sd.toTenders')}</a></div></div>
     <div class="panel c4 sd-noprint"><div class="panel-head"><div><h2>${t('sd.feedsTitle')}</h2><div class="sub">${t('sd.feedsSub')}</div></div></div>
-      ${(feeds?.municipalities || []).includes(ags) ? `<div class="sd-feeds"><a class="chip" href="${ctx.esc(feed(null))}" type="application/atom+xml">${t('sd.feedAll')}</a>${KINDS.map(k => `<a class="chip" href="${ctx.esc(feed(k))}" type="application/atom+xml">${ctx.esc(KIND_DE[k])}</a>`).join('')}</div>`
+      ${(feeds?.municipalities || []).includes(ags) ? `<div class="sd-feeds"><a class="chip" href="${ctx.esc(feed(null))}" type="application/atom+xml">${t('sd.feedAll')}</a>${KINDS.map(k => `<a class="chip" href="${ctx.esc(feed(k))}" type="application/atom+xml">${ctx.esc(t(`sd.kind_${k}`))}</a>`).join('')}</div>`
         : `<div class="empty"><b>${t('sd.noFeed')}</b>${t('sd.noFeedHint')}</div>`}
       <h3 style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('sd.embedTitle')}</h3><textarea class="sd-code" rows="4" readonly aria-label="${t('sd.embedTitle')}">${ctx.esc(embed)}</textarea></div>
   </div>`;

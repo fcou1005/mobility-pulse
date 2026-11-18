@@ -40,5 +40,13 @@ assert(rows.length === 1 && rows[0].op === 'Voi', 'nur Anbieter der Gemeinde, Du
 const v = rows[0];
 assert(v.feed && v.zones && v.prices && v.license === 'CC0-1.0' && v.version === '2.3' && v.ageMs === 4e6, 'Feed, Zonen, Preise, Lizenz, GBFS-Version, Datenalter (ältester Feed)');
 assert(Math.abs(v.avail - (80 + 73) / 160) < 1e-9 && v.level === 'near', `zwei Feeds zusammen: ${(v.avail * 100).toFixed(1)} % → nahe`);
+// Spiegel eines Verzeichnisses (CityBikes) zählt nicht neben dem eigenen Feed; negatives Datenalter (Feed-Uhr vor) wird 0
+const rr = A.obligations({ sources: [
+  { id: 'regiorad', operator: 'RegioRad', status: 'live', municipalities: ['08111000'], feedAgeMs: -30e3, api: 'gbfs', directories: ['mobilitydata', 'mobidata_bw'] },
+  { id: 'citybikes_x', operator: 'RegioRad', status: 'stale', municipalities: ['08111000'], feedAgeMs: 26e6, api: 'citybikes', directories: ['citybikes'] },
+  { id: 'cb_only', operator: 'Nur CityBikes', status: 'live', municipalities: ['08111000'], feedAgeMs: 60e3, api: 'citybikes', directories: ['citybikes'] },
+] }, null, { ags: '08111000' });
+const rg = rr.find(x => x.op === 'RegioRad'), cb = rr.find(x => x.op === 'Nur CityBikes');
+assert(rg.sources.join() === 'regiorad' && rg.mirrors.join() === 'citybikes_x' && rg.ageMs === 0 && cb.sources.join() === 'cb_only' && cb.feed, `Spiegel nur ohne eigenen Feed, Datenalter nicht negativ (${JSON.stringify(rg)})`);
 console.log(`${bad ? '✗' : '✓'} auflagen: ${ok} ok, ${bad} fehlgeschlagen`);
 process.exit(bad ? 1 : 0);

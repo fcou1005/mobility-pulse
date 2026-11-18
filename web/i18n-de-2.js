@@ -3,6 +3,8 @@ export default {
   "app.noData2": "keine Daten",
   "app.anomaly": "Auffälligkeit",
   "app.anomalies": "Auffälligkeiten",
+  "app.anomaliesCrit": "{n} kritische Auffälligkeiten",
+  "app.anomalyCrit1": "1 kritische Auffälligkeit",
   "app.disabled": "<strong>{disabled}</strong> gesperrt",
   "app.noVehicleData": "keine Fahrzeugdaten",
   "app.vehiclesAvailable": "<b>{place}{v1}:</b> <strong>{available}</strong> Fahrzeuge verfügbar, {v3}, {v4}",

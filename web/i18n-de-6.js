@@ -366,6 +366,7 @@ export default {
   // lib, Bausteine (lib)
   "lib.idle12d": "1–2 Tage",
   "lib.idle2d": ">2 Tage",
+  "trk.idle12d": "1–2 Tage",
   "trk.idle23d": "2–3 Tage",
   "trk.idle72h": "> 72 h",
   "trk.idleForAtLeast": "Standzeit {v0} (seit Messbeginn unbewegt)",

@@ -45,7 +45,9 @@ export async function renderOepnv(el, ctx) {
   const name = city ? ctx.esc(ctx.muniName(ags)) : t('pt.germany');
   M.live = live; M.wege = wege?.segs ? WG.wegeLookup(wege) : null; M.cover = null; M.fleet = S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
   const H = doc?.hours, last = H?.days?.length ? H.days.length - 1 : -1;
-  const dayRow = (i) => { const n = sum(H.n[i]), sk = sum(H.skip[i]), la = sum(H.late[i]); return { day: H.days[i], n, sk, la, ok: n ? (n - sk - la) / n : null, flag: sum(H.flag?.[i]), cancel: H.cancel?.[i] ?? 0 }; };
+  // Lückenstunden des Echtzeit-Stroms (H.gap, lib gapHours) zählen nicht mit
+  const keep = (/** @type {number[]} */ a, /** @type {number} */ i) => (a || []).map((x, h) => (H.gap?.[i]?.[h] ? 0 : x));
+  const dayRow = (i) => { const n = sum(keep(H.n[i], i)), sk = sum(keep(H.skip[i], i)), la = sum(keep(H.late[i], i)); return { day: H.days[i], n, sk, la, ok: n ? (n - sk - la) / n : null, flag: sum(keep(H.flag?.[i], i)), cancel: H.cancel?.[i] ?? 0, gaps: sum(H.gap?.[i] || []) }; };
   const today = last >= 0 ? dayRow(last) : null, liveN = live ? (live.trips || []).length : 0;
   // ---------- Antwort ----------
   if (city && today && today.n) {
@@ -56,7 +58,7 @@ export async function renderOepnv(el, ctx) {
   } else if (!city && idx?.cities && Object.keys(idx.cities).length) {
     const all = Object.values(idx.cities), n = sum(all.map(r => r[1])), bad = sum(all.map(r => r[2] + r[3]));
     putAnswer(el, { id: 'oepnv', sentence: t('pt.answerDe', { cities: f(all.length), p: `<strong>${pct(ctx, n ? (n - bad) / n : null)}</strong>`, n: f(n) }),
-      kpis: [{ label: t('pt.kOk'), value: pct(ctx, n ? (n - bad) / n : null), cmp: t('pt.kCities', { n: f(all.length) }) }, { label: t('pt.kLive'), value: f(idx.trips || 0), cmp: t('pt.kLiveCmp') }], how: t('pt.how'), asOf: timeTxt(idx.at) });
+      kpis: [{ label: t('pt.kOk'), value: pct(ctx, n ? (n - bad) / n : null), cmp: t('pt.kCities', { n: f(all.length) }) }, { label: t('pt.kSkip'), value: pct(ctx, n ? sum(all.map(r => r[2])) / n : null, 1), cmp: t('pt.kLateCmp', { p: pct(ctx, n ? sum(all.map(r => r[3])) / n : null, 1) }) }, { label: t('pt.kLive'), value: f(idx.trips || 0), cmp: t('pt.kLiveCmp') }], how: t('pt.how'), asOf: timeTxt(idx.at) });
   } else putAnswer(el, { id: 'oepnv', sentence: t('pt.answerNone', { name }), kpis: [{ label: t('pt.kOk'), value: '–' }, { label: t('pt.kSkip'), value: '–' }, { label: t('pt.kLive'), value: '–' }], how: t('pt.how') });
 
   // ---------- Live-Karte ----------
@@ -69,9 +71,9 @@ export async function renderOepnv(el, ctx) {
     const hr = today ? H.n[last].map((n, h) => ({ h, n, sk: H.skip[last][h], la: H.late[last][h], fl: H.flag?.[last]?.[h] })).filter(x => x.n > 0) : [];
     dash = `<div class="panel"><div class="panel-head"><div><h2>${t('pt.dashTitle', { name })}</h2><div class="sub">${t('pt.dashSub')}</div></div></div>
       <div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.dashTitle', { name }))}"><table id="pt-days"><thead><tr><th>${t('pt.colDay')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colOk')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th class="n">${t('pt.colFlagH')}</th><th class="n">${t('pt.colCancel')}</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${dayTxt(r.day)}</td><td class="n">${f(r.n)}</td><td class="n pt-ok">${pct(ctx, r.ok)}</td><td class="n">${pct(ctx, r.n ? r.sk / r.n : null, 1)}</td><td class="n">${pct(ctx, r.n ? r.la / r.n : null, 1)}</td><td class="n">${f(r.flag)}</td><td class="n">${f(r.cancel)}</td></tr>`).join('')}</tbody></table></div>
+      ${rows.map(r => `<tr><td>${dayTxt(r.day)}${r.gaps ? ` <span class="muted small">${t('pt.dayGap', { n: f(r.gaps) })}</span>` : ''}</td><td class="n">${f(r.n)}</td><td class="n pt-ok">${pct(ctx, r.ok)}</td><td class="n">${pct(ctx, r.n ? r.sk / r.n : null, 1)}</td><td class="n">${pct(ctx, r.n ? r.la / r.n : null, 1)}</td><td class="n">${f(r.flag)}</td><td class="n">${f(r.cancel)}</td></tr>`).join('')}</tbody></table></div>
       ${hr.length ? `<h3>${t('pt.hoursTitle', { day: dayTxt(today.day) })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.hoursTitle', { day: dayTxt(today.day) }))}"><table><thead><tr><th>${t('pt.colHour')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th>${t('pt.colState')}</th></tr></thead><tbody>
-      ${hr.map(x => `<tr><td>${x.h}–${x.h + 1} h</td><td class="n">${f(x.n)}</td><td class="n">${pct(ctx, x.sk / x.n, 1)}</td><td class="n">${pct(ctx, x.la / x.n, 1)}</td><td>${x.fl ? `▲ ${t('pt.stateBad')}` : `○ ${t('pt.stateOk')}`}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${hr.map(x => `<tr><td>${x.h}–${x.h + 1} h</td><td class="n">${f(x.n)}</td><td class="n">${pct(ctx, x.sk / x.n, 1)}</td><td class="n">${pct(ctx, x.la / x.n, 1)}</td><td>${H.gap?.[last]?.[x.h] ? `◌ ${t('pt.stateGap')}` : x.fl ? `▲ ${t('pt.stateBad')}` : `○ ${t('pt.stateOk')}`}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <p class="muted small">${t('pt.dashNote')}</p></div>`;
   } else if (city) dash = `<div class="panel"><div class="empty">${t('pt.dashEmpty', { name })}</div></div>`;
 

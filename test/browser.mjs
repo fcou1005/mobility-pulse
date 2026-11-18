@@ -31,7 +31,7 @@ const CHECKS = {
   'prognose-basis': [['Selbstkontrollen', /Selbstkontrollen/], ['Parameter', /Parameter/], ['Korrekturen', /Korrekturen der Prognose[\s\S]*Tageskorrektur\s*Probe\s*Heute bisher 1,07 × des Modells[\s\S]*Bewertet: 3 von mindestens 12 Ausgaben[\s\S]*Störungskorrektur ÖPNV\s*Probe\s*2 Städte mit gestörtem ÖPNV[\s\S]*Probe bis zum Ende der Lernzeit am 20\. November[\s\S]*Gestörte Städte mit der größten Wirkung/]],
   sources: [['letzter Lauf', /Letzter Lauf \d\d:\d\d/], ['Quellen aktuell', /\d+ von \d+ Quellen im Gebiet sind aktuell/]],
   signals: [['Kopf', /Signale je Anbieter und Gemeinde/], ['Stationshinweis', /Abstellzonen ohne Fahrzeug/]],
-  stadt: [['Antwort mit Bestand', /Unterwegs sind in Stuttgart [\d.]+ E-Scooter bei einer amtlichen Obergrenze von [\d.]+/], ['Feeds', /Alle Themen/]],
+  stadt: [['Antwort mit Bestand', /Im Feed gemeldet sind in Stuttgart [\d.]+ E-Scooter bei einer amtlichen Obergrenze von [\d.]+/], ['Feeds', /Alle Themen/]],
   auflagen: [['Titel', /Datenauflagen in Stuttgart/], ['Ampel', /Verfügbarkeit 2026/]],
   ausschreibungen: [['Kalender', /Fristenkalender/], ['Quelle', /Heidelberg[\s\S]*geprüft/]],
   marktindex: [['Antwort', /Im November 2026 \(vorläufig\) gab es in Stuttgart [\d.]+ Fahrten je Tag/], ['Rangliste', /1 Köln [\d.]+/], ['Wirkung', /Wirkung von Ereignissen[\s\S]*(mehr Fahrten|weniger Fahrten|nicht unterscheidbar)/], ['Scout', /Expansions-Scout[\s\S]*Leonberg/], ['Grafik der Woche', /Grafik der Woche/]],

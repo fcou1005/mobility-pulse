@@ -53,7 +53,8 @@ export async function renderStatus(el, ctx) {
     tile(t('st.lastRun'), esc(hhmm), `${esc(day)}${ageMin != null ? `, ${t('st.ago', { min: fmt(ageMin) })}` : ''}${stale ? `, ${t('st.stale', { m: BUDGET.staleMin })}` : ''}`, stale ? 'bad' : ''),
     tile(t('st.runtime'), `${fmt(runMs / 1000)} s`, t(`st.lvl.${lvl || 'ok'}`, { w: BUDGET.warnS, f: BUDGET.failS }), lvlCls[lvl] || ''),
     tile(t('st.trend'), tr?.ratio != null ? `${fmt(tr.ratio, 2)}×` : '–', tr?.ratio != null ? t('st.trendSub', { r: fmt(tr.recentS), b: fmt(tr.baseS), n: BUDGET.recentRuns, d: BUDGET.baseDays }) : t('st.trendNone'), tr?.alarm ? 'warn' : ''),
-    tile(t('st.sources'), fmt(st.byStatus?.live ?? 0), t('st.sourcesSub', { n: fmt(st.counts?.sources ?? 0) })),
+    // gleicher Nenner wie Quellen und Übersicht (273 / 329): ohne Dubletten, ausgemusterte, verschwundene und ausländische Quellen
+    tile(t('st.sources'), fmt(st.byStatus?.live ?? 0), t('st.sourcesSub', { n: fmt((st.counts?.sources ?? 0) - ['duplicate', 'retired', 'gone', 'foreign'].reduce((a, k) => a + (st.byStatus?.[k] || 0), 0)) })),
   ].join('');
   const phases = v2 && Array.isArray(st.phases) ? st.phases : [];
   el.innerHTML = `<div class="tiles">${tiles}</div>

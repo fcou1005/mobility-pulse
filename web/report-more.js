@@ -368,7 +368,7 @@ export async function renderForecast(el, ctx) {
 // ======================================================================
 // Messbasis-Abzeichen (mbBase, mbBadge, …) liegen seit S3.4 in web/ui-shared.js (Start und Disposition ohne report.js)
 /** Flag-Text im Bericht: Ampel rot vor anderen Flags (Grund für den Ausschluss) */
-export const mbFlagText = (flags) => (flags.includes(R.AMPEL_RED) ? t('mb.flagRed') : tx(flags[0]));
+export const mbFlagText = (flags) => (flags.includes(R.AMPEL_RED) ? t('mb.flagRed') : flags[0] === R.INCOMPLETE ? t('lib.incomplete') : tx(flags[0]));
 /** Ampel je Gruppe für die Feed-Prüfung (Gebiet und Anbieter wie oben; gelb und rot zuerst, höchstens 60 Zeilen) */
 export function mbAmpelHtml(ctx) {
   const { state, esc } = ctx; const ec = state.latest?.eventChecks;

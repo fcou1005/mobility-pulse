@@ -37,7 +37,10 @@ export async function computePlan() {
     const typeOk = (tq) => type === 'all' || tq === type;
     const counts = new Map(); for (const v of inMuni) if (typeOk(v.type)) counts.set(v.operator, (counts.get(v.operator) || 0) + 1);
     if (type === 'all' || type === 'bike' || type === 'ebike') for (const s of stInMuni) if (!counts.has(s.operator)) counts.set(s.operator, 0);
-    const ops = [...counts].sort((a, b) => b[1] - a[1]);
+    // stationsgebundenes Carsharing nicht vorwählen (Tübingen wählte teilAuto, 18.11.2026): Anbieter mit überwiegend Autos ans Ende
+    const cars = new Map(); for (const v of inMuni) if (typeOk(v.type) && v.type === 'car') cars.set(v.operator, (cars.get(v.operator) || 0) + 1);
+    const carOp = (/** @type {string} */ o) => (cars.get(o) || 0) * 2 > (counts.get(o) || 0);
+    const ops = [...counts].sort((a, b) => Number(carOp(a[0])) - Number(carOp(b[0])) || b[1] - a[1]);
     if (!ops.length) { const why = t('ops.noInInLastCollectorRunChoose', { v0: type === 'all' ? t('ops.vehiclesOrStations') : X.esc(X.TYPE[type] || type), muniName: X.esc(X.muniName(ags)) }); status(why); $('#ops-op').innerHTML = ''; emptyPlan(why); return; }
     const pick = (o) => o && counts.has(o) && (counts.get(o) > 0 || ops[0][1] === 0);
     let op = pick(S.op) ? S.op : pick(st.operator) ? st.operator : ops[0][0];
@@ -140,7 +143,7 @@ export async function replanRuns() {
 /** Prognose-Faktor und ÖPNV-Ziele als Satz hinter dem Status (leer, wenn beides aus ist) */
 function extNote(p) {
   const f = p.fc, pct = f ? Math.round((f.raw - 1) * 100) : 0, when = f ? (p.band === 'day' ? t('ops.fcNext24') : t('ops.fcHours', { from: f.from, to: f.to })) : '';
-  const a = f ? ` ${t(Math.abs(pct) < 3 ? 'ops.fcSame' : pct > 0 ? 'ops.fcMore' : 'ops.fcLess', { p: X.fmt(Math.abs(pct)), when, x: X.fmt(f.factor, 2), d: X.fmt(f.days || 7) })}` : '';
+  const a = f ? ` ${t(Math.abs(pct) < 3 ? 'ops.fcSame' : pct > 0 ? 'ops.fcMore' : 'ops.fcLess', { p: X.fmt(Math.abs(pct)), when, x: X.fmt(f.factor, 2), d: X.fmt(f.days || 7) })}${f.held ? ` ${t('ops.fcHeld', { p: X.fmt(Math.round((f.today - 1) * 100)) })}` : ''}` : '';
   const b = p.ptSpots?.length ? ` ${t('ops.ptTargets', { n: X.fmt(p.ptSpots.length), names: p.ptSpots.map(s => X.esc(s.oepnv.name)).join(', ') })}` : '';
   // Korrekturen der Prognose (forecast/dispo.json corrections): eingerechnet oder in der Probe nur angezeigt
   const c = p.fcPt, sgn = (x) => `${x >= 0 ? '+' : '−'}${X.fmt(Math.abs(x * 100), 1)} %`;

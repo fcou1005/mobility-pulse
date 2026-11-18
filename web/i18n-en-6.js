@@ -363,6 +363,7 @@ export default {
   // lib, Bausteine (lib)
   "lib.idle12d": "1–2 days",
   "lib.idle2d": ">2 days",
+  "trk.idle12d": "1–2 days",
   "trk.idle23d": "2–3 days",
   "trk.idle72h": "> 72 h",
   "trk.idleForAtLeast": "idle {v0} (not moved since tracking began)",

@@ -21,6 +21,7 @@ export async function run(ctx) {
     const name = (ags) => munis[ags]?.name || ags;
     const cur = AL.snapshot({ latest, caps: ctx.caps || null, pricing, pt: ctx.ptNow || null });
     const fresh = AL.detect(prev?.state || null, cur, { now, muniName: name });
+    AL.carryPriceSeen(prev?.state || null, cur, now);
     const doc = SV.withSchema('auflagen', AL.updateLog(prev, fresh, { now, state: cur }));
     await mkdir(path.join(DATA, 'auflagen'), { recursive: true });
     await writeFile(logFile, JSON.stringify(doc));

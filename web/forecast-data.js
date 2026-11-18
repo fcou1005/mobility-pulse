@@ -280,7 +280,7 @@ function decisionHtml(ctx, L, G) {
   const selfRel = (m) => FC.selfRelative(evals, m, days)?.r ?? null; // S2.2: gegen die bessere Basis, Summenverhältnis (wie lib)
   const pkOf = (m) => { const v = recs.map(x => x.models?.[m]?.peak?.hit1).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
   const t3Of = (m) => { const v = recs.map(x => x.models?.[m]?.peak?.top3).filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
-  const ms = [...MODEL_ORDER.filter(m => m !== 'naive'), 'naive', 'week'].filter(m => D?.live?.[m] || selfRel(m) != null || D?.combined?.[m]);
+  const ms = [...MODEL_ORDER.filter(m => m !== 'naive' && m !== 'week'), 'naive', 'week'].filter(m => D?.live?.[m] || selfRel(m) != null || D?.combined?.[m]);
   if (!ms.length) return `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.decTitle')}</h3><p class="fv-sub">${t('fv.decRule', { min: rule.liveMin, k: rule.liveK, hl: rule.halfLifeDays, gain: pc(rule.switchGain), base: rule.baseMin })}</p>`;
   const dmTxt = (m) => { const x = D?.dm?.[m]; return x ? `<div class="sub-line">${x.ok ? t('fv.dmOk', { p: numFmt(2).format(x.p), n: x.n }) : t('fv.dmLocked', { n: x.n, min: FC.DM.minDays })}</div>` : ''; };
   const rows = ms.map(m => { const lv = D?.live?.[m], c = D?.combined?.[m], sr = selfRel(m);
@@ -296,7 +296,8 @@ export function accuracyPanel(ctx, S0, sel, G, L) {
     : `<div class="empty"><b>${t('fv.accNone')}</b>${t('fv.accNoneHint')}</div>`;
   const live = (L?.live || []).slice(-6).reverse(), pk1 = (x) => (x?.peak?.hit1 == null ? '–' : pc(x.peak.hit1)), mdl = (x) => (x.model ? ctx.esc(modelName(x.model)) : '–');
   const liveHtml = live.length ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.liveTitle')}</h3><div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('fv.liveTitle'))}"><table><thead><tr><th>${t('fv.colIssued')}</th><th class="mh">${t('fv.colModel')}</th><th class="n">${t('fv.colErrOp')}</th><th class="n">${t('fv.colNaive')}</th><th class="n mh">${t('fv.colWeek')}</th><th class="n mh">${t('fv.colPeak1')}</th><th class="n mh">${t('fv.colBand')}</th><th class="n mh" title="${ctx.esc(t('fv.colPinballTip'))}">${t('fv.colPinball')}</th><th class="n mh">${t('fv.colHours')}</th></tr></thead><tbody>${live.map(x => `<tr><td>${ctx.esc(dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(x.at)))}</td><td class="mh">${mdl(x)}</td><td class="n">${pc(x.v >= 2 ? x.wapeOpHn : x.wapeOpH)}</td><td class="n">${pc(x.naiveOpH)}</td><td class="n mh">${pc(x.weekOpH)}</td><td class="n mh">${pk1(x)}</td><td class="n mh">${pc(x.cover80)}</td><td class="n mh">${x.pinball == null ? '–' : pc(x.pinball)}</td><td class="n mh">${x.hours == null ? '24' : n0(x.hours)}</td></tr>`).join('')}</tbody></table></div><div class="fv-sub">${t('fv.liveNote', { min: FC.GATES.liveMinHours })}${bandFreq(live)}</div>` : '';
-  return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div>${liveHtml}${decisionHtml(ctx, L, G)}</div>`;
+  // Technik (ausgegebene Prognosen, Modellwahl) eingeklappt: die Seite war 9.600 px lang, am Handy 14.000 px
+  return `<div class="panel">${head(t('fv.accTitle'), t('fv.accSub'))}${table}<div class="fv-sub">${t('fv.accNote')}</div><details class="fv-data fv-tech"><summary>${t('fv.techToggle')}</summary>${liveHtml}${decisionHtml(ctx, L, G)}</details></div>`;
 }
 
 // ---------- Gewähltes Gebiet bzw. Anbieter (11.11.2026): je Gruppe Erwartung, Trefferbilanz und woraus die Prognose lernt ----------
@@ -348,7 +349,7 @@ export function scopePanel(ctx, S0, sel, G, L) {
     + `<td>${r.w == null ? `<span class="muted">${t('fv.scLearnAll', { w: pc(R.w0) })}</span>` : `${splitBar(r.w)} <span class="fv-sub" style="display:inline">${t('fv.scOwnPct', { w: pc(r.w) })}</span>${r.y < XP.enough ? `<div class="sub-line">${t('fv.scLearnShrunk')}</div>` : ''}`}</td>`
     + `<td class="n">${r.plan ? `${pc(r.plan.a)}, ${pc(r.plan.b)} ${jChip(judge(r.plan.a, r.plan.b))}` : '<span class="muted">–</span>'}</td></tr>`).join('');
   const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(title)}"><table><thead><tr><th>${city ? t('fv.scColGroup') : t('fv.scColGroupCity')}</th><th class="n">${t('fv.scColExp')}</th><th class="n mh">${t('fv.scColXp')}</th><th class="n mh">${t('fv.scColHit')}</th><th>${t('fv.scColLearn')}</th><th class="n">${t('fv.scColPlan')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  const quietHtml = quiet.length ? `<div class="fv-sub">${t('fv.scQuiet', { n: n0(quiet.length), ok: XP.enough, list: quiet.map(r => label(r.k)).join(', ') })}</div>` : '';
+  const quietHtml = quiet.length ? `<div class="fv-sub">${t(quiet.length === 1 ? 'fv.scQuiet1' : 'fv.scQuiet', { n: n0(quiet.length), ok: XP.enough, list: quiet.map(r => label(r.k)).join('; ') })}</div>` : '';
   return `<div class="panel" id="fv-scope">${head(title, t('fv.scSub'))}<p class="fv-lead" style="margin-top:var(--s2)">${lead}</p>${shown.length ? tbl : ''}${quietHtml}`
     + `${R.more ? `<div class="fv-sub">${t('fv.scMore', { n: n0(R.more) })}</div>` : ''}<div class="fv-sub">${esc(activeHow(L))}</div><div class="fv-sub">${t('fv.scHowCols', { much: XP.much, ok: XP.enough })}</div></div>`;
 }

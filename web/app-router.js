@@ -11,7 +11,7 @@ import { renderCities, renderLab } from './app-energy.js';
 import { loadGroups, renderSignals } from './app-signals.js';
 import { renderCoverage, renderPricing, renderShareChart, renderSources } from './app-sources.js';
 import { econFor, loadCells, loadEvents, loadOnce, loadUsageIndex, renderUsage } from './app-usage.js';
-import { renderCalibPanel } from './app-calib.js';
+import { renderCalibPanel, GEO, geoKey, queueGeo } from './app-calib.js';
 import { renderTerms } from './app-terms.js';
 import { TYPE_FILTER, populateOperators, populateScope, renderFilterSum, scheduleToc } from './app.js';
 
@@ -202,7 +202,7 @@ export async function copyLink() {
 }
 // Nach neuem Datenstand oder Filterwechsel: Kopf sofort, Ansichten als veraltet markieren, nur die aktive zeichnen
 // Berichtsmodul (web/report.js): bekommt die Helfer und Lader der Seite, teilt deren Cache
-export const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells, health: (ags) => dataHealth({ ags }),
+export const rpCtx = () => ({ state, CFG, esc, fmt, getJson: getJsonShared, sharedCache: true, opColor, muniName, loadUsageIndex, loadEvents, loadHistory, loadCells, health: (ags) => dataHealth({ ags }), geo: { GEO, geoKey, queueGeo },
   setScope: (ags) => { const sel = $('#sel-scope'); if (![...sel.options].some(o => o.value === ags)) return; sel.value = ags; sel.dispatchEvent(new Event('change')); },
   // einzelnen Filter der Leiste setzen (kind: scope | op | type) bzw. alle zurücksetzen; wirkt wie die Auswahl in der Leiste
   setFilter: (kind, v) => { const sel = $(kind === 'scope' ? '#sel-scope' : kind === 'op' ? '#sel-operator' : '#sel-type'); if (!sel || sel.value === v || ![...sel.options].some(o => o.value === v)) return; sel.value = v; sel.dispatchEvent(new Event('change')); },

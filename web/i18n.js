@@ -169,7 +169,7 @@ async function loadArea(l, area) {
     if (BROWSER) {
       const r = await fetch(new URL(`i18n/${l}/${area}.json${BUILD ? `?v=${BUILD}` : ''}`, document.baseURI));
       if (!r.ok) throw new Error(`Wörterbuch ${k}: HTTP ${r.status}`);
-      Object.assign(DICT[l], await r.json());
+      Object.assign(DICT[l], await r.json()); REV = null; // Rückwärts-Zuordnung neu, sobald weitere deutsche Texte da sind
     } else {
       const src = './i18n-dict.js', d = await import(/* @vite-ignore */ src); // ganzes Wörterbuch (Node)
       Object.assign(DICT.de, d.DE); Object.assign(DICT.en, d.EN);

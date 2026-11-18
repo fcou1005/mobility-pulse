@@ -736,6 +736,12 @@ assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('ca
     `Prognose-Faktor: Band beim nächsten Vorkommen (${fm?.day} ${fm?.from}–${fm?.to} Uhr, × ${fm?.raw}), ganzer Tag über 24 Stunden`);
   assert(O.forecastFactor(d, 'Z', 'day') === null && O.forecastFactor({ ...d, ags: { A: [d.ags.A[0], d.ags.A[1].map(() => 0.5)] } }, 'A', 'day') === null && O.forecastFactor({ ...d, ags: { A: [d.ags.A[0].map(() => 1000), d.ags.A[1]] } }, 'A', 'day').factor === 2,
     'Prognose-Faktor: ohne Gemeinde oder mit zu wenig Messung keiner, begrenzt auf 0,5 bis 2');
+  // Schranke: Stadt heute deutlich über Plan → Prognose senkt den Bedarf nicht (Stuttgart 18.11.2026)
+  { const low = { ...d, ags: { A: [d.ags.A[0].map(x => x * 0.7), d.ags.A[1]] } }, f0 = O.forecastFactor(low, 'A', 'day');
+    const ser2 = { ...series, days: { ...series.days, '2026-11-16': { 'ags:A': { a: act.map((x, h) => (h < 12 ? x * 1.3 : null)), p: act.map((x, h) => (h < 12 ? x : null)) } } } };
+    const dd = O.dispoForecast(latest, ser2), fh = O.forecastFactor({ ...low, today: dd.today }, 'A', 'day'), fu = O.forecastFactor({ ...d, ags: { A: [d.ags.A[0].map(x => x * 1.5), d.ags.A[1]] }, today: dd.today }, 'A', 'day');
+    assert(f0.factor < 1 && !f0.held && Math.abs(dd.today.A[0] / dd.today.A[1] - 1.3) < 0.01 && fh.held && fh.factor === 1 && Math.abs(fh.raw - f0.raw) < 1e-9 && !fu.held,
+      `Schranke: heute +30 % über Plan hält den Bedarf bei × 1 statt × ${f0.factor.toFixed(2)}; nach oben wirkt sie nicht`); }
   // Korrekturen: Stand der Freigabe und Faktor je gestörter Gemeinde; Wirkung in Fahrten aus der Prognose (eingerechnet: aus ihr herausgerechnet)
   const gate = { on: false, why: 'few', n: 2, cases: 40, ratio: 0.97, p: 0.3, need: { minN: 7 } };
   const lat2 = { ...latest, stoerung: { applied: false, gate, learnUntil: '2026-11-23', rule: { maxLeadH: 3, tauH: 2 }, now: { c: { A: [1.2, 50, 50, 50] } } }, nowcast: { applied: false, gate: { ...gate, why: 'learning' }, now: { ratio: 1.1 } } };
@@ -749,7 +755,8 @@ assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('ca
   // ÖPNV-Ziele: Station mit eigenem Fahrzeug in 300 m und Station am Spot fallen weg, höchstens fünf, die stärkste Störung zuerst
   const rows = [['s1', 'Hbf', 48.53, 9.07, 40, 10, 10], ['s2', 'Uni', 48.54, 9.08, 30, 2, 20], ['s3', 'Mitte', base[0], base[1], 50, 30, 0], ['s4', 'Nord', 48.55, 9.10, 20, 1, 8]];
   const os = O.oepnvSpots(rows, { vehicles: [{ lat: 48.5401, lon: 9.0801 }], spots: [{ lat: base[0], lon: base[1] }], firstRank: 21 });
-  assert(os.map(s => `${s.cell}:${s.rank}`).join() === 'pt:s1:21,pt:s4:22' && os[0].target === 2 && os[0].oepnv.name === 'Hbf', `ÖPNV-Ziele: ${os.map(s => s.oepnv.name).join(', ')}`);
+  assert(os.map(s => `${s.cell}:${s.rank}`).join() === 'pt:s1:21' && os[0].target === 2 && os[0].oepnv.name === 'Hbf', `ÖPNV-Ziele: ${os.map(s => s.oepnv.name).join(', ')} (Nord 5 km vom nächsten Spot fällt weg)`);
+  assert(O.oepnvSpots(rows, { vehicles: [{ lat: 48.5401, lon: 9.0801 }], spots: [{ lat: base[0], lon: base[1] }], maxFromSpotM: 6000 }).length === 2, 'ÖPNV-Ziele: mit größerer Reichweite auch die Station am Rand');
   // durch Umsetzen und Schichtplan bis in die Fahrertour
   const sp1 = { spots: [] }, veh = [{ id: 'v1', lat: base[0] + 0.02, lon: base[1] + 0.02, battery: 90, idleMin: 3000 }, { id: 'v2', lat: base[0] + 0.0201, lon: base[1] + 0.0201, battery: 90, idleMin: 3000 }];
   const pr = O.planRebalance({ spots: sp1.spots, extraSpots: os, vehicles: veh, model: m, share: 0.5, depot });

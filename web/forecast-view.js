@@ -308,7 +308,9 @@ const LIGA = { bl1: '1. Bundesliga', bl2: '2. Bundesliga', bl3: '3. Liga', del: 
 const evWhen = (e, until = null) => {
   const d = (x, o) => dateFmt({ ...o, timeZone: TZ }).format(new Date(x)), day = { weekday: 'short', day: '2-digit', month: '2-digit' };
   if (until) return `${d(e.beginn, day)}–${d(CX.localMs(until), { day: '2-digit', month: '2-digit' })}`;
-  return e.noTime ? `${d(e.beginn, day)}, ${t(e.noTime === 1 ? 'fv.evAllDay' : 'fv.evNoTime')}` : d(e.beginn, { ...day, hour: '2-digit', minute: '2-digit' });
+  // ohne Uhrzeit: angenommenes Fenster nennen, mit dem Verlauf und Prognose rechnen (lib/pulse-context.js VENUES, pulse-termine.js)
+  const win = Number.isFinite(e.von) && Number.isFinite(e.bis) ? ` (${t('fv.evAssumed', { a: d(e.von, { hour: '2-digit', minute: '2-digit' }), b: d(e.bis, { hour: '2-digit', minute: '2-digit' }) })})` : '';
+  return e.noTime ? `${d(e.beginn, day)}, ${t(e.noTime === 1 ? 'fv.evAllDay' : 'fv.evNoTime')}${win}` : d(e.beginn, { ...day, hour: '2-digit', minute: '2-digit' });
 };
 const evKind = (e) => (e.src === 'sport' ? `${t('fv.evSport')}, ${LIGA[e.liga] || e.liga || ''}` : e.src === 'liste' ? `${e.kind ? t(`fv.evKind.${e.kind}`) : t('fv.evListe')}${e.auto ? `, ${t('fv.evAuto')}` : ''}` : e.kind || t('fv.evVenue'));
 const evWhat = (ctx, e) => (e.quelle && /^https?:/.test(e.quelle) && e.src !== 'sport' ? `<a href="${ctx.esc(e.quelle)}" target="_blank" rel="noopener">${ctx.esc(e.titel)}</a>` : ctx.esc(e.titel));

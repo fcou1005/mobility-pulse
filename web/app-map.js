@@ -241,7 +241,8 @@ export function setMapOps(vehicles) {
   if (!n.size) for (const [k, st] of Object.entries(state.latest?.groups || {})) { if (!groupInScope(k)) continue; const op = k.split('|')[1]; n.set(op, (n.get(op) || 0) + st.available); }
   MAP_OPS = new Set(state.operator !== 'all' ? [state.operator] : [...n].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([o]) => o));
 }
-export const mapColor = (op) => (MAP_OPS.has(op) ? opColor(op) : moreColor());
+// ein in der Legende hervorgehobener Anbieter trägt seine Farbe, auch wenn er nicht zu den zwei größten gehört (Dott mit 1.090 Fahrzeugen war grau)
+export const mapColor = (op) => (MAP_OPS.has(op) || state.mapFocus === op ? opColor(op) : moreColor());
 export function renderOpLegend(vehicles) {
   if (vehicles?.length) setMapOps(vehicles);
   const n = new Map();

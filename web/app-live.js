@@ -107,7 +107,9 @@ export async function liveFetch() {
   }
   state.live = { at: now, systems, groups, vehicles: dv.vehicles, stations: ds.stations, recs: recsOut, dedupe: { ...dv.stats, stationDuplicates: ds.duplicates }, targets: targets.length };
   clearNotice('live'); btn.disabled = false;
-  const failed = [...recsOut.values()].filter(r => !['live', 'delayed', 'collector'].includes(r.status));
+  // eine ausgefallene Quelle zählt nicht, wenn derselbe Anbieter über eine andere Quelle aktuell liefert (z. B. CityBikes-Spiegel neben dem GBFS-Feed)
+  const okOps = new Set([...recsOut.values()].filter(r => ['live', 'delayed', 'collector'].includes(r.status)).map(r => r.operator));
+  const failed = [...recsOut.values()].filter(r => !['live', 'delayed', 'collector'].includes(r.status) && !okOps.has(r.operator));
   // Kundenansicht: ohne „Sammler“ und Quellenzustände, nur wie viele Anbieter gerade keine aktuellen Daten haben
   if (failed.length) notice(() => cl(t('app.ofSourcesDeliveredNoUsable', { length: failed.length, size: recsOut.size, join: esc([...new Set(failed.map(r => STATUS[r.status] || r.status))].join(', ')) }), t('app.someOperatorsNoCurrentData', { n: fmt(new Set(failed.map(r => r.operator)).size) })), 'warn', 'livefail'); else clearNotice('livefail');
   if (!state.bIndex) notice(() => t('app.withoutMunicipalBoundaries'), 'warn', 'nob');

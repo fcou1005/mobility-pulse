@@ -16,7 +16,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [ops](#ops) | 1.4 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
-| [forecast](#forecast) | 1.2 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
+| [forecast](#forecast) | 1.3 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.1 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
@@ -342,7 +342,7 @@ Version 1.0 · Schema: [schemas/calib.schema.json](../schemas/calib.schema.json)
 
 forecast/ – Prognose. latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.
 
-Version 1.2 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
+Version 1.3 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
 
 ### forecast · latest
 
@@ -403,6 +403,7 @@ Für die Disposition (seit 1.1): je Gemeinde die Prognose der nächsten 24 Stund
 | `fields` |  | array von string |
 | `ags` | ja | object |
 | `corrections` |  | object – Seit 1.2: Korrekturen der Prognose – je Korrektur on (in prognose eingerechnet) und gate (Stand der Freigabe); Störungskorrektur mit cities (Faktor je gerade gestörter Gemeinde), maxLeadH, tauH, learnUntil; Tageskorrektur mit ratio |
+| `today` |  | object – Seit 1.3: je Gemeinde heute bisher \[gezählt, Plan\] über die Stunden mit beiden Werten; liegt gezählt ≥ 1,15 × Plan, senkt die Disposition den Bedarf nicht (lib/pulse-ops-extern.js DISPO_FC.holdAbove). |
 
 ## auflagen
 

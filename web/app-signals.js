@@ -83,7 +83,14 @@ export function computeSignalsNow() {
   }
   // Quellenzustand; geprüfte Direktfeed-Kandidaten ohne Feed sind kein Ausfall (wie in der Ampel)
   const recs = sourcesForScope().map(r => liveRec(r.id) || r);
+  // kein Quellen-Alarm, wenn derselbe Anbieter über eine andere Quelle aktuell liefert (CityBikes-Spiegel neben GBFS) oder die Lücke bekannt ist
+  // (state.latest.gaps, eigenes Hinweis-Signal weiter unten; Dott Tübingen stand sonst bei jedem Aufruf als „kritisch“ im Lagebild)
+  const liveKeys = new Set(recs.filter(r => ['live', 'delayed'].includes(r.status)).flatMap(r => (r.municipalities || []).map((/** @type {string} */ a) => `${r.operator}|${a}`)));
+  const covered = (/** @type {any} */ r) => (r.municipalities || []).length > 0 && r.municipalities.every((/** @type {string} */ a) => liveKeys.has(`${r.operator}|${a}`));
+  const gapKeys = new Set((state.latest?.gaps || []).map(g => `${g.operator}|${g.city}`));
+  const knownGap = (/** @type {any} */ r) => (r.municipalities || []).some((/** @type {string} */ a) => gapKeys.has(`${r.operator}|${muniName(a)}`));
   for (const r of recs) {
+    if (['stale', 'gone', 'error', 'auth'].includes(r.status) && (covered(r) || knownGap(r))) continue;
     if (r.candidate && !['live', 'delayed', 'stale', 'unknown', 'empty'].includes(r.status)) continue;
     // Audit UXM-04: Anbieter- und Art-Filter gelten auch für Quellen-Signale (vorher meldete „Voi · E-Scooter“ RegioRad als kritisch)
     if (state.operator !== 'all' && r.operator !== state.operator) continue;
