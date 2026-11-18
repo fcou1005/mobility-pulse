@@ -30,7 +30,7 @@ export default {
   "pt.mapStale": "The stop times from the run at {time} only reach {min} minutes ahead. New vehicle paths arrive with the collector's next run.",
   "pt.mapNone": "No vehicle paths loaded; they arrive with the collector's next run.",
   "pt.mapEmpty": "There are no vehicle paths for this city yet. They appear with the collector's next run (about every 20 minutes).",
-  "pt.mapNote": "The collector delivers a new report about every 20 minutes with the stop times for the next {min} minutes; in between the map keeps calculating from the last one. Between two stations a vehicle moves evenly along the route where it is known, otherwise along the straight line. Hovering shows the destination and next stop, a click lists the next stops with times (delay included); from zoom level 15 the destination is on the label. Trips without real-time data are missing.",
+  "pt.mapNote": "The collector delivers a new report about every 20 minutes with the stop times for the next {min} minutes; in between the map keeps calculating from the last one. Between two stations a vehicle moves evenly along the route where it is known, otherwise it stands at the nearer station. Hovering shows the destination and next stop, a click lists the next stops with times (delay included); from zoom level 15 the destination is on the label. Trips without real-time data are missing.",
   "pt.noLine": "line unknown",
   "pt.noDelay": "no delay information",
   "pt.onTime": "on time",

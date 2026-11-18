@@ -16,6 +16,18 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCo
   assert(lk.size === 2 && f.length === 3 && r[0].join() === '2,2' && r[2].join() === '1,1' && s?.length === 3 && no === null && lk.stats().hit === 3 && lk.stats().miss === 1,
     'Nachschlagen: Richtung, Gegenrichtung umgedreht, „sonst“ sucht in beiden Netzen, Bus nicht auf Gleisen');
 }
+// ---------- Lücken überbrücken (ausgelassene Halte, 18.11.2026) ----------
+{
+  const A = [48.0, 9.0], B = [48.0, 9.01], C = [48.0005, 9.0105], D = [48.01, 9.02], E = [48.2, 9.5];
+  const key = (n, p, q) => K.segKey(n, p[0], p[1], q[0], q[1]);
+  const doc = { segs: { [key('r', A, B)]: K.encodePolyline([A, [48.001, 9.005], B]), [key('r', C, B)]: K.encodePolyline([C, B]), [key('r', C, D)]: K.encodePolyline([C, D]), [key('s', A, E)]: K.encodePolyline([A, E]) } };
+  const lk = K.wegeLookup(doc), get = (art, p, q) => lk.get(art, p[0], p[1], q[0], q[1]);
+  const ac = get('sbahn', A, C), ad = get('sbahn', A, D), da = get('sbahn', D, A), far = get('sbahn', A, E), none = get('bus', B, D);
+  assert(ac && ac.length === 4 && ac[1][0] === 48.001 && ac.at(-1).join() === C.join() && ad && ad.length === 5 && da && da[0].join() === D.join() && da.at(-1).join() === A.join() && !far && !none,
+    'ausgelassener Halt: A → C über B zusammengesetzt (kurzes Glied gerade), auch rückwärts; ohne Netz der Art oder zu großer Umweg kein Verlauf');
+  const W = await import('../lib/pulse-geo-wege.js'), out = W.routePairs([{ net: 'r', a: [48.0, 9.0], b: [48.0003, 9.0003] }], () => null);
+  assert(out.stats.short === 1 && K.decodePolyline(out.segs[K.segKey('r', 48.0, 9.0, 48.0003, 9.0003)]).length === 2, 'Verbindung unter 100 m wird gerade abgelegt (Glied für das Überbrücken)');
+}
 // ---------- Lage entlang des Verlaufs ----------
 {
   const w = [48.0, 9.0, 0, 48.0, 9.02, 600, 48.01, 9.02, 900]; // Station A, B (10 min), C (5 min)

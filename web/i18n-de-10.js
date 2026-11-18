@@ -30,7 +30,7 @@ export default {
   "pt.mapStale": "Die Haltezeiten vom Lauf um {time} Uhr reichen nur {min} Minuten weit. Neue Fahrzeugwege kommen mit dem nächsten Lauf des Sammlers.",
   "pt.mapNone": "Keine Fahrzeugwege geladen; sie kommen mit dem nächsten Lauf des Sammlers.",
   "pt.mapEmpty": "Für diese Stadt liegen noch keine Fahrzeugwege vor. Sie erscheinen mit dem nächsten Lauf des Sammlers (etwa alle 20 Minuten).",
-  "pt.mapNote": "Der Sammler liefert etwa alle 20 Minuten eine neue Meldung mit den Haltezeiten der nächsten {min} Minuten; dazwischen rechnet die Karte mit der letzten weiter. Zwischen zwei Stationen fährt das Fahrzeug gleichmäßig auf dem Streckenverlauf, wo er bekannt ist, sonst auf der Luftlinie. Darüberfahren zeigt Ziel und nächsten Halt, ein Klick die nächsten Halte mit Uhrzeit (Verspätung eingerechnet); ab Zoomstufe 15 steht das Ziel am Schild. Fahrten ohne Echtzeit fehlen.",
+  "pt.mapNote": "Der Sammler liefert etwa alle 20 Minuten eine neue Meldung mit den Haltezeiten der nächsten {min} Minuten; dazwischen rechnet die Karte mit der letzten weiter. Zwischen zwei Stationen fährt das Fahrzeug gleichmäßig auf dem Streckenverlauf, wo er bekannt ist, sonst steht es an der näheren Station. Darüberfahren zeigt Ziel und nächsten Halt, ein Klick die nächsten Halte mit Uhrzeit (Verspätung eingerechnet); ab Zoomstufe 15 steht das Ziel am Schild. Fahrten ohne Echtzeit fehlen.",
   "pt.noLine": "Linie unbekannt",
   "pt.noDelay": "ohne Verspätungsangabe",
   "pt.onTime": "pünktlich",
