@@ -5,6 +5,9 @@ import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import * as AL from '../../lib/pulse-alarme.js';
+import * as BR from '../../lib/pulse-briefing.js';
+import * as CX from '../../lib/pulse-context.js';
+import { dayOf, hourOf } from '../../lib/pulse-track.js';
 import * as SV from '../../lib/pulse-schema.js';
 
 const BASE = 'https://fcou1005.github.io/mobility-pulse/', DATA_BASE = 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/';
@@ -47,8 +50,28 @@ export async function run(ctx) {
     for (const f of drop.slice(0, FEED_DROP_MAX)) await rm(path.join(DATA, 'feeds', f));
     if (drop.length) log(`Feeds: ${Math.min(drop.length, FEED_DROP_MAX)} Dateien kleiner Gemeinden entfernt${drop.length > FEED_DROP_MAX ? `, ${drop.length - FEED_DROP_MAX} folgen in den nächsten Läufen` : ''}`);
     if (written) log(`Feeds: ${written} geschrieben (${agsList.length} Gemeinden × ${AL.KINDS.length + 1})`);
+    // F32: Tagesbriefing einmal je Ortstag ab 6 Uhr (Feed feeds/<AGS>-briefing.xml; ntfy nur für BRIEFING_AGS, Vorgabe Stuttgart)
+    const topic = process.env.NTFY_TOPIC, bDay = dayOf(now);
+    doc.briefings = prev?.briefings || {}; doc.briefingDay = prev?.briefingDay || null;
+    if (BR.briefingDue(doc.briefingDay, bDay, hourOf(now))) {
+      const fc = await rd(path.join(DATA, 'forecast', 'latest.json')).catch(() => null), yday = dayOf(now - 86400e3);
+      const [sp, vd, cu] = await Promise.all(['sport.json', 'veranstaltungen.json', 'ereignisse.json'].map(f => rd(path.join(DATA, f)).catch(() => null)));
+      let evs = []; try { evs = CX.eventList({ sport: sp, venues: vd, curated: cu?.ereignisse || [], now, pastDays: 0, aheadDays: 1 }).filter((/** @type {any} */ e) => dayOf(e.beginn) === bDay); } catch { evs = []; }
+      const hhmm = (/** @type {number} */ ms) => new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(ms);
+      const out = {};
+      for (const ags of agsList) {
+        const [pt, ak] = await Promise.all([rd(path.join(DATA, 'oepnv', `${ags}.json`)).catch(() => null), rd(path.join(DATA, 'akku', `${ags}.json`)).catch(() => null)]);
+        const cap = (ctx.caps || []).find(c => c.ags === ags), ev = evs.filter((/** @type {any} */ e) => (e.ags || []).includes(ags)).sort((a, b) => (b.cap || 0) - (a.cap || 0)).map((/** @type {any} */ e) => ({ titel: e.titel, ort: e.ort, cap: e.cap, zeit: e.noTime ? null : hhmm(e.beginn) }));
+        const b = BR.briefingText({ name: name(ags), day: bDay, fc: BR.dayForecast(fc, ags, bDay), akku: ak?.totals || null, pt: BR.ptBrief(pt, yday), events: ev, cap: cap ? { total: cap.total, limit: cap.limit } : null });
+        if (b) out[ags] = { id: `briefing:${ags}:${bDay}`, at: now, ags, kind: 'briefing', op: null, level: 'info', ...b };
+      }
+      doc.briefings = out; doc.briefingDay = bDay; await writeFile(logFile, JSON.stringify(doc));
+      for (const [ags, b] of Object.entries(out)) await writeFile(path.join(DATA, 'feeds', `${ags}-briefing.xml`), AL.atomFeed({ ags, name: name(ags), kind: 'briefing', items: [b], base: BASE, dataBase: DATA_BASE, since }));
+      log(`Tagesbriefing: ${Object.keys(out).length} Gemeinden`);
+      const pushTo = (process.env.BRIEFING_AGS || BR.BRIEFING.pushDefault.join(',')).split(',').map(x => x.trim()).filter(Boolean);
+      if (topic) for (const ags of pushTo) { const b = out[ags]; if (b) await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: 'POST', body: b.text, headers: { Title: b.title, Tags: 'briefing', Priority: '2', Click: `${BASE}?scope=${ags}#stadt` }, signal: AbortSignal.timeout(8000) }).catch(() => null); }
+    } else await writeFile(logFile, JSON.stringify(doc));
     // Push über ntfy (frei, ohne Konto): nur wenn ein Thema gesetzt ist
-    const topic = process.env.NTFY_TOPIC;
     if (topic && fresh.length) for (const x of fresh.slice(0, 20)) {
       await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: 'POST', body: x.text, headers: { Title: x.title, Tags: x.kind, Priority: x.level === 'bad' ? '4' : '3', Click: `${BASE}?scope=${x.ags}#stadt` }, signal: AbortSignal.timeout(8000) }).catch(e => log(`ntfy: ${e.message}`));
     }

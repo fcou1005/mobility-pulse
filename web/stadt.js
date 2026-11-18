@@ -24,7 +24,7 @@ function css() {
   const s = document.createElement('style'); s.textContent = `
 .sd-lvl{display:inline-flex;gap:6px;align-items:center;font-weight:600}.sd-lvl i{display:inline-grid;place-items:center;width:1.3em;height:1.3em;border-radius:50%;font-style:normal;font-size:.75rem;color:var(--panel);background:var(--muted)}
 .sd-lvl.ok i{background:var(--ok)}.sd-lvl.warn i{background:var(--warn)}.sd-lvl.bad i{background:var(--bad)}
-.sd-links{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 0}.sd-alarms{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
+.sd-brief{margin:0;padding-left:1.1rem;display:grid;gap:var(--s1)}.sd-links{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 0}.sd-alarms{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
 .sd-alarms li{display:grid;grid-template-columns:auto 1fr;gap:2px var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--line)}.sd-alarms .k{grid-row:span 2}.sd-alarms small{color:var(--muted)}
 .sd-feeds{display:flex;flex-wrap:wrap;gap:var(--s2)}.sd-code{width:100%;font:.75rem/1.4 var(--mono);padding:var(--s2);border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--panel-2);color:var(--fg)}
 .sd-cal{display:grid;gap:var(--s4)}.sd-cal h3{margin:0 0 var(--s2);font-size:.875rem}
@@ -67,11 +67,14 @@ export async function renderStadt(el, ctx) {
   const alarmList = open.length ? `<ul class="sd-alarms">${open.slice(0, 10).map(x => `<li><span class="k">${lvlChip(x.level === 'bad' ? 'bad' : x.level === 'warn' ? 'near' : 'ok', ctx.esc(KIND_DE[x.kind] || x.kind))}</span><b>${ctx.esc(x.title)}</b><small>${stamp(x.at)}: ${ctx.esc(x.text)}</small></li>`).join('')}</ul>`
     : `<div class="empty"><b>${t('sd.noAlarms')}</b>${t('sd.noAlarmsHint')}</div>`;
   const embed = `<iframe src="${ctx.esc(new URL('.', location.href).href)}?embed=1&amp;scope=${ags}#stadt" title="Mobility Pulse – ${ctx.esc(name)}" width="100%" height="560" loading="lazy" style="border:0"></iframe>`;
-  el.innerHTML = `<div class="grid">
+  // F32: Tagesbriefing des Sammlers (heute ab 6 Uhr, auflagen/alarme.json briefings; Text deutsch wie die Feeds)
+  const br = alarms?.briefings?.[ags], brOk = br && alarms?.briefingDay === new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
+  const brief = brOk ? `<div class="panel c12" id="sd-briefing"><div class="panel-head"><div><h2>${t('sd.briefTitle')}</h2><div class="sub">${t('sd.briefSub', { time: stamp(br.at) })}</div></div></div><ul class="sd-brief">${String(br.text).split('\n').map(l => `<li>${ctx.esc(l)}</li>`).join('')}</ul></div>` : '';
+  el.innerHTML = `<div class="grid">${brief}
     <div class="panel c8"><div class="panel-head"><div><h2>${t('sd.alarmsTitle')}</h2><div class="sub">${t('sd.alarmsSub')}</div></div></div>${alarmList}
       <div class="sd-links"><a class="chip" href="#bericht">${t('sd.toReport')}</a><a class="chip" href="#auflagen">${t('sd.toAuflagen')}</a><a class="chip" href="#ausschreibungen">${t('sd.toTenders')}</a></div></div>
     <div class="panel c4 sd-noprint"><div class="panel-head"><div><h2>${t('sd.feedsTitle')}</h2><div class="sub">${t('sd.feedsSub')}</div></div></div>
-      ${(feeds?.municipalities || []).includes(ags) ? `<div class="sd-feeds"><a class="chip" href="${ctx.esc(feed(null))}" type="application/atom+xml">${t('sd.feedAll')}</a>${KINDS.map(k => `<a class="chip" href="${ctx.esc(feed(k))}" type="application/atom+xml">${ctx.esc(t(`sd.kind_${k}`))}</a>`).join('')}</div>`
+      ${(feeds?.municipalities || []).includes(ags) ? `<div class="sd-feeds"><a class="chip" href="${ctx.esc(feed(null))}" type="application/atom+xml">${t('sd.feedAll')}</a>${[...KINDS, 'briefing'].map(k => `<a class="chip" href="${ctx.esc(feed(k))}" type="application/atom+xml">${ctx.esc(t(`sd.kind_${k}`))}</a>`).join('')}</div>`
         : `<div class="empty"><b>${t('sd.noFeed')}</b>${t('sd.noFeedHint')}</div>`}
       <h3 style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('sd.embedTitle')}</h3><textarea class="sd-code" rows="4" readonly aria-label="${t('sd.embedTitle')}">${ctx.esc(embed)}</textarea></div>
   </div>`;

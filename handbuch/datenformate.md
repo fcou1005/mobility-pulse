@@ -17,7 +17,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.3 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
-| [auflagen](#auflagen) | 1.1 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
+| [auflagen](#auflagen) | 1.2 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
@@ -409,7 +409,7 @@ Für die Disposition (seit 1.1): je Gemeinde die Prognose der nächsten 24 Stund
 
 auflagen/ – Datenauflagen-Check und Alarme. Jahresbuch der Feed-Verfügbarkeit je Quelle (auflagen/verfuegbarkeit-&lt;Jahr&gt;.json, S5.1) und Alarmprotokoll je Gemeinde (auflagen/alarme.json, S5.2; daraus die Atom-Feeds feeds/&lt;AGS&gt;.xml).
 
-Version 1.1 · Schema: [schemas/auflagen.schema.json](../schemas/auflagen.schema.json)
+Version 1.2 · Schema: [schemas/auflagen.schema.json](../schemas/auflagen.schema.json)
 
 ### auflagen · ledger
 
@@ -432,6 +432,8 @@ Alarme der letzten 60 Tage, neueste zuerst; Zustand für den Vergleich mit dem n
 | `at` | ja | integer – Stand (ms seit 1970) |
 | `items` | ja | array von object |
 | `state` |  | object – Stand des letzten Laufs für den Vergleich (Obergrenzen, Quellenstatus, Zonen, Preise, Flotte) |
+| `briefings` |  | object – Seit 1.2 (F32): Tagesbriefing je Gemeinde (lib/pulse-briefing.js), Einträge wie items mit kind „briefing“; erneuert einmal je Ortstag ab 6 Uhr |
+| `briefingDay` |  | string / null – Seit 1.2: Ortstag des letzten Tagesbriefings |
 
 ## markt
 

@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/auflagen.schema.json",
  "title": "auflagen/ – Datenauflagen-Check und Alarme",
  "description": "Jahresbuch der Feed-Verfügbarkeit je Quelle (auflagen/verfuegbarkeit-<Jahr>.json, S5.1) und Alarmprotokoll je Gemeinde (auflagen/alarme.json, S5.2; daraus die Atom-Feeds feeds/<AGS>.xml).",
- "x-version": "1.1",
+ "x-version": "1.2",
  "$defs": {
   "ledger": {
    "type": "object",
@@ -176,6 +176,44 @@
     "state": {
      "type": "object",
      "description": "Stand des letzten Laufs für den Vergleich (Obergrenzen, Quellenstatus, Zonen, Preise, Flotte)"
+    },
+    "briefings": {
+     "type": "object",
+     "description": "Seit 1.2 (F32): Tagesbriefing je Gemeinde (lib/pulse-briefing.js), Einträge wie items mit kind „briefing“; erneuert einmal je Ortstag ab 6 Uhr",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "id",
+       "at",
+       "ags",
+       "title",
+       "text"
+      ],
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "at": {
+        "type": "number"
+       },
+       "ags": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       },
+       "text": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    "briefingDay": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "Seit 1.2: Ortstag des letzten Tagesbriefings"
     }
    }
   }
