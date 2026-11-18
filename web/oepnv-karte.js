@@ -153,7 +153,7 @@ export function tick(ctx, el) {
   const live = M.live, st = el.querySelector('#pt-map-status'); if (!M.map) return;
   const dt = live ? (Date.now() - live.at) / 1000 : Infinity, stale = !live || dt > (live.aheadMin || 45) * 60; let n = 0, late = 0;
   for (const x of M.marks) {
-    const p = stale ? null : WG.positionAlong(x.w, dt, (i) => x.geo[i]);
+    const p = stale ? null : WG.positionAlong(x.w, dt, (i) => x.geo[i], 120, true);
     if (!p) { if (x.on) { M.veh.removeLayer(x.mk); x.on = false; } continue; }
     x.mk.setLatLng(p); if (!x.on) { x.mk.addTo(M.veh); x.on = true; } n++; if (x.delay != null && x.delay >= 300) late++;
   }

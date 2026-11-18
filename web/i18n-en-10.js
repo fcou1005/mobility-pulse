@@ -237,7 +237,7 @@ export default {
   "pt.cancelMore": "{n} more lines",
   "pt.cancelSum": "Cancelled entirely according to real-time data: {n} trips ({list}). {w} of them fall between half an hour ago and {min} minutes ahead and are drawn dashed; for {nt} the feed gives no time, so they are missing from the map.",
   "pt.cancelSumNoTime": "Cancelled entirely according to real-time data: {n} trips ({list}). The feed gives no time for {nt} of them, so they are not on the map.",
-  "pt.pathsAir": "The map draws line paths only along the actual route: trains and trams on their tracks, buses on the roads they may use. There are no route shapes for {name} yet (the monthly geo run calculates them for the cities with the largest fleets); until then it shows only vehicles and stations.",
+  "pt.pathsAir": "The map draws line paths only along the actual route: trains and trams on their tracks, buses on the roads they may use. There are no route shapes for {name} yet (the monthly geo run calculates them for the cities with the largest fleets); until then vehicles stand at the nearer station instead of cutting across buildings.",
   "pt.pathsGeo": "Line paths follow the route from OpenStreetMap: trains and trams on their tracks, buses on the roads they may use (main roads and bus lanes before residential streets).",
   "pt.pathsShare": "Line paths: {p} % of {n} sections follow the route from OpenStreetMap (© OpenStreetMap contributors, ODbL), trains on tracks, buses on roads with one-way rules.",
   "pt.nowTipSkip": "{skip} of {n} stops cancelled, {late} late",
@@ -248,5 +248,5 @@ export default {
   "pt.vehNext": "Next stop: {name}, {time}",
   "pt.vehEnd": "No further stop reported",
   "pt.vehStops": "Next stops according to real-time data:",
-  "pt.pathsHidden": "{n} sections without a known route are not drawn; vehicles still move there.",
+  "pt.pathsHidden": "{n} sections without a known route are not drawn; vehicles stand at the nearer station there.",
 };

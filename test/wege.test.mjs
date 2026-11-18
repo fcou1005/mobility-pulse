@@ -24,6 +24,8 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCo
   const half = K.positionAlong(w, 300, geom), q = K.positionAlong(w, 750, geom), path = K.pathPoints(w, geom);
   assert(Math.abs(half[0] - 48.005) < 1e-6 && Math.abs(half[1] - 9.01) < 1e-4 && Math.abs(q[0] - 48.005) < 1e-9 && Math.abs(q[1] - 9.02) < 1e-9 && path.length === 5 && K.positionAlong(w, 2000, geom) === null,
     `Fahrzeug fährt den Bogen statt der Luftlinie (Mitte ${half.map(x => x.toFixed(4))}), ohne Verlauf Luftlinie; Weg mit allen Punkten`);
+  const s1 = K.positionAlong(w, 650, geom, 120, true), s2 = K.positionAlong(w, 850, geom, 120, true), s3 = K.positionAlong(w, 300, geom, 120, true);
+  assert(s1.join() === '48,9.02' && s2.join() === '48.01,9.02' && Math.abs(s3[0] - 48.005) < 1e-6, 'Live-Karte ohne Verlauf: Fahrzeug an der näheren Station, mit Verlauf weiter auf dem Bogen');
 }
 // ---------- Netz, Einbahn, Router ----------
 {

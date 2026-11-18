@@ -16,7 +16,7 @@ import { cellOf, dayOf, hourOf } from '../../lib/pulse-track-rules.js';
 import * as SV from '../../lib/pulse-schema.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const GEO = Object.freeze({ base: process.env.GEO_BASE || 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/geo/', checkH: 6, minVehicles: 20, keepDays: 30, feederCities: 30, minCount: 3, hideBand: 5, floorDefault: 15, moveM: 200, massLoss: 0.3, batchM: 25, batchMin: 3, swapPts: 15, stateV: 1 });
+export const GEO = Object.freeze({ base: process.env.GEO_BASE || 'https://raw.githubusercontent.com/fcou1005/mobility-pulse/geo/', checkH: 1, minVehicles: 20, keepDays: 30, feederCities: 30, minCount: 3, hideBand: 5, floorDefault: 15, moveM: 200, massLoss: 0.3, batchM: 25, batchMin: 3, swapPts: 15, stateV: 1 });
 const r4 = (x) => (x == null ? null : Math.round(x * 1e4) / 1e4);
 const LAND = { '01': 'SH', '02': 'HH', '03': 'NI', '04': 'HB', '05': 'NW', '06': 'HE', '07': 'RP', '08': 'BW', '09': 'BY', '10': 'SL', '11': 'BE', '12': 'BB', '13': 'MV', '14': 'SN', '15': 'ST', '16': 'TH' };
 

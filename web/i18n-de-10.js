@@ -237,7 +237,7 @@ export default {
   "pt.cancelMore": "{n} weitere Linien",
   "pt.cancelSum": "Ganz ausgefallen laut Echtzeit: {n} Fahrten ({list}). {w} davon fallen zwischen einer halben Stunde zurück und {min} Minuten voraus und sind gestrichelt eingezeichnet; bei {nt} nennt der Strom keine Uhrzeit, sie fehlen auf der Karte.",
   "pt.cancelSumNoTime": "Ganz ausgefallen laut Echtzeit: {n} Fahrten ({list}). Der Strom nennt für {nt} davon keine Uhrzeit, darum stehen sie nicht auf der Karte.",
-  "pt.pathsAir": "Linienwege zeichnet die Karte nur im Streckenverlauf: Züge und Bahnen auf ihren Gleisen, Busse auf den Straßen, die sie befahren dürfen. Für {name} gibt es die Verläufe noch nicht (der monatliche Geo-Lauf rechnet sie für die Städte mit den größten Flotten); bis dahin zeigt sie nur Fahrzeuge und Stationen.",
+  "pt.pathsAir": "Linienwege zeichnet die Karte nur im Streckenverlauf: Züge und Bahnen auf ihren Gleisen, Busse auf den Straßen, die sie befahren dürfen. Für {name} gibt es die Verläufe noch nicht (der monatliche Geo-Lauf rechnet sie für die Städte mit den größten Flotten); bis dahin stehen die Fahrzeuge an der jeweils näheren Station statt quer über die Häuser.",
   "pt.pathsGeo": "Linienwege im Streckenverlauf aus OpenStreetMap: Züge und Bahnen auf ihren Gleisen, Busse auf den Straßen, die sie befahren dürfen (Hauptstraßen und Busspuren vor Wohnstraßen).",
   "pt.pathsShare": "Linienwege: {p} % von {n} Abschnitten im Streckenverlauf aus OpenStreetMap (© OpenStreetMap-Mitwirkende, ODbL), Züge auf Gleisen, Busse auf Straßen mit Einbahnregeln.",
   "pt.nowTipSkip": "{skip} von {n} Halten ausgefallen, {late} verspätet",
@@ -248,5 +248,5 @@ export default {
   "pt.vehNext": "Nächster Halt: {name}, {time} Uhr",
   "pt.vehEnd": "Kein weiterer Halt gemeldet",
   "pt.vehStops": "Nächste Halte laut Echtzeit:",
-  "pt.pathsHidden": "{n} Abschnitte ohne bekannten Verlauf sind nicht gezeichnet; die Fahrzeuge fahren dort trotzdem.",
+  "pt.pathsHidden": "{n} Abschnitte ohne bekannten Verlauf sind nicht gezeichnet; Fahrzeuge stehen dort an der jeweils näheren Station.",
 };
