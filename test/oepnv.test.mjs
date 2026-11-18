@@ -217,5 +217,29 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(NZ2.learnEffects(NZ2.mergeDaily(null, { A: { '2026-11-12': [0.4, 1] } }, '2026-11-16')).cities.A[1] === Math.round(0.4 / 6 * 1000) / 1000, 'Lernen: unter 5 Stadt-Tagen zieht die Schätzung zu null');
 }
 
+// ---------- Abfahrtstafel, Suche, Linie entlang (F29/F35, lib/pulse-oepnv-tafel.js) ----------
+{
+  const TF = await import('../lib/pulse-oepnv-tafel.js');
+  const at = Date.parse('2026-11-18T16:00:00Z'), now = at + 5 * 60e3;
+  const live = { at, names: ['Hbf', 'Stadtmitte', 'Uni', 'Vaihingen'], trips: [
+    ['U6', 'ubahn', 120, [48.784, 9.182, 0, 48.776, 9.173, 600, 48.74, 9.1, 1200], null, 'Uni', [0, 1, 2]],
+    ['U6', 'ubahn', 0, [48.74, 9.1, 400, 48.776, 9.173, 1000, 48.784, 9.182, 1600], null, 'Hbf', [2, 1, 0]],
+    ['42', 'bus', null, [48.776, 9.173, 900, 48.73, 9.11, 1500], null, 'Vaihingen', [1, 3]],
+  ], ausfall: { rows: [['S1', 'sbahn', [48.784, 9.182, 300, 48.73, 9.11, 900], 'Herrenberg']] } };
+  const ix = TF.searchIndex(live), dep = TF.departures(live, 'Stadtmitte', now), hbf = TF.departures(live, 'Hbf', now);
+  assert(ix.lines.map(l => `${l.name}:${l.n}`).join() === 'U6:2,42:1' && ix.stations[0].name === 'Stadtmitte' && ix.stations[0].n === 3, `Suche: Linien und Stationen nach Häufigkeit (${ix.stations.map(s => s.name).join(', ')})`);
+  assert(dep.map(d => `${new Date(d.at).toISOString().slice(11, 16)} ${d.linie} ${d.ziel}`).join(' | ') === '16:10 U6 Uni | 16:15 42 Vaihingen | 16:16 U6 Hbf' && hbf.length === 1 && hbf[0].endet,
+    `Abfahrtstafel: nach Zeit, Verspätung im Weg, Ankunft am Ziel hinten (${dep.length})`);
+  const fleet = [{ lat: 48.7761, lon: 9.1731 }, { lat: 48.7762, lon: 9.1732 }, { lat: 48.7845, lon: 9.1825 }];
+  const al = TF.alongLine(live, 'U6', fleet), s1 = TF.alongLine(live, 'S1', fleet);
+  assert(al.map(r => `${r.name}:${r.vehicles}:${r.low ? 'wenig' : 'ok'}`).join() === 'Hbf:1:wenig,Stadtmitte:2:ok,Uni:0:wenig' && s1.length === 2 && s1[0].name === null,
+    `Linie entlang: Stationen mit Sharing in 300 m, ausgefallene Linie aus ihrem Weg (${al.map(r => r.name).join(' → ')})`);
+  const cl = TF.cancelledLines([['S4', 'sbahn', 600, 180, 240, 5.9, 120, 40, 50], ['U6', 'ubahn', 6000, 40, 190, 1.3, 1893, 0, 30], ['X', 'bus', 10, 5, 0, 0, 8, 4, 0]]);
+  assert(cl.length === 1 && cl[0].linie === 'S4' && Math.abs(cl[0].share - 1 / 3) < 1e-9, 'Schnellwahl: Linien mit mindestens 10 % Ausfall heute ab 20 Halten');
+  const as = TF.atStops([{ name: 'Hbf', lat: 48.784, lon: 9.182 }, { name: 'Hbf', lat: 48.78401, lon: 9.18201 }, { name: 'Uni', lat: 48.74, lon: 9.1 }],
+    [{ lat: 48.78405, lon: 9.18205, operator: 'Voi', type: 'scooter' }, { lat: 48.78408, lon: 9.1821, operator: 'Bolt', type: 'scooter' }, { lat: 48.7841, lon: 9.182, operator: 'stadtmobil', type: 'car' }, { lat: 48.785, lon: 9.182, operator: 'Voi', type: 'scooter' }]);
+  assert(as.total === 2 && as.rows.length === 1 && as.rows[0].name === 'Hbf' && as.rows[0].ops.Voi === 1 && as.rows[0].ops.Bolt === 1, 'An Haltestellen: E-Scooter und Räder bis 15 m, Autos und Fahrzeuge in 110 m nicht, doppelte Station einmal');
+}
+
 console.log(`${oks} ok, ${fails} Fehler`);
 if (fails) process.exitCode = 1;

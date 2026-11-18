@@ -251,6 +251,12 @@ try {
     const p = String(pop || '');
     if (!/ → /.test(p) || !/(Nächste Halte laut Echtzeit:\s*\d{1,2}:\d{2}|Kein weiterer Halt gemeldet)/.test(p) || errs.length) fail(`ÖPNV-Fahrzeug-Popup: ${JSON.stringify({ veh, pop: p.slice(0, 160), errs: errs.slice(0, 2) })}`);
     else console.log(`✓ ÖPNV-Fahrzeug zeigt Ziel und nächste Halte: ${p.replace(/\s+/g, ' ').slice(0, 90)}`);
+    // F29/F35: Suche nach Station (Abfahrtstafel) und Linie (Karte gefiltert, Stationen mit Sharing)
+    const pick = await page.evaluate(() => { const o = [...document.querySelectorAll('#pt-find-list option')].map(x => /** @type {HTMLOptionElement} */ (x).value); return { line: o.find(v => /^Linie /.test(v)), st: o.find(v => !/^Linie /.test(v)) }; });
+    const run = async (v) => { await page.fill('#pt-find', v || ''); await page.dispatchEvent('#pt-find', 'change'); await page.waitForTimeout(300); return page.evaluate(() => ({ out: document.querySelector('#pt-find-out')?.textContent || '', veh: document.querySelectorAll('.pt-veh').length })); };
+    const all = await page.evaluate(() => document.querySelectorAll('.pt-veh').length), a = await run(pick.st), b = await run(pick.line);
+    if (!/Abfahrten/.test(a.out) || !/Sharing entlang der Strecke/.test(b.out) || !(b.veh > 0 && b.veh < all)) fail(`ÖPNV-Suche: ${JSON.stringify({ pick, a: a.out.slice(0, 80), b: b.out.slice(0, 80), all, veh: b.veh })}`);
+    else console.log(`✓ ÖPNV-Suche: Abfahrtstafel ${pick.st}, ${pick.line} zeigt ${b.veh} von ${all} Fahrzeugen und die Stationen mit Sharing`);
     await close();
   }
   // M2: Bericht ohne Anbieter mit ungeklärter kommerzieller Nutzung (?lizenz=1): Hinweis nennt sie, Kopfzahl Flotte sinkt

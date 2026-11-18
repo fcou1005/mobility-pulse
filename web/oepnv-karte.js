@@ -8,11 +8,13 @@ import * as NZ from './pulse-oepnv-karte.js';
 import * as WG from './pulse-oepnv-wege.js';
 import { HIT, MODEL, seriesColor, moreColor, ptCancelColor } from './tokens.js';
 import { t, dateFmt } from './i18n.js';
+import { findHtml, bindFind } from './oepnv-tafel.js';
 
 /** Zustand der Karte; web/oepnv.js setzt live und fleet vor setupMap */
 export const M = { map: /** @type {any} */ (null), veh: /** @type {any} */ (null), share: /** @type {any} */ (null), paths: /** @type {any} */ (null), hi: /** @type {any} */ (null), timer: 0, live: /** @type {any} */ (null), fleet: /** @type {any[] | null} */ (null),
   hot: /** @type {any[]} */ ([]), showShare: false, showPaths: true, showCancel: true, off: /** @type {Set<string>} */ (new Set()), marks: /** @type {any[]} */ ([]), status: '',
-  wege: /** @type {ReturnType<typeof WG.wegeLookup> | null} */ (null), cover: /** @type {{ hit: number, miss: number } | null} */ (null), skipShare: 0.15 };
+  wege: /** @type {ReturnType<typeof WG.wegeLookup> | null} */ (null), cover: /** @type {{ hit: number, miss: number } | null} */ (null), skipShare: 0.15,
+  onlyLine: /** @type {string | null} */ (null), focus: /** @type {any} */ (null), fx: /** @type {any} */ (null) };
 const MODE_KEY = { bus: 'pt.artBus', tram: 'pt.artTram', ubahn: 'pt.artUbahn', sbahn: 'pt.artSbahn', regio: 'pt.artRegio', fern: 'pt.artFern', bahn: 'pt.artBahn', sonst: 'pt.artSonst' };
 export const modeTxt = (/** @type {string} */ a) => t(MODE_KEY[/** @type {keyof typeof MODE_KEY} */ (a)] || 'pt.artSonst');
 const MODE_ORDER = ['bus', 'tram', 'ubahn', 'sbahn', 'regio', 'fern', 'bahn', 'sonst'];
@@ -20,7 +22,8 @@ const modeColor = (/** @type {string} */ a) => { const i = MODE_ORDER.indexOf(a)
 const delayColor = (/** @type {number | null} */ d) => (d == null ? HIT.none : d >= 300 ? HIT.miss : d >= 120 ? MODEL.blend : HIT.ok);
 const timeTxt = (/** @type {number} */ ms) => (ms ? dateFmt({ hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(ms)) : '–');
 const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
-export const KARTE_CSS = `.pt-veh{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-weight:600;font-size:.6875rem;line-height:1;padding:3px 5px;border-radius:9px;background:var(--panel);color:var(--fg);border:2px solid var(--c);box-shadow:0 1px 2px rgba(0,0,0,.25)}
+export const KARTE_CSS = `.pt-find{margin:var(--s2) 0}.pt-find input{min-width:16rem;max-width:100%}.pt-find h3{margin:var(--s3) 0 var(--s2)}
+.pt-veh{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-weight:600;font-size:.6875rem;line-height:1;padding:3px 5px;border-radius:9px;background:var(--panel);color:var(--fg);border:2px solid var(--c);box-shadow:0 1px 2px rgba(0,0,0,.25)}
 .pt-veh.rail{border-radius:3px}
 .pt-far .pt-veh{font-size:0;padding:0;width:10px;height:10px;border-radius:50%;background:var(--c);border-color:var(--panel)}
 .pt-far .pt-veh.rail{border-radius:2px}
@@ -43,7 +46,7 @@ export const KARTE_CSS = `.pt-veh{display:inline-block;transform:translate(-50%,
 export function stopTimer() { if (M.timer) { clearInterval(M.timer); M.timer = 0; } }
 /** Tafel der Karte: Schalter, Legende, Kasten, Statuszeile */
 /** @param {any} ctx @param {string} name @param {any} live */
-export function mapPanel(ctx, name, live) {
+export function mapPanel(ctx, name, live, lineRows = []) {
   if (!live) return `<div class="panel"><div class="panel-head"><div><h2>${t('pt.mapTitle', { name })}</h2><div class="sub">${t('pt.mapSub')}</div></div></div><div class="empty">${t('pt.mapEmpty')}</div></div>`;
   const cnt = /** @type {Record<string, number>} */ ({}); for (const r of live.trips || []) cnt[r[1]] = (cnt[r[1]] || 0) + 1;
   const modes = MODE_ORDER.filter(a => cnt[a]), cc = ptCancelColor();
@@ -52,6 +55,7 @@ export function mapPanel(ctx, name, live) {
     <div class="pt-bar"><label><input type="checkbox" id="pt-paths"${M.showPaths ? ' checked' : ''}> ${t('pt.pathsToggle')}</label><label><input type="checkbox" id="pt-cancel"${M.showCancel ? ' checked' : ''}> ${t('pt.cancelToggle')}</label><label><input type="checkbox" id="pt-share"${M.showShare ? ' checked' : ''}${M.fleet ? '' : ' disabled'}> ${t('pt.shareToggle')}</label></div>
     <div class="pt-legend" style="--x:${cc}"><span class="small muted">${t('pt.legDelay')}</span><span><i style="background:${HIT.ok}"></i>${t('pt.legOk')}</span><span><i style="background:${MODEL.blend}"></i>${t('pt.legLate2')}</span><span><i style="background:${HIT.miss}"></i>${t('pt.legLate5')}</span><span><i style="background:${HIT.none}"></i>${t('pt.legNone')}</span><span><i style="background:transparent;border:2px solid ${HIT.miss}"></i>${t('pt.legHotLate')}</span></div>
     <div class="pt-legend" style="--x:${cc};margin-top:var(--s2)"><span class="small muted">${t('pt.legCancelHead')}</span><span><b class="x" aria-hidden="true">×</b>${t('pt.legSkipStop')}</span><span><i class="ring"></i>${t('pt.legSkipVeh')}</span><span><i class="dash"></i>${t('pt.legCancel')}</span><span><i class="ring"></i>${t('pt.legHotSkip')}</span><span><i class="sq" style="background:${HIT.over}"></i>${t('pt.legShare')}</span></div>
+    ${findHtml(ctx, live, lineRows)}
     <div id="pt-map" class="pt-map" role="application" aria-label="${ctx.esc(t('pt.mapTitle', { name }))}"></div><p class="small" id="pt-map-status" aria-live="polite"></p>
     <p class="small" id="pt-cancel-sum">${cancelSummary(ctx, live)}</p>
     <p class="muted small" id="pt-paths-note">${pathsNote(ctx, name)}</p>
@@ -107,7 +111,7 @@ function vehPopup(ctx, r) {
 /** @param {any} ctx */
 function rebuild(ctx) {
   if (!M.map) return; M.veh.clearLayers(); M.paths.clearLayers(); M.hi.clearLayers(); M.marks = [];
-  const trips = (M.live?.trips || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1])), cc = ptCancelColor();
+  const trips = (M.live?.trips || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]) && (!M.onlyLine || r[0] === M.onlyLine)), cc = ptCancelColor();
   if (M.showPaths) {
     // nur im Streckenverlauf (Gleise, für Busse Straßen); Luftlinien von Halt zu Halt ergaben ein unlesbares Strichgewirr, die Fahrzeuge fahren dort trotzdem
     let hit = 0, miss = 0;
@@ -124,7 +128,7 @@ function rebuild(ctx) {
       .bindTooltip(`${ctx.esc(h.name)}: ${t(skip ? 'pt.nowTipSkip' : 'pt.nowTipLate', { skip: ctx.fmt(h.skip), late: ctx.fmt(h.late), n: ctx.fmt(h.n) })}`).addTo(M.paths);
   }
   // ganz ausgefallene Fahrten mit Zeit im Fenster: gestrichelt auf ihrem Weg
-  if (M.showCancel) for (const [line, art, w, ziel] of (M.live?.ausfall?.rows || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]))) {
+  if (M.showCancel) for (const [line, art, w, ziel] of (M.live?.ausfall?.rows || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]) && (!M.onlyLine || r[0] === M.onlyLine))) {
     if (!w || w.length < 6) continue; const geo = geomOf(art, w);
     L.polyline(/** @type {any} */ (WG.pathPoints(w, (i) => geo[i])), { color: cc, weight: 3, opacity: 0.85, dashArray: '6 6' }).bindTooltip(t('pt.cancelTip', { line: `${ctx.esc(line || t('pt.noLine'))}${ziel ? ` → ${ctx.esc(ziel)}` : ''}`, art: modeTxt(art), time: timeTxt((M.live.at || 0) + w[2] * 1000) })).addTo(M.paths);
   }
@@ -166,7 +170,8 @@ export function setupMap(ctx, el, rows, reload) {
   L.control.zoom({ zoomInTitle: t('common.zoomIn'), zoomOutTitle: t('common.zoomOut') }).addTo(M.map);
   M.map.attributionControl?.setPrefix(`<a href="https://leafletjs.com" title="${t('common.leafletTitle')}" lang="en">Leaflet</a>`);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: `${t('app.openstreetmapContributors')}, ${ctx.esc(M.live?.attribution || NZ.NETZ_ATTRIBUTION)}` }).addTo(M.map);
-  M.paths = L.layerGroup().addTo(M.map); M.share = L.layerGroup().addTo(M.map); M.hi = L.layerGroup().addTo(M.map); M.veh = L.layerGroup().addTo(M.map);
+  M.paths = L.layerGroup().addTo(M.map); M.share = L.layerGroup().addTo(M.map); M.hi = L.layerGroup().addTo(M.map); M.fx = L.layerGroup().addTo(M.map); M.veh = L.layerGroup().addTo(M.map);
+  M.onlyLine = null; M.focus = null;
   const far = () => { box.classList.toggle('pt-far', M.map.getZoom() < 13); box.classList.toggle('pt-near', M.map.getZoom() >= 15); }; M.map.on('zoomend', far);
   const pts = /** @type {any[]} */ ((rows || []).slice(0, 60).map(r => [r[2], r[3]]));
   if (pts.length) M.map.fitBounds(L.latLngBounds(pts).pad(0.05)); else M.map.setView([51.2, 10.4], 6);
@@ -175,6 +180,11 @@ export function setupMap(ctx, el, rows, reload) {
   el.querySelector('#pt-share')?.addEventListener('change', (e) => { M.showShare = /** @type {HTMLInputElement} */ (e.target).checked; drawShare(); tick(ctx, el); });
   el.querySelector('#pt-paths')?.addEventListener('change', (e) => { M.showPaths = /** @type {HTMLInputElement} */ (e.target).checked; rebuild(ctx); tick(ctx, el); });
   el.querySelector('#pt-cancel')?.addEventListener('change', (e) => { M.showCancel = /** @type {HTMLInputElement} */ (e.target).checked; rebuild(ctx); tick(ctx, el); });
+  // Suche: Linie filtert die Karte, Station zeigt die Abfahrtstafel und rückt sie in die Mitte (F29/F35)
+  bindFind(ctx, el, () => M.live, () => M.fleet, {
+    onLine: (l) => { M.onlyLine = l; rebuild(ctx); tick(ctx, el); },
+    onStation: (st) => { M.focus = st; M.fx.clearLayers(); if (st && Number.isFinite(st.lat)) { L.circleMarker([st.lat, st.lon], { radius: 14, weight: 3, color: HIT.none, fill: false, interactive: false }).addTo(M.fx); M.map.setView([st.lat, st.lon], Math.max(M.map.getZoom(), 15)); } },
+  });
   for (const c of el.querySelectorAll('#pt-modes input')) c.addEventListener('change', () => { const a = /** @type {HTMLElement} */ (c).dataset.mode || ''; if (/** @type {HTMLInputElement} */ (c).checked) M.off.delete(a); else M.off.add(a); rebuild(ctx); notes(); tick(ctx, el); });
   // Lage jede Sekunde (ruhig gestellt: alle 15 s), neue Meldung jede Minute; endet, wenn die Ansicht den Kasten nicht mehr zeigt
   let ticks = 0, busy = false; const every = still ? 15000 : 1000, ags = ctx.state.scope;

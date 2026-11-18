@@ -3,6 +3,7 @@
 // Daten: oepnv/<AGS>.json (lines, profile; seit Format 1.1), Störungskorrektur aus forecast/dispo.json. Texte unter pt.* (Bereich oepnv).
 import { t, dateFmt } from './i18n.js';
 import { modeTxt as artTxt } from './oepnv-karte.js';
+import * as TF from './pulse-oepnv-tafel.js';
 
 const csvNum = (/** @type {number | null} */ x, d = 1) => (x == null ? '' : (+x).toFixed(d).replace('.', ','));
 const pct = (/** @type {any} */ ctx, /** @type {number | null} */ x, d = 1) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
@@ -73,4 +74,18 @@ export function bindMehr(el, doc, ags, days, download, hints = /** @type {any[]}
   el.querySelector('#pt-lm-csv')?.addEventListener('click', () => download(`letzte_meile_${ags}.csv`, ['zelle;einwohner_fern_vom_oepnv;anteil_mit_fahrzeug;einwohner_ohne_beides', ...(ver?.letzteMeile?.cells?.rows || []).map((/** @type {any[]} */ r) => [r[0], r[1], csvNum(r[2], 3), Math.round(r[1] * (1 - (r[2] ?? 0)))].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-now-csv')?.addEventListener('click', () => download(`oepnv_jetzt_gestoert_${ags}.csv`, ['station;name;lat;lon;halte;ausgefallen;verspaetet;sharing_fahrzeuge_300m', ...hints.map(x => [x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), x.n, x.skip, x.late, x.vehicles ?? ''].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-ln-csv')?.addEventListener('click', () => download(`oepnv_linien_${ags}.csv`, ['linie;art;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(doc?.lines?.rows || []).map((/** @type {any[]} */ r) => [`"${String(r[0]).replace(/"/g, '""')}"`, r[1], csvNum(r[2] / days), csvNum(r[3] / r[2], 3), csvNum(r[4] / r[2], 3), csvNum(r[5])].join(';'))].join('\n') + '\n'));
+}
+
+/** Sharing-Fahrzeuge direkt an Haltestellen (F30): Stationen der Gemeinde (Tabelle + Live-Datei) gegen den verfügbaren Bestand */
+/** @param {any} ctx @param {any} doc @param {any} live @param {any[]|null} fleet @param {string} name */
+export function atStopsPanel(ctx, doc, live, fleet, name) {
+  if (!fleet) return '';
+  const F = doc?.fields || [], iN = F.indexOf('name'), iA = F.indexOf('lat'), iO = F.indexOf('lon');
+  const st = [...(doc?.rows || []).map((/** @type {any[]} */ r) => ({ name: r[iN], lat: r[iA], lon: r[iO] })), ...TF.searchIndex(live).stations];
+  const R = TF.atStops(st, fleet), f = (/** @type {number} */ x) => ctx.fmt(x);
+  const body = R.rows.length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.asTitle', { name }))}"><table><thead><tr><th>${t('pt.colStation')}</th><th class="n">${t('pt.asColN')}</th><th>${t('pt.asColOps')}</th><th>${t('pt.colMap')}</th></tr></thead><tbody>
+    ${R.rows.map(r => `<tr><td>${ctx.esc(r.name)}</td><td class="n">${f(r.n)}</td><td>${Object.entries(r.ops).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${ctx.esc(o)} ${f(n)}`).join(', ')}</td><td><a href="https://www.openstreetmap.org/?mlat=${r.lat}&amp;mlon=${r.lon}#map=19/${r.lat}/${r.lon}" target="_blank" rel="noopener">OSM ↗</a></td></tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty">${t('pt.asNone', { name })}</div>`;
+  return `<div class="panel" id="pt-atstops"><div class="panel-head"><div><h2>${t('pt.asTitle', { name })}</h2><div class="sub">${t('pt.asSub')}</div></div></div>
+    ${R.rows.length ? `<p>${t('pt.asLead', { n: `<b>${f(R.total)}</b>`, s: f(R.stations) })}</p>` : ''}${body}<p class="muted small">${t('pt.asNote')}</p></div>`;
 }
