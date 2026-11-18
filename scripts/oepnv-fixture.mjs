@@ -4,6 +4,7 @@
 //   node scripts/oepnv-fixture.mjs [--out test/fixtures/oepnv-synth]
 // make-fixture.mjs kopiert diese Dateien in das Fixture, wenn der Datenstand keine echten ÖPNV-Dateien enthält.
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import * as PG from '../lib/pulse-oepnv-prog.js';
 import path from 'node:path';
 import { NETZ, NETZ_LICENSE, NETZ_ATTRIBUTION, LIVE_FIELDS, STATION_FIELDS } from '../lib/pulse-oepnv-netz.js';
 import { SCHEMA } from '../lib/pulse-schema.js';
@@ -42,7 +43,10 @@ for (const ags of fx.ags) {
   const lines = Array.from({ length: ags === '08111000' ? 18 : 4 }, (_, i) => { const art = ['bus', 'tram', 'sbahn'][i % 3], h = Math.round((1400 - 60 * i) * (0.8 + 0.4 * rnd())), q = 0.03 + 0.25 * rnd() * (i % 4 === 0 ? 1.5 : 0.5); return [`${art === 'sbahn' ? 'S' : art === 'tram' ? 'U' : ''}${i + 1}${art === 'bus' ? 0 : ''}`, art, h, Math.round(h * q * 0.3), Math.round(h * q * 0.7), Math.round((1 + 18 * q) * 10) / 10, Math.round(h / days * 0.7), 0, 0]; });
   const pPt = Array.from({ length: 24 }, (_, h) => (h >= 5 ? Math.round(nSt * 14 * (h >= 7 && h <= 9 || h >= 16 && h <= 18 ? 1.5 : 1) * (h >= 22 ? 0.3 : 1)) : h === 0 ? Math.round(nSt * 2.5) : 0)), pSh = Array.from({ length: 24 }, (_, h) => Math.round((ags === '08111000' ? 60 : 8) * (h < 5 ? 0.25 : h >= 22 ? 0.6 : 0.5 + 0.5 * Math.sin((h - 5) / 17 * Math.PI)) * 10) / 10);
   const pk = Math.max(...pPt), profile = { days: 2, pt: pPt, sharing: pSh, gap: pPt.map((x, h) => (x < 0.25 * pk && pSh[h] >= 3 ? h : -1)).filter(h => h >= 0), gapShare: 0.25, minSharing: 3 };
-  await put(`${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, ...head, halfLifeDays: NETZ.halfLifeDays, days, stations: nSt + 40, fields: STATION_FIELDS, rows, hours: H, lines: { fields: LINE_FIELDS, rows: lines }, profile, jetzt: { windowH: JETZT.windowH, minN: JETZT.minN, fields: JETZT_FIELDS, rows: st.filter((_, i) => i % 4 === 1).slice(0, 5).map((s, i) => [s.id, s.name, s.lat, s.lon, 40 - 4 * i, 6 - i, 9 - i]) } });
+  // F28: Verspätungsprognose (synthetisch, gleiche Form wie lib/pulse-oepnv-prog.js cityOutlook)
+  const mean = { late: 0.06, skip: 0.009 }, next = Array.from({ length: 24 }, (_, i) => { const t = fx.at + (i + 1) * 3600e3, h = +new Intl.DateTimeFormat('de-DE', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Berlin' }).format(t), d = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(t); return [d, h, Math.round((0.04 + 0.05 * (h >= 16 && h <= 19 ? 1 : 0) + 0.01 * rnd()) * 1e4) / 1e4, Math.round((0.006 + 0.006 * rnd()) * 1e4) / 1e4, pPt[h] || 100]; }).filter(x => Number(x[4]) >= 100);
+  const prognose = { at: fx.at, fields: ['tag', 'stunde', 'verspaetet', 'ausgefallen', 'halte'], next, eval: { days: 5, hours: 90, mae: 0.0372, maeNaive: 0.0394, better: true }, mean, lines: PG.lineOutlook(lines, next, mean) };
+  await put(`${ags}.json`, { schemaVersion: sv, ags, at: fx.at, feedAt: fx.at - 40e3, ...head, halfLifeDays: NETZ.halfLifeDays, days, stations: nSt + 40, fields: STATION_FIELDS, rows, hours: H, lines: { fields: LINE_FIELDS, rows: lines }, profile, prognose, jetzt: { windowH: JETZT.windowH, minN: JETZT.minN, fields: JETZT_FIELDS, rows: st.filter((_, i) => i % 4 === 1).slice(0, 5).map((s, i) => [s.id, s.name, s.lat, s.lon, 40 - 4 * i, 6 - i, 9 - i]) } });
   // Fahrzeugwege: je Fahrt 5 bis 8 Stationen in Folge, Start bis 10 Minuten vor dem Stand, Halte alle 2 bis 4 Minuten
   const trips = [], ARTEN = ['bus', 'bus', 'ubahn', 'sbahn', 'bus', 'regio', 'tram', 'fern'];
   for (let k = 0; k < (ags === '08111000' ? 60 : 12); k++) {

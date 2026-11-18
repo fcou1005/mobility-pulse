@@ -22,7 +22,8 @@ const modeColor = (/** @type {string} */ a) => { const i = MODE_ORDER.indexOf(a)
 const delayColor = (/** @type {number | null} */ d) => (d == null ? HIT.none : d >= 300 ? HIT.miss : d >= 120 ? MODEL.blend : HIT.ok);
 const timeTxt = (/** @type {number} */ ms) => (ms ? dateFmt({ hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(ms)) : '–');
 const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
-export const KARTE_CSS = `.pt-find{margin:var(--s2) 0}.pt-find input{min-width:16rem;max-width:100%}.pt-find h3{margin:var(--s3) 0 var(--s2)}
+export const KARTE_CSS = `#pt-prog .fv-bar{display:inline-block;height:.5rem;background:var(--accent);border-radius:2px;margin-left:var(--s2);vertical-align:middle}#pt-prog .bars .t{display:inline-block;min-width:3.5rem}
+.pt-find{margin:var(--s2) 0}.pt-find input{min-width:16rem;max-width:100%}.pt-find h3{margin:var(--s3) 0 var(--s2)}
 .pt-veh{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-weight:600;font-size:.6875rem;line-height:1;padding:3px 5px;border-radius:9px;background:var(--panel);color:var(--fg);border:2px solid var(--c);box-shadow:0 1px 2px rgba(0,0,0,.25)}
 .pt-veh.rail{border-radius:3px}
 .pt-far .pt-veh{font-size:0;padding:0;width:10px;height:10px;border-radius:50%;background:var(--c);border-color:var(--panel)}

@@ -241,5 +241,22 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(as.total === 2 && as.rows.length === 1 && as.rows[0].name === 'Hbf' && as.rows[0].ops.Voi === 1 && as.rows[0].ops.Bolt === 1, 'An Haltestellen: E-Scooter und Räder bis 15 m, Autos und Fahrzeuge in 110 m nicht, doppelte Station einmal');
 }
 
+// ---------- Verspätungsprognose (F28, lib/pulse-oepnv-prog.js) ----------
+{
+  const PG = await import('../lib/pulse-oepnv-prog.js');
+  const day = (i) => new Date(Date.parse('2026-11-18T12:00:00Z') - i * 86400e3).toISOString().slice(0, 10);
+  const docs = new Map();
+  for (let i = 14; i >= 0; i--) { const d = day(i), we = ['S', 'H'].includes(PG.dayType(d)), n = new Array(24).fill(0).map((_, h) => (h >= 5 ? (we ? 2000 : 4000) : 0));
+    const late = n.map((x, h) => Math.round(x * (h === 17 ? 0.2 : we ? 0.03 : 0.06) * (1 + 0.1 * ((i * 7 + h) % 3 - 1))));
+    docs.set(d, { ags: { A: { ptN: n, ptLate: late, ptSkip: n.map(x => Math.round(x * 0.01)) } } }); }
+  const days = PG.cityDays(docs, 'A'), p = PG.predictDay(days, day(0)), sat = PG.predictDay(days, '2026-11-21');
+  assert(PG.dayType('2026-11-18') === 'W' && PG.dayType('2026-11-21') === 'S' && PG.dayType('2026-11-22') === 'H' && Math.abs(p.late[17] - 0.2) < 0.02 && Math.abs(p.late[10] - 0.06) < 0.01 && sat.late[10] < p.late[10] && p.late[2] === null,
+    `Prognose: Stunde 17 mit 20 % Verspätung, Werktag 6 %, Samstag weniger (${sat.late[10]}), Nacht ohne Halte ohne Wert`);
+  const out = PG.cityOutlook(docs, 'A', Date.parse('2026-11-18T09:20:00Z'), [['S4', 'sbahn', 600, 180, 240, 5.9, 120, 40, 50], ['U6', 'ubahn', 30, 1, 2, 1, 5, 0, 0]]);
+  assert(out && out.next[0][0] === '2026-11-18' && out.next[0][1] === 11 && out.eval && out.eval.hours > 0 && out.eval.mae <= out.eval.maeNaive && out.lines.length === 1 && out.lines[0][0] === 'S4',
+    `Ausblick: ab der nächsten vollen Ortsstunde, Selbstprüfung ${JSON.stringify(out?.eval)}, Linien ab 40 Halten`);
+  assert(PG.cityOutlook(new Map([...docs].slice(-2)), 'A', Date.now(), []) === null, 'Ohne mindestens drei Tage keine Prognose');
+}
+
 console.log(`${oks} ok, ${fails} Fehler`);
 if (fails) process.exitCode = 1;

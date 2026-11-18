@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/oepnv.schema.json",
  "title": "ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV)",
  "description": "oepnv/<AGS>.json (Stationen und Stunden einer Gemeinde), oepnv/live/<AGS>.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.",
- "x-version": "1.6",
+ "x-version": "1.7",
  "$defs": {
   "ags": {
    "type": "object",
@@ -231,6 +231,49 @@
         "type": "array",
         "minItems": 7,
         "maxItems": 7
+       }
+      }
+     }
+    },
+    "prognose": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: [Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: [Linie, Art, erwartet verspätet, erwartet ausgefallen] für die nächsten 3 Stunden.",
+     "properties": {
+      "at": {
+       "type": "number"
+      },
+      "fields": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "next": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5
+       }
+      },
+      "eval": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "mean": {
+       "type": "object"
+      },
+      "lines": {
+       "type": "array",
+       "items": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4
        }
       }
      }

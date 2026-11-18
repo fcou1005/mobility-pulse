@@ -8,6 +8,7 @@ import * as T from '../../lib/pulse-track.js';
 import * as OE from '../../lib/pulse-oepnv.js';
 import * as NZ from '../../lib/pulse-oepnv-netz.js';
 import * as LN from '../../lib/pulse-oepnv-linien.js';
+import * as PG from '../../lib/pulse-oepnv-prog.js';
 import * as SV from '../../lib/pulse-schema.js';
 import { gzipSync, gunzipSync, inflateRawSync } from 'node:zlib';
 
@@ -77,7 +78,9 @@ export async function run(ctx) {
         if (st?.v !== NZ.NETZ.version) st = NZ.emptyNetzState();
         const mc = NZ.mergeCounts(st, counter.result(), now); st.lines ||= NZ.emptyNetzState(); const ml = NZ.mergeCounts(st.lines, lines.result(), now); await writeFile(stFile, gzipSync(JSON.stringify(st)));
         const today = T.dayOf(now), totals = NZ.stationTotals(st, today), byAgs = NZ.stationsByAgs(ix), pr = paths.result();
-        const days8 = Array.from({ length: 8 }, (_, i) => T.dayOf(now - (7 - i) * 86400e3)), hist = await incidentDocs(days8), lineBy = LN.lineRows(NZ.stationTotals(st.lines, today)), hot = LN.hotspots(ix, recent.result());
+        // F28: Verspätungsprognose aus bis zu PG.PTP.days Tagen (Ortstage vor heute plus heute)
+        const daysP = Array.from({ length: PG.PTP.days + 1 }, (_, i) => T.dayOf(now - (PG.PTP.days - i) * 86400e3)), histP = await incidentDocs(daysP); let progN = 0;
+        const days8 = daysP.slice(-8), hist = new Map(/** @type {Array<[string, any]>} */ (days8.filter(d => histP.has(d)).map(d => [d, histP.get(d)]))), lineBy = LN.lineRows(NZ.stationTotals(st.lines, today)), hot = LN.hotspots(ix, recent.result());
         let series = null; try { series = JSON.parse(await readFile(path.join(DATA, 'forecast', 'series.json'), 'utf8')); } catch { series = null; }
         const ptNow = {}, hNow = T.hourOf(now - 3600e3), dNow = T.dayOf(now - 3600e3); // letzte volle Ortsstunde je Gemeinde für die Alarme (Phase alarme)
         const liveDir = path.join(dir, 'live'); await mkdir(liveDir, { recursive: true });
@@ -86,12 +89,14 @@ export async function run(ctx) {
           const rows = NZ.stationRows(ix, qs, totals), hours = NZ.hoursOf(hist, ags, days8), trips = pr.by.get(ags) || [];
           if (!rows.length && !hours.days.length && !trips.length) continue;
           const lr = lineBy.get(ags) || [], profile = series ? LN.dayProfile(hist, series, ags, { today }) : null;
+          const prognose = PG.cityOutlook(histP, ags, now, lr); if (prognose) progN++;
           const aN = hist.get(dNow)?.ags?.[ags]; if (aN?.ptN?.[hNow] >= NZ.NETZ.minHourN) ptNow[ags] = { day: dNow, hour: hNow, n: aN.ptN[hNow], skip: aN.ptSkip?.[hNow] || 0, late: aN.ptLate?.[hNow] || 0, flag: aN.pt?.[hNow] ? 1 : 0 };
-          await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(NZ.netzDays(st, now) * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile, jetzt: { windowH: LN.JETZT.windowH, minN: LN.JETZT.minN, fields: LN.JETZT_FIELDS, rows: hot.get(ags) || [] } })));
+          await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(NZ.netzDays(st, now) * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile, jetzt: { windowH: LN.JETZT.windowH, minN: LN.JETZT.minN, fields: LN.JETZT_FIELDS, rows: hot.get(ags) || [] }, prognose })));
           await writeFile(path.join(liveDir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, aheadMin: NZ.NETZ.aheadMin, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, fields: NZ.LIVE_FIELDS, ...NZ.liveRows(trips, ix), ausfall: NZ.cancelDoc(pr.cancel.get(ags)) })));
           const td = hours.days.at(-1) === today ? hours.days.length - 1 : -1, sum = (a) => (td < 0 ? 0 : a[td].reduce((x, y) => x + y, 0));
           cities[ags] = [rows.length, sum(hours.n), sum(hours.skip), sum(hours.late), trips.length]; files++; vehicles += trips.length;
         }
+        log(`ÖPNV-Verspätungsprognose: ${progN} Gemeinden (Tage ${[...histP.values()].filter(d => Object.keys(d?.ags || {}).length).length})`);
         // Wirkung auf Sharing: Prognose-Reihen des vorigen Laufs (forecast/series.json) gegen die Störungs-Stunden
         ctx.ptNow = ptNow;
         const { daily, ...eff } = series ? NZ.ptEffect(hist, series, { today }) : { daily: {}, rule: null, pooled: null, cities: [] };

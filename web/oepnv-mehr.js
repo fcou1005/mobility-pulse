@@ -89,3 +89,19 @@ export function atStopsPanel(ctx, doc, live, fleet, name) {
   return `<div class="panel" id="pt-atstops"><div class="panel-head"><div><h2>${t('pt.asTitle', { name })}</h2><div class="sub">${t('pt.asSub')}</div></div></div>
     ${R.rows.length ? `<p>${t('pt.asLead', { n: `<b>${f(R.total)}</b>`, s: f(R.stations) })}</p>` : ''}${body}<p class="muted small">${t('pt.asNote')}</p></div>`;
 }
+
+/** Verspätungsprognose (F28): nächste Stunden der Gemeinde, Linien für die nächsten 3 Stunden, Selbstprüfung gegen „wie gestern“ */
+/** @param {any} ctx @param {any} doc @param {string} name */
+export function progPanel(ctx, doc, name) {
+  const P = doc?.prognose; if (!P?.next?.length) return '';
+  const pc = (/** @type {number} */ x, d = 1) => `${ctx.fmt(Math.round(x * 100 * 10 ** d) / 10 ** d, d)} %`, f = (/** @type {number} */ x) => ctx.fmt(x);
+  const a3 = P.next.slice(0, 3), mL = a3.reduce((s, x) => s + x[2], 0) / a3.length, mS = a3.reduce((s, x) => s + x[3], 0) / a3.length, max = Math.max(0.01, ...P.next.map((/** @type {any[]} */ x) => x[2] + x[3]));
+  const ev = P.eval ? t(P.eval.better ? 'pt.pgEvalBetter' : 'pt.pgEvalWorse', { m: ctx.fmt(P.eval.mae * 100, 1), n: ctx.fmt(P.eval.maeNaive * 100, 1), d: f(P.eval.days), h: f(P.eval.hours) }) : t('pt.pgEvalNone');
+  const hours = P.next.slice(0, 12).map((/** @type {any[]} */ x) => `<tr><td>${x[1]}–${x[1] + 1} h</td><td class="n bars"><span class="t">${pc(x[2])}</span><span class="fv-bar" style="width:${Math.round(x[2] / max * 110)}px"></span></td><td class="n">${pc(x[3])}</td><td class="n">${f(x[4])}</td></tr>`).join('');
+  const lines = (P.lines || []).map((/** @type {any[]} */ l) => `<tr><td>${ctx.esc(l[0])}</td><td>${artTxt(l[1])}</td><td class="n">${pc(l[2], 0)}</td><td class="n">${pc(l[3], 0)}</td></tr>`).join('');
+  return `<div class="panel" id="pt-prog"><div class="panel-head"><div><h2>${t('pt.pgTitle', { name })}</h2><div class="sub">${t('pt.pgSub')}</div></div></div>
+    <p>${t('pt.pgLead', { l: `<b>${pc(mL)}</b>`, s: `<b>${pc(mS)}</b>`, ml: pc(P.mean?.late || 0), ms: pc(P.mean?.skip || 0) })}</p>
+    <div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.pgTitle', { name }))}"><table><thead><tr><th>${t('pt.colHour')}</th><th class="n">${t('pt.pgColLate')}</th><th class="n">${t('pt.pgColSkip')}</th><th class="n">${t('pt.pgColN')}</th></tr></thead><tbody>${hours}</tbody></table></div>
+    ${lines ? `<h3>${t('pt.pgLines')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.pgLines'))}"><table><thead><tr><th>${t('pt.colLine')}</th><th>${t('pt.pgColArt')}</th><th class="n">${t('pt.pgColLate')}</th><th class="n">${t('pt.pgColSkip')}</th></tr></thead><tbody>${lines}</tbody></table></div>` : ''}
+    <p class="muted small">${ev} ${t('pt.pgNote')}</p></div>`;
+}
