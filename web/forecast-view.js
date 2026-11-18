@@ -9,7 +9,7 @@ import { t, tMap, dateFmt, numFmt, fcReason } from './i18n.js';
 import { weatherFor, weatherSvg } from './weather.js';
 import { chartExtra } from './charttip.js';
 import { putAnswer } from './answer.js';
-import { FAM, LAST_RATED, TZ, accRows, accuracyPanel, addDays, badge, berlinNow, blendTxt, corrNote, corrPanel, css, dayStats, dayTxt, gateTxt, famFile, famNow, fj, head, learnPanel, memo, modelName, n0, pc, pickScope, raceOf, scopePanel, seriesOf, sg, st, sum, tile, timeline } from './forecast-data.js';
+import { FAM, LAST_RATED, TZ, accRows, accuracyPanel, addDays, badge, berlinNow, blendTxt, corrNote, corrPanel, css, dayStats, dayTxt, gateTxt, famFile, famNow, fj, head, learnPanel, memo, modelName, n0, n1, pc, pickScope, raceOf, scopePanel, seriesOf, sg, st, sum, tile, timeline } from './forecast-data.js';
 import { NOT_KEYS, NOT_STATE, bindDl, bindTop, csvBtn, curvePanel, dlRow, download, envHtml, fileTag, gradeOf, gradePanel, verdictMain, verdictMore, judge, paintSpots, paramRows, spotsPanelShell, topBar } from './forecast-parts.js';
 
 // ---------- Hauptansicht ----------
@@ -27,8 +27,31 @@ export async function renderForecastView(el, ctx, opts = {}) {
     if (!S0 || S0.version !== 1 || !L) { none(); return; }
     if (part === 'spots') return await renderSpotsPart(el, ctx, s, S0, L);
     if (part === 'basis') return renderBasisPart(el, ctx, s, S0, L, G);
+    if (fam !== 'micro' && FC.smallNoForecast(L)) return renderSmall(el, ctx, S0, L, fam);
     await renderVerlauf(el, ctx, s, tok, S0, L, G);
   } catch (e) { console.error('Prognose-Ansicht', e); if (tok === s.tok) none(); }
+}
+
+/** E-Roller und Carsharing ohne tragfähiges Volumen (FC.smallNoForecast, 18.11.2026): ehrlicher Stand statt der Vorwoche als Prognose –
+ * Fahrtbeginne heute und im 7-Tage-Mittel, gemeldete Flotte, je Anbieter der Befund (steht still, Quelle liefert nicht, zu wenige Fahrten) */
+function renderSmall(el, ctx, S0, L, fam) {
+  const { esc } = ctx, sel = pickScope(S0, ctx.state), lt = ctx.state.latest || {}, min = L.minVolume ?? FC.MIN_VOLUME[fam] ?? 500;
+  const S = FC.smallState(S0, lt.municipalities, FC.FAMILY_TYPES[fam] || [], S0.today, { ags: sel.ags, sources: lt.sources });
+  const perDay = S.perDay ?? L.volume, todayA = sum((seriesOf(S0, S0.today, { keys: ['DE'] }).a || []).filter(x => x != null)), famL = t(`fv.fam.${fam}`);
+  const still = S.rows.filter(r => r.still && !r.down), where = (r) => r.ags.map(a => ctx.muniName?.(a) || a).join(', ') || '–';
+  const lead = still.length ? ` ${t('fv.smallStillLead', { op: still.map(r => `${r.op} (${where(r)})`).join(', '), n: n0(sum(still.map(r => r.vehicles))), days: S.days })}` : '';
+  const answer = putAnswer(el, { id: 'prognose', sentence: `<b>${esc(t('fv.smallNone', { fam: famL }))}</b> ${esc(t('fv.smallWhy', { n: n1(perDay), min: n0(min), days: S.days || 7 }))}${esc(lead)}`,
+    kpis: [
+      { label: t('fv.smallKToday'), value: n0(todayA), n: Math.round(todayA), cmp: t('fv.smallKTodayCmp') },
+      { label: t('fv.smallKAvg', { days: S.days || 7 }), value: n1(perDay), cmp: t('fv.smallKAvgCmp', { min: n0(min) }) },
+      { label: t('fv.smallKFleet'), value: n0(S.vehicles), n: S.vehicles, cmp: still.length ? t('fv.smallKFleetStill', { n: n0(sum(still.map(r => r.vehicles))) }) : t('fv.smallKFleetCmp') },
+    ], how: esc(t('fv.smallHow', { min: n0(min) })), asOf: S0.generatedAt ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) : '' });
+  const find = (r) => (r.down ? t('fv.smallDown') : r.still ? t('fv.smallStill', { days: r.days }) : r.vehicles === 0 ? t('fv.smallGone') : t('fv.smallFew', { n: n1(r.days ? r.starts / r.days : null) }));
+  const table = S.rows.length ? `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.smallTitle'))}"><table><thead><tr><th>${t('fv.smallColOp')}</th><th>${t('fv.smallColWhere')}</th><th class="n">${t('fv.smallColVeh')}</th><th class="n">${t('fv.smallColStarts', { days: S.days })}</th><th>${t('fv.smallColFind')}</th></tr></thead><tbody>`
+    + S.rows.map(r => `<tr><td>${esc(r.op)}</td><td>${esc(where(r))}</td><td class="n">${n0(r.vehicles)}</td><td class="n">${n0(r.starts)}</td><td class="wrap">${esc(find(r))}</td></tr>`).join('') + '</tbody></table></div>'
+    : `<p class="fv-sub">${esc(t('fv.smallNoOps', { fam: famL }))}</p>`;
+  el.innerHTML = topBar(ctx, sel) + `${answer}<div class="fv-grid"><div class="panel">${head(esc(t('fv.smallTitle')), esc(t('fv.smallSub', { days: S.days || 7 })))}${table}<p class="fv-sub">${esc(t('fv.smallNext', { min: n0(min) }))}</p></div></div>`;
+  bindTop(el, ctx);
 }
 
 async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
@@ -424,7 +447,7 @@ async function fillEvents(box, ctx, sel, S0 = null) {
 }
 
 export function scopeLabel(ctx, sel) {
-  const parts = [sel.ags && sel.ags !== 'DE' ? (ctx.muniName?.(sel.ags) || sel.ags) : t('fc.scopeDE'), sel.op && sel.op !== 'all' && !sel.ignored ? sel.op : null, sel.ty && sel.ty !== 'all' && !sel.ignored ? sel.ty : null].filter(Boolean);
+  const parts = [sel.ags && sel.ags !== 'DE' ? (ctx.muniName?.(sel.ags) || sel.ags) : t('fc.scopeDE'), sel.op && sel.op !== 'all' && !sel.ignored ? sel.op : null, sel.ty && sel.ty !== 'all' && !sel.ignored ? (tMap('type', VEHICLE_TYPE_LABEL)[sel.ty] || sel.ty) : null].filter(Boolean);
   return parts.join(', ');
 }
 /** Ist des heutigen Tags frisch aus events/<Tag>.json (Sammler-Lauf alle paar Minuten); null = Datei fehlt, dann gelten die Reihen aus series.json */

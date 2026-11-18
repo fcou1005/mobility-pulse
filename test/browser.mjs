@@ -242,6 +242,15 @@ try {
     else console.log(`✓ Abstellflächen-Planer Stuttgart (synthetisch): ${m[1]} Vorschläge decken ${m[2]} von ${m[3]} Fahrtenden, CSV bereit`);
     await close();
   }
+  // E-Roller ohne Volumen (18.11.2026): keine Schein-Prognose, sondern Stand je Anbieter mit Befund und nächstem Schritt
+  if (!ONLY || ONLY.includes('prognose')) {
+    const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: 'DE', viewport: { width: 1280, height: 900 }, hash: 'prognose', query: '&type=moped' });
+    const txt = await page.waitForFunction(() => { const x = document.querySelector('#view-prognose')?.textContent || document.body.textContent || ''; return /Warum keine Prognose\?/.test(x) ? x : null; }, null, { timeout: 30000 }).then(h => h.jsonValue()).catch(() => null);
+    const x = String(txt || '').replace(/\s+/g, ' ');
+    if (!/Für E-Roller gibt es derzeit keine Prognose\. Gezählt wurden in den letzten \d Tagen im Mittel [\d,]+ Fahrtbeginne je Tag/.test(x) || !/Geprüft wird bei jedem Sammler-Lauf, alle 20 Min\./.test(x) || /Erwartet werden bis Tagesende/.test(x) || /moped/.test(x) || errs.length) fail(`E-Roller-Prognose: ${JSON.stringify({ x: x.slice(0, 300), errs: errs.slice(0, 2) })}`);
+    else console.log(`✓ E-Roller ohne Volumen: ${(/Für E-Roller[^.]*\.[^.]*\./.exec(x) || [''])[0]}`);
+    await close();
+  }
   // ÖPNV-Live-Karte: Klick auf ein Fahrzeug zeigt Ziel und die nächsten Halte mit Uhrzeit
   if (!ONLY || ONLY.includes('oepnv')) {
     const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'oepnv' });
