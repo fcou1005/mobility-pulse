@@ -16,7 +16,7 @@ import { UA, sleep, download, zipAll, zipLines, zipNames } from './common.mjs';
 import { osmExtract } from './wege-osm.mjs';
 
 const CFG = { cities: +(process.env.GEO_WEGE_CITIES || W.WEGE_GEO.cities), budgetMin: +(process.env.GEO_WEGE_BUDGET_MIN || W.WEGE_GEO.budgetMin),
-  overpass: (process.env.GEO_OVERPASS || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter,https://overpass.private.coffee/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter').split(','), pauseMs: 5000,
+  overpass: (process.env.GEO_OVERPASS || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter,https://overpass.private.coffee/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter').split(','), pauseMs: 5000, overpassRestMs: +(process.env.GEO_OVERPASS_REST_MS || 300e3),
   source: process.env.GEO_WEGE_SOURCE || (process.env.GEO_OVERPASS ? 'overpass' : 'osm') };
 
 async function overpass(q) {
@@ -86,10 +86,10 @@ export async function runWege({ OUT, TMP, DATA, bounds, log, now, top }) {
   if (fallback) log(`Wege: Overpass für ${todo.length} Städte ohne früheren Verlauf, nur Straßen`);
   const roadOf = async (p) => (fromOsm ? fromOsm(`road-${p.ags}`) : overpass(W.overpassRoad(p.roadBb)).then(async (el) => { await sleep(CFG.pauseMs); return el; }));
   const tileElements = async (tl) => { if (!tiles.has(tl.key)) { tiles.set(tl.key, fromOsm ? await fromOsm(`rail-${tl.key.replace(':', '_')}`) : await overpass(W.overpassRail(tl.bb))); if (!fromOsm) await sleep(CFG.pauseMs); } return tiles.get(tl.key); };
-  let fails = 0;
-  for (const x of todo) {
+  // eine Stadt rechnen: 'ok' | 'err' | 'budget'
+  const one = async (x) => {
     const { ags, fleet, name, road } = x, rail = fallback ? [] : x.rail, tl0 = fallback ? [] : x.tiles;
-    if ((Date.now() - t0) / 60e3 > CFG.budgetMin) { log(`Wege: Zeitbudget erreicht vor ${name}`); break; }
+    if ((Date.now() - t0) / 60e3 > CFG.budgetMin) { log(`Wege: Zeitbudget erreicht vor ${name}`); return 'budget'; }
     try {
       const t1 = Date.now();
       const roadEl = road.length ? await roadOf(x) : [];
@@ -99,12 +99,26 @@ export async function runWege({ OUT, TMP, DATA, bounds, log, now, top }) {
       const doc = JSON.stringify({ schemaVersion: '1.0', ags, at: now, day: ymd, attribution: '© OpenStreetMap-Mitwirkende (ODbL); Fahrplan: gtfs.de (DELFI e. V. u. a.), CC BY 4.0', license: 'ODbL 1.0',
         note: 'kürzester Weg im OSM-Netz je Verbindung Station → Station (Schlüssel: Netz r = Schiene, s = Straße, Lage beider Stationen), Polyline 5 Nachkommastellen', stats: res.stats, segs: res.segs });
       await writeFile(path.join(dir, `${ags}.json`), doc);
-      idx[ags] = { name, fleet, road: road.length, rail: rail.length, ...(fallback && x.rail.length ? { railSkipped: x.rail.length } : {}), ...res.stats, bytes: doc.length, s: Math.round((Date.now() - t1) / 1000) }; fails = 0;
+      idx[ags] = { name, fleet, road: road.length, rail: rail.length, ...(fallback && x.rail.length ? { railSkipped: x.rail.length } : {}), ...res.stats, bytes: doc.length, s: Math.round((Date.now() - t1) / 1000) };
       log(`Wege ${name}: ${res.stats.routed} von ${res.stats.pairs} Verbindungen mit Verlauf (Straße ${road.length}, Schiene ${rail.length}; zu kurz ${res.stats.short}, ohne Weg ${res.stats.noPath}, zu lang ${res.stats.tooLong}), ${(doc.length / 1e6).toFixed(2)} MB, ${idx[ags].s} s`);
-    } catch (e) { log(`Wege ${name}: ${e.message}`); idx[ags] = { name, fleet, error: e.message };
-      // ohne Landesextrakte und mit totem Overpass nicht stundenlang weiterversuchen (19.11.2026: Lauf #7 nach 70 Minuten abgebrochen)
-      if (!fromOsm && ++fails >= 3) { log('Wege: Overpass dreimal nacheinander gescheitert, Teil abgebrochen'); break; } }
-  }
+      return 'ok';
+    } catch (e) { log(`Wege ${name}: ${e.message}`); idx[ags] = { name, fleet, error: e.message }; return 'err'; }
+  };
+  // Overpass im Rückfall (19.11.2026, Lauf #9: jede zweite Stadt 502, auch Tübingen): nach 3 Fehlschlägen in Folge 5 Minuten Pause, nach 6 Abbruch;
+  // gescheiterte Städte bekommen am Ende einen zweiten Versuch, solange das Zeitbudget reicht
+  const pass = async (list, label) => {
+    const failed = []; let fails = 0;
+    for (const x of list) {
+      const r = await one(x); if (r === 'budget') return { failed, stop: true };
+      if (r === 'ok') { fails = 0; continue; }
+      failed.push(x); if (fromOsm) continue;
+      if (++fails >= 6) { log(`Wege: Overpass sechsmal nacheinander gescheitert, ${label} abgebrochen`); return { failed, stop: true }; }
+      if (fails % 3 === 0) { log('Wege: Overpass dreimal nacheinander gescheitert, 5 Minuten Pause'); await sleep(CFG.overpassRestMs); }
+    }
+    return { failed, stop: false };
+  };
+  const first = await pass(todo, 'Teil');
+  if (!fromOsm && !first.stop && first.failed.length) { log(`Wege: zweiter Versuch für ${first.failed.length} Städte (${first.failed.map(x => x.name).slice(0, 8).join(', ')})`); await sleep(CFG.overpassRestMs); await pass(first.failed, 'zweiter Versuch'); }
   // frühere Städte mit Verlauf behalten, wenn sie diesmal nicht gerechnet wurden
   for (const [a, c] of Object.entries(prev)) if (!idx[a] && c && !c.error && existsSync(path.join(dir, `${a}.json`))) idx[a] = c;
   await writeFile(path.join(dir, 'index.json'), JSON.stringify({ schemaVersion: '1.0', at: now, day: ymd, rule: { ...W.WEGE_GEO }, source: fromOsm ? 'osm-geofabrik' : 'overpass', railTiles: tiles.size, cities: idx }));

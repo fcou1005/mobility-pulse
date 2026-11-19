@@ -242,7 +242,7 @@ try {
     const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'ops', query: '&op=Voi' });
     const btn = await page.waitForSelector('#ops-chk-save:not([disabled])', { timeout: 60000 }).catch(() => null);
     if (btn) await btn.click();
-    const row = await page.waitForFunction(() => { const r = document.querySelector('#ops-chk tbody tr'); return r ? r.innerText : null; }, null, { timeout: 30000 }).then(h => h.jsonValue(), () => null);
+    const row = await page.waitForFunction(() => { const r = /** @type {HTMLElement|null} */ (document.querySelector('#ops-chk tbody tr')); return r ? r.innerText : null; }, null, { timeout: 30000 }).then(h => h.jsonValue(), () => null);
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('mp-plan-kontrolle') || '[]').length);
     await page.click('#ops-chk button[data-at]').catch(() => null);
     const gone = await page.waitForFunction(() => !document.querySelector('#ops-chk tbody tr') && /Noch kein Plan gemerkt/.test(document.getElementById('ops-chk-out')?.innerText || ''), null, { timeout: 10000 }).then(() => true, () => false);
