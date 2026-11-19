@@ -1,9 +1,9 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/markt.schema.json",
- "title": "Markt – Deutschland-Index, Wirkung, Scout, Grafik der Woche, offene Daten (Sprint 7)",
- "description": "index/<JJJJ-MM>.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).",
- "x-version": "1.1",
+ "title": "Markt – Deutschland-Index, Wirkung, Scout, Regen-Elastizität, Grafik der Woche, offene Daten (Sprint 7)",
+ "description": "index/<JJJJ-MM>.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), markt/regen.json (Regen-Elastizität je Stadt und Fahrzeugart, F34), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).",
+ "x-version": "1.2",
  "$defs": {
   "index": {
    "type": "object",
@@ -562,6 +562,149 @@
        },
        "rows": {
         "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "regen": {
+   "type": "object",
+   "description": "Regen-Elastizität (F34): Fahrten in Stunden mit ≥ 0,5 mm Regen gegen das Mittel trockener Stunden gleicher Uhrzeit und Tagart, 7–21 Uhr, aus den letzten 42 Tagen von train/; Intervall 90 % aus Bootstrap über die Regentage. Einmal je Ortstag neu.",
+   "required": [
+    "schemaVersion",
+    "version",
+    "day",
+    "days",
+    "rows",
+    "de"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "at": {
+     "type": "integer",
+     "description": "Stand (ms seit 1970)"
+    },
+    "version": {
+     "type": "integer",
+     "description": "Rechenregel (lib/pulse-markt-regen.js REGEN.version)"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+     "description": "Ortstag der Rechnung"
+    },
+    "rule": {
+     "type": "object",
+     "description": "Schwellen: wetMm (Regenstunde ab mm/h), hours [von, bis), minWetHours, minWetDays, minTripsDay, level (Intervall)"
+    },
+    "days": {
+     "type": "integer",
+     "description": "gelesene Tage aus train/"
+    },
+    "first": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "last": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "rows": {
+     "type": "array",
+     "description": "je Gemeinde und Fahrzeugart mit Ergebnis, nach Fahrten je Tag absteigend",
+     "items": {
+      "type": "object",
+      "required": [
+       "ags",
+       "name",
+       "type",
+       "effect",
+       "lo",
+       "hi",
+       "wetHours",
+       "wetDays",
+       "tripsDay"
+      ],
+      "properties": {
+       "ags": {
+        "type": "string",
+        "pattern": "^\\d{8}$"
+       },
+       "name": {
+        "type": "string"
+       },
+       "type": {
+        "type": "string",
+        "description": "Fahrzeugart (ohne car)"
+       },
+       "effect": {
+        "type": "number",
+        "description": "Wirkung als Anteil (−0,3 = 30 % weniger Fahrten als in trockenen Stunden)"
+       },
+       "lo": {
+        "type": "number",
+        "description": "untere Grenze des 90-%-Intervalls"
+       },
+       "hi": {
+        "type": "number",
+        "description": "obere Grenze des 90-%-Intervalls"
+       },
+       "wetHours": {
+        "type": "integer",
+        "description": "gezählte Regenstunden"
+       },
+       "wetDays": {
+        "type": "integer",
+        "description": "Tage mit Regenstunden"
+       },
+       "tripsDay": {
+        "type": "integer",
+        "description": "Fahrtbeginne je Tag in den gezählten Stunden"
+       }
+      }
+     }
+    },
+    "de": {
+     "type": "array",
+     "description": "je Fahrzeugart über alle Städte mit Ergebnis gepoolt (ab 5 Städten)",
+     "items": {
+      "type": "object",
+      "required": [
+       "type",
+       "effect",
+       "lo",
+       "hi",
+       "wetHours",
+       "cities"
+      ],
+      "properties": {
+       "type": {
+        "type": "string"
+       },
+       "effect": {
+        "type": "number",
+        "description": "Wirkung als Anteil (−0,3 = 30 % weniger Fahrten als in trockenen Stunden)"
+       },
+       "lo": {
+        "type": "number"
+       },
+       "hi": {
+        "type": "number"
+       },
+       "wetHours": {
+        "type": "integer"
+       },
+       "cities": {
+        "type": "integer"
        }
       }
      }

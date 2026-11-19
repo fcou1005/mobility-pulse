@@ -104,5 +104,5 @@ const names = { '08111000': 'Stuttgart', '08416041': 'Tübingen', '08888888': 'K
   await run({ DATA, latest, now: at + 18 * 60e3, log: (m) => logs.push(m) });
   assert((await stat(path.join(DATA, 'index', '2026-11.json'))).mtimeMs === m0 && logs.filter(l => /Index und Daten-Paket 2026-11/.test(l)).length === 1, 'S7.1: späterer Lauf schreibt den Monat nicht erneut');
   const g = JSON.parse(await readFile(path.join(DATA, 'grafik', 'index.json'), 'utf8'));
-  assert(g.weeks[0].week === '2026-W48' && g.schemaVersion === '1.1', `S7.5: Grafik der Woche entsteht von selbst (${g.weeks[0].week})`);
+  assert(g.weeks[0].week === '2026-W48' && g.schemaVersion === '1.2', `S7.5: Grafik der Woche entsteht von selbst (${g.weeks[0].week})`);
 }

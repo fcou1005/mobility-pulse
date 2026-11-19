@@ -1,7 +1,7 @@
 // @ts-check
 // Mobility Pulse — Markt (Sprint 7): Deutschland-Index (S7.1), Ereignis-Wirkung (S7.2), Preis-Wirkung (S7.3), Expansions-Scout (S7.4),
 // offene Daten-Pakete und Grafik der Woche (S7.5). renderMarkt(el, ctx), ctx = rpCtx(). Daten aus dem Sammler (Phase „markt“):
-// index/index.json, index/<JJJJ-MM>.json, index/laufend.json, markt/wirkung.json, markt/scout.json, grafik/index.json, offen/index.json.
+// index/index.json, index/<JJJJ-MM>.json, index/laufend.json, markt/wirkung.json, markt/scout.json, markt/regen.json (F34), grafik/index.json, offen/index.json.
 import * as K from './pulse-markt.js';
 import { t, tMap, dateFmt } from './i18n.js';
 import { putAnswer } from './answer.js';
@@ -26,7 +26,7 @@ export async function renderMarkt(el, ctx) {
   css();
   const D = ctx.CFG.DATA, ags = ctx.state.scope, TY = tMap('type', Object.fromEntries(Object.keys(K.TYPE_DE).map(k => [k, 1])));
   el.innerHTML = `<div class="panel"><p class="muted">${t('mk.loading')}</p></div>`;
-  const [list, wirk, scout, gList, oList] = await Promise.all(['index/index.json', 'markt/wirkung.json', 'markt/scout.json', 'grafik/index.json', 'offen/index.json'].map(f => load(ctx, `${D}${f}`)));
+  const [list, wirk, scout, gList, oList, regen] = await Promise.all(['index/index.json', 'markt/wirkung.json', 'markt/scout.json', 'grafik/index.json', 'offen/index.json', 'markt/regen.json'].map(f => load(ctx, `${D}${f}`)));
   const months = (list?.months || []).filter(m => m.complete).map(m => m.month);
   const want = S.month && (S.month === 'laufend' || months.includes(S.month)) ? S.month : 'laufend';
   let index = await load(ctx, `${D}index/${want}.json`); if (!index && want !== 'laufend') index = await load(ctx, `${D}index/laufend.json`);
@@ -57,7 +57,7 @@ export async function renderMarkt(el, ctx) {
     <p class="muted small">${t('mk.indexNote')}</p>` : `<div class="empty">${t('mk.noIndex')}</div>`}</div>
   <div class="panel mk-noprint"><div class="panel-head"><div><h2>${t('mk.weekTitle')}</h2><div class="sub">${t('mk.weekSub')}</div></div></div><div class="mk-week" id="mk-week">${gList?.weeks?.length ? '' : `<div class="empty">${t('mk.noWeek')}</div>`}</div></div>
   <div class="panel mk-noprint"><div class="panel-head"><div><h2>${t('mk.openTitle')}</h2><div class="sub">${t('mk.openSub')}</div></div></div>${(oList?.packages || []).length ? `<ul class="plain">${oList.packages.map(p => `<li class="mk-pkg"><b>${K.monthText(p.month)}</b> <span class="mk-files">${p.files.map(f => `<a href="${D}offen/${p.month}/${f}" target="_blank" rel="noopener" download>${ctx.esc(f)}</a>`).join(' ')}</span> <span class="muted small">${t('mk.openRows', { tage: ctx.fmt(p.rows?.tage ?? 0), monat: ctx.fmt(p.rows?.monat ?? 0) })}</span></li>`).join('')}</ul>` : `<div class="empty">${t('mk.noOpen')}</div>`}</div>
-  ${eventsPanel(ctx, wirk, ags)}${pricesPanel(ctx, wirk, ags)}${scoutPanel(ctx, scout)}`;
+  ${regenPanel(ctx, regen, ags, TY)}${eventsPanel(ctx, wirk, ags)}${pricesPanel(ctx, wirk, ags)}${scoutPanel(ctx, scout)}`;
   el.querySelector('#mk-month').addEventListener('change', (e) => { S.month = /** @type {HTMLSelectElement} */ (e.target).value; renderMarkt(el, ctx); });
   el.querySelector('#mk-type').addEventListener('change', (e) => { S.type = /** @type {HTMLSelectElement} */ (e.target).value; renderMarkt(el, ctx); });
   const svg = index ? (row ? K.citySvg(index, row) : K.indexSvg(index, { type })) : null;
@@ -66,11 +66,25 @@ export async function renderMarkt(el, ctx) {
   el.querySelector('#mk-print').addEventListener('click', () => { document.body.classList.add('mk-printing'); const end = () => { document.body.classList.remove('mk-printing'); window.removeEventListener('afterprint', end); }; window.addEventListener('afterprint', end); window.print(); setTimeout(end, 60e3); });
   if (gList?.weeks?.length) {
     const w = gList.weeks[0], box = el.querySelector('#mk-week');
-    fetch(`${D}grafik/${w.file}`).then(r => (r.ok ? r.text() : null)).then(txt => { if (!txt || !box) return; const img = new Image(); img.src = svgBlob(txt); const wt = w.theme === 'staedte' ? t('mk.wkCities', { nr: +String(w.week).slice(-2) }) : w.theme === 'arten' ? t('mk.wkTypes', { nr: +String(w.week).slice(-2) }) : w.title; img.alt = wt; box.innerHTML = `<p><b>${ctx.esc(wt)}</b></p>`; box.appendChild(img);
+    fetch(`${D}grafik/${w.file}`).then(r => (r.ok ? r.text() : null)).then(txt => { if (!txt || !box) return; const img = new Image(); img.src = svgBlob(txt); const wt = w.theme === 'staedte' ? t('mk.wkCities', { nr: +String(w.week).slice(-2) }) : w.theme === 'arten' ? t('mk.wkTypes', { nr: +String(w.week).slice(-2) }) : w.theme === 'regen' ? t('mk.wkRain', { nr: +String(w.week).slice(-2) }) : w.title; img.alt = wt; box.innerHTML = `<p><b>${ctx.esc(wt)}</b></p>`; box.appendChild(img);
       box.insertAdjacentHTML('beforeend', `<p class="muted small">${t('mk.weekMore')} ${gList.weeks.slice(0, 12).map(x => `<a href="${D}grafik/${x.file}" target="_blank" rel="noopener">${x.week}</a>`).join(', ')}</p>`); }).catch(() => {});
   }
 }
 
+// F34: Regen-Elastizität je Stadt und Art; Deutschland gepoolt zuerst, die gewählte Stadt hervorgehoben (auch außerhalb der ersten 20)
+function regenPanel(ctx, rg, ags, TY) {
+  const rows = rg?.rows || [], mine = ags !== 'DE' ? rows.filter(r => r.ags === ags) : [], list = [...rows.slice(0, 20), ...mine.filter(r => rows.indexOf(r) >= 20)];
+  const pc = (/** @type {number} */ x) => `${x < 0 ? '−' : '+'}${ctx.fmt(Math.abs(x) * 100, 0)} %`, span = (/** @type {any} */ r) => t('mk.rnSpan', { lo: pc(r.lo), hi: pc(r.hi) });
+  const amt = (/** @type {number} */ x) => `<strong>${t(x < 0 ? 'mk.rnLess' : 'mk.rnMore', { v: `${ctx.fmt(Math.abs(x) * 100, 0)} %` })}</strong>`;
+  const ty = (/** @type {string} */ x) => ctx.esc(TY[x] || x), m = mine[0], d = rg?.de?.find((/** @type {any} */ x) => x.type === (m?.type || 'scooter')) || rg?.de?.[0];
+  const lead = m ? t('mk.rnCity', { name: ctx.esc(m.name), type: ty(m.type), v: amt(m.effect), span: span(m), h: ctx.fmt(m.wetHours), d: ctx.fmt(m.wetDays), de: d ? pc(d.effect) : '–' })
+    : d ? t('mk.rnDe', { type: ty(d.type), v: amt(d.effect), span: span(d), n: ctx.fmt(d.cities) }) : '';
+  const tr = (/** @type {any} */ r, /** @type {boolean} */ de) => `<tr${!de && r.ags === ags ? ' class="hl"' : ''}><td>${de ? `<b>${t('mk.germany')}</b>` : ctx.esc(r.name)}</td><td>${ty(r.type)}</td><td class="n mk-v ${r.hi < 0 ? 'down' : ''}">${pc(r.effect)}</td><td class="n">${pc(r.lo)} … ${pc(r.hi)}</td><td class="n">${ctx.fmt(r.wetHours)}${de ? ` (${t('mk.rnCities', { n: ctx.fmt(r.cities) })})` : ` (${ctx.fmt(r.wetDays)} ${t('mk.rnDays')})`}</td><td class="n">${de ? '' : ctx.fmt(r.tripsDay)}</td></tr>`;
+  const body = rows.length ? `${lead ? `<p>${lead}</p>` : ''}<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('mk.rnTitle'))}"><table id="mk-regen"><thead><tr><th>${t('mk.city')}</th><th>${t('mk.type')}</th><th class="n">${t('mk.rnEffect')}</th><th class="n">${t('mk.rnCi')}</th><th class="n">${t('mk.rnHours')}</th><th class="n">${t('mk.rnTrips')}</th></tr></thead><tbody>
+    ${(rg.de || []).map((/** @type {any} */ r) => tr(r, true)).join('')}${list.map(r => tr(r, false)).join('')}</tbody></table></div>${ags !== 'DE' && !mine.length ? `<p class="muted small">${t('mk.rnNoneHere', { name: ctx.esc(ctx.muniName(ags)) })}</p>` : ''}`
+    : `<div class="empty">${t('mk.rnNone')}</div>`;
+  return `<div class="panel"><div class="panel-head"><div><h2>${t('mk.rnTitle')}</h2><div class="sub">${rg?.first ? t('mk.rnSub', { first: dayTxt(rg.first), last: dayTxt(rg.last) }) : ''}</div></div></div>${body}</div>`;
+}
 function eventsPanel(ctx, wirk, ags) {
   const all = wirk?.events || [], mine = ags !== 'DE' ? all.filter(e => e.ags === ags) : all, list = (mine.length ? mine : all).slice(0, 40);
   const V = { mehr: t('mk.vMore'), weniger: t('mk.vLess'), 'nicht unterscheidbar': t('mk.vSame') };

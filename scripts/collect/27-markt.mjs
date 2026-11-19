@@ -5,8 +5,11 @@
 //  - grafik/<JJJJ>-W<KW>.svg: einmal je abgeschlossener Kalenderwoche, sobald mindestens 5 volle Tage im Archiv stehen
 //  - markt/wirkung.json: je Lauf (Ereignisse aus forecast/series.json und ereignisse.json, Preisänderungen aus pricing-log.json und archive/)
 //  - markt/scout.json: höchstens alle 20 Stunden (Gemeindegrenzen mit Einwohnern, Bestand aus latest.json)
+//  - markt/regen.json: Regen-Elastizität je Stadt und Art (F34), einmal je Ortstag aus den letzten 42 Tagen von train/ (lib/pulse-markt-regen.js);
+//    jede dritte Grafik der Woche (KW durch 3 teilbar) zeigt sie, sobald 5 Städte ein Ergebnis haben
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import * as K from '../../lib/pulse-markt.js';
 import * as SV from '../../lib/pulse-schema.js';
@@ -54,6 +57,14 @@ export async function run(ctx) {
       if (!list.months.some(e => e.month === month)) { list.months = [{ month, complete: false }, ...list.months.filter(e => e.complete)]; await mkdir(idxDir, { recursive: true }); await writeFile(listFile, JSON.stringify(SV.withSchema('markt', list))); }
     }
 
+    // ---------- F34 Regen-Elastizität (einmal je Ortstag) ----------
+    const rFile = path.join(DATA, 'markt', 'regen.json'); let regen = await rd(rFile);
+    if (regen?.day !== today || regen?.version !== K.REGEN.version) {
+      const tDays = ((await rd(path.join(DATA, 'train', 'index.json')))?.days || []).filter(d => d < today).sort().slice(-K.REGEN.maxDays), compact = [];
+      for (const d of tDays) { const f = path.join(DATA, 'train', d.slice(0, 4), `${d}.json.gz`); if (existsSync(f)) compact.push(K.regenDay(JSON.parse(gunzipSync(await readFile(f)).toString('utf8')))); }
+      if (compact.length) { regen = { ...SV.withSchema('markt', K.rainElasticity(compact, { names })), day: today, at: now }; await mkdir(path.dirname(rFile), { recursive: true }); await writeFile(rFile, JSON.stringify(regen)); notes.push(`Regen ${regen.rows.length} Städte/Arten aus ${compact.length} Tagen`); }
+    }
+
     // ---------- S7.5 Grafik der Woche ----------
     const wd = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7, lastWeek = K.isoWeek(addDays(today, -wd - 1));
     const gDir = path.join(DATA, 'grafik'), gList = (await rd(path.join(gDir, 'index.json'))) || { weeks: [] };
@@ -61,7 +72,7 @@ export async function run(ctx) {
       const days = K.weekDays(lastWeek), a = await merged([...new Set(days.map(d => d.slice(0, 7)).flatMap(m => [K.prevMonth(m), m]))]);
       const F = Object.fromEntries((a.fields || []).map((f, i) => [f, i])), full = days.filter(d => Object.values(a.days[d] || {}).some(r => K.fullDay(r, F))).length;
       if (full >= 5) {
-        const g = K.weekGraphic(a, lastWeek, { names });
+        const g = +lastWeek.slice(-2) % 3 === 0 && (regen?.rows || []).filter(r => r.effect < 0).length >= K.REGEN.minCities ? K.regenGraphic(regen, lastWeek) : K.weekGraphic(a, lastWeek, { names });
         await mkdir(gDir, { recursive: true }); await writeFile(path.join(gDir, `${lastWeek}.svg`), g.svg);
         gList.weeks = [{ week: lastWeek, theme: g.theme, title: g.title, file: `${lastWeek}.svg`, days: full, at: now }, ...gList.weeks].slice(0, 260);
         await writeFile(path.join(gDir, 'index.json'), JSON.stringify(SV.withSchema('markt', gList)));

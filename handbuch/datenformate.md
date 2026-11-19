@@ -18,7 +18,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [calib](#calib) | 1.0 | `calib.json` |
 | [forecast](#forecast) | 1.3 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.2 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
-| [markt](#markt) | 1.1 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `grafik/index.json`, `offen/index.json` |
+| [markt](#markt) | 1.2 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `markt/regen.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 | [oepnv](#oepnv) | 1.8 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
@@ -437,9 +437,9 @@ Alarme der letzten 60 Tage, neueste zuerst; Zustand für den Vergleich mit dem n
 
 ## markt
 
-Markt – Deutschland-Index, Wirkung, Scout, Grafik der Woche, offene Daten (Sprint 7). index/&lt;JJJJ-MM&gt;.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).
+Markt – Deutschland-Index, Wirkung, Scout, Regen-Elastizität, Grafik der Woche, offene Daten (Sprint 7). index/&lt;JJJJ-MM&gt;.json und index/laufend.json (Deutschland-Index je Gemeinde und Fahrzeugart, S7.1), index/index.json, markt/wirkung.json (Ereignis- und Preis-Wirkung, S7.2/S7.3), markt/scout.json (Expansions-Scout, S7.4), markt/regen.json (Regen-Elastizität je Stadt und Fahrzeugart, F34), grafik/index.json (Grafik der Woche) und offen/index.json (Monatspakete, S7.5).
 
-Version 1.1 · Schema: [schemas/markt.schema.json](../schemas/markt.schema.json)
+Version 1.2 · Schema: [schemas/markt.schema.json](../schemas/markt.schema.json)
 
 ### markt · index
 
@@ -501,6 +501,23 @@ Monatswerte je Gemeinde und Fahrzeugart über alle Anbieter; complete = Monat ab
 | --- | --- | --- |
 | `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
 | `packages` | ja | array von object |
+
+### markt · regen
+
+Regen-Elastizität (F34): Fahrten in Stunden mit ≥ 0,5 mm Regen gegen das Mittel trockener Stunden gleicher Uhrzeit und Tagart, 7–21 Uhr, aus den letzten 42 Tagen von train/; Intervall 90 % aus Bootstrap über die Regentage. Einmal je Ortstag neu.
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `at` |  | integer – Stand (ms seit 1970) |
+| `version` | ja | integer – Rechenregel (lib/pulse-markt-regen.js REGEN.version) |
+| `day` | ja | string (Muster `^\d{4}-\d{2}-\d{2}$`) – Ortstag der Rechnung |
+| `rule` |  | object – Schwellen: wetMm (Regenstunde ab mm/h), hours \[von, bis), minWetHours, minWetDays, minTripsDay, level (Intervall) |
+| `days` | ja | integer – gelesene Tage aus train/ |
+| `first` |  | string / null |
+| `last` |  | string / null |
+| `rows` | ja | array von object – je Gemeinde und Fahrzeugart mit Ergebnis, nach Fahrten je Tag absteigend |
+| `de` | ja | array von object – je Fahrzeugart über alle Städte mit Ergebnis gepoolt (ab 5 Städten) |
 
 ## akku
 
