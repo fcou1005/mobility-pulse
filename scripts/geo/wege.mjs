@@ -16,7 +16,7 @@ import { UA, sleep, download, zipAll, zipLines, zipNames } from './common.mjs';
 import { osmExtract } from './wege-osm.mjs';
 
 const CFG = { cities: +(process.env.GEO_WEGE_CITIES || W.WEGE_GEO.cities), budgetMin: +(process.env.GEO_WEGE_BUDGET_MIN || W.WEGE_GEO.budgetMin),
-  overpass: (process.env.GEO_OVERPASS || 'https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter').split(','), pauseMs: 5000,
+  overpass: (process.env.GEO_OVERPASS || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter,https://overpass.private.coffee/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter').split(','), pauseMs: 5000,
   source: process.env.GEO_WEGE_SOURCE || (process.env.GEO_OVERPASS ? 'overpass' : 'osm') };
 
 async function overpass(q) {
@@ -80,7 +80,9 @@ export async function runWege({ OUT, TMP, DATA, bounds, log, now, top }) {
   // Rückfall Overpass (19.11.2026: Geofabrik lehnte die Verbindung der Läufer ab): nur Städte ohne Verlauf aus einem früheren Lauf, nur Straßen
   // (Busse); Gleise brauchen große Kacheln, die ein ausgelasteter Overpass-Server nicht liefert
   const fallback = CFG.source === 'osm' && !fromOsm;
-  const todo = fallback ? plans.filter(x => !(prev[x.ags] && !prev[x.ags].error && existsSync(path.join(dir, `${x.ags}.json`)))) : plans;
+  // Rückfall (19.11.2026, Lauf #9: Halle und Heilbronn mit 502 auf allen Overpass-Servern): kleine Städte zuerst – kurze Abfragen kommen eher
+  // durch, und mehr Städte bekommen Linien, bevor drei Fehlschläge in Folge oder das Zeitbudget den Teil beenden
+  const todo = fallback ? plans.filter(x => !(prev[x.ags] && !prev[x.ags].error && existsSync(path.join(dir, `${x.ags}.json`)))).sort((a, b) => a.road.length - b.road.length) : plans;
   if (fallback) log(`Wege: Overpass für ${todo.length} Städte ohne früheren Verlauf, nur Straßen`);
   const roadOf = async (p) => (fromOsm ? fromOsm(`road-${p.ags}`) : overpass(W.overpassRoad(p.roadBb)).then(async (el) => { await sleep(CFG.pauseMs); return el; }));
   const tileElements = async (tl) => { if (!tiles.has(tl.key)) { tiles.set(tl.key, fromOsm ? await fromOsm(`rail-${tl.key.replace(':', '_')}`) : await overpass(W.overpassRail(tl.bb))); if (!fromOsm) await sleep(CFG.pauseMs); } return tiles.get(tl.key); };
