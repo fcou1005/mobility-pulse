@@ -13,7 +13,7 @@ assert(D.bands[0].get('100:200') === 2 && D.bands[1].get('100:200') === 1 && D.b
 assert(D.bands[3] === null && D.max === 3, 'Band mit einem Lauf zählt nicht');
 const old = { ...doc, fields: 'start,end,present,reloc,start×6,present×6,end×6', munis: { '08111000': { '100:200': row([24, 12, 0, 5, 36, 0]).slice(0, 22) } } };
 assert(ZR.bandDensity(old, '08111000').bands[4].get('100:200') === 3, 'ältere Dateien ohne angebot×6');
-assert(ZR.bandDensity(doc, '08416041') === null && ZR.bandLabel(4) === '16–20', 'andere Gemeinde: nichts; Bandname');
+assert(ZR.bandDensity(doc, '08416041') === null && ZR.bandLabel(4) === '15–19' && ZR.bandLabel(0) === '00–06', 'andere Gemeinde: nichts; Bandname');
 
 // GIF: Kopf, Bilder, Rückweg über einen kleinen LZW-Decoder (auch mit vollem Codebuch: Rauschen)
 const w = 160, h = 120, pal = [[255, 255, 255], [0, 0, 0], [15, 118, 110], [200, 0, 0], [1, 2, 3]];

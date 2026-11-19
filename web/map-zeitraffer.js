@@ -26,7 +26,7 @@ export async function renderTimelapse(c) {
   const col = c.tok('--accent'), rects = new Map();
   for (const cell of D.cells) { const [lat, lon] = c.cellCenterOf(cell); rects.set(cell, L.rectangle([[lat - c.CELL_LAT / 2, lon - c.CELL_LON / 2], [lat + c.CELL_LAT / 2, lon + c.CELL_LON / 2]], { weight: 0, fillColor: col, fillOpacity: 0 }).addTo(L_.grid)); }
   const have = D.bands.map((/** @type {any} */ m, /** @type {number} */ b) => (m ? b : -1)).filter((/** @type {number} */ b) => b >= 0);
-  let band = have.find((/** @type {number} */ b) => b === 4) ?? have[0] ?? 0; // Start 16–20 Uhr, die Hauptzeit
+  let band = have.find((/** @type {number} */ b) => b === 4) ?? have[0] ?? 0; // Start 15–19 Uhr, die Hauptzeit
   const dayTxt = day.split('-').reverse().join('.'), name = c.muniName(state.scope);
   const show = (/** @type {number} */ b) => {
     band = b; const m = D.bands[b];

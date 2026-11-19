@@ -237,6 +237,19 @@ try {
     else console.log(`✓ Akku-Prognose Dott Stuttgart: ${m[1]} von ${m[2]} bis 8 Uhr unter 20 % (${m[3]} schon darunter), ${rows} Zonen, Häkchen plant die Tauschtouren neu`);
     await close();
   }
+  // F31: Plan merken und Erfolgskontrolle (Disposition Stuttgart, Voi): Zeile mit Gemeinde und Anbieter, Status oder Auswertung, Entfernen
+  if (!ONLY || ONLY.includes('ops')) {
+    const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'ops', query: '&op=Voi' });
+    const btn = await page.waitForSelector('#ops-chk-save:not([disabled])', { timeout: 60000 }).catch(() => null);
+    if (btn) await btn.click();
+    const row = await page.waitForFunction(() => { const r = document.querySelector('#ops-chk tbody tr'); return r ? r.innerText : null; }, null, { timeout: 30000 }).then(h => h.jsonValue(), () => null);
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('mp-plan-kontrolle') || '[]').length);
+    await page.click('#ops-chk button[data-at]').catch(() => null);
+    const gone = await page.waitForFunction(() => !document.querySelector('#ops-chk tbody tr') && /Noch kein Plan gemerkt/.test(document.getElementById('ops-chk-out')?.innerText || ''), null, { timeout: 10000 }).then(() => true, () => false);
+    if (!btn || !/Stuttgart · Voi/.test(row || '') || !/(wartet auf das nächste Zeitfenster|\d+ von \d+|keine Zelldaten)/.test(row || '') || stored !== 1 || !gone || errs.length) fail(`Plan-Erfolgskontrolle: ${JSON.stringify({ btn: !!btn, row, stored, gone, errs: errs.slice(0, 2) })}`);
+    else console.log(`✓ Plan-Erfolgskontrolle: gemerkt (${(row || '').replace(/\s+/g, ' ').trim()}), entfernt`);
+    await close();
+  }
   // S8.4: Abstellflächen-Planer gegen ein Ersatz-Overpass (Straßenraster mit Gehwegen, Haltestellen an den Kreuzungen, zwei vorhandene Flächen)
   if (!ONLY || ONLY.includes('umfeld')) {
     const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'umfeld' });
