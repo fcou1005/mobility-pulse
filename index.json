@@ -1,0 +1,27 @@
+{
+ "schemaVersion": "1.0",
+ "parts": {
+  "zensus": {
+   "at": 1794677598802,
+   "ok": true
+  },
+  "unfall": {
+   "at": 1794677598802,
+   "ok": true,
+   "missing": []
+  },
+  "gtfs": {
+   "at": 1794668965476,
+   "ok": true
+  },
+  "umweg": {
+   "at": 1794677598802,
+   "ok": true
+  },
+  "wege": {
+   "at": 1795125938833,
+   "ok": true
+  }
+ },
+ "at": 1795125938833
+}
