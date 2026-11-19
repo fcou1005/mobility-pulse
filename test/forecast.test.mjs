@@ -919,3 +919,16 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const mk = (m23) => ({ day: '2026-11-08', cls: () => 3, era: 0, complete: true, hourMin: [...new Array(23).fill(60), m23], groups: { '08111000|Voi|scooter': { start: new Array(24).fill(5), vmin: new Array(24).fill(600) } } });
   assert(F.buildRows([mk(42)]).n === 24 && F.buildRows([mk(39)]).n === 23 && F.buildRows([{ ...mk(60), hourMin: [...new Array(22).fill(60), 42, 42] }]).n === 23, 'Stunde 23 zählt fürs Training ab 40 beobachteten Minuten, jede andere ab 50');
 }
+
+// ---------- V8 (19.11.2026): vorhergesagte Stunden – Nieselgefahr (0,1–0,3 mm/h) ist kein voller Regen, gemessene Stunden bleiben 0/1
+{
+  const p = new Array(24).fill(0.2); p[13] = 2; p[14] = 0.2;
+  const w = { day: '2026-11-18', generatedAt: '2026-11-18T10:00:00Z', ags: { '08111000': 'c' }, cells: { c: { t: new Array(24).fill(12), p } } };
+  const wx = F.wxLookup([w]);
+  const obs = wx('08111000', '2026-11-18', 10), fc = wx('08111000', '2026-11-18', 12), fc1 = wx('08111000', '2026-11-18', 14), fc2 = wx('08111000', '2026-11-18', 15); // Ortszeit 10 = 9 UTC (gemessen), 12 = 11 UTC
+  assert(obs[2] === 1 && obs[3] === 0 && obs[5] === 1, `gemessen 0,2 mm/h: Regen 1, Vorstunde 1 (${obs})`);
+  assert(fc[2] === F.WX_FC.rain[1] && fc[2] < 0.3 && fc[3] < 0.05, `vorhergesagt 0,2 mm/h: Regen ${fc[2]}, ≥ 1 mm ${fc[3]}`);
+  assert(fc1[2] === F.WX_FC.rain[4] && fc1[3] === F.WX_FC.rain1[4] && fc2[5] === F.WX_FC.rain[4], `vorhergesagt 2 mm/h: ≥ 0,1 ${fc1[2]}, ≥ 1 ${fc1[3]}; Vorstunde danach ${fc2[5]}`);
+  const noGen = F.wxLookup([{ ...w, generatedAt: undefined }])('08111000', '2026-11-18', 12);
+  assert(noGen[2] === 1, 'ohne Abrufzeit: wie gemessen');
+}
