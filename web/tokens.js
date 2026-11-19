@@ -37,6 +37,8 @@ export const PT_CANCEL = Object.freeze({ light: '#b3245e', dark: '#f0609a' });
 // Druck (Bericht): helle Werte wie @media print in index.html
 export const PRINT = Object.freeze({ accent: '#0f766e', panel: '#ffffff' });
 // Zonen-Beobachtung: Reihen je Zone (kleine Vielfache, höchstens sechs)
+// Zeitraffer-GIF (F33, web/map-zeitraffer.js): feste Druckfarben, fünf Stufen Bestand von hell nach PRINT.accent, Schrift, Rahmen
+export const TIMELAPSE = Object.freeze({ ramp: ['#d7efec', '#a6dcd4', '#62bdb0', '#26968a', '#0f766e'], ink: '#1f2933', muted: '#5b6573', line: '#d5dbe1', bg: '#ffffff' });
 export const ZONE_SERIES = Object.freeze(['#0f766e', '#c2410c', '#6d28d9', '#a16207', '#be185d', '#1d4ed8']);
 
 const dark = () => typeof document !== 'undefined' && (document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches));

@@ -3,10 +3,11 @@
 // Karte und als GIF zum Teilen (nur Zellen, keine Einzelfahrzeuge; lib/pulse-zeitraffer.js). Nachgeladen von app-map.js, sobald die Ebene gewählt ist.
 import * as ZR from './pulse-zeitraffer.js';
 import { t } from './i18n.js';
+import { TIMELAPSE } from './tokens.js';
 
 /* global L */
-const RAMP = ['#d7efec', '#a6dcd4', '#62bdb0', '#26968a', '#0f766e'], INK = '#1f2933', MUTED = '#5b6573', LINE = '#d5dbe1';
-const PAL = ['#ffffff', ...RAMP, INK, MUTED, LINE].map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+const { ramp: RAMP, ink: INK, muted: MUTED, line: LINE, bg: BG } = TIMELAPSE;
+const PAL = [BG, ...RAMP, INK, MUTED, LINE].map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
 const cls = (/** @type {number} */ v, /** @type {number} */ scale) => { const r = v / scale; return r < 0.15 ? 1 : r < 0.35 ? 2 : r < 0.6 ? 3 : r < 0.9 ? 4 : 5; };
 let timer = 0;
 export function stop() { if (timer) clearInterval(timer); timer = 0; }
@@ -61,7 +62,7 @@ function gifOf(/** @type {any} */ D, /** @type {number[]} */ have, /** @type {st
     if (i == null) { let best = 1e9; (text ? TXT : PAL.map((_, j) => j)).forEach((j) => { const p = PAL[j], d = (p[0] - r) ** 2 + (p[1] - gg) ** 2 + (p[2] - b) ** 2; if (d < best) { best = d; i = j; } }); near.set(k, i); }
     return i; };
   const frames = have.map((b) => {
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = BG; g.fillRect(0, 0, W, H);
     g.fillStyle = INK; g.font = '600 15px system-ui, sans-serif'; g.fillText(`${title} · ${t('app.tlBand', { band: ZR.bandLabel(b) })}`, pad, 22);
     g.fillStyle = MUTED; g.font = '11px system-ui, sans-serif'; g.fillText(t('app.tlGifSub'), pad, 38);
     g.strokeStyle = LINE; g.strokeRect(pad - 0.5, top - 0.5, cols * px + 1, rows * px + 1);
