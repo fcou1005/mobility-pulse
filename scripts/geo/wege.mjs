@@ -91,7 +91,9 @@ export async function runWege({ OUT, TMP, DATA, bounds, log, now, top }) {
       await writeFile(path.join(dir, `${ags}.json`), doc);
       idx[ags] = { name, fleet, road: road.length, rail: rail.length, ...res.stats, bytes: doc.length, s: Math.round((Date.now() - t1) / 1000) };
       log(`Wege ${name}: ${res.stats.routed} von ${res.stats.pairs} Verbindungen mit Verlauf (Straße ${road.length}, Schiene ${rail.length}; zu kurz ${res.stats.short}, ohne Weg ${res.stats.noPath}, zu lang ${res.stats.tooLong}), ${(doc.length / 1e6).toFixed(2)} MB, ${idx[ags].s} s`);
-    } catch (e) { log(`Wege ${name}: ${e.message}`); idx[ags] = { name, fleet, error: e.message }; }
+    } catch (e) { log(`Wege ${name}: ${e.message}`); idx[ags] = { name, fleet, error: e.message };
+      // ohne Landesextrakte und mit totem Overpass nicht stundenlang weiterversuchen (19.11.2026: Lauf #7 nach 70 Minuten abgebrochen)
+      if (!fromOsm && Object.values(idx).every(x => x.error) && Object.keys(idx).length >= 2) { log('Wege: Overpass zweimal gescheitert, Teil abgebrochen'); break; } }
   }
   await writeFile(path.join(dir, 'index.json'), JSON.stringify({ schemaVersion: '1.0', at: now, day: ymd, rule: { ...W.WEGE_GEO }, source: fromOsm ? 'osm-geofabrik' : 'overpass', railTiles: tiles.size, cities: idx }));
   // kein einziger Verlauf = Teil gescheitert (Workflow rot statt „ok“ wie am 18.11.2026 nach 3 Stunden ohne Ergebnis)

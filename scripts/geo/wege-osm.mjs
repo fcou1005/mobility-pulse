@@ -13,12 +13,18 @@ import { bboxOf } from '../../lib/pulse-zones-geo.js';
 import { download } from './common.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const OSM_SRC = Object.freeze({ url: process.env.GEO_OSM_URL || 'https://download.geofabrik.de/europe/germany/{slug}-latest.osm.pbf', pyosmium: 'osmium==4.3.2', timeoutMin: 120 });
+export const OSM_SRC = Object.freeze({ url: process.env.GEO_OSM_URL || 'https://download.geofabrik.de/europe/germany/{slug}-latest.osm.pbf', pyosmium: 'osmium==4.3.2', timeoutMin: 120,
+  // zweite Quelle (19.11.2026: Geofabrik antwortete dem Lauf mit ECONNREFUSED): Landesextrakte von openstreetmap.fr, eigene Schreibweise ({fr})
+  mirror: process.env.GEO_OSM_URL ? null : 'https://download.openstreetmap.fr/extracts/europe/germany/{fr}-latest.osm.pbf' });
 /** Geofabrik-Name je Land (erste zwei Stellen des Gemeindeschlüssels) */
 export const LAND_SLUG = Object.freeze({ '01': 'schleswig-holstein', '02': 'hamburg', '03': 'niedersachsen', '04': 'bremen', '05': 'nordrhein-westfalen', '06': 'hessen',
   '07': 'rheinland-pfalz', '08': 'baden-wuerttemberg', '09': 'bayern', '10': 'saarland', '11': 'berlin', '12': 'brandenburg', '13': 'mecklenburg-vorpommern', '14': 'sachsen',
   '15': 'sachsen-anhalt', '16': 'thueringen' });
 
+/** Schreibweise bei openstreetmap.fr (Unterstriche, ohne Umlaut-Ersatz) */
+export const LAND_FR = Object.freeze({ '01': 'schleswig_holstein', '02': 'hamburg', '03': 'niedersachsen', '04': 'bremen', '05': 'nordrhein_westfalen', '06': 'hessen',
+  '07': 'rheinland_pfalz', '08': 'baden_wurttemberg', '09': 'bayern', '10': 'saarland', '11': 'berlin', '12': 'brandenburg', '13': 'mecklenburg_vorpommern', '14': 'sachsen',
+  '15': 'sachsen_anhalt', '16': 'thuringen' });
 const meets = (a, b) => !(a[3] < b[1] || a[1] > b[3] || a[2] < b[0] || a[0] > b[2]);
 /** Rechteck [S, W, N, O] je Land aus den Gemeindegrenzen */
 export function landBoxes(bounds) {
@@ -57,9 +63,11 @@ export async function osmExtract({ jobs, bounds, TMP, log, files = null }) {
   if (!pbf) {
     const lands = landsFor(jobs, landBoxes(bounds)); pbf = [];
     for (const l of lands) {
-      const slug = LAND_SLUG[l], f = path.join(dir, `${slug}.osm.pbf`), url = OSM_SRC.url.replace('{slug}', slug);
-      const r = await download(url, f, { timeoutMs: 30 * 60e3 }); pbf.push(f);
-      log(`Wege: OSM ${slug} ${(r.bytes / 1e6).toFixed(0)} MB${r.lastModified ? ` (Stand ${r.lastModified})` : ''}`);
+      const slug = LAND_SLUG[l], f = path.join(dir, `${slug}.osm.pbf`), urls = [OSM_SRC.url.replace('{slug}', slug), ...(OSM_SRC.mirror ? [OSM_SRC.mirror.replace('{fr}', LAND_FR[l])] : [])];
+      let r = null, err = '';
+      for (const url of urls) { try { r = await download(url, f, { timeoutMs: 30 * 60e3, tries: 4, waitMs: 30e3 }); log(`Wege: OSM ${slug} ${(r.bytes / 1e6).toFixed(0)} MB von ${new URL(url).host}${r.lastModified ? ` (Stand ${r.lastModified})` : ''}`); break; } catch (e) { err += `${new URL(url).host}: ${e.message}; `; } }
+      if (!r) throw new Error(`${slug}: ${err}`);
+      pbf.push(f);
     }
   }
   const jf = path.join(dir, 'auftraege.json'), out = path.join(dir, 'aus');
