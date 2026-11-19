@@ -209,6 +209,21 @@ try {
     if (ok) console.log('✓ Hinweis bei abweichender Formatversion (status.json 9.0)'); else fail('kein Hinweis bei abweichender Formatversion (status.json 9.0)');
     await close();
   }
+  // F33: Zeitraffer der Bestandsdichte – Ebene wählen, Band wechselt beim Abspielen, GIF entsteht (GIF89a, mehrere Bilder)
+  if (!ONLY || ONLY.includes('live')) {
+    const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'live' });
+    await page.waitForSelector('#sel-layer', { timeout: 20000 }); await page.selectOption('#sel-layer', 'timelapse');
+    const lab0 = await page.waitForFunction(() => document.getElementById('tl-label')?.textContent || null, null, { timeout: 30000 }).then(h => h.jsonValue(), () => null);
+    const leg = await page.evaluate(() => document.getElementById('map-legend')?.innerText || '');
+    await page.click('#tl-play').catch(() => null);
+    const lab1 = await page.waitForFunction((a) => { const x = document.getElementById('tl-label')?.textContent; return x && x !== a ? x : null; }, lab0, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+    await page.click('#tl-play').catch(() => null);
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }).catch(() => null), page.click('#tl-gif').catch(() => null)]);
+    const buf = dl ? await readFile(await dl.path()) : null, head = buf ? buf.subarray(0, 6).toString('latin1') : '';
+    if (!lab0 || !lab1 || !/Mittel verfügbarer Fahrzeuge je Zelle, \d\d\.\d\d\.2026, [\d.]+ Zellen/.test(leg) || head !== 'GIF89a' || buf.length < 2000 || errs.length) fail(`Zeitraffer: ${JSON.stringify({ lab0, lab1, leg: leg.slice(0, 120), head, size: buf?.length, errs: errs.slice(0, 2) })}`);
+    else console.log(`✓ Zeitraffer Stuttgart: ${lab0} → ${lab1}, GIF ${Math.round(buf.length / 1024)} KB (${dl.suggestedFilename()})`);
+    await close();
+  }
   // S6.5: Akku-Prognose für einen Anbieter mit Ladestand (Dott Stuttgart): Satz, Zonen, CSV, Häkchen plant die Tauschtouren neu
   if (!ONLY || ONLY.includes('ops')) {
     const { page, errs, close } = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 }, hash: 'ops', query: '&op=Dott' });

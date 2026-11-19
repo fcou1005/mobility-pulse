@@ -51,18 +51,22 @@ export function collectorPoints() {
   const f = (x) => x.ags === state.scope && (state.operator === 'all' || x.operator === state.operator);
   return { at: doc.at, vehicles: doc.vehicles.filter(v => f(v) && (state.type === 'all' || v.type === state.type)), stations: doc.stations.filter(f) };
 }
+// F33 Zeitraffer: eigener Teil, erst bei Wahl der Ebene geladen (Zeitgeber stoppt bei jedem Neuzeichnen)
+let ZT = /** @type {any} */ (null);
 export function renderMap() {
   if (!state.map) return;
+  ZT?.stop();
   if (currentView !== 'live') { dirty.add('live'); return; } // verdeckte Karte nicht zeichnen (Größe 0); beim Öffnen der Übersicht nachziehen
   const L_ = state.layers; Object.values(L_).forEach(l => l.clearLayers());
   const layerMode = $('#sel-layer').value;
   const bg = bgColor(); // Punktrand in der Hintergrundfarbe
-  if (['flow', 'served', 'idle'].includes(layerMode)) {
+  if (['flow', 'served', 'idle', 'timelapse'].includes(layerMode)) {
     $('#map-title').textContent = t('app.map', { v0: scopeLabel() });
-    $('#map-sub').textContent = layerMode === 'flow' ? t('app.tripStartsAndEndsPerCell') : layerMode === 'served' ? t('app.cellsWithAvailableVehicle') : t('app.availableVehiclesThatHaveNot');
+    $('#map-sub').textContent = layerMode === 'flow' ? t('app.tripStartsAndEndsPerCell') : layerMode === 'served' ? t('app.cellsWithAvailableVehicle') : layerMode === 'timelapse' ? t('app.tlSub') : t('app.availableVehiclesThatHaveNot');
     renderMuniLayer();
     fitMap(); renderZonesLayer();
-    (layerMode === 'flow' ? renderFlowLayer : layerMode === 'served' ? renderServedLayer : renderIdleLayer)();
+    if (layerMode === 'timelapse') import('./map-zeitraffer.js').then(m => { ZT = m; return m.renderTimelapse({ state, $, fmt, tok, notice, clearNotice, loadUsageIndex, loadCells, scopeState, CELL_LAT, CELL_LON, cellCenterOf, muniName: (/** @type {string} */ a) => state.latest?.municipalities?.[a]?.name || a }); }).catch(() => notice(() => t('app.noCellDataYet'), '', 'flow'));
+    else (layerMode === 'flow' ? renderFlowLayer : layerMode === 'served' ? renderServedLayer : renderIdleLayer)();
     renderOpLegend([]);
     return;
   }
