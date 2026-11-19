@@ -13,7 +13,7 @@ const pct = (/** @type {any} */ ctx, /** @type {number | null} */ x, d = 1) => (
 export function nowPanel(ctx, doc, name, hints, mine, corr = null) {
   const J = doc?.jetzt, f = ctx.fmt; if (!doc || !J) return '';
   const none = hints.filter(x => x.level === 'none').length, few = hints.filter(x => x.level === 'few').length, known = hints.some(x => x.vehicles != null);
-  const lvl = (/** @type {any} */ x) => (x.level === 'none' ? `▲ ${t('pt.nowNone')}` : x.level === 'few' ? `▲ ${t('pt.nowFew', { n: f(x.vehicles) })}` : x.level === 'ok' ? `○ ${t('pt.nowOk', { n: f(x.vehicles) })}` : '–');
+  const lvl = (/** @type {any} */ x) => (x.level === 'out' ? `· ${t('pt.nowOut')}` : x.level === 'none' ? `▲ ${t('pt.nowNone')}` : x.level === 'few' ? `▲ ${t('pt.nowFew', { n: f(x.vehicles) })}` : x.level === 'ok' ? `○ ${t('pt.nowOk', { n: f(x.vehicles) })}` : '–');
   const eff = mine && (mine.verdict === 'mehr' || mine.verdict === 'weniger') ? t(mine.verdict === 'mehr' ? 'pt.nowEffMore' : 'pt.nowEffLess', { name, e: `${f(Math.abs(mine.effect) * 100, 1)} %` }) : t('pt.nowEffOpen', { name });
   // Prognose: Störungskorrektur für diese Stadt (läuft mit, wirkt nach Freigabe – Prognose › Grundlagen › Korrekturen)
   const g = corr?.gate, sgn = (/** @type {number} */ x, d = 1) => `${x >= 0 ? '+' : '−'}${f(Math.abs(x), d)}`;
@@ -77,11 +77,11 @@ export function bindMehr(el, doc, ags, days, download, hints = /** @type {any[]}
 }
 
 /** Sharing-Fahrzeuge direkt an Haltestellen (F30): Stationen der Gemeinde (Tabelle + Live-Datei) gegen den verfügbaren Bestand */
-/** @param {any} ctx @param {any} doc @param {any} live @param {any[]|null} fleet @param {string} name @param {((name: string) => boolean) | null} [keep] Geschäftsgebiet */
-export function atStopsPanel(ctx, doc, live, fleet, name, keep = null) {
+/** @param {any} ctx @param {any} doc @param {any} live @param {any[]|null} fleet @param {string} name */
+export function atStopsPanel(ctx, doc, live, fleet, name) {
   if (!fleet) return '';
   const F = doc?.fields || [], iN = F.indexOf('name'), iA = F.indexOf('lat'), iO = F.indexOf('lon');
-  const st = [...(doc?.rows || []).map((/** @type {any[]} */ r) => ({ name: r[iN], lat: r[iA], lon: r[iO] })), ...TF.searchIndex(live, keep).stations];
+  const st = [...(doc?.rows || []).map((/** @type {any[]} */ r) => ({ name: r[iN], lat: r[iA], lon: r[iO] })), ...TF.searchIndex(live).stations];
   const R = TF.atStops(st, fleet), f = (/** @type {number} */ x) => ctx.fmt(x);
   const body = R.rows.length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.asTitle', { name }))}"><table><thead><tr><th>${t('pt.colStation')}</th><th class="n">${t('pt.asColN')}</th><th>${t('pt.asColOps')}</th><th>${t('pt.colMap')}</th></tr></thead><tbody>
     ${R.rows.map(r => `<tr><td>${ctx.esc(r.name)}</td><td class="n">${f(r.n)}</td><td>${Object.entries(r.ops).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${ctx.esc(o)} ${f(n)}`).join(', ')}</td><td><a href="https://www.openstreetmap.org/?mlat=${r.lat}&amp;mlon=${r.lon}#map=19/${r.lat}/${r.lon}" target="_blank" rel="noopener">OSM ↗</a></td></tr>`).join('')}</tbody></table></div>`

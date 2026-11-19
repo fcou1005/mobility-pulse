@@ -1,6 +1,7 @@
 // Geschäftsgebiet im Reiter ÖPNV (lib/pulse-oepnv-gebiet.js, 19.11.2026): bediente Zellen, Stationen innen und außen, Filter für die Seite
 import * as GB from '../lib/pulse-oepnv-gebiet.js';
-import * as TF from '../lib/pulse-oepnv-tafel.js';
+import * as NZ from '../lib/pulse-oepnv-karte.js';
+import * as OX from '../lib/pulse-ops-extern.js';
 import { cellOf, CELL_LAT, CELL_LON } from '../lib/pulse-track-rules.js';
 let ok = 0, bad = 0;
 const assert = (c, m) => { if (!c) { bad++; console.error('FEHLER:', m); } else { ok++; console.log('ok:', m); } };
@@ -21,12 +22,14 @@ assert(g && g.inside === 2 && g.outside.join() === '4,3' && g.names.join() === '
 assert(GB.gebietOf(rows, new Set(['1:1']), 7) === null && GB.gebietOf(rows, undefined, 7) === null, 'unter 10 bedienten Zellen kein Gebiet');
 
 const F = GB.gebietFilter({ rows, gebiet: g }), off = GB.gebietFilter({ rows, gebiet: null });
-assert(F.on && F.keepId('1') && !F.keepId(3) && F.keepName('Tübingen Uni') && !F.keepName('Kilchberg Bahnhof') && !F.keepName('Bahnhof/ZOB, Herrenberg'), 'Filter: innen ja, außen nein, Halte anderer Gemeinden entlang der Linie nein');
-assert(!off.on && off.keepId('3') && off.keepName('Bahnhof/ZOB, Herrenberg'), 'ohne Gebiet lässt der Filter alles durch');
+assert(F.on && F.keepId('1') && F.keepId(2) && !F.keepId(3) && !F.keepId('4') && !off.on && off.keepId('3'), 'Filter: innen ja, außen nein; ohne Gebiet alles');
 
-const live = { names: ['Tü, Neckarbrücke', 'Bahnhof/ZOB, Herrenberg', 'Kilchberg Bahnhof'], trips: [['RB63', 'regio', 0, [...ctr(1, 1), 60, 48.59, 8.86, 900, ...ctr(20, 1), 1200], null, 'Herrenberg', [0, 1, 2]]] };
-const all = TF.searchIndex(live), mine = TF.searchIndex(live, F.keepName);
-assert(all.stations.length === 3 && mine.stations.map(s => s.name).join() === 'Tü, Neckarbrücke' && mine.lines.length === 1, 'Suche: nur Stationen im Gebiet, Linien bleiben');
+// Jetzt gestört: Station außerhalb bleibt in der Liste, aber ohne Bedarf (Stufe out, ganz hinten), auch ohne Fahrzeug daneben
+const jetzt = [['3', 'Kilchberg Bahnhof', ...ctr(20, 1), 30, 9, 3], ['1', 'Tü, Neckarbrücke', ...ctr(1, 1), 40, 2, 10]];
+const H = NZ.hotspotHints(jetzt, [], { keep: F.keepId });
+assert(H.length === 2 && H[0].id === '1' && H[0].level === 'none' && H[1].id === '3' && H[1].level === 'out', `außerhalb: kein Bedarf (${H.map(x => `${x.id}:${x.level}`).join(' ')})`);
+const spots = OX.oepnvSpots(jetzt.filter(r => F.keepId(r[0])), { vehicles: [] });
+assert(spots.length === 1 && spots[0].cell === 'pt:1', 'Disposition: Ziel nur an der Station im Gebiet');
 
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);

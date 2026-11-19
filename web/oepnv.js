@@ -15,7 +15,6 @@ import { t, dateFmt } from './i18n.js';
 import { putAnswer } from './answer.js';
 import { linesPanel, profilePanel, nowPanel, lastMilePanel, bindMehr, atStopsPanel, progPanel } from './oepnv-mehr.js';
 import { M, KARTE_CSS, mapPanel as mapPanelHtml, setupMap, stopTimer } from './oepnv-karte.js';
-import { setKeep } from './oepnv-tafel.js';
 
 const cache = new Map(), S = { run: 0, fleet: null, hub: null, rows: null };
 const load = (ctx, url, fresh = false) => { if (fresh || !cache.has(url)) cache.set(url, ctx.getJson(url, { timeout: 30000 }).then(r => (r?.ok ? r.json : null)).catch(() => null)); return cache.get(url); };
@@ -45,10 +44,10 @@ export async function renderOepnv(el, ctx) {
   const [doc, live, abs, fleetDoc, zIdx, ver, fcDoc, wege] = city ? await Promise.all([load(ctx, `${D}oepnv/${ags}.json`), load(ctx, `${D}oepnv/live/${ags}.json`, true), load(ctx, `${D}abstell/${ags}.json`), load(ctx, `${D}ops-input/fleet/${ags}.json`), load(ctx, `${D}zones/index.json`), load(ctx, `${D}versorgung/${ags}.json`), load(ctx, `${D}forecast/dispo.json`), load(ctx, `${D}wege/${ags}.json`)]) : [null, null, null, null, null, null, null, null];
   if (run !== S.run) return;
   const name = city ? ctx.esc(ctx.muniName(ags)) : t('pt.germany');
-  // Geschäftsgebiet (19.11.2026): Listen, Suche und Stationen der Karte nur im Gebiet der Sharing-Anbieter; die Pünktlichkeit bleibt für die ganze Gemeinde
-  const GF = GB.gebietFilter(doc); setKeep(GF.on ? GF.keepName : null);
-  const docG = doc && GF.on ? { ...doc, rows: (doc.rows || []).filter((/** @type {any[]} */ r) => GF.keepId(r[0])), jetzt: doc.jetzt ? { ...doc.jetzt, rows: (doc.jetzt.rows || []).filter((/** @type {any[]} */ r) => GF.keepId(r[0])) } : doc.jetzt } : doc;
-  const gebietNote = city && doc ? `<p class="muted small" id="pt-gebiet">${GF.on ? t('pt.gebietNote', { inside: f(GF.g.inside), all: f((doc.rows || []).length), days: f(GF.g.days), n: f(GF.g.outside.length), names: GF.g.names.length ? ctx.esc(GF.g.names.slice(0, 6).join(', ')) : '–' }) : t('pt.gebietNone', { name })}</p>` : '';
+  // Geschäftsgebiet (19.11.2026): alle Haltestellen bleiben sichtbar; als Bedarf an Sharing-Fahrzeugen (Jetzt gestört, Stationsvorschläge, Disposition)
+  // zählen nur die im Gebiet der Anbieter
+  const GF = GB.gebietFilter(doc);
+  const gebietNote = city && doc && GF.on && GF.g.outside.length ? `<p class="muted small" id="pt-gebiet">${t('pt.gebietNote', { inside: f(GF.g.inside), all: f((doc.rows || []).length), days: f(GF.g.days), n: f(GF.g.outside.length), names: GF.g.names.length ? ctx.esc(GF.g.names.slice(0, 6).join(', ')) : '–' })}</p>` : '';
   M.live = live; M.wege = wege?.segs ? WG.wegeLookup(wege) : null; M.cover = null; M.fleet = S.fleet = fleetDoc ? (decodeFleet(fleetDoc)?.vehicles || []).filter(v => !v.disabled && !v.reserved && Number.isFinite(v.lat)) : null;
   const H = doc?.hours, last = H?.days?.length ? H.days.length - 1 : -1;
   // Lückenstunden des Echtzeit-Stroms (H.gap, lib gapHours) zählen nicht mit
@@ -84,7 +83,7 @@ export async function renderOepnv(el, ctx) {
   } else if (city) dash = `<div class="panel"><div class="empty">${t('pt.dashEmpty', { name })}</div></div>`;
 
   // ---------- Stationen ----------
-  const R = docG?.rows || [], days = Math.max(0.25, doc?.days || 0.25); S.rows = R;
+  const R = doc?.rows || [], days = Math.max(0.25, doc?.days || 0.25); S.rows = R;
   const worst = R.filter(r => r[4] >= 40).map(r => ({ r, q: (r[5] + r[6]) / r[4] })).sort((a, b) => b.q - a.q || b.r[4] - a.r[4]).slice(0, 15);
   const stPanel = city ? (R.length ? `<div class="panel"><div class="panel-head"><div><h2>${t('pt.stTitle')}</h2><div class="sub">${t('pt.stSub', { n: f(R.length), all: f(doc.stations || R.length), days: f(days, 1), hl: doc.halfLifeDays || 7 })}</div></div>
       <div class="panel-actions"><button class="chip" type="button" id="pt-st-csv">${t('pt.csv')}</button></div></div>
@@ -107,7 +106,7 @@ export async function renderOepnv(el, ctx) {
     const mineZ = (zIdx?.zones || []).filter(z => (z.municipalities || []).includes(ags)), zDocs = (await Promise.all(mineZ.map(z => load(ctx, `${D}zones/${z.file}`)))).filter(Boolean);
     if (run !== S.run) return;
     const isl = PL.parkingIslands(Z.zonesFor(zDocs)), demand = PL.demandFromDoc(abs);
-    const hub = NZ.hubCandidates(R, { days, demand, vehicles: S.fleet || [], existing: isl }); S.hub = hub;
+    const hub = NZ.hubCandidates(R.filter((/** @type {any[]} */ r) => GF.keepId(r[0])), { days, demand, vehicles: S.fleet || [], existing: isl }); S.hub = hub;
     const why = (x) => Object.entries(x.parts).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => (k === 'pt' ? t('pt.whyPt', { n: f(x.perDay) }) : k === 'stoer' ? t('pt.whyStoer', { p: pct(ctx, x.stoer) }) : t('pt.whyEnds', { n: f(x.ends) }))).join('; ');
     hubPanel = `<div class="panel"><div class="panel-head"><div><h2>${t('pt.hubTitle')}</h2><div class="sub">${t('pt.hubSub', { r: NZ.NETZ.hubRadiusM, n: f(hub.stations), has: f(hub.withArea), min: NZ.NETZ.hubMinPerDay })}</div></div>
       <div class="panel-actions"><button class="chip" type="button" id="pt-hub-csv"${hub.rows.length ? '' : ' disabled'}>${t('pt.csv')}</button></div></div>
@@ -116,12 +115,12 @@ export async function renderOepnv(el, ctx) {
       <p class="muted small">${t('pt.hubNote', { isl: f(isl.length), abs: abs ? t('pt.hubAbsYes') : t('pt.hubAbsNo') })}</p></div>`;
   }
 
-  const hints = city ? NZ.hotspotHints(docG?.jetzt?.rows || [], S.fleet) : []; M.hot = hints;
+  const hints = city ? NZ.hotspotHints(doc?.jetzt?.rows || [], S.fleet, { keep: GF.on ? GF.keepId : null }) : []; M.hot = hints;
   // ---------- Städte (ohne Auswahl) ----------
   const cityList = !city ? `<div class="panel"><div class="panel-head"><div><h2>${t('pt.listTitle')}</h2><div class="sub">${t('pt.listSub')}</div></div></div>${idx?.cities && Object.keys(idx.cities).length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.listTitle'))}"><table><thead><tr><th>${t('pt.city')}</th><th class="n">${t('pt.colStops')}</th><th class="n">${t('pt.colOk')}</th><th class="n">${t('pt.colSkip')}</th><th class="n">${t('pt.colLate')}</th><th class="n">${t('pt.kLive')}</th></tr></thead><tbody>
     ${Object.entries(idx.cities).sort((a, b) => b[1][1] - a[1][1]).slice(0, 40).map(([a, r]) => `<tr><td><button type="button" class="chip" data-ags="${a}">${ctx.esc(ctx.muniName(a))}</button></td><td class="n">${f(r[1])}</td><td class="n">${pct(ctx, r[1] ? (r[1] - r[2] - r[3]) / r[1] : null)}</td><td class="n">${pct(ctx, r[1] ? r[2] / r[1] : null, 1)}</td><td class="n">${pct(ctx, r[1] ? r[3] / r[1] : null, 1)}</td><td class="n">${f(r[4])}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${t('pt.listEmpty')}</div>`}</div>` : '';
 
-  el.innerHTML = `${mapPanel}${gebietNote}${city ? nowPanel(ctx, docG, name, hints, mine, fcDoc ? ptCorrectionOf(fcDoc, ags) : null) : ''}${city ? atStopsPanel(ctx, docG, live, M.fleet, name, GF.on ? GF.keepName : null) : ''}${cityList}${dash}${city ? progPanel(ctx, doc, name) : ''}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${city ? lastMilePanel(ctx, ver, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
+  el.innerHTML = `${mapPanel}${gebietNote}${city ? nowPanel(ctx, doc, name, hints, mine, fcDoc ? ptCorrectionOf(fcDoc, ags) : null) : ''}${city ? atStopsPanel(ctx, doc, live, M.fleet, name) : ''}${cityList}${dash}${city ? progPanel(ctx, doc, name) : ''}${stPanel}${city ? linesPanel(ctx, doc, days) : ''}${effPanel}${city ? profilePanel(ctx, doc, name) : ''}${city ? lastMilePanel(ctx, ver, name) : ''}${hubPanel}<p class="muted small">${t('pt.source', { attr: ctx.esc(doc?.attribution || idx?.attribution || NZ.NETZ_ATTRIBUTION) })}</p>`;
   for (const b of el.querySelectorAll('button[data-ags]')) b.addEventListener('click', () => { const sel = /** @type {HTMLSelectElement | null} */ (document.querySelector('#sel-scope')); if (sel) { sel.value = /** @type {HTMLElement} */ (b).dataset.ags || ''; sel.dispatchEvent(new Event('change', { bubbles: true })); } });
   el.querySelector('#pt-st-csv')?.addEventListener('click', () => download(`oepnv_stationen_${ags}.csv`, ['station;name;lat;lon;halte_je_tag;ausgefallen_anteil;verspaetet_anteil;verspaetung_min', ...(S.rows || []).map(r => [r[0], `"${String(r[1]).replace(/"/g, '""')}"`, csvNum(r[2], 5), csvNum(r[3], 5), csvNum(r[4] / days), csvNum(r[5] / r[4], 3), csvNum(r[6] / r[4], 3), csvNum(r[7])].join(';'))].join('\n') + '\n'));
   el.querySelector('#pt-hub-csv')?.addEventListener('click', () => S.hub && download(`sharing_stationen_${ags}.csv`, ['rang;station;name;lat;lon;halte_je_tag;gestoert_anteil;fahrtenden_150m;fahrzeuge_jetzt_150m;punkte', ...S.hub.rows.map((x, i) => [i + 1, x.id, `"${String(x.name).replace(/"/g, '""')}"`, csvNum(x.lat, 5), csvNum(x.lon, 5), csvNum(x.perDay), csvNum(x.stoer, 3), x.ends, x.vehicles, csvNum(x.score, 3)].join(';'))].join('\n') + '\n'));

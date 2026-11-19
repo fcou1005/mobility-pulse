@@ -249,6 +249,6 @@ export default {
   "pt.vehEnd": "Kein weiterer Halt gemeldet",
   "pt.vehStops": "Nächste Halte laut Echtzeit:",
   "pt.pathsHidden": "{n} Abschnitte ohne bekannten Verlauf sind nicht gezeichnet; Fahrzeuge stehen dort an der jeweils näheren Station.",
-  "pt.gebietNote": "Listen, Suche und Stationen der Karte zeigen nur Haltestellen im Geschäftsgebiet der Sharing-Anbieter: {inside} von {all} Stationen mit Echtzeit liegen in Zellen (≈ 280 × 250 m), in denen in den letzten {days} Tagen ein verfügbares Fahrzeug stand, oder direkt daneben. Ausgeblendet sind {n} Haltestellen, darunter {names}. Pünktlichkeit und Linien zählen weiter für die ganze Gemeinde.",
-  "pt.gebietNone": "Für {name} ist kein Geschäftsgebiet bekannt (zu wenige Sharing-Fahrzeuge in den Zellen der letzten 7 Tage); Listen zeigen alle Haltestellen der Gemeinde. Neu geprüft wird einmal am Tag.",
+  "pt.gebietNote": "Als Bedarf an Sharing-Fahrzeugen zählen nur Haltestellen im Geschäftsgebiet der Anbieter: {inside} von {all} Stationen mit Echtzeit liegen in Zellen (≈ 280 × 250 m), in denen in den letzten {days} Tagen ein verfügbares Fahrzeug stand, oder direkt daneben. Die übrigen {n} (darunter {names}) stehen weiter in Karte, Suche und Listen, sind aber kein Ziel in „Jetzt gestört“, in den Stationsvorschlägen und in der Disposition.",
+  "pt.nowOut": "außerhalb Geschäftsgebiet, kein Bedarf",
 };

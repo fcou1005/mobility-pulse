@@ -240,7 +240,7 @@
       "object",
       "null"
      ],
-     "description": "Seit 1.8 (19.11.2026): Geschäftsgebiet der Sharing-Anbieter – Zellen (≈ 280 × 250 m), in denen in den letzten days Tagen ein verfügbares Fahrzeug stand, plus ring Zellen Rand. outside = Station-IDs der Gemeinde außerhalb (die Seite blendet sie in Listen aus), names = bis zu 12 davon mit den meisten Halten. null bei unter 10 bedienten Zellen (dann kein Filter).",
+     "description": "Seit 1.8 (19.11.2026): Geschäftsgebiet der Sharing-Anbieter – Zellen (≈ 280 × 250 m), in denen in den letzten days Tagen ein verfügbares Fahrzeug stand, plus ring Zellen Rand. outside = Station-IDs der Gemeinde außerhalb (sichtbar, aber kein Bedarf an Sharing-Fahrzeugen: Jetzt gestört, Stationsvorschläge, Disposition), names = bis zu 12 davon mit den meisten Halten. null bei unter 10 bedienten Zellen (dann zählt jede Station).",
      "required": [
       "days",
       "cells",

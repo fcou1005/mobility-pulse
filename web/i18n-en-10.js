@@ -249,6 +249,6 @@ export default {
   "pt.vehEnd": "No further stop reported",
   "pt.vehStops": "Next stops according to real-time data:",
   "pt.pathsHidden": "{n} sections without a known route are not drawn; vehicles stand at the nearer station there.",
-  "pt.gebietNote": "Lists, search and the map's stations show only stops inside the sharing operators' business area: {inside} of {all} stations with real-time data lie in cells (≈ 280 × 250 m) where an available vehicle stood in the last {days} days, or right next to one. {n} stops are hidden, among them {names}. Punctuality and lines still count for the whole municipality.",
-  "pt.gebietNone": "No business area is known for {name} (too few sharing vehicles in the cells of the last 7 days); lists show all stops of the municipality. It is checked again once a day.",
+  "pt.gebietNote": "Only stops inside the operators' business area count as demand for sharing vehicles: {inside} of {all} stations with real-time data lie in cells (≈ 280 × 250 m) where an available vehicle stood in the last {days} days, or right next to one. The other {n} (among them {names}) stay on the map, in search and in the lists, but are no target in “Disrupted now”, in the station suggestions or in dispatch.",
+  "pt.nowOut": "outside business area, no demand",
 };

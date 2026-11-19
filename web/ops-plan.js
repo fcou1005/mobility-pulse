@@ -8,6 +8,7 @@ import { NEUTRAL } from './tokens.js';
 import { setAnswer } from './answer.js';
 import { renderShiftPanels } from './ops-shift.js';
 import { akkuVehicles } from './ops-akku.js';
+import * as GB from './pulse-oepnv-gebiet.js';
 
 // ---------- Plan ----------
 export async function computePlan() {
@@ -120,7 +121,8 @@ function scoreFor(p, osm) {
   return spots;
 }
 const rebalanceFor = (p) => O.planRebalance({ spots: p.noDemand ? [] : p.spots.spots, extraSpots: p.noDemand ? [] : p.ptSpots || [], vehicles: p.fleet.vehicles.filter(O.isAvailable), model: p.model, share: p.shareDemand ?? p.share, vanCapacity: p.params.van, ...p.params.common });
-const ptSpotsFor = (p) => (p.noDemand || !p.ptDoc?.jetzt?.rows?.length || !p.fleet.vehicles.length ? [] : O.oepnvSpots(p.ptDoc.jetzt.rows, { vehicles: p.fleet.vehicles.filter(O.isAvailable), spots: p.spots.spots, firstRank: p.spots.spots.length + 1 }));
+// nur Stationen im Geschäftsgebiet sind Bedarf (19.11.2026, lib/pulse-oepnv-gebiet.js): Pfrondorf oder Kilchberg sind keine Ziele für Tübingens Flotte
+const ptSpotsFor = (p) => (p.noDemand || !p.ptDoc?.jetzt?.rows?.length || !p.fleet.vehicles.length ? [] : O.oepnvSpots(p.ptDoc.jetzt.rows.filter((/** @type {any[]} */ r) => GB.gebietFilter(p.ptDoc).keepId(r[0])), { vehicles: p.fleet.vehicles.filter(O.isAvailable), spots: p.spots.spots, firstRank: p.spots.spots.length + 1 }));
 const swapsFor = (p) => O.planSwaps({ vehicles: akkuVehicles(p, p.fleet.vehicles.filter(v => !v.reserved)), model: p.model, swapCapacity: p.params.swapCapacity, swapThreshold: p.params.swapThreshold, swapRangeKm: p.params.swapRangeKm, ...p.params.common });
 const workshopFor = (p) => O.planWorkshop({ vehicles: p.fleet.vehicles, workshopCapacity: p.params.van, ...p.params.common });
 const stationFor = (p) => { const sb = p.fleet.stations.length ? O.planStationBalance({ stations: p.fleet.stations, vanCapacity: p.params.van, ...p.params.common }) : null; return sb?.stations ? sb : null; };
