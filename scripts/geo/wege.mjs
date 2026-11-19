@@ -59,7 +59,8 @@ export async function runWege({ OUT, TMP, DATA, bounds, log, now, top }) {
   const feat = new Map(bounds.features.map(f => [f.properties.ags, f])), tiles = new Map(), idx = {};
   // Plan je Stadt (Verbindungen, Rechtecke), dann ein Ausschnitt aller Netze aus den Landesextrakten in einem Durchgang
   const plans = [];
-  for (const [ags, fleet, name] of top.slice(0, CFG.cities)) {
+  // alle Städte ab minFleet Sharing-Fahrzeugen (19.11.2026: 99 Städte; bis dahin die 30 größten, Tübingen auf Platz 42 fehlte)
+  for (const [ags, fleet, name] of top.filter(x => x[1] >= (process.env.GEO_WEGE_CITIES ? 0 : W.WEGE_GEO.minFleet)).slice(0, CFG.cities)) {
     const f = feat.get(ags); if (!f) continue;
     const b0 = bboxOf(f.geometry), city = [b0[1], b0[0], b0[3], b0[2]];
     const roadBb = grow(city, W.WEGE_GEO.roadBufM).map(x => +x.toFixed(4)), railNear = grow(city, W.WEGE_GEO.railBufM);

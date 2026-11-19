@@ -6,11 +6,14 @@ import { t, dateFmt } from './i18n.js';
 
 const tm = (/** @type {number} */ ms) => dateFmt({ hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(ms));
 const LINE_PREFIX = () => t('pt.findLinePrefix');
+/** Stationen der Suche: nur im Geschäftsgebiet (gesetzt von oepnv.js, lib/pulse-oepnv-gebiet.js gebietFilter); null = alle */
+let KEEP = /** @type {((name: string) => boolean) | null} */ (null);
+export const setKeep = (/** @type {((name: string) => boolean) | null} */ f) => { KEEP = f; };
 
 /** Suchfeld mit Vorschlägen (Linien und Stationen) und Schnellwahl der Linien mit vielen Ausfällen heute */
 /** @param {any} ctx @param {any} live @param {any[][]} lineRows */
 export function findHtml(ctx, live, lineRows) {
-  const ix = TF.searchIndex(live), cl = TF.cancelledLines(lineRows || []), pct = (/** @type {number} */ x) => `${ctx.fmt(Math.round(x * 100))} %`;
+  const ix = TF.searchIndex(live, KEEP), cl = TF.cancelledLines(lineRows || []), pct = (/** @type {number} */ x) => `${ctx.fmt(Math.round(x * 100))} %`;
   return `<div class="pt-find"><label for="pt-find">${t('pt.findLabel')}</label> <input id="pt-find" list="pt-find-list" autocomplete="off" placeholder="${ctx.esc(t('pt.findPh'))}">
     <datalist id="pt-find-list">${ix.lines.slice(0, 200).map(l => `<option value="${ctx.esc(`${LINE_PREFIX()} ${l.name}`)}"></option>`).join('')}${ix.stations.slice(0, 800).map(s => `<option value="${ctx.esc(s.name)}"></option>`).join('')}</datalist>
     <button type="button" class="chip" id="pt-find-clear" hidden>${t('pt.findClear')}</button>
@@ -51,7 +54,7 @@ export function bindFind(ctx, el, liveOf, fleetOf, cb) {
   const show = (/** @type {string} */ v) => {
     const live = liveOf(), q = v.trim(), pre = `${LINE_PREFIX()} `;
     if (!q) { out.innerHTML = ''; cb.onLine(null); cb.onStation(null); if (clr) clr.hidden = true; return; }
-    const ix = TF.searchIndex(live), ln = q.startsWith(pre) ? q.slice(pre.length) : (ix.lines.find(l => l.name.toLowerCase() === q.toLowerCase())?.name ?? null);
+    const ix = TF.searchIndex(live, KEEP), ln = q.startsWith(pre) ? q.slice(pre.length) : (ix.lines.find(l => l.name.toLowerCase() === q.toLowerCase())?.name ?? null);
     if (ln != null && ix.lines.some(l => l.name === ln)) { cb.onStation(null); cb.onLine(ln); out.innerHTML = lineHtml(ctx, live, ln, fleetOf()); }
     else { const st = ix.stations.find(s => s.name === q) || ix.stations.find(s => s.name.toLowerCase().includes(q.toLowerCase()));
       cb.onLine(null); if (st) { cb.onStation(st); out.innerHTML = boardHtml(ctx, live, st.name); } else { cb.onStation(null); out.innerHTML = `<p class="small">${t('pt.findNone', { q: ctx.esc(q) })}</p>`; } }

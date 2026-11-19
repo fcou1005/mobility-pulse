@@ -45,8 +45,30 @@ def main(job_file, out_dir):
     rail = [j for j in jobs if j['kind'] == 'rail']
     res = {j['key']: {'nodes': {}, 'ways': {}} for j in jobs}
 
-    def hits(lst, s, w, n, e):
-        return [j for j in lst if not (e < j['bb'][1] or w > j['bb'][3] or n < j['bb'][0] or s > j['bb'][2])]
+    # Raster 0,1° → Aufträge, die die Rasterzelle berühren (bei 100+ Städten wäre der Vergleich mit allen Aufträgen je Weg zu langsam)
+    def grid(lst):
+        g = {}
+        for j in lst:
+            s, w, n, e = j['bb']
+            for a in range(int(s * G), int(n * G) + 1):
+                for b in range(int(w * G), int(e * G) + 1):
+                    g.setdefault((a, b), []).append(j)
+        return g
+
+    G = 10
+    grids = {'road': grid(road), 'rail': grid(rail)}
+
+    def hits(kind, s, w, n, e):
+        g, seen, out = grids[kind], set(), []
+        for a in range(int(s * G), int(n * G) + 1):
+            for b in range(int(w * G), int(e * G) + 1):
+                for j in g.get((a, b), ()):
+                    if j['key'] in seen:
+                        continue
+                    seen.add(j['key'])
+                    if not (e < j['bb'][1] or w > j['bb'][3] or n < j['bb'][0] or s > j['bb'][2]):
+                        out.append(j)
+        return out
 
     for f in cfg['files']:
         t0, seen = time.time(), 0
@@ -67,7 +89,7 @@ def main(job_file, out_dir):
                 continue
             lats = [p[1] for p in pts]
             lons = [p[2] for p in pts]
-            sel = hits(road if is_road else rail, min(lats), min(lons), max(lats), max(lons))
+            sel = hits('road' if is_road else 'rail', min(lats), min(lons), max(lats), max(lons))
             if not sel:
                 continue
             seen += 1

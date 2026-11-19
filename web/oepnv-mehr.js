@@ -77,11 +77,11 @@ export function bindMehr(el, doc, ags, days, download, hints = /** @type {any[]}
 }
 
 /** Sharing-Fahrzeuge direkt an Haltestellen (F30): Stationen der Gemeinde (Tabelle + Live-Datei) gegen den verfügbaren Bestand */
-/** @param {any} ctx @param {any} doc @param {any} live @param {any[]|null} fleet @param {string} name */
-export function atStopsPanel(ctx, doc, live, fleet, name) {
+/** @param {any} ctx @param {any} doc @param {any} live @param {any[]|null} fleet @param {string} name @param {((name: string) => boolean) | null} [keep] Geschäftsgebiet */
+export function atStopsPanel(ctx, doc, live, fleet, name, keep = null) {
   if (!fleet) return '';
   const F = doc?.fields || [], iN = F.indexOf('name'), iA = F.indexOf('lat'), iO = F.indexOf('lon');
-  const st = [...(doc?.rows || []).map((/** @type {any[]} */ r) => ({ name: r[iN], lat: r[iA], lon: r[iO] })), ...TF.searchIndex(live).stations];
+  const st = [...(doc?.rows || []).map((/** @type {any[]} */ r) => ({ name: r[iN], lat: r[iA], lon: r[iO] })), ...TF.searchIndex(live, keep).stations];
   const R = TF.atStops(st, fleet), f = (/** @type {number} */ x) => ctx.fmt(x);
   const body = R.rows.length ? `<div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.asTitle', { name }))}"><table><thead><tr><th>${t('pt.colStation')}</th><th class="n">${t('pt.asColN')}</th><th>${t('pt.asColOps')}</th><th>${t('pt.colMap')}</th></tr></thead><tbody>
     ${R.rows.map(r => `<tr><td>${ctx.esc(r.name)}</td><td class="n">${f(r.n)}</td><td>${Object.entries(r.ops).sort((a, b) => b[1] - a[1]).map(([o, n]) => `${ctx.esc(o)} ${f(n)}`).join(', ')}</td><td><a href="https://www.openstreetmap.org/?mlat=${r.lat}&amp;mlon=${r.lon}#map=19/${r.lat}/${r.lon}" target="_blank" rel="noopener">OSM ↗</a></td></tr>`).join('')}</tbody></table></div>`

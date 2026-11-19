@@ -9,6 +9,7 @@ import * as OE from '../../lib/pulse-oepnv.js';
 import * as NZ from '../../lib/pulse-oepnv-netz.js';
 import * as LN from '../../lib/pulse-oepnv-linien.js';
 import * as PG from '../../lib/pulse-oepnv-prog.js';
+import * as GB from '../../lib/pulse-oepnv-gebiet.js';
 import * as SV from '../../lib/pulse-schema.js';
 import { gzipSync, gunzipSync, inflateRawSync } from 'node:zlib';
 
@@ -84,18 +85,27 @@ export async function run(ctx) {
         let series = null; try { series = JSON.parse(await readFile(path.join(DATA, 'forecast', 'series.json'), 'utf8')); } catch { series = null; }
         const ptNow = {}, hNow = T.hourOf(now - 3600e3), dNow = T.dayOf(now - 3600e3); // letzte volle Ortsstunde je Gemeinde für die Alarme (Phase alarme)
         const liveDir = path.join(dir, 'live'); await mkdir(liveDir, { recursive: true });
+        // Geschäftsgebiet (19.11.2026): bediente Zellen der letzten GB.GEBIET.days Ortstage vor heute, einmal je Tag gelesen (Zwischenstand in st.gebiet)
+        const gDays = Array.from({ length: GB.GEBIET.days }, (_, i) => T.dayOf(now - (GB.GEBIET.days - i) * 86400e3));
+        if (st.gebiet?.key !== gDays.join()) {
+          const gDocs = []; for (const d of gDays) { const dd = path.join(DATA, 'cells', d); if (!existsSync(dd)) continue; for (const f of (await readdir(dd)).filter(x => /^[A-Z]{2}\.json$/.test(x))) { try { gDocs.push(JSON.parse(await readFile(path.join(dd, f), 'utf8'))); } catch { /* Tag unvollständig */ } } }
+          st.gebiet = { key: gDays.join(), days: new Set(gDocs.map(d => d.day)).size, served: Object.fromEntries([...GB.servedFrom(gDocs)].map(([a, c]) => [a, [...c]])) };
+        }
+        const served = new Map(Object.entries(st.gebiet.served || {}).map(([a, c]) => [a, new Set(/** @type {string[]} */ (c))])); let gebietN = 0;
         const cities = {}; let files = 0, vehicles = 0;
         for (const [ags, qs] of byAgs) {
           const rows = NZ.stationRows(ix, qs, totals), hours = NZ.hoursOf(hist, ags, days8), trips = pr.by.get(ags) || [];
           if (!rows.length && !hours.days.length && !trips.length) continue;
           const lr = lineBy.get(ags) || [], profile = series ? LN.dayProfile(hist, series, ags, { today }) : null;
           const prognose = PG.cityOutlook(histP, ags, now, lr); if (prognose) progN++;
+          const gebiet = GB.gebietOf(rows, served.get(ags), st.gebiet.days); if (gebiet) gebietN++;
           const aN = hist.get(dNow)?.ags?.[ags]; if (aN?.ptN?.[hNow] >= NZ.NETZ.minHourN) ptNow[ags] = { day: dNow, hour: hNow, n: aN.ptN[hNow], skip: aN.ptSkip?.[hNow] || 0, late: aN.ptLate?.[hNow] || 0, flag: aN.pt?.[hNow] ? 1 : 0 };
-          await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(NZ.netzDays(st, now) * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile, jetzt: { windowH: LN.JETZT.windowH, minN: LN.JETZT.minN, fields: LN.JETZT_FIELDS, rows: hot.get(ags) || [] }, prognose })));
+          await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(NZ.netzDays(st, now) * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile, jetzt: { windowH: LN.JETZT.windowH, minN: LN.JETZT.minN, fields: LN.JETZT_FIELDS, rows: hot.get(ags) || [] }, prognose, gebiet })));
           await writeFile(path.join(liveDir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, aheadMin: NZ.NETZ.aheadMin, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, fields: NZ.LIVE_FIELDS, ...NZ.liveRows(trips, ix), ausfall: NZ.cancelDoc(pr.cancel.get(ags)) })));
           const td = hours.days.at(-1) === today ? hours.days.length - 1 : -1, sum = (a) => (td < 0 ? 0 : a[td].reduce((x, y) => x + y, 0));
           cities[ags] = [rows.length, sum(hours.n), sum(hours.skip), sum(hours.late), trips.length]; files++; vehicles += trips.length;
         }
+        log(`ÖPNV-Geschäftsgebiet: ${gebietN} Gemeinden mit bedienten Zellen (${st.gebiet.days} Tage)`);
         log(`ÖPNV-Verspätungsprognose: ${progN} Gemeinden (Tage ${[...histP.values()].filter(d => Object.keys(d?.ags || {}).length).length})`);
         // Wirkung auf Sharing: Prognose-Reihen des vorigen Laufs (forecast/series.json) gegen die Störungs-Stunden
         ctx.ptNow = ptNow;

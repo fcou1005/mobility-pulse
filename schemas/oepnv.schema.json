@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/oepnv.schema.json",
  "title": "ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV)",
  "description": "oepnv/<AGS>.json (Stationen und Stunden einer Gemeinde), oepnv/live/<AGS>.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Haltestellen CC BY 4.0. Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.",
- "x-version": "1.7",
+ "x-version": "1.8",
  "$defs": {
   "ags": {
    "type": "object",
@@ -233,6 +233,29 @@
         "maxItems": 7
        }
       }
+     }
+    },
+    "gebiet": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Seit 1.8 (19.11.2026): Geschäftsgebiet der Sharing-Anbieter – Zellen (≈ 280 × 250 m), in denen in den letzten days Tagen ein verfügbares Fahrzeug stand, plus ring Zellen Rand. outside = Station-IDs der Gemeinde außerhalb (die Seite blendet sie in Listen aus), names = bis zu 12 davon mit den meisten Halten. null bei unter 10 bedienten Zellen (dann kein Filter).",
+     "required": [
+      "days",
+      "cells",
+      "ring",
+      "inside",
+      "outside",
+      "names"
+     ],
+     "properties": {
+      "days": { "type": "integer", "minimum": 0 },
+      "cells": { "type": "integer", "minimum": 0 },
+      "ring": { "type": "integer", "minimum": 0 },
+      "inside": { "type": "integer", "minimum": 0 },
+      "outside": { "type": "array", "items": { "type": "string" } },
+      "names": { "type": "array", "items": { "type": "string" }, "maxItems": 12 }
      }
     },
     "prognose": {
