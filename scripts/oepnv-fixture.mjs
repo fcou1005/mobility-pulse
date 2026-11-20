@@ -56,7 +56,8 @@ for (const ags of fx.ags) {
     // seit Format 1.5: jede siebte Fahrt mit einem ausgefallenen Halt (Station zwischen erstem und letztem Punkt; ohne Zufallszahl, damit der übrige Stand gleich bleibt)
     const gone = k % 7 === 3 ? [[st[(from + 1) % nSt].lat, st[(from + 1) % nSt].lon]].flat() : null;
     // seit 1.6: Ziel (jede sechste ohne) und je Punkt die Station als Index in names (hier: alle Stationen der Stadt)
-    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w, gone, k % 6 === 5 ? null : st[qs[qs.length - 1]].name, qs]);
+    // seit 1.9: Quelle; jede neunte Fahrt (ohne Verspätungsangabe) fährt nach Fahrplan ohne Echtzeit
+    trips.push([k % 11 === 0 ? null : `${{ sbahn: 'S', ubahn: 'U', regio: 'RE', fern: 'IC' }[art] || ''}${1 + (k % 14)}${art === 'bus' ? 0 + (k % 3) : ''}`, art, dl, w, gone, k % 6 === 5 ? null : st[qs[qs.length - 1]].name, qs, k % 9 === 0 ? 'fahrplan' : 'echtzeit']);
   }
   // ganz ausgefallene Fahrten: zwei mit Zeit im Fenster (gestrichelt), drei ohne Uhrzeit im Strom
   const cw = (/** @type {number} */ from, /** @type {number} */ dt0) => st.slice(from, from + 4).flatMap((s, j) => [s.lat, s.lon, dt0 + j * 180]);
@@ -72,11 +73,11 @@ for (const ags of fx.ags) {
     await put(`wege/${ags}.json`, { schemaVersion: SCHEMA.geo, ags, at: fx.at, day: '20261117', attribution: '© OpenStreetMap-Mitwirkende (ODbL); Fahrplan: gtfs.de (DELFI e. V. u. a.), CC BY 4.0 (synthetisch)', license: 'ODbL 1.0', stats: { pairs: Object.keys(segs).length, routed: Object.keys(segs).length }, segs });
   }
   const today = fx.days.length - 1, sum = (/** @type {number[]} */ a) => a.reduce((s, x) => s + x, 0);
-  cities[ags] = [nSt + 40, sum(H.n[today]), sum(H.skip[today]), sum(H.late[today]), trips.length];
+  const nPlan = trips.filter(r => r[7] === 'fahrplan').length; cities[ags] = [nSt + 40, sum(H.n[today]), sum(H.skip[today]), sum(H.late[today]), trips.length - nPlan, nPlan];
   wirk.push(ags === '08111000' ? { ags, days: 4, hours: 9, effect: 0.137, ci: [0.021, 0.253], verdict: 'mehr' } : { ags, days: 1, hours: 2, effect: 0.06, verdict: 'zu wenig Tage' });
 }
 await put('wirkung.json', { schemaVersion: sv, at: fx.at, days: fx.days, rule: 'synthetisch', pooled: { effect: 0.112, ci: [0.018, 0.206], cityDays: 5, hours: 11, cities: wirk.length, verdict: 'mehr' }, cities: wirk,
   learn: { since: fx.days.at(-1), until: '2026-11-20', k: 5, pooled: { effect: 0.09, cityDays: 5 }, fields: ['tage', 'wirkung', 'mittel_stadt'], cities: { '08111000': [4, 0.116, 0.137], '08416041': [1, 0.085, 0.06] } } });
-await put('index.json', { schemaVersion: sv, at: fx.at, feedAt: fx.at - 40e3, ...head, aheadMin: NETZ.aheadMin, days: 2.6, fields: ['stationen', 'halte_heute', 'ausgefallen_heute', 'verspaetet_heute', 'fahrzeuge'], cities, trips: Object.values(cities).reduce((s, r) => s + r[4], 0), withRoute: Object.values(cities).reduce((s, r) => s + r[4], 0) - 7 });
+await put('index.json', { schemaVersion: sv, at: fx.at, feedAt: fx.at - 40e3, ...head, aheadMin: NETZ.aheadMin, days: 2.6, fields: ['stationen', 'halte_heute', 'ausgefallen_heute', 'verspaetet_heute', 'fahrzeuge', 'fahrzeuge_fahrplan'], cities, trips: Object.values(cities).reduce((s, r) => s + r[4], 0), withRoute: Object.values(cities).reduce((s, r) => s + r[4], 0) - 7, plan: { builtAt: fx.at - 86400e3, feed: 'Sat, 14 Nov 2026 09:28:10 GMT', trips: Object.values(cities).reduce((s, r) => s + r[5], 0), merged: 9 } });
 await writeFile(path.join(OUT, 'README.md'), '# Synthetischer ÖPNV-Stand\n\nErzeugt von `scripts/oepnv-fixture.mjs`. Stationen, Stunden, Fahrzeugwege und Wirkung sind ausgedacht; nur für die Browser-Tests.\n');
 console.log(`ÖPNV-Fixture: ${Object.keys(cities).length} Gemeinden → ${path.relative(ROOT, OUT)}/`);

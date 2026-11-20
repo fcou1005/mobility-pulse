@@ -23,9 +23,9 @@ export function findHtml(ctx, live, lineRows) {
 function boardHtml(ctx, live, name) {
   const dep = TF.departures(live, name, Date.now());
   if (!dep.length) return `<p class="small">${t('pt.boardNone', { name: ctx.esc(name) })}</p>`;
-  const late = (/** @type {number|null} */ s) => (s == null ? t('pt.noDelay') : s >= 60 ? `+${ctx.fmt(Math.round(s / 60))} min` : t('pt.onTime'));
+  const late = (/** @type {{ verspaetung_s: number|null, plan?: boolean }} */ d) => { const s = d.verspaetung_s; return d.plan ? t('pt.planShort') : s == null ? t('pt.noDelay') : s >= 60 ? `+${ctx.fmt(Math.round(s / 60))} min` : t('pt.onTime'); };
   return `<h3>${t('pt.boardTitle', { name: ctx.esc(name) })}</h3><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.boardTitle', { name }))}"><table><thead><tr><th>${t('pt.colTime')}</th><th>${t('pt.colLine')}</th><th>${t('pt.colDest')}</th><th class="n">${t('pt.colDelay')}</th></tr></thead><tbody>
-    ${dep.map(d => `<tr><td>${tm(d.at)}</td><td>${ctx.esc(d.linie || t('pt.noLine'))}</td><td>${d.endet ? t('pt.boardEnds') : ctx.esc(d.ziel || '–')}</td><td class="n">${late(d.verspaetung_s)}</td></tr>`).join('')}</tbody></table></div>
+    ${dep.map(d => `<tr><td>${tm(d.at)}</td><td>${ctx.esc(d.linie || t('pt.noLine'))}</td><td>${d.endet ? t('pt.boardEnds') : ctx.esc(d.ziel || '–')}</td><td class="n">${late(d)}</td></tr>`).join('')}</tbody></table></div>
     <p class="muted small">${t('pt.boardNote')}</p>`;
 }
 

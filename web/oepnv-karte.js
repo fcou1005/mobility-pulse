@@ -3,7 +3,8 @@
 // Linienwege (Station → Station im Streckenverlauf aus wege/<AGS>.json, sonst Luftlinie) und Sharing-Fahrzeuge als zweite Ebene. Die Lage rechnet die
 // Seite jede Sekunde aus den zuletzt gemeldeten Haltezeiten neu (lib/pulse-oepnv-wege.js positionAlong); jede Minute fragt sie nach einer neueren
 // Meldung des Sammlers. Ausfälle (seit 17.11.2026) getrennt von Verspätungen: ausgefallene Halte (×), Fahrten mit ausgefallenen Halten (Ring),
-// ganz ausgefallene Fahrten (gestrichelt) und Stationen mit Ausfällen in eigener Farbe (tokens.js PT_CANCEL).
+// ganz ausgefallene Fahrten (gestrichelt) und Stationen mit Ausfällen in eigener Farbe (tokens.js PT_CANCEL). Seit 20.11.2026 (Format 1.9) auch Fahrten
+// ohne Echtzeit nach Fahrplan (Quelle 'fahrplan', Schild gestrichelt, abschaltbar); Fahrten im Strom haben die Halte zwischen den gemeldeten aus dem Fahrplan.
 import * as NZ from './pulse-oepnv-karte.js';
 import * as WG from './pulse-oepnv-wege.js';
 import { HIT, MODEL, seriesColor, moreColor, ptCancelColor } from './tokens.js';
@@ -12,7 +13,7 @@ import { findHtml, bindFind } from './oepnv-tafel.js';
 
 /** Zustand der Karte; web/oepnv.js setzt live und fleet vor setupMap */
 export const M = { map: /** @type {any} */ (null), veh: /** @type {any} */ (null), share: /** @type {any} */ (null), paths: /** @type {any} */ (null), hi: /** @type {any} */ (null), timer: 0, live: /** @type {any} */ (null), fleet: /** @type {any[] | null} */ (null),
-  hot: /** @type {any[]} */ ([]), showShare: false, showPaths: true, showCancel: true, off: /** @type {Set<string>} */ (new Set()), marks: /** @type {any[]} */ ([]), status: '',
+  hot: /** @type {any[]} */ ([]), showShare: false, showPaths: true, showCancel: true, showPlan: true, off: /** @type {Set<string>} */ (new Set()), marks: /** @type {any[]} */ ([]), status: '',
   wege: /** @type {ReturnType<typeof WG.wegeLookup> | null} */ (null), cover: /** @type {{ hit: number, miss: number } | null} */ (null), skipShare: 0.15,
   onlyLine: /** @type {string | null} */ (null), focus: /** @type {any} */ (null), fx: /** @type {any} */ (null) };
 const MODE_KEY = { bus: 'pt.artBus', tram: 'pt.artTram', ubahn: 'pt.artUbahn', sbahn: 'pt.artSbahn', regio: 'pt.artRegio', fern: 'pt.artFern', bahn: 'pt.artBahn', sonst: 'pt.artSonst' };
@@ -20,12 +21,17 @@ export const modeTxt = (/** @type {string} */ a) => t(MODE_KEY[/** @type {keyof 
 const MODE_ORDER = ['bus', 'tram', 'ubahn', 'sbahn', 'regio', 'fern', 'bahn', 'sonst'];
 const modeColor = (/** @type {string} */ a) => { const i = MODE_ORDER.indexOf(a); return i >= 0 && i < 6 ? seriesColor(i) : moreColor(); };
 const delayColor = (/** @type {number | null} */ d) => (d == null ? HIT.none : d >= 300 ? HIT.miss : d >= 120 ? MODEL.blend : HIT.ok);
+/** Fahrt ohne Echtzeit, nach Fahrplan (Format 1.9, achtes Feld) */
+const isPlan = (/** @type {any[]} */ r) => r[7] === 'fahrplan';
 const timeTxt = (/** @type {number} */ ms) => (ms ? dateFmt({ hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(ms)) : '–');
 const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 export const KARTE_CSS = `#pt-prog .fv-bar{display:inline-block;height:.5rem;background:var(--accent);border-radius:2px;margin-left:var(--s2);vertical-align:middle}#pt-prog .bars .t{display:inline-block;min-width:3.5rem}
 .pt-find{margin:var(--s2) 0}.pt-find input{min-width:16rem;max-width:100%}.pt-find h3{margin:var(--s3) 0 var(--s2)}
 .pt-veh{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-weight:600;font-size:.6875rem;line-height:1;padding:3px 5px;border-radius:9px;background:var(--panel);color:var(--fg);border:2px solid var(--c);box-shadow:0 1px 2px rgba(0,0,0,.25)}
 .pt-veh.rail{border-radius:3px}
+.pt-veh.plan{border-style:dashed;color:var(--muted)}
+.pt-far .pt-veh.plan{background:var(--panel);border:2px dashed var(--c)}
+.pt-legend i.plan{background:transparent!important;border:2px dashed var(--c)}
 .pt-far .pt-veh{font-size:0;padding:0;width:10px;height:10px;border-radius:50%;background:var(--c);border-color:var(--panel)}
 .pt-far .pt-veh.rail{border-radius:2px}
 .pt-modes{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);margin:var(--s2) 0;font-size:.875rem}
@@ -49,12 +55,12 @@ export function stopTimer() { if (M.timer) { clearInterval(M.timer); M.timer = 0
 /** @param {any} ctx @param {string} name @param {any} live */
 export function mapPanel(ctx, name, live, lineRows = []) {
   if (!live) return `<div class="panel"><div class="panel-head"><div><h2>${t('pt.mapTitle', { name })}</h2><div class="sub">${t('pt.mapSub')}</div></div></div><div class="empty">${t('pt.mapEmpty')}</div></div>`;
-  const cnt = /** @type {Record<string, number>} */ ({}); for (const r of live.trips || []) cnt[r[1]] = (cnt[r[1]] || 0) + 1;
+  const cnt = /** @type {Record<string, number>} */ ({}); let nPlan = 0; for (const r of live.trips || []) { cnt[r[1]] = (cnt[r[1]] || 0) + 1; if (isPlan(r)) nPlan++; }
   const modes = MODE_ORDER.filter(a => cnt[a]), cc = ptCancelColor();
   return `<div class="panel"><div class="panel-head"><div><h2>${t('pt.mapTitle', { name })}</h2><div class="sub">${t('pt.mapSub')}</div></div></div>
     <fieldset class="pt-modes" id="pt-modes"><legend class="small muted">${t('pt.modesLegend')}</legend>${modes.map(a => `<label><input type="checkbox" data-mode="${a}"${M.off.has(a) ? '' : ' checked'}><i style="background:${modeColor(a)}"></i>${modeTxt(a)} (${ctx.fmt(cnt[a])})</label>`).join('')}</fieldset>
-    <div class="pt-bar"><label><input type="checkbox" id="pt-paths"${M.showPaths ? ' checked' : ''}> ${t('pt.pathsToggle')}</label><label><input type="checkbox" id="pt-cancel"${M.showCancel ? ' checked' : ''}> ${t('pt.cancelToggle')}</label><label><input type="checkbox" id="pt-share"${M.showShare ? ' checked' : ''}${M.fleet ? '' : ' disabled'}> ${t('pt.shareToggle')}</label></div>
-    <div class="pt-legend" style="--x:${cc}"><span class="small muted">${t('pt.legDelay')}</span><span><i style="background:${HIT.ok}"></i>${t('pt.legOk')}</span><span><i style="background:${MODEL.blend}"></i>${t('pt.legLate2')}</span><span><i style="background:${HIT.miss}"></i>${t('pt.legLate5')}</span><span><i style="background:${HIT.none}"></i>${t('pt.legNone')}</span><span><i style="background:transparent;border:2px solid ${HIT.miss}"></i>${t('pt.legHotLate')}</span></div>
+    <div class="pt-bar"><label><input type="checkbox" id="pt-paths"${M.showPaths ? ' checked' : ''}> ${t('pt.pathsToggle')}</label><label><input type="checkbox" id="pt-cancel"${M.showCancel ? ' checked' : ''}> ${t('pt.cancelToggle')}</label>${nPlan ? `<label><input type="checkbox" id="pt-plan"${M.showPlan ? ' checked' : ''}> ${t('pt.planToggle', { n: ctx.fmt(nPlan) })}</label>` : ''}<label><input type="checkbox" id="pt-share"${M.showShare ? ' checked' : ''}${M.fleet ? '' : ' disabled'}> ${t('pt.shareToggle')}</label></div>
+    <div class="pt-legend" style="--x:${cc}"><span class="small muted">${t('pt.legDelay')}</span><span><i style="background:${HIT.ok}"></i>${t('pt.legOk')}</span><span><i style="background:${MODEL.blend}"></i>${t('pt.legLate2')}</span><span><i style="background:${HIT.miss}"></i>${t('pt.legLate5')}</span><span><i style="background:${HIT.none}"></i>${t('pt.legNone')}</span>${nPlan ? `<span><i class="plan" style="--c:${HIT.none}"></i>${t('pt.legPlan')}</span>` : ''}<span><i style="background:transparent;border:2px solid ${HIT.miss}"></i>${t('pt.legHotLate')}</span></div>
     <div class="pt-legend" style="--x:${cc};margin-top:var(--s2)"><span class="small muted">${t('pt.legCancelHead')}</span><span><b class="x" aria-hidden="true">×</b>${t('pt.legSkipStop')}</span><span><i class="ring"></i>${t('pt.legSkipVeh')}</span><span><i class="dash"></i>${t('pt.legCancel')}</span><span><i class="ring"></i>${t('pt.legHotSkip')}</span><span><i class="sq" style="background:${HIT.over}"></i>${t('pt.legShare')}</span></div>
     ${findHtml(ctx, live, lineRows)}
     <div id="pt-map" class="pt-map" role="application" aria-label="${ctx.esc(t('pt.mapTitle', { name }))}"></div><p class="small" id="pt-map-status" aria-live="polite"></p>
@@ -97,7 +103,7 @@ const vehHead = (ctx, r) => `<b>${ctx.esc(r[0] || t('pt.noLine'))}</b>${r[5] ? `
 function vehTip(ctx, r) {
   const [, , delay, w, skipped, , hix] = r, names = M.live?.names || [], i = nextIx(w), ns = skipped ? skipped.length / 2 : 0;
   const next = i >= 0 ? t('pt.vehNext', { name: ctx.esc(names[hix?.[i]] ?? '?'), time: timeTxt((M.live?.at || 0) + w[3 * i + 2] * 1000) }) : t('pt.vehEnd');
-  const late = delay == null ? t('pt.noDelay') : delay >= 60 ? t('pt.delayMin', { n: ctx.fmt(Math.round(delay / 60)) }) : t('pt.onTime');
+  const late = isPlan(r) ? t('pt.planTip') : delay == null ? t('pt.noDelay') : delay >= 60 ? t('pt.delayMin', { n: ctx.fmt(Math.round(delay / 60)) }) : t('pt.onTime');
   return `${vehHead(ctx, r)}<br>${next}<br>${late}${ns ? `<br>${t('pt.skipTip', { n: ctx.fmt(ns) })}` : ''}`;
 }
 /** Klick: die nächsten Halte mit Uhrzeit (aus den gemeldeten Haltezeiten, Verspätung eingerechnet) */
@@ -106,13 +112,13 @@ function vehPopup(ctx, r) {
   const w = r[3], hix = r[6] || [], names = M.live?.names || [], i0 = nextIx(w), rows = [];
   if (i0 < 0) return `<div class="pt-pop">${vehHead(ctx, r)}<div class="muted small">${t('pt.vehEnd')}</div></div>`;
   for (let i = i0; i < w.length / 3 && rows.length < 10; i++) rows.push(`<li><b>${timeTxt((M.live?.at || 0) + w[3 * i + 2] * 1000)}</b><span>${ctx.esc(names[hix[i]] ?? '?')}</span></li>`);
-  return `<div class="pt-pop">${vehHead(ctx, r)}<div class="muted small">${t('pt.vehStops')}</div><ol>${rows.join('')}</ol></div>`;
+  return `<div class="pt-pop">${vehHead(ctx, r)}<div class="muted small">${t(isPlan(r) ? 'pt.vehStopsPlan' : 'pt.vehStops')}</div><ol>${rows.join('')}</ol></div>`;
 }
 /** Schildchen, Linienwege und Ausfälle aus M.live neu aufbauen (neue Meldung, Filter geändert) */
 /** @param {any} ctx */
 function rebuild(ctx) {
   if (!M.map) return; M.veh.clearLayers(); M.paths.clearLayers(); M.hi.clearLayers(); M.marks = [];
-  const trips = (M.live?.trips || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]) && (!M.onlyLine || r[0] === M.onlyLine)), cc = ptCancelColor();
+  const trips = (M.live?.trips || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]) && (!M.onlyLine || r[0] === M.onlyLine) && (M.showPlan || !isPlan(r))), cc = ptCancelColor();
   if (M.showPaths) {
     // nur im Streckenverlauf (Gleise, für Busse Straßen); Luftlinien von Halt zu Halt ergaben ein unlesbares Strichgewirr, die Fahrzeuge fahren dort trotzdem
     let hit = 0, miss = 0;
@@ -136,12 +142,12 @@ function rebuild(ctx) {
   /** @type {Map<string, { p: number[], lines: Set<string> }>} */ const gone = new Map();
   for (const r of trips) {
     const [line, kind, delay, w, skipped, ziel] = r, rail = kind !== 'bus' && kind !== 'tram', ns = skipped ? skipped.length / 2 : 0;
-    const mk = L.marker(/** @type {any} */ ([w[0], w[1]]), { icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<span class="pt-veh${rail ? ' rail' : ''}${ns ? ' skip' : ''}" style="--c:${delayColor(delay)};--x:${cc}">${ctx.esc(line || '?')}${ziel ? `<span class="pt-dest"> → ${ctx.esc(ziel)}</span>` : ''}</span>` }), keyboard: false, zIndexOffset: rail ? 200 : 0 })
+    const mk = L.marker(/** @type {any} */ ([w[0], w[1]]), { icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<span class="pt-veh${rail ? ' rail' : ''}${ns ? ' skip' : ''}${isPlan(r) ? ' plan' : ''}" style="--c:${delayColor(delay)};--x:${cc}">${ctx.esc(line || '?')}${ziel ? `<span class="pt-dest"> → ${ctx.esc(ziel)}</span>` : ''}</span>` }), keyboard: false, zIndexOffset: rail ? 200 : 0 })
       .bindTooltip(() => vehTip(ctx, r)).bindPopup(() => vehPopup(ctx, r), { maxWidth: 300 });
     const geo = geomOf(kind, w);
     // Klick: Weg dieses Fahrzeugs hervorheben (bis zu den gemeldeten nächsten Halten, im Streckenverlauf)
     mk.on('click', () => { mk.closeTooltip(); M.hi.clearLayers(); L.polyline(/** @type {any} */ (WG.pathPoints(w, (i) => geo[i])), { color: delayColor(delay), weight: 5, opacity: 0.9, interactive: false }).addTo(M.hi); for (let i = 0; i + 2 < w.length; i += 3) L.circleMarker(/** @type {any} */ ([w[i], w[i + 1]]), { radius: 3, color: delayColor(delay), weight: 2, fillOpacity: 1, interactive: false }).addTo(M.hi); });
-    M.marks.push({ mk, w, geo, delay, on: false });
+    M.marks.push({ mk, w, geo, delay, plan: isPlan(r), on: false });
     if (skipped) for (let i = 0; i + 1 < skipped.length; i += 2) { const k = `${skipped[i]},${skipped[i + 1]}`; let g = gone.get(k); if (!g) gone.set(k, g = { p: [skipped[i], skipped[i + 1]], lines: new Set() }); g.lines.add(line || t('pt.noLine')); }
   }
   // ausgefallene Halte fahrender Fahrten: × an der Station
@@ -151,13 +157,13 @@ function rebuild(ctx) {
 /** @param {any} ctx @param {HTMLElement} el */
 export function tick(ctx, el) {
   const live = M.live, st = el.querySelector('#pt-map-status'); if (!M.map) return;
-  const dt = live ? (Date.now() - live.at) / 1000 : Infinity, stale = !live || dt > (live.aheadMin || 45) * 60; let n = 0, late = 0;
+  const dt = live ? (Date.now() - live.at) / 1000 : Infinity, stale = !live || dt > (live.aheadMin || 45) * 60; let n = 0, late = 0, plan = 0;
   for (const x of M.marks) {
     const p = stale ? null : WG.positionAlong(x.w, dt, (i) => x.geo[i], 120, true);
     if (!p) { if (x.on) { M.veh.removeLayer(x.mk); x.on = false; } continue; }
-    x.mk.setLatLng(p); if (!x.on) { x.mk.addTo(M.veh); x.on = true; } n++; if (x.delay != null && x.delay >= 300) late++;
+    x.mk.setLatLng(p); if (!x.on) { x.mk.addTo(M.veh); x.on = true; } n++; if (x.plan) plan++; else if (x.delay != null && x.delay >= 300) late++;
   }
-  const txt = !live ? t('pt.mapNone') : stale ? t('pt.mapStale', { time: timeTxt(live.at), min: live.aheadMin || 45 }) : t('pt.mapStatus2', { n: ctx.fmt(n), late: ctx.fmt(late), time: timeTxt(live.at), age: ctx.fmt(Math.max(0, Math.round(dt / 60))), share: M.showShare && M.fleet ? t('pt.mapShare', { n: ctx.fmt(M.fleet.length) }) : '' });
+  const txt = !live ? t('pt.mapNone') : stale ? t('pt.mapStale', { time: timeTxt(live.at), min: live.aheadMin || 45 }) : t('pt.mapStatus2', { n: ctx.fmt(n), late: ctx.fmt(late), time: timeTxt(live.at), age: ctx.fmt(Math.max(0, Math.round(dt / 60))), share: M.showShare && M.fleet ? t('pt.mapShare', { n: ctx.fmt(M.fleet.length) }) : '' }) + (plan ? ` ${t('pt.mapPlan', { n: ctx.fmt(plan) })}` : '');
   if (st && txt !== M.status) { st.textContent = txt; M.status = txt; }
 }
 function drawShare() { if (!M.share) return; M.share.clearLayers(); if (M.showShare && M.fleet) for (const v of M.fleet) L.rectangle([[v.lat - 0.00006, v.lon - 0.00009], [v.lat + 0.00006, v.lon + 0.00009]], { color: HIT.over, weight: 1, fillOpacity: 0.7, interactive: false }).addTo(M.share); }
@@ -181,6 +187,7 @@ export function setupMap(ctx, el, rows, reload) {
   el.querySelector('#pt-share')?.addEventListener('change', (e) => { M.showShare = /** @type {HTMLInputElement} */ (e.target).checked; drawShare(); tick(ctx, el); });
   el.querySelector('#pt-paths')?.addEventListener('change', (e) => { M.showPaths = /** @type {HTMLInputElement} */ (e.target).checked; rebuild(ctx); tick(ctx, el); });
   el.querySelector('#pt-cancel')?.addEventListener('change', (e) => { M.showCancel = /** @type {HTMLInputElement} */ (e.target).checked; rebuild(ctx); tick(ctx, el); });
+  el.querySelector('#pt-plan')?.addEventListener('change', (e) => { M.showPlan = /** @type {HTMLInputElement} */ (e.target).checked; rebuild(ctx); notes(); tick(ctx, el); });
   // Suche: Linie filtert die Karte, Station zeigt die Abfahrtstafel und rückt sie in die Mitte (F29/F35)
   bindFind(ctx, el, () => M.live, () => M.fleet, {
     onLine: (l) => { M.onlyLine = l; rebuild(ctx); tick(ctx, el); },

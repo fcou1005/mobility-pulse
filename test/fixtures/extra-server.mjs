@@ -142,7 +142,13 @@ export async function startExtra() {
     if (kind === 'big') { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"data":"'); for (let i = 0; i < 30; i++) res.write('x'.repeat(10000)); return res.end('"}'); }
     if (kind === 'oepnv') { // gtfs.de: statischer Feed nur per Range (ganzer Abruf wird gezählt), Echtzeit gzip; Halte in Stuttgart, Tübingen, Berlin
       if (file === 'feed.zip') {
-        const z = (st.gtfsZip ||= makeZip({ 'agency.txt': 'agency_id\n1\n', 'stops.txt': 'stop_name,parent_station,stop_id,stop_lat,stop_lon,location_type,platform_code\n"Stuttgart, Mitte",,101,48.772,9.172,,\nStuttgart,,100,48.772,9.172,1,\nTübingen,,102,48.525,9.05,,\nBerlin,,103,52.52,13.40,,\n', 'stop_times.txt': 'x\n'.repeat(500) }));
+        // Fahrplan (20.11.2026): s2 auch im Strom (dort nur der Halt in Tübingen), p1 nur im Fahrplan; Zeiten relativ zu jetzt, Betriebstag = Ortsdatum vor einer Stunde
+        const sd = Date.now() - 3600e3, ymd = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date(sd)), mid = Date.parse(`${ymd}T00:00:00Z`) - (+new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }).format(new Date(Date.parse(`${ymd}T12:00:00Z`))) - 12) * 3600e3;
+        const hms = (min) => { const x = Math.round((Date.now() + min * 60e3 - mid) / 60e3); return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}:00`; };
+        const z = (st.gtfsZip ||= makeZip({ 'agency.txt': 'agency_id\n1\n', 'stops.txt': 'stop_name,parent_station,stop_id,stop_lat,stop_lon,location_type,platform_code\n"Stuttgart, Mitte",,101,48.772,9.172,,\nStuttgart,,100,48.772,9.172,1,\nTübingen,,102,48.525,9.05,,\nBerlin,,103,52.52,13.40,,\n',
+          'routes.txt': 'route_id,route_short_name,route_long_name,route_type\nr5,5,,3\nr9,RB99,,2\n', 'trips.txt': 'route_id,service_id,trip_id,trip_headsign\nr5,all,s2,Stuttgart\nr9,all,p1,Stuttgart Mitte\n',
+          'calendar.txt': 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nall,1,1,1,1,1,1,1,20260101,20301231\n',
+          'stop_times.txt': `trip_id,arrival_time,departure_time,stop_id,stop_sequence\ns2,${hms(-10)},${hms(-10)},102,1\ns2,${hms(30)},${hms(30)},101,2\np1,${hms(10)},${hms(10)},102,1\np1,${hms(40)},${hms(40)},101,2\n` }));
         if (req.method === 'HEAD') { res.writeHead(200, { 'content-length': z.length, 'last-modified': 'Sat, 07 Nov 2026 09:31:53 GMT', etag: '"t1"', 'accept-ranges': 'bytes' }); return res.end(); }
         const m = /bytes=(\d+)-(\d+)/.exec(req.headers.range || '');
         if (!m) { st.gtfsFull = (st.gtfsFull || 0) + 1; res.writeHead(200, { 'content-length': z.length }); return res.end(z); }

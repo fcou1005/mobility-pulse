@@ -98,7 +98,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(pr.trips === 2 && pr.withRoute === 1 && tr.length === 2 && tr[0][0] === 'U6' && tr[0][1] === 'ubahn' && tr[0][2] === 360 && tr[0][3].join() === '48.7842,9.1822,-240,48.776,9.173,360,48.75,9.1,4200' && tr[1][0] === null && tr[1][3].length === 6,
     `Fahrzeugwege: laufende Fahrten ab dem letzten Halt, abgesagte und beendete fehlen, ausgefallener Halt und unbekannte Station übersprungen (${JSON.stringify(tr)})`);
   const cd = NZ.cancelDoc(pr.cancel.get('08111000'));
-  assert(tr[0].length === 7 && tr[0][4] === null && tr[1][4]?.join() === '48.776,9.173' && pr.skipped === 1, `Ausgefallene Halte einer fahrenden Fahrt im Fenster als eigenes Feld (${JSON.stringify(tr[1][4])})`);
+  assert(tr[0].length === 8 && tr[0][7] === 'echtzeit' && tr[0][4] === null && tr[1][4]?.join() === '48.776,9.173' && pr.skipped === 1, `Ausgefallene Halte einer fahrenden Fahrt im Fenster als eigenes Feld (${JSON.stringify(tr[1][4])})`);
   const lr = NZ.liveRows(tr, ix);
   assert(tr[0][5] === 'Uni' && tr[0][6].join() === '0,1,2' && lr.names.join() === 'Hauptbahnhof,Stadtmitte,Uni' && lr.trips[0][6].join() === '0,1,2' && lr.trips[1][6].join() === '0,2' && lr.trips[1][5] === 'Uni',
     `Ziel ohne Fahrtziel im Fahrplan = letzter Halt im Strom; Stationen je Punkt als Index in die Namen der Datei (${JSON.stringify(lr.names)})`);

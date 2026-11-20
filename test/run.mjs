@@ -212,6 +212,11 @@ const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
   const src = docs.map(d => d.sources?.pt).find(Boolean);
   assert(ix.mapped === 2 && ix.stops === 3 && ix.ags?.length === 2 && ix.etag === '"t1"', 'ÖPNV-Haltestellen: 2 von 3 Halten zugeordnet (Berlin liegt außerhalb), Stand aus dem Feed');
   assert(sum('ptN') === 25 && sum('ptSkip') === 5 && sum('ptLate') === 2 && sum('pt') === 1 && src?.trips === 3 && src.unmatched === 2 && src.cancelTrips === 1 && docs.some(d => d.ptDay?.['08111000']?.join() === '1,2'), `ÖPNV-Echtzeit: Stuttgart 25 Halte, 5 ausgefallen, 2 verspätet, Kennzeichen gesetzt, 1 ganz ausgefallene Fahrt als Tageswert (${sum('ptN')}/${sum('ptSkip')}/${sum('ptLate')}/${sum('pt')})`);
+  // Fahrplan (20.11.2026): s2 meldet im Strom nur den Halt in Tübingen und bekommt den Weg aus dem Fahrplan; p1 fährt nur nach Fahrplan
+  const lv = JSON.parse(await readFile('test/out/oepnv/live/08416041.json', 'utf8').catch(() => '{}')), oi = JSON.parse(await readFile('test/out/oepnv/index.json', 'utf8').catch(() => '{}'));
+  const q = (src) => (lv.trips || []).filter(r => r[7] === src).map(r => `${r[0]}:${r[3]?.length / 3}`).join();
+  assert(lv.fields?.at(-1) === 'quelle' && q('echtzeit') === '5:2' && q('fahrplan') === 'RB99:2' && oi.plan?.trips === 1 && oi.cities?.['08416041']?.slice(-2).join() === '1,1' && oi.fields?.at(-1) === 'fahrzeuge_fahrplan',
+    `ÖPNV-Fahrplan: Fahrt im Strom mit Weg aus dem Fahrplan, Fahrt ohne Echtzeit nach Fahrplan (echtzeit ${q('echtzeit')}, fahrplan ${q('fahrplan')}, Index ${JSON.stringify(oi.plan)})`);
 }
 // Trainingsarchiv (Audit DAT-01): der abgeschlossene Vortag landet als train/<JJJJ>/<Tag>.json.gz (erst 3 Stunden nach Tagesende)
 if (TR.trainReady(ydM, Date.now())) {

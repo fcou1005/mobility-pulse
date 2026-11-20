@@ -6,8 +6,9 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 
 - Echtzeit: freier GTFS-Realtime-Strom von gtfs.de (`realtime-free.pb`, DELFI e. V. u. a., CC BY-SA 4.0), ein Abruf je Sammler-Lauf (Phase `oepnv`, `scripts/collect/13-oepnv.mjs`). Der Abruf ist derselbe wie für die Störungsmerkmale der [Prognose](prognose.md); es kommt kein zweiter dazu.
 - Haltestellen und Linien: `stops.txt` und `routes.txt` aus dem Deutschland-Fahrplan von gtfs.de (CC BY 4.0), per Bereichsabruf aus dem Zip, neu nur bei geändertem Fahrplan.
+- Fahrplan der Live-Karte (seit 20.11.2026): `trips.txt`, `calendar.txt`, `calendar_dates.txt` und `stop_times.txt` aus demselben Zip, siehe [Fahrplan auf der Live-Karte](#fahrplan-auf-der-live-karte).
 - Die Dateien unter `oepnv/` sind aus dem Strom abgeleitet und stehen deshalb unter CC BY-SA 4.0, abweichend vom übrigen Datenstand. Jede Datei trägt `license` und `attribution`.
-- Keine Fahrgastzahlen, keine Ortung. Fahrten ohne Echtzeit fehlen im Strom und damit überall in dieser Ansicht.
+- Keine Fahrgastzahlen, keine Ortung. Fahrten ohne Echtzeit fehlen im Strom und damit in Pünktlichkeit, Stationen, Linien und Wirkung; die Live-Karte zeigt sie seit 20.11.2026 nach Fahrplan.
 
 ## Zählung (`lib/pulse-oepnv-netz.js`)
 
@@ -29,6 +30,26 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Geschäftsgebiet (seit 19.11.2026, `lib/pulse-oepnv-gebiet.js`, Feld `gebiet` in `oepnv/<AGS>.json`): Als Bedarf an Sharing-Fahrzeugen zählen nur Haltestellen im Gebiet der Anbieter: „Jetzt gestört“ (Haltestellen außerhalb stehen in der Liste, ohne Bedarfshinweis), Stationsvorschläge und Ziele an gestörten Stationen in der Disposition. Karte, Suche und übrige Listen zeigen alle Haltestellen der Gemeinde. Gemessen: Zellen (≈ 280 × 250 m), in denen in den letzten 7 Tagen ein verfügbares Fahrzeug stand (`cells/<Tag>/<Land>.json`, Feld `present`), plus eine Zelle Rand; einmal je Tag gelesen. Tübingen 19.11.: 192 von 224 Stationen innen, außen Kilchberg, Pfrondorf, Hirschau, Unterjesingen, Hagelloch, Weilheim, Bebenhausen. Unter 10 bedienten Zellen gilt kein Gebiet. Die Störungskorrektur der Prognose nutzt weiter die Lage der ganzen Gemeinde.
 - Grenzen: echtes Tempo ist unbekannt (gleichmäßig zwischen zwei Stationen); der Streckenverlauf ist der günstigste Weg im Netz (Gleise nach Länge, Straßen nach Länge und Straßenart), nicht die gefahrene Route (Umleitungen, Schleifen und Wenden fehlen); ohne Verlauf springt das Fahrzeug von Station zu Station, die Linie dazu fehlt. Nach dem Ende der 70 Minuten ohne neuen Lauf sagt die Karte das und zeigt keine Fahrzeuge mehr.
 - Verworfen: Fahrzeugpositionen von Transitous (nur für nicht-kommerzielle Open-Source-Projekte freigegeben).
+
+## Fahrplan auf der Live-Karte
+
+`lib/pulse-oepnv-plan.js`, Phase `oepnv`, seit 20.11.2026.
+
+- Anlass: Der Strom von gtfs.de enthält nicht alle Fahrten. In Tübingen waren es am 20.11.2026 rund 15.000 Halte gegen 21.844 Abfahrten im Fahrplan (68 %), die Linien 6 und 11 fehlten ganz. Viele Fahrten meldet der Strom nur mit zwei oder drei Halten. gtfs.de selbst nennt den Busverkehr bei NVBW und VRR teilweise unvollständig.
+- Tabelle: Der Sammler liest `stop_times.txt` (rund 37 Mio. Zeilen) zeilenweise aus dem Zip, ohne den Eintrag ganz in den Speicher zu laden. Er behält nur Halte an Stationen in Gemeinden mit Flotte, und zwar von Fahrten, deren Dienst in den 14 Tagen ab gestern fährt.
+  - Gleiche Stationsfolge mit gleichen Fahrzeiten bildet ein Muster, das sich viele Fahrten teilen.
+  - Die Tabelle liegt nur im Zwischenspeicher des Sammlers (`oepnv-fahrplan.bin.gz`, Stand in `oepnv-fahrplan.json`), nicht im Datenstand.
+  - Neu gebaut wird sie mit dem Stationsindex: bei neuem Fahrplan, bei neuer Gemeinde mit Flotte, oder wenn weniger als 3 Tage übrig sind. Nach einem Fehlschlag frühestens nach 20 Stunden wieder. `OEPNV_PLAN=0` schaltet sie ab.
+- Fahrten im Strom: Sie bekommen den ganzen Weg aus dem Fahrplan.
+  - Die Zuordnung läuft über dieselbe `trip_id` (gtfs.de: Strom und Fahrplan passen zusammen), den Betriebstag aus `start_date`, sonst den Tag, dessen Zeiten zu den gemeldeten Halten passen.
+  - Gemeldete Halte behalten ihre Zeit. Alle anderen bekommen den Fahrplan plus die Verspätung des letzten gemeldeten Halts davor, vor dem ersten gemeldeten Halt dessen Verspätung.
+  - Ausgefallene Halte bleiben ausgefallen.
+  - Liegt eine Meldung mehr als eine Stunde neben dem Fahrplan, bleibt es beim Weg aus dem Strom.
+- Fahrten ohne Echtzeit: Sie stehen mit `quelle` = `fahrplan` in der Live-Datei (Format 1.9), ohne Verspätung und hinter den Fahrten mit Echtzeit (zusammen höchstens 1.500 je Gemeinde). Doppelt erscheint nichts:
+  - Gleiche Fahrt am selben Betriebstag im Strom, auch abgesagt: kein Eintrag nach Fahrplan.
+  - Für Fahrten im Strom mit fremder `trip_id` zählt dieselbe Linie an derselben Station zur selben Plan-Minute (± 2 Minuten).
+- Karte: Fahrten nach Fahrplan haben ein gestricheltes Schildchen (Legende „nach Fahrplan, ohne Echtzeit“). Der Schalter „Fahrten ohne Echtzeit zeigen“ blendet sie aus. Tooltip, Klick und Abfahrtstafel sagen „nach Fahrplan“. Die Statuszeile nennt, wie viele der Fahrzeuge nach Fahrplan fahren.
+- Zählungen: Pünktlichkeit, Stationen, Linien und Wirkung zählen weiter nur Halte mit Echtzeit. `oepnv/index.json` trennt `fahrzeuge` (im Strom) von `fahrzeuge_fahrplan`; `plan` nennt Stand und Zahl der Fahrten.
 
 ## Jetzt gestört (`recentCounter`, `hotspots`, `hotspotHints`)
 
