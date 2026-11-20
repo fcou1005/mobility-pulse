@@ -27,7 +27,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCo
     'ausgelassener Halt: A → C über B zusammengesetzt (kurzes Glied gerade), auch rückwärts; ohne Netz der Art oder zu großer Umweg kein Verlauf');
   // Schiene über viele Stationen (Straßenbahn nur mit erstem und letztem Halt gemeldet), Straße höchstens CHAIN.maxHops
   const line = Array.from({ length: 21 }, (_, i) => [48.1, 9 + i * 0.004]), segs2 = {}; for (let i = 1; i < line.length; i++) { segs2[key('r', line[i - 1], line[i])] = K.encodePolyline([line[i - 1], line[i]]); segs2[key('s', line[i - 1], line[i])] = K.encodePolyline([line[i - 1], line[i]]); }
-  const lk2 = K.wegeLookup({ segs: segs2 }), tram = lk2.get('tram', ...line[0], ...line[20]), bus = lk2.get('bus', ...line[0], ...line[20]);
+  const lk2 = K.wegeLookup({ segs: segs2 }), tram = lk2.get('tram', line[0][0], line[0][1], line[20][0], line[20][1]), bus = lk2.get('bus', line[0][0], line[0][1], line[20][0], line[20][1]);
   assert(tram && tram.length === 21 && tram.at(-1).join() === line[20].join() && !bus && K.CHAIN.maxHopsRail >= 20, `Schiene über 20 Stationen zusammengesetzt, Straße nicht (${tram?.length})`);
   const W = await import('../lib/pulse-geo-wege.js'), out = W.routePairs([{ net: 'r', a: [48.0, 9.0], b: [48.0003, 9.0003] }], () => null);
   assert(out.stats.short === 1 && K.decodePolyline(out.segs[K.segKey('r', 48.0, 9.0, 48.0003, 9.0003)]).length === 2, 'Verbindung unter 100 m wird gerade abgelegt (Glied für das Überbrücken)');
