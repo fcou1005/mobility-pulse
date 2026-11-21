@@ -197,6 +197,16 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
     const lgFast = JSON.parse(JSON.stringify(r.log)); for (const e of Object.values(lgFast.evals)) if (e.models.ens) { e.models.ens.wapeGD *= 0.3; e.models.ens.wapeGH *= 0.3; }
     assert(F.chooseModel(lgFast.evals, { trainDays: NDAY, nowMs: NOW }).active !== 'ens', 'vor dem Ende der Lernphase nicht wählbar, auch wenn die Kombination weit vorn liegt');
   }
+  // fehlt Chronos in einer Zeile, lernt die Kombination nicht daraus und mischt dort nur die übrigen vier (kein Hybrid unter dem Namen Chronos)
+  {
+    const n = 400, y = Array.from({ length: n }, (_, j) => 10 + (j % 7)), keyOf = () => '08416041|A|scooter', noise = (j, s) => ((j * s) % 11) - 5;
+    const base = { muP: y.map((v, j) => v + noise(j, 3)), mu1: y.map((v, j) => v + noise(j, 5)), muQ: y.map((v, j) => v + noise(j, 7)), muH: y.map((v, j) => v + 4 + noise(j, 2)) };
+    const X = F.ensBases({ ...base, muC: y.map((v, j) => (j < n / 2 ? v + 0.2 * noise(j, 9) : NaN)) }), st = F.ensUpdate(F.emptyEns(), '2026-11-20', keyOf, y, X);
+    const W = F.ensWeights(st), wFull = W.of('08416041|A|scooter'), wNoC = W.of('08416041|A|scooter', X.ok[n - 1]), pr = F.predictEns(X, keyOf, W);
+    assert(X.ok[0] === 31 && X.ok[n - 1] === 15 && st.all[0] === y.slice(0, n / 2).reduce((a, b) => a + b, 0) && st.allR[0] === y.slice(n / 2).reduce((a, b) => a + b, 0) && wFull[4] > 0.8 && wNoC[4] === 0 && Math.abs(wNoC.reduce((a, b) => a + b, 0) - 1) < 1e-9
+      && Math.abs(pr[n - 1] - wNoC.reduce((s, w, k) => s + w * X[k][n - 1], 0)) < 1e-9,
+      `Kombination ohne Chronos-Wert: Zeilen mit allen Modellen und ohne Chronos getrennt gelernt, mit Chronos ${wFull[4].toFixed(2)}, ohne Chronos Gewicht 0 und Summe 1`);
+  }
 }
 
 // ---------- Hybrid: Niveau des Bezugstags, Tagesgang aus dem Modell
