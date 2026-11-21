@@ -135,6 +135,7 @@ export default {
   "mk.rnLess": "{v} weniger",
   "mk.rnMore": "{v} mehr",
   "fc.model.ens": "Kombination aller Modelle",
+  "fc.scopeDEIn": "allen erfassten Gemeinden",
   "fc.model.mittel": "Mittel aller Modelle (Kontrolle)",
   "fv.mEns": "Führt fünf Modelle zusammen: je Gruppe, gepoolt, gepoolt mit Wetter, Hybrid und Chronos-2. Die Gewichte lernt es aus den Fehlern der vergangenen Tage als beste Mischung: Modelle, die gemeinsam danebenliegen, teilen sich ihr Gewicht, ein Modell, das anders danebenliegt, gleicht die übrigen aus. Die Gewichte sind nie negativ und ergeben zusammen 100 %, die Mischung liegt also immer zwischen den Modellen. Eigene Gewichte bekommen nur Gruppen mit sehr viel Erfahrung, alle anderen die ihrer Fahrzeugart. Läuft bis zum {from} nur zum Vergleich mit, danach wählbar mit geprüftem Vorsprung.",
   "fv.ensWeights": "Bisher gelernt ({days} Tage): {w}.",

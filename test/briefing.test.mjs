@@ -13,7 +13,7 @@ const pt = BR.ptBrief({ hours: H, prognose: { next: [['2026-11-19', 7, 0.06, 0.0
 assert(Math.abs(pt.yOk - 0.9) < 1e-9 && Math.abs(pt.late3 - 0.06) < 1e-9 && pt.lines.join() === 'S4,S5,U6' && BR.ptBrief(null, 'x') === null, 'ÖPNV: Pünktlichkeit des Vortags ohne Lückenstunden, nächste 3 Stunden, drei Linien');
 
 const b = BR.briefingText({ name: 'Stuttgart', day: '2026-11-19', fc: f, akku: { morning: 38, nowLow: 155 }, pt, events: [{ titel: 'PITBULL', ort: 'Hanns-Martin-Schleyer-Halle', cap: 15500, zeit: null }], cap: { total: 4906, limit: 6000 } });
-assert(b.title === 'Briefing Stuttgart, 19.11.2026' && /Prognose: 5\.700 Fahrtbeginne, Spitze 17–18 Uhr \(600\)\./.test(b.text) && /Akku: 38 Fahrzeuge unter 20 % bis 8 Uhr, jetzt 155\./.test(b.text)
+assert(b.title === 'Briefing Stuttgart, 19.11.2026' && /Prognose: 5\.700 Fahrtbeginne, Spitze 17–18 Uhr \(600\)\./.test(b.text) && /Akku: jetzt 155 Fahrzeuge unter 20 %, bis 8 Uhr 38 weitere\./.test(b.text)
   && /ÖPNV: gestern 90 % pünktlich; nächste 3 Stunden erwartet 6,0 % verspätet, 1,0 % ausgefallen \(am stärksten: S4, S5, U6\)\./.test(b.text) && /PITBULL \(Hanns-Martin-Schleyer-Halle, 15\.500 Plätze\)/.test(b.text) && /Obergrenze: 4\.906 von 6\.000 E-Scootern \(82 %\)\./.test(b.text),
   `Text mit allen Teilen:\n${b.text}`);
 assert(BR.briefingText({ name: 'X', day: '2026-11-19' }) === null, 'ohne Daten kein Briefing');

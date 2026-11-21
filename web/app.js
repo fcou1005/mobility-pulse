@@ -5,7 +5,7 @@ import { $, $$, CFG, DEMO, DIRS, QS, STATUS, TYPE, esc, fmt, gl, isClient, state
 import { LITE_VIEWS, REQ, cached, clearNotice, fresh, getJson, loadBase, loadLatest, notice, resetCache, resetDaily } from './app-load.js';
 import { muniInfo, muniName, operatorRows, scopeLabel } from './app-scope.js';
 import { autoLive, liveFetch, setPendingLive } from './app-live.js';
-import { FILTERS, M, VIEWS, applyUrlParams, bindGlossTips, bindTableCsv, copyLink, currentView, dataReady, dirty, markDirty, opsFleet, placeSeg, renderAll, safe, setClient, setView, syncUrl, urlReady, ROLE_START, roleOf } from './app-router.js';
+import { FILTERS, M, VIEWS, applyUrlParams, bindGlossTips, bindTableCsv, copyLink, currentView, resolveView, dataReady, dirty, markDirty, opsFleet, placeSeg, renderAll, safe, setClient, setView, syncUrl, urlReady, ROLE_START, roleOf } from './app-router.js';
 import { bindLangSwitch, onLanguage, renderHeader, renderLangHint, renderLangSwitch, renderStamp } from './app-lang.js';
 import { fitMap, initMap, loadWfs, renderMap, renderZonesLayer } from './app-map.js';
 import { ENERGY, energyOfOp, renderHistory } from './app-energy.js';
@@ -99,6 +99,9 @@ export function bind() {
   window.addEventListener('popstate', () => {
     if (!urlReady) return;
     const q = new URLSearchParams(location.search), view = location.hash.slice(1), before = `${state.scope}|${state.operator}|${state.type}|${opsFleet() || ''}|${$('#ops-type').value}`;
+    // aus der Disposition heraus (Menü-Link oder Zurück): ?op= und ?type= gehören dort ihrer Flotte und Fahrzeugart, nicht dem Filter der übrigen
+    // Ansichten (sonst zeigte die Übersicht danach nur noch E-Scooter); den Filter ändert die Disposition nicht, er gilt weiter
+    if (currentView === 'ops' && resolveView(view) !== 'ops') { q.set('op', state.operator); q.set('type', state.type); }
     clearTimeout(scopeT); scopeT = null; scopeByKey = false; setPendingLive(false);
     const sc = q.get('scope') || 'DE';
     if (sc !== state.scope && [...$('#sel-scope').options].some(o => o.value === sc)) resetScope(sc);

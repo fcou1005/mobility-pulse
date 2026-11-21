@@ -13,6 +13,8 @@ const cache = new Map();
 const load = (ctx, url) => { if (!cache.has(url)) cache.set(url, ctx.getJson(url, { timeout: 30000 }).then(r => (r?.ok ? r.json : null)).catch(() => null)); return cache.get(url); };
 const stamp = (ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: TZ }).format(new Date(ms)) : '–');
 const dayTxt = (d) => (d ? dateFmt({ dateStyle: 'medium', timeZone: TZ }).format(new Date(`${d}T12:00:00Z`)) : '–');
+// Kennzahl-Kacheln: kurzes Datum, sonst bricht „31.12.2026“ auf dem Handy mitten in der Zahl um
+const dayShort = (d) => (d ? dateFmt({ day: '2-digit', month: '2-digit', year: '2-digit', timeZone: TZ }).format(new Date(`${d}T12:00:00Z`)) : '–');
 const pct = (ctx, x, d = 0) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
 const LVL = { ok: ['✓', 'ok'], near: ['!', 'warn'], bad: ['✕', 'bad'], over: ['✕', 'bad'], unknown: ['?', ''] };
 const lvlChip = (lvl, label) => `<span class="sd-lvl ${LVL[lvl]?.[1] || ''}"><i aria-hidden="true">${LVL[lvl]?.[0] || '–'}</i>${label}</span>`;
@@ -27,7 +29,7 @@ function css() {
 .sd-brief{margin:0;padding-left:1.1rem;display:grid;gap:var(--s1)}.sd-links{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 0}.sd-alarms{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
 .sd-alarms li{display:grid;grid-template-columns:auto 1fr;gap:2px var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--line)}.sd-alarms .k{grid-row:span 2}.sd-alarms small{color:var(--muted)}
 .sd-feeds{display:flex;flex-wrap:wrap;gap:var(--s2)}.sd-code{width:100%;font:.75rem/1.4 var(--mono);padding:var(--s2);border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--panel-2);color:var(--fg)}
-.sd-cal{display:grid;gap:var(--s4)}.sd-cal h3{margin:0 0 var(--s2);font-size:.875rem}
+.sd-cal{display:grid;gap:var(--s4)}.sd-cal>*{min-width:0}.sd-cal h3{margin:0 0 var(--s2);font-size:.875rem}
 @media print{body.sd-printing .app>:not(main),body.sd-printing .topbar,body.sd-printing .filters,body.sd-printing #notice,body.sd-printing .view:not(.active),body.sd-printing .sd-noprint,body.sd-printing .toc{display:none!important}}`;
   document.head.appendChild(s);
 }
@@ -123,8 +125,8 @@ export async function renderTenders(el, ctx) {
     sentence: next.length ? t('ans.tenders', { n: `<strong>${ctx.fmt(next.length)}</strong>`, first: `<b>${ctx.esc(next[0].stadt)}</b>`, date: dayTxt(next[0].frist) }) : t('ans.tendersNone', { n: ctx.fmt(list.length) }),
     kpis: [
       { label: t('aus.kOpen'), value: ctx.fmt(next.length), n: next.length, cmp: t('aus.kOpenCmp', { n: ctx.fmt(list.length) }) },
-      { label: t('aus.kNext'), value: next.length ? dayTxt(next[0].frist) : '–', cmp: next.length ? next[0].stadt : t('aus.noNext') },
-      { label: t('aus.kChecked'), value: doc?.stand ? dayTxt(doc.stand) : '–', cmp: t('aus.kCheckedCmp', { n: ctx.fmt(list.length) }) },
+      { label: t('aus.kNext'), value: next.length ? dayShort(next[0].frist) : '–', cmp: next.length ? next[0].stadt : t('aus.noNext') },
+      { label: t('aus.kChecked'), value: doc?.stand ? dayShort(doc.stand) : '–', cmp: t('aus.kCheckedCmp', { n: ctx.fmt(list.length) }) },
     ],
     how: t('aus.how'), asOf: doc?.stand ? dayTxt(doc.stand) : '' });
   const row = (x, open) => `<tr class="${open ? 'open' : ''}"><td><b>${ctx.esc(x.stadt)}</b>${x.ags ? `<div class="sub-line mono">${ctx.esc(x.ags)}</div>` : ''}</td><td>${ctx.esc(x.verfahren || '–')}</td><td class="n">${x.frist ? dayTxt(x.frist) : '–'}${x.fristArt ? `<div class="sub-line">${ctx.esc(x.fristArt)}</div>` : ''}</td>

@@ -107,11 +107,11 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   // S4.1: Antwort oben – Erwartung bis Tagesende, Ist gegen Plan, Abweichung; das Urteil kommt nur aus gradeOf (S4.2, ein Urteil je Bildschirm)
   const g = gradeOf(S0, sel, G, L), gIco = g.lvl === 'ok' ? '✓' : g.lvl === 'near' ? '!' : g.lvl === 'bad' ? '✗' : '–';
   const answer = noSeries ? putAnswer(el, { id: 'prognose', sentence: `<b>${esc(t('fv.noScope'))}</b> ${esc(t('fv.noScopeHint'))}`, kpis: [] }) : putAnswer(el, { id: 'prognose',
-    sentence: `${t('ans.fc', { n: `<strong>${n0(expectDay)}</strong>`, scope: `<b>${esc(scopeTxt)}</b>` })} <span class="fv-verdict-in ${g.lvl}"><i aria-hidden="true">${gIco}</i> ${esc(verdictMain(g))}</span> <a href="#fv-grade" class="fv-gdet">${t('fv.gDetails')}</a>`,
+    sentence: `${t('ans.fc', { n: `<strong>${n0(expectDay)}</strong>`, scope: `<b>${esc(scopeLabel(ctx, sel, true))}</b>` })} <span class="fv-verdict-in ${g.lvl}"><i aria-hidden="true">${gIco}</i> ${esc(verdictMain(g))}</span> <a href="#fv-grade" class="fv-gdet">${t('fv.gDetails')}</a>`,
     kpis: [
       { label: t('fv.kSoFar'), value: n0(doneIst), n: Math.round(doneIst), cmp: stT ? t('ans.kPlanSame', { plan: n0(stT.plan), d: sg(stT.bias, 1) }) : t('fv.kNoPlan') },
       { label: t('fv.kErr'), value: stT ? pc(stT.wape) : '–', cmp: stT ? (stT.naive != null ? t('ans.kNaive', { naive: pc(stT.naive) }) : t('fv.kErrSub1', { n: stT.n })) : t('fv.kNoPlan') },
-      { label: t('fv.kDay'), value: n0(expectDay), n: Math.round(expectDay), cmp: planDay != null ? t('ans.kPlanDay', { plan: n0(planDay), d: sg(planDay > 0 ? expectDay / planDay - 1 : null, 1) }) : t('fv.kNoPlan') },
+      { label: t('fv.kDay'), value: n0(expectDay), n: Math.round(expectDay), cmp: planDay != null ? t('ans.kPlanDay', { plan: n0(planDay), d: sg(expectDay > 0 ? planDay / expectDay - 1 : null, 1) }) : t('fv.kNoPlan') }, // wie „Plan derselben Stunden“: Plan gegen den Wert der Kachel
     ],
     how: `${esc(t('ans.fcHow'))} ${esc(verdictMore(g))}`, asOf: S0.generatedAt ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(S0.generatedAt)) : '' });
   const tiles = noSeries ? '' : '<div class="tiles">'
@@ -446,8 +446,8 @@ async function fillEvents(box, ctx, sel, S0 = null) {
   box.querySelectorAll('[data-evr]').forEach(b => b.addEventListener('click', () => { EV_RANGE = +b.dataset.evr; fillEvents(box, ctx, sel, S0); }));
 }
 
-export function scopeLabel(ctx, sel) {
-  const parts = [sel.ags && sel.ags !== 'DE' ? (ctx.muniName?.(sel.ags) || sel.ags) : t('fc.scopeDE'), sel.op && sel.op !== 'all' && !sel.ignored ? sel.op : null, sel.ty && sel.ty !== 'all' && !sel.ignored ? (tMap('type', VEHICLE_TYPE_LABEL)[sel.ty] || sel.ty) : null].filter(Boolean);
+export function scopeLabel(ctx, sel, dative = false) { // dative: nach „in“ (Deutsch „in allen erfassten Gemeinden“)
+  const parts = [sel.ags && sel.ags !== 'DE' ? (ctx.muniName?.(sel.ags) || sel.ags) : t(dative ? 'fc.scopeDEIn' : 'fc.scopeDE'), sel.op && sel.op !== 'all' && !sel.ignored ? sel.op : null, sel.ty && sel.ty !== 'all' && !sel.ignored ? (tMap('type', VEHICLE_TYPE_LABEL)[sel.ty] || sel.ty) : null].filter(Boolean);
   return parts.join(', ');
 }
 /** Ist des heutigen Tags frisch aus events/<Tag>.json (Sammler-Lauf alle paar Minuten); null = Datei fehlt, dann gelten die Reihen aus series.json */

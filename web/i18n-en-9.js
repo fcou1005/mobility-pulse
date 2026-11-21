@@ -135,6 +135,7 @@ export default {
   "mk.rnLess": "{v} fewer",
   "mk.rnMore": "{v} more",
   "fc.model.ens": "Combination of all models",
+  "fc.scopeDEIn": "all covered municipalities",
   "fc.model.mittel": "Mean of all models (control)",
   "fv.mEns": "Brings five models together: per group, pooled, pooled with weather, hybrid and Chronos-2. It learns the weights from the errors of past days as the best mix: models that miss together share their weight, a model that misses differently balances the others. Weights are never negative and add up to 100 %, so the mix always lies between the models. Only groups with a lot of experience get their own weights, all others use those of their vehicle type. Runs for comparison only until {from}, then selectable with a proven lead.",
   "fv.ensWeights": "Learned so far ({days} days): {w}.",

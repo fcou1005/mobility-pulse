@@ -26,7 +26,7 @@ const CHECKS = {
   bericht: [['Gemeindeschlüssel', /AGS 08111000/], ['Einwohner', /609\.365 Einwohner/], ['Zeitraum', /Alle verfügbaren Tage \(3\)/]],
   ops: [['Flotte je Anbieter', /FLOTTE\s*Voi \([\d.]+ Fzg\.\)/i], ['Deploy-Spots', /Deploy-Spots/], ['Schichtplan', /Schichtplan/], ['Prognose im Plan', /\. Prognose: (\d+ % (mehr|weniger) Fahrten als im Schnitt der letzten \d+ Tage|Fahrten wie im Schnitt der letzten \d+ Tage)[\s\S]*gestörte ÖPNV-Stationen ohne Fahrzeug in 300 m als zusätzliche Ziele/], ['Störungskorrektur im Plan', /ÖPNV gestört: Die Störungskorrektur erwartet \+[\d,]+ % Fahrten in den nächsten 3 Stunden \(Probe, nicht im Bedarf\)/], ['Soll je Tageszeit', /[\d.]+ von [\d.]+ verfügbaren Fahrzeugen auf [\d.]+ Zellen/], ['Akku bis morgen 8 Uhr', /Akku bis morgen 8 Uhr[\s\S]*melden keinen Ladestand/], ['Akku: Trefferquote', /Selbstprüfung: \d+ % von [\d.]+ Vorhersagen getroffen in/]],
   spots: [['Gebiet', /Spot-Abgleich: Stuttgart/], ['eigener Anbieter mit Spots', /Mein Anbieter\s*Voi \(\d+ Spots\)/]],
-  prognose: [['Prognose für Anbieter und Gebiet', /Prognose für Voi in Stuttgart/], ['Güte', /Wie gut ist die Prognose\?/]],
+  prognose: [['Prognose für Anbieter und Gebiet', /Prognose für (Voi in Stuttgart|Stuttgart – je Anbieter)/], ['Güte', /Wie gut ist die Prognose\?/]], // seit 21.11.2026 ohne Flotte der Disposition
   'prognose-spots': [['Filter Gebiet', /Gebiet: Stuttgart/], ['Spots bewertet', /Wichtigkeit und Fehlbestand/]],
   'prognose-basis': [['Selbstkontrollen', /Selbstkontrollen/], ['Parameter', /Parameter/], ['Korrekturen', /Korrekturen der Prognose[\s\S]*Tageskorrektur\s*Probe\s*Heute bisher 1,07 × des Modells[\s\S]*Bewertet: 3 von mindestens 12 Ausgaben[\s\S]*Störungskorrektur ÖPNV\s*Probe\s*2 Städte mit gestörtem ÖPNV[\s\S]*Probe bis zum Ende der Lernzeit am 20\. November[\s\S]*Gestörte Städte mit der größten Wirkung/]],
   sources: [['letzter Lauf', /Letzter Lauf \d\d:\d\d/], ['Quellen aktuell', /\d+ von \d+ Quellen im Gebiet sind aktuell/]],
@@ -169,6 +169,15 @@ try {
     if (!card) fail('Erstbesuch-Karte fehlt'); else { await card.click(); await fv.page.waitForTimeout(300); const v = await fv.page.evaluate(() => [location.hash, localStorage.getItem('mp-rolle'), !!document.querySelector('#first-visit[hidden]')]);
       if (v[0] !== '#ops' || v[1] !== 'betrieb' || !v[2]) fail(`Erstbesuch-Karte: ${JSON.stringify(v)}`); else console.log('✓ Erstbesuch-Karte: Wahl „Betrieb“ öffnet die Disposition und wird gemerkt'); }
     await fv.close();
+    // 21.11.2026: Flotte und Art der Disposition (?op=, ?type=) dürfen beim Wechsel per Menü nicht zum Filter der Übersicht werden
+    const lk = await openFixturePage(browser, { port: PORT, fx, scope: '08111000', viewport: { width: 1280, height: 900 } });
+    await lk.page.evaluate(() => { location.hash = 'ops'; }); await lk.page.waitForFunction(() => /[?&]type=/.test(location.search), null, { timeout: 15000 }).catch(() => null);
+    const inOps = await lk.page.evaluate(() => location.search);
+    await lk.page.click('nav a[href="#live"]'); await lk.page.waitForFunction(() => document.querySelector('section.view.active')?.id === 'view-live', null, { timeout: 5000 }).catch(() => null);
+    const after = await lk.page.evaluate(() => [/** @type {HTMLSelectElement} */ (document.querySelector('#sel-type')).value, location.search]);
+    await lk.close();
+    if (after[0] !== 'all' || /[?&](type|op)=/.test(after[1])) fail(`Disposition → Übersicht: Filter ${after[0]}, Adresse ${after[1]} (in der Disposition ${inOps})`);
+    else console.log(`✓ Disposition → Übersicht: Filter bleibt „alle Arten“ (Disposition ${inOps})`);
   }
   // S5.5: Kommunal-Bericht im Druck – Antwort und Kennzahlen vorn, der Kern endet nach höchstens zwei A4-Seiten (Inhalt 186 × 269 mm), Anhang danach
   if (!ONLY) {

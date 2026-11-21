@@ -230,7 +230,8 @@ export function renderTiles() {
   ].join('');
   // S4.1: Antwort oben – was zu tun ist (Fehlbestand an Spots = Summe der Spalte „Fehlen“ in der Spot-Tabelle), Flotte, Touren
   setAnswer($('#ops-answer'), { id: 'ops',
-    sentence: t(need > 0 ? 'ans.ops' : 'ans.opsNone', { need: `<strong>${f(need)}</strong>`, spots: f(p.rebalance.needs.filter(n => n.need > 0).length), op: `<b>${X.esc(p.op)}</b>`, muni: X.esc(X.muniName(p.ags)), runs: f(runs.length) }),
+    sentence: t(need > 0 ? 'ans.ops' : 'ans.opsNone', { need: `<strong>${f(need)}</strong>`, spots: f(p.rebalance.needs.filter(n => n.need > 0).length), op: `<b>${X.esc(p.op)}</b>`, muni: X.esc(X.muniName(p.ags)), runs: f(runs.length),
+      kinds: runs.length ? ` (${RUN_KINDS.map(k => [k, runs.filter(r => r.kind === k).length]).filter(([, n]) => n).map(([k, n]) => `${f(n)} ${RUN_LABEL[k]}`).join(', ')})` : '' }), // Touren nach Art: sonst klingt es, als verteilten sich die Ausbringungen auf alle Touren
     kpis: [
       { label: t('ans.kNeed'), value: f(need), n: need, cmp: t('ans.kNeedCmp', { target: f(target), n: f(p.spots.spots.length) }), tone: need > 0 ? 'warn' : 'ok', eq: '#ops-spots tbody td.need', eqSum: true },
       { label: t('ops.fleet'), value: f(k.available), n: k.available, cmp: t('ans.kFleetCmp', { total: f(k.total), disabled: f(k.disabled) }) },
