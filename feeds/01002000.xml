@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/01002000.xml</id>
+  <title>Mobility Pulse – Kiel</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-20T13:01:32Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/01002000.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=01002000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:01002000:-:1795179692053</id>
+    <title>ÖPNV in Kiel gestört</title>
+    <updated>2026-11-20T13:01:32Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=01002000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 13 und 14 Uhr fielen 1 % der 1.327 Halte mit Echtzeit aus, 51 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 397 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+</feed>

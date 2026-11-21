@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/03159016.xml</id>
+  <title>Mobility Pulse – Göttingen</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-21T00:05:28Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/03159016.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795219528828</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-21T00:05:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">296 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+296).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795218279504</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-20T23:44:39Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 296 Fahrzeuge im Feed seit dem vorigen Lauf (−296).</summary>
+  </entry>
+</feed>

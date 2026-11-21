@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/08317065-oepnv.xml</id>
+  <title>Mobility Pulse – Lahr/Schwarzwald: ÖPNV gestört</title>
+  <subtitle>Alarme zum Thema ÖPNV gestört aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-20T13:01:32Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/08317065-oepnv.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08317065#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08317065:-:1795179692053</id>
+    <title>ÖPNV in Lahr/Schwarzwald gestört</title>
+    <updated>2026-11-20T13:01:32Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08317065#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 13 und 14 Uhr fielen 3 % der 296 Halte mit Echtzeit aus, 69 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 122 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08317065:-:1795107885367</id>
+    <title>ÖPNV in Lahr/Schwarzwald gestört</title>
+    <updated>2026-11-19T17:04:45Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08317065#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 17 und 18 Uhr fielen 0 % der 246 Halte mit Echtzeit aus, 67 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 126 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08317065:-:1795075768870</id>
+    <title>ÖPNV in Lahr/Schwarzwald gestört</title>
+    <updated>2026-11-19T08:09:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08317065#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 8 und 9 Uhr fielen 1 % der 264 Halte mit Echtzeit aus, 70 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 126 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08317065:-:1794988945587</id>
+    <title>ÖPNV in Lahr/Schwarzwald gestört</title>
+    <updated>2026-11-18T08:02:25Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08317065#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 8 und 9 Uhr fielen 1 % der 194 Halte mit Echtzeit aus, 54 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 130 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+</feed>

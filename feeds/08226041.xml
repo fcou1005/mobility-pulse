@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/08226041.xml</id>
+  <title>Mobility Pulse – Leimen</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-21T08:36:52Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/08226041.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08226041#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:08226041:Zeus:1795250212042</id>
+    <title>Zeus: Flotte geschrumpft in Leimen</title>
+    <updated>2026-11-21T08:36:52Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08226041#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">84 statt 124 Fahrzeuge im Feed seit dem vorigen Lauf (−40).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:08226041:Zeus:1795124048867</id>
+    <title>Zeus: Flotte gewachsen in Leimen</title>
+    <updated>2026-11-19T21:34:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08226041#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">127 statt 76 Fahrzeuge im Feed seit dem vorigen Lauf (+51).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:08226041:Zeus:1795122753233</id>
+    <title>Zeus: Flotte geschrumpft in Leimen</title>
+    <updated>2026-11-19T21:12:33Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08226041#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">76 statt 127 Fahrzeuge im Feed seit dem vorigen Lauf (−51).</summary>
+  </entry>
+</feed>

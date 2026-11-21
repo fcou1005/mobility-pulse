@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05978024-fleet.xml</id>
+  <title>Mobility Pulse – Lünen: Flottensprung</title>
+  <subtitle>Alarme zum Thema Flottensprung aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-19T21:34:08Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05978024-fleet.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05978024#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:05978024:Donkey:1795124048867</id>
+    <title>Donkey: Flotte geschrumpft in Lünen</title>
+    <updated>2026-11-19T21:34:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05978024#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">196 statt 379 Fahrzeuge im Feed seit dem vorigen Lauf (−183).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:05978024:Donkey:1795122753233</id>
+    <title>Donkey: Flotte gewachsen in Lünen</title>
+    <updated>2026-11-19T21:12:33Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05978024#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">379 statt 196 Fahrzeuge im Feed seit dem vorigen Lauf (+183).</summary>
+  </entry>
+</feed>

@@ -1,0 +1,1 @@
+{"schemaVersion":"1.8","ags":"05158036","at":1795151719348,"feedAt":1795145593000,"aheadMin":70,"license":"CC BY-SA 4.0","attribution":"Echtzeit: gtfs.de (DELFI e. V. u. a.), CC BY-SA 4.0; Haltestellen: gtfs.de, CC BY 4.0","fields":["linie","art","verspaetung_s","weg","ausgefallene_halte","ziel","halte"],"trips":[],"names":[],"ausfall":null}

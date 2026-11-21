@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05382068.xml</id>
+  <title>Mobility Pulse – Troisdorf</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-21T12:44:34Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05382068.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382068:nextbike:1795265074411</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T12:44:34Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382068:nextbike:1795261229118</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T11:40:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:05382068:-:1795176019684</id>
+    <title>ÖPNV in Troisdorf gestört</title>
+    <updated>2026-11-20T12:00:19Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 12 und 13 Uhr fielen 18 % der 166 Halte mit Echtzeit aus, 17 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 125 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:05382068:-:1795097921140</id>
+    <title>ÖPNV in Troisdorf gestört</title>
+    <updated>2026-11-19T14:18:41Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 14 und 15 Uhr fielen 21 % der 187 Halte mit Echtzeit aus, 12 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 123 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:05382068:-:1795075768870</id>
+    <title>ÖPNV in Troisdorf gestört</title>
+    <updated>2026-11-19T08:09:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 8 und 9 Uhr fielen 17 % der 168 Halte mit Echtzeit aus, 15 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 126 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:05382068:-:1795007651937</id>
+    <title>ÖPNV in Troisdorf gestört</title>
+    <updated>2026-11-18T13:14:11Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382068#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 13 und 14 Uhr fielen 27 % der 160 Halte mit Echtzeit aus, 11 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 124 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+</feed>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05378020-briefing.xml</id>
+  <title>Mobility Pulse – Odenthal: Tagesbriefing</title>
+  <subtitle>Alarme zum Thema Tagesbriefing aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-21T05:08:47Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05378020-briefing.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05378020#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:briefing:05378020:2026-11-21</id>
+    <title>Briefing Odenthal, 21.11.2026</title>
+    <updated>2026-11-21T05:08:47Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05378020#stadt"/>
+    <category term="briefing" label="Tagesbriefing"/>
+    <summary type="text">Prognose: 11 Fahrtbeginne, Spitze 16–17 Uhr (3).
+Akku: 0 Fahrzeuge unter 20 % bis 8 Uhr, jetzt 0.
+ÖPNV: gestern 87 % pünktlich.</summary>
+  </entry>
+</feed>

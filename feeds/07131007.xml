@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/07131007.xml</id>
+  <title>Mobility Pulse – Bad Neuenahr-Ahrweiler</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-21T12:44:34Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/07131007.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=07131007#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:07131007:nextbike:1795265074411</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T12:44:34Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=07131007#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-aw-bike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:07131007:nextbike:1795261229118</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T11:40:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=07131007#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-aw-bike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+</feed>

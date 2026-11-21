@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05562004-source.xml</id>
+  <title>Mobility Pulse – Castrop-Rauxel: Quelle aus</title>
+  <subtitle>Alarme zum Thema Quelle aus aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-21T17:53:28Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05562004-source.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795283608784</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T17:53:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795278618765</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T16:30:18Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795274911024</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T15:28:31Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795271188159</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T14:26:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795271188159</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T14:26:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795265074411</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T12:44:34Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-dortmund meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795265074411</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T12:44:34Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795258733572</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T10:58:53Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795258733572</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T10:58:53Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Donkey:1795253849029</id>
+    <title>Donkey: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T09:37:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_bikesharing-nrw:source-metropolrad-ruhr-donkey meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795248995499</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T08:16:35Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795248995499</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T08:16:35Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795244952438</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T07:09:12Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795244952438</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T07:09:12Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795231630502</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T03:27:10Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795231630502</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T03:27:10Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795226720129</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T02:05:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795192156419</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T16:29:16Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795192156419</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T16:29:16Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795188364698</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T15:26:04Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795188364698</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T15:26:04Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795184649113</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T14:24:09Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795184649113</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T14:24:09Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795174795569</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T11:39:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795174795569</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T11:39:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795172383120</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T10:59:43Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795172383120</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T10:59:43Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795166242748</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T09:17:22Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795166242748</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T09:17:22Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795146983359</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T03:56:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795146983359</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T03:56:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795143444838</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T02:57:24Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Voi:1795143444838</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-20T02:57:24Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bochum meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795117814286</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T19:50:14Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795114089265</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T18:48:09Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795106636623</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T16:43:56Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795102927291</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T15:42:07Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795099180857</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T14:39:40Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795090564972</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T12:16:04Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795050087745</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-19T01:01:27Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795037605222</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T21:33:25Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795035082542</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T20:51:22Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795031360188</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T19:49:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795023866365</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T17:44:26Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795010119966</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T13:55:19Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1795000138618</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T11:08:58Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1794988945587</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T08:02:25Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05562004:Lime:1794986183976</id>
+    <title>Lime: offener Feed nicht erreichbar</title>
+    <updated>2026-11-18T07:16:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05562004#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-lime-dortmund meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+</feed>

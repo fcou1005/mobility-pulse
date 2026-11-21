@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05515000-briefing.xml</id>
+  <title>Mobility Pulse – Münster: Tagesbriefing</title>
+  <subtitle>Alarme zum Thema Tagesbriefing aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-21T05:08:47Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05515000-briefing.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05515000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:briefing:05515000:2026-11-21</id>
+    <title>Briefing Münster, 21.11.2026</title>
+    <updated>2026-11-21T05:08:47Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05515000#stadt"/>
+    <category term="briefing" label="Tagesbriefing"/>
+    <summary type="text">Prognose: 2.263 Fahrtbeginne, Spitze 19–20 Uhr (175).
+Akku: 0 Fahrzeuge unter 20 % bis 8 Uhr, jetzt 71.
+ÖPNV: gestern 84 % pünktlich; nächste 3 Stunden erwartet 17,1 % verspätet, 0,1 % ausgefallen (am stärksten: RE7, RE15, RE42).</summary>
+  </entry>
+</feed>
