@@ -134,4 +134,10 @@ export default {
   "mk.rnNone": "Noch keine Auswertung: Sie entsteht einmal am Tag aus den Stundenwerten der letzten 42 Tage.",
   "mk.rnLess": "{v} weniger",
   "mk.rnMore": "{v} mehr",
+  "fc.model.ens": "Kombination aller Modelle",
+  "fc.model.mittel": "Mittel aller Modelle (Kontrolle)",
+  "fv.mEns": "Führt fünf Modelle zusammen: je Gruppe, gepoolt, gepoolt mit Wetter, Hybrid und Chronos-2. Die Gewichte lernt es aus den Fehlern der vergangenen Tage als beste Mischung: Modelle, die gemeinsam danebenliegen, teilen sich ihr Gewicht, ein Modell, das anders danebenliegt, gleicht die übrigen aus. Die Gewichte sind nie negativ und ergeben zusammen 100 %, die Mischung liegt also immer zwischen den Modellen. Eigene Gewichte bekommen nur Gruppen mit sehr viel Erfahrung, alle anderen die ihrer Fahrzeugart. Läuft bis zum {from} nur zum Vergleich mit, danach wählbar mit geprüftem Vorsprung.",
+  "fv.ensWeights": "Bisher gelernt ({days} Tage): {w}.",
+  "fv.mMittel": "Kontrolle, nicht wählbar: die fünf Modelle der Kombination gleich gewichtet. Schlägt die Kombination dieses einfache Mittel nicht, hat sie nichts gelernt.",
+  "fv.scHowEns": "Aktiv ist {model}: je Gruppe eine Mischung aus fünf Modellen, gewichtet nach der besten Mischung der vergangenen Tage.",
 };

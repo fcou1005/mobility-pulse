@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.3",
+ "x-version": "1.4",
  "$defs": {
   "latest": {
    "type": "object",
@@ -96,6 +96,13 @@
     "nowcast": {
      "type": "object",
      "description": "Tageskorrektur: Regel, Live-Abgleich; seit 1.2 gate, now (Stunden, Gruppen, Verhältnis Ist ÷ Modell heute) und applied"
+    },
+    "ens": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Seit 1.4: Kombination aller Modelle (Kandidat ens, lib/pulse-forecast-ens.js) – upto (letzter gelernter Tag), days, bases (Basismodelle), all und types (Gewichte aller Gruppen und je Fahrzeugart, Summe 1), groups/own (Gruppen im Lernstand, davon mit eigener Erfahrung), ownShare, spread (mittlere Abweichung der eigenen Gewichte), activeFrom (wählbar ab); null ohne Lernstand. Die Kandidaten ens und mittel stehen zudem in evals, decision und den Schattenprognosen."
     }
    }
   },
@@ -128,6 +135,10 @@
     "gates": {
      "type": "object",
      "description": "Seit 1.2: Stand der Freigabe je Korrektur (lib/pulse-forecast-select.js CORR_GATE)"
+    },
+    "feedbackE": {
+     "type": "object",
+     "description": "Seit 1.4: Lernstand der Kombination aller Modelle (v, upto, days; all und types[Art] = [Starts, Σ y², Σ x·y je Basismodell, Σ x_i·x_j oberes Dreieck], groups[Gruppe] = [Starts, Σ y², Σ x·y, Σ x² je Basismodell], nur Gruppen ab ENS.minGroupY Starts; Halbwertszeit 7 Tage)"
     },
     "ptScore": {
      "type": "object",

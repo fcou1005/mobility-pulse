@@ -30,7 +30,7 @@ export const RUN = Object.freeze({
 });
 export const IDLE = Object.freeze({ light: '#7c3aed', dark: '#c084fc' }); // lange Standzeit
 // Prognose: Modelle (Reihen ohne Anbieter) und Trefferbilanz
-export const MODEL = Object.freeze({ chronos: '#14b8a6', blend: '#f59e0b', hybrid: '#8b5cf6' });
+export const MODEL = Object.freeze({ chronos: '#14b8a6', blend: '#f59e0b', hybrid: '#8b5cf6', ens: '#e11d48' }); // ens: Kombination aller Modelle (21.11.2026)
 export const HIT = Object.freeze({ miss: '#e3703d', ok: '#2fa36b', over: '#4f8fe0', none: '#8a949e' });
 // ÖPNV-Karte (17.11.2026): Ausfälle eigene Farbe neben „verspätet“ (HIT.miss), dazu eigene Form (×, gestrichelt) – nie Farbe allein
 export const PT_CANCEL = Object.freeze({ light: '#b3245e', dark: '#f0609a' });

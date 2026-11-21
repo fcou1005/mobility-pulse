@@ -180,6 +180,23 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   assert(JSON.stringify(r2.log.feedback) === JSON.stringify(r.log.feedback) && JSON.stringify(r2.log.evals) === JSON.stringify(r.log.evals), 'Zweiter Lauf am selben Tag: Lernstand und Auswertungen unverändert');
   const r3 = F.runForecast({ docs: [...ds, mk(addDays(DAY0, NDAY))], calendar: null, weather: [], prevLog: JSON.parse(JSON.stringify(r.log)), now: NOW + 86400e3 });
   assert(r3.log.feedback.upto === addDays(DAY0, NDAY) && r3.log.evals[addDays(DAY0, NDAY)]?.models.adaptive, 'Neuer Tag: wird erst bewertet, dann in den Lernstand übernommen');
+  // Kombination aller Modelle (ens, 21.11.2026): bewertet wie adaptive (erst bewertet, dann gelernt), Lernstand log.feedbackE, als Schatten ausgegeben,
+  // vor ENS.activeFrom nicht wählbar; „mittel“ als Kontrolle
+  {
+    const evE = Object.values(r.log.evals).filter(e => e.models.ens && e.models.mittel), avgE = (m) => mean(evE.map(e => F.scoreOf(e.models[m]))), sh = Object.values(r.log.issued)[0]?.shadow || {};
+    const wsum = Object.values(r.latest.ens?.all || {}).reduce((x, y) => x + y, 0), best = Math.min(...['profile', 'pooled', 'hybrid'].map(avgE));
+    assert(evE.length >= 5 && r.log.feedbackE?.upto === addDays(DAY0, NDAY - 1) && Math.abs(wsum - 1) < 0.01 && sh.ens && sh.mittel && r.latest.active !== 'ens' && r3.log.feedbackE.upto === addDays(DAY0, NDAY),
+      `Kombination: ${evE.length} Tage bewertet, Gewichte ${JSON.stringify(r.latest.ens?.all)}, Schatten ens und mittel, nicht aktiv vor dem ${r.latest.ens?.activeFrom?.slice(0, 10)}`);
+    assert(avgE('ens') <= best + 0.01 && avgE('ens') <= avgE('mittel') + 0.01, `Kombination nicht schlechter als das beste Basismodell und das Mittel (ens ${(avgE('ens') * 100).toFixed(1)} %, bestes ${(best * 100).toFixed(1)} %, mittel ${(avgE('mittel') * 100).toFixed(1)} %)`);
+    assert(JSON.stringify(r2.log.feedbackE) === JSON.stringify(r.log.feedbackE), 'Zweiter Lauf am selben Tag: Lernstand der Kombination unverändert');
+    // erster Lauf mit ens auf einem bestehenden Log: die schon bewerteten Tage nur für ens und mittel nachprüfen, übrige Wertungen unverändert
+    const lg = JSON.parse(JSON.stringify(r.log)); delete lg.feedbackE; for (const e of Object.values(lg.evals)) { delete e.models.ens; delete e.models.mittel; }
+    const rB = F.runForecast({ docs: ds, calendar: null, weather: [], prevLog: lg, now: NOW + 3600e3 }), strip = (ev) => JSON.stringify(Object.fromEntries(Object.entries(ev).map(([d, e]) => [d, Object.fromEntries(Object.entries(e.models).filter(([m]) => !['ens', 'mittel'].includes(m)))])));
+    assert(JSON.stringify(rB.log.feedbackE) === JSON.stringify(r.log.feedbackE) && Object.values(rB.log.evals).filter(e => e.models.ens).length === evE.length && strip(rB.log.evals) === strip(r.log.evals),
+      'Nachholen: Lernstand der Kombination wie bei durchgehender Prüfung, übrige Wertungen unverändert');
+    const lgFast = JSON.parse(JSON.stringify(r.log)); for (const e of Object.values(lgFast.evals)) if (e.models.ens) { e.models.ens.wapeGD *= 0.3; e.models.ens.wapeGH *= 0.3; }
+    assert(F.chooseModel(lgFast.evals, { trainDays: NDAY, nowMs: NOW }).active !== 'ens', 'vor dem Ende der Lernphase nicht wählbar, auch wenn die Kombination weit vorn liegt');
+  }
 }
 
 // ---------- Hybrid: Niveau des Bezugstags, Tagesgang aus dem Modell

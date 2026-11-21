@@ -3,6 +3,7 @@
 import { hourOf, dayOf } from './pulse-track.js';
 import { CTX_KEYS, ctxLookup } from './pulse-context.js';
 import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, NOWCAST, PEAK, PTADJ, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, sum } from './pulse-forecast-model.js';
+import { ENSEMBLE, compactEns, emptyEns, ensSummary, loadEns } from './pulse-forecast-ens.js';
 import { BIAS, DECIDE, DM, MIN_VOLUME, agsFactors, assignEras, biasFactorOf, buildFuture, chooseModel, dayFromDoc, evaluateDays, localToUtcMs, nowcastApply, nowcastRatios, nowcastWindow, portableModel, ptApply, ptFactors, ptScoreAdd, corrGate, CORR_GATE, ptUnits, nowcastUnits, predictAll, predictLag, predictNaive, shiftDay, typeFactors, volumeOf, wxLookup } from './pulse-forecast-select.js';
 
 // ---------- Stundenreihen für das Prognose-Dashboard (forecast/series.json) ----------
@@ -80,7 +81,7 @@ export function lastExposure(days, beforeIdx = days.length, { target = null, mod
  * Plan eines Tags (Index di in days): Modell nur mit Tagen < di, Fahrzeugstunden vom letzten beobachteten Wert vor di, Wetter des Tags.
  * Modellwahl wie im Betrieb: chooseModel über die Auswertungen der Tage < Tag. Rückgabe { model, trainDays, scopes } oder null (zu wenige Tage).
  */
-export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem = null, prior: memPrior = null, ctx = null, live = null, ext = null, fbC = null } = {}) {
+export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem = null, prior: memPrior = null, ctx = null, live = null, ext = null, fbC = null, fbE = null } = {}) {
   const trainSel = []; for (let i = 0; i < R.n; i++) if (R.day[i] < di) trainSel.push(i);
   const trainDays = new Set(trainSel.map(i => R.day[i])).size;
   if (trainDays < GATES.minTrainDays) return null;
@@ -93,12 +94,13 @@ export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem 
   // lernendes Modell nur, wenn der Lernstand ausschließlich Tage vor dem geplanten Tag kennt (rückwirkende Pläne sonst ohne Rückkopplung)
   if (model === 'adaptive' && !(fb?.upto && fb.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['adaptive', ...gate], live, untilMs: dayStart, nowMs: dayStart }).active);
   if (model === 'blend' && !(fbC?.upto && fbC.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
+  if (model === 'ens' && !(fbE?.upto && fbE.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['ens', 'blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
   const rec = dayFromDoc({ day, runs: [], groups: {} }, calendar), fut = Array.from({ length: 24 }, (_, h) => ({ day, h, cls: rec.cls }));
   const last = lastExposure(days, di, { target: rec.cls }), F = buildFuture(R, fut, (k, h) => last.get(k)?.[h] ?? 0, wx, ctx), sel = Array.from({ length: F.n }, (_, i) => i);
   // Chronos für den Plan: Vortagsprognose des Tags, sonst der Lauf, der den Tag abdeckt
   const tH = Array.from({ length: 24 }, (_, h) => localToUtcMs(day, h)), useBack = !!ext?.hasBack(day);
   const chronosOf = ext ? (i) => { const t = tH[F.hr[i]], k = R.keys[F.g[i]]; return useBack ? ext.back(k, t) : ext.live(k, t); } : null;
-  let mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC }).mu.get(model);
+  let mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC, fbE }).mu.get(model);
   // S2.8: Plan mit derselben Verzerrungskorrektur wie die Veröffentlichung, aus den Prüfungen vor dem Tag
   let bias = null;
   if (BIAS.models.includes(model) && mu) { const tf = typeFactors(prior, model); if (Object.keys(tf).length) { const af = agsFactors(prior, model, tf); bias = { ...tf, ...(Object.keys(af).length ? { ags: af } : {}) }; mu = Float64Array.from(mu, (x, j) => x * biasFactorOf(R.keys[F.g[sel[j]]], tf, af)); } }
@@ -184,10 +186,19 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   // Lernstand der Mischung Chronos/Hybrid: nur fortschreiben, wenn auch der Lernstand von adaptive weiterläuft (sonst beide neu aus dem Fenster)
   const pfbC = pfb && prev?.feedbackC?.v === FEEDBACK.v ? prev.feedbackC : null;
   const fbC = pfbC ? { ...emptyFeedback(), upto: pfbC.upto, days: pfbC.days || 0, groups: Object.fromEntries(Object.entries(pfbC.groups || {}).map(([k, s]) => [k, [...s]])) } : emptyFeedback();
+  // Lernstand der Kombination aller Modelle (log.feedbackE, lib/pulse-forecast-ens.js): wie fbC nur mit dem Lernstand von adaptive fortgeschrieben
+  const pfbE = pfb ? loadEns(prev?.feedbackE) : null, fbE = pfbE || emptyEns();
   // Rolling Origin: jeder volle, abgeschlossene Tag, der noch nicht ausgewertet ist (ältere Tage ohne Vortraining entfallen von selbst)
   const win = days.map((d, i) => (d.complete && d.day < today ? i : -1)).filter(i => i >= 0).slice(-(GATES.evalWindow + 2));
   const evalIdx = pfb ? win.filter(i => !log.evals[days[i].day]) : win;
-  const ev = evaluateDays(R, evalIdx, { fb, dayName: (i) => days[i].day, expoBefore: (d) => lastExposure(days, d, { target: days[d].cls }), days, mem, prior, ext, fbC, wxTest: weatherFc ? wxLookup(weatherFc) : null });
+  const evOpt = { dayName: (/** @type {number} */ i) => days[i].day, expoBefore: (/** @type {number} */ d) => lastExposure(days, d, { target: days[d].cls }), days, mem, prior, ext, wxTest: weatherFc ? wxLookup(weatherFc) : null };
+  // Kombination neu (erster Lauf mit ens, 21.11.2026): die schon ausgewerteten Tage des Fensters noch einmal nur für ens und mittel prüfen, in zeitlicher
+  // Reihenfolge – die übrigen Wertungen dieser Tage bleiben, wie sie sind (Lernphase)
+  if (pfb && !pfbE) {
+    const old = win.filter(i => log.evals[days[i].day] && !evalIdx.includes(i)), evE = evaluateDays(R, old, { ...evOpt, fbE });
+    for (const [di, e] of Object.entries(evE)) { const rec = log.evals[days[+di].day]; if (rec?.models) for (const m of ENSEMBLE) if (e.models[m]) rec.models[m] = e.models[m]; }
+  }
+  const ev = evaluateDays(R, evalIdx, { ...evOpt, fb, fbC, fbE });
   for (const [di, e] of Object.entries(ev)) {
     const test = []; for (let i = 0; i < R.n; i++) if (R.day[i] === +di) test.push(i);
     const mk = e.mask; e.models.naive = scoreDay(R, test, predictNaive(R, test, +di), 1, { split: true, mask: mk }); delete e.mask; delete e.maskWeek;
@@ -197,7 +208,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   for (const d of Object.keys(log.evals).sort().slice(0, -21)) delete log.evals[d];
   // je Gemeinde nur so lange, wie die Korrektur sie liest (log.json bleibt klein)
   for (const d of Object.keys(log.evals).sort().slice(0, -(BIAS.days + 3))) for (const r of Object.values(log.evals[d]?.models || {})) delete r.byAgsType;
-  log.feedback = compactFeedback(fb); log.feedbackC = compactFeedback(fbC);
+  log.feedback = compactFeedback(fb); log.feedbackC = compactFeedback(fbC); log.feedbackE = compactEns(fbE);
   const all = Array.from({ length: R.n }, (_, i) => i);
   // neue vollständige Tage ins Gedächtnis (Beiträge aus einem Fenstermodell mit allen Wirkungen, die Daten haben; nur Zeilen mit Wetter, sofern vorhanden)
   {
@@ -289,6 +300,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     decision: { rule: { ...DECIDE, dm: { ...DM } }, live: choice.live || null, combined: choice.combined || null, why: choice.why || null, dm: choice.dm || null },
     learn: fb.upto ? learnSummary(fb, fbw) : null,
     blend: { activeFrom: new Date(BLEND.activeFrom).toISOString(), chronos: ext ? { at: ext.at, model: ext.model, backDays: ext.backDays } : null, learn: fbC.upto ? learnSummary(fbC, feedbackWeights(fbC)) : null },
+    ens: ensSummary(fbE),
     horizon: null, totals: null, groups: {}, municipalities: {} };
   const tomorrow = dayOf(localToUtcMs(today, 12) + 24 * 3600e3);
   let live = new Map(); const liveFrom = {}; let portable = null, ncR = null, ncNow = null, ptNow = null; const corrections = [];
@@ -308,8 +320,8 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     // Ausgabe fällig? Dann alle Kandidaten mitrechnen (Schattenprognosen für den Live-Abgleich)
     const lastIssued = Math.max(0, ...Object.keys(log.issued).map(Number)), issuing = now - lastIssued >= issueEveryMs;
     const chronosOn = !!ext?.usable(t0), chronosOf = chronosOn ? (i) => ext.live(R.keys[F.g[i]], fut[F.fh[i]].t) : null;
-    const cands = [...MODELS.filter(m => (m !== 'pooledWx' || env.on) && (m !== 'blend' || chronosOn)), ...(chronosOn ? SHADOW_ONLY : [])], want = new Set([out.active, ...(issuing ? cands : [])]);
-    const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day, chronosOf, fbC });
+    const cands = [...MODELS.filter(m => (m !== 'pooledWx' || env.on) && (m !== 'blend' || chronosOn)), ...(chronosOn ? SHADOW_ONLY : []), ...ENSEMBLE], want = new Set([out.active, ...(issuing ? cands : [])]);
+    const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day, chronosOf, fbC, fbE });
     try { portable = portableModel(PA.fitted(), R, { family: family || 'micro', now, trainDays: out.trainDays, active: out.active, days: days.map(d => d.day) }); } catch { portable = null; }
     // S2.8: Verzerrung je Art korrigieren (je Modell aus dessen Selbstprüfung; Vergleichswerte bleiben roh)
     const biasCorr = {}, biasFn = {};
@@ -325,7 +337,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     const tRec = dayBy.get(today), nh = fut[0].day === today && NOWCAST.models.includes(out.active) ? nowcastWindow(tRec?.hourMin, fut[0].h) : null;
     if (nh) {
       const Fp = buildFuture(R, nh.map(h => ({ day: today, h, cls: fut[0].cls, t: localToUtcMs(today, h) })), expo, wx, ctx), selP = Array.from({ length: Fp.n }, (_, i) => i);
-      const muP = predictAll(R, days, days.length, all, Fp, selP, new Set([out.active]), { envFit, fb, dayOfRow: () => today, fbC }).mu.get(out.active), bf = biasFn[out.active], pred = new Map(), obs = new Map();
+      const muP = predictAll(R, days, days.length, all, Fp, selP, new Set([out.active]), { envFit, fb, dayOfRow: () => today, fbC, fbE }).mu.get(out.active), bf = biasFn[out.active], pred = new Map(), obs = new Map();
       selP.forEach((i, j) => { const key = R.keys[Fp.g[i]]; pred.set(key, (pred.get(key) || 0) + muP[j] * (bf ? bf(key) : 1)); obs.set(key, (obs.get(key) || 0) + (tRec.groups[key]?.start?.[Fp.hr[i]] || 0)); });
       ncR = nowcastRatios(obs, pred); const so = sum([...obs.values()]), sp = sum([...pred.values()]); ncNow = { hours: nh, groups: ncR.size, ratio: sp > 0 ? +(so / sp).toFixed(3) : null };
     }
@@ -383,8 +395,8 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   // Stundenreihen für das Dashboard: Plan heute (und für noch nicht gespeicherte, abgeschlossene Tage), Ist, Live-Prognose bis Ende morgen
   const plans = new Map(), has = (d) => Object.values(prevSeries?.version === 1 ? prevSeries.days?.[d] || {} : {}).some(x => x.p), keepFrom = dayOf(now - (SERIES_KEEP_DAYS - 1) * 86400e3);
   if (trainDays >= GATES.minTrainDays) {
-    days.forEach((d, pi) => { if (d.day >= keepFrom && d.day < today && d.complete && !has(d.day)) { const r = planDay(R, days, pi, d.day, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live, ext, fbC }); if (r) plans.set(d.day, r); } });
-    if (!has(today)) { const ti = days.findIndex(d => d.day === today), r = planDay(R, days, ti >= 0 ? ti : days.filter(d => d.day < today).length, today, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live, ext, fbC }); if (r) plans.set(today, r); }
+    days.forEach((d, pi) => { if (d.day >= keepFrom && d.day < today && d.complete && !has(d.day)) { const r = planDay(R, days, pi, d.day, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live, ext, fbC, fbE }); if (r) plans.set(d.day, r); } });
+    if (!has(today)) { const ti = days.findIndex(d => d.day === today), r = planDay(R, days, ti >= 0 ? ti : days.filter(d => d.day < today).length, today, wx, calendar, log.evals, fb, { mem, prior, ctx, live: log.live, ext, fbC, fbE }); if (r) plans.set(today, r); }
   }
   const series = buildSeries({ days, today, tomorrow, plans, live, liveFrom, prev: prevSeries, now, status: out.status, active: out.active });
   if (family) { out.family = family; series.family = family; }

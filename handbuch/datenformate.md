@@ -16,7 +16,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [ops](#ops) | 1.4 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
-| [forecast](#forecast) | 1.3 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
+| [forecast](#forecast) | 1.4 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.2 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.2 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `markt/regen.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
@@ -342,7 +342,7 @@ Version 1.0 · Schema: [schemas/calib.schema.json](../schemas/calib.schema.json)
 
 forecast/ – Prognose. latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.
 
-Version 1.3 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
+Version 1.4 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
 
 ### forecast · latest
 
@@ -359,6 +359,7 @@ Version 1.3 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema
 | `corrections` |  | array von string – Seit 1.2: in die veröffentlichte Prognose eingerechnete Korrekturen (nowcast, stoerung), nur mit Freigabe (log.gates) |
 | `stoerung` |  | object – Störungskorrektur ÖPNV: Regel, Lernstand, Live-Abgleich; seit 1.2 gate (Freigabe: on, why, n, cases, ratio, p, need), now (gerade gestörte Gemeinden: Faktor und Prognose ohne Korrektur je Wirkstunde) und applied |
 | `nowcast` |  | object – Tageskorrektur: Regel, Live-Abgleich; seit 1.2 gate, now (Stunden, Gruppen, Verhältnis Ist ÷ Modell heute) und applied |
+| `ens` |  | object / null – Seit 1.4: Kombination aller Modelle (Kandidat ens, lib/pulse-forecast-ens.js) – upto (letzter gelernter Tag), days, bases (Basismodelle), all und types (Gewichte aller Gruppen und je Fahrzeugart, Summe 1), groups/own (Gruppen im Lernstand, davon mit eigener Erfahrung), ownShare, spread (mittlere Abweichung der eigenen Gewichte), activeFrom (wählbar ab); null ohne Lernstand. Die Kandidaten ens und mittel stehen zudem in evals, decision und den Schattenprognosen. |
 
 ### forecast · log
 
@@ -371,6 +372,7 @@ Version 1.3 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema
 | `live` |  | object |
 | `history` |  | array |
 | `gates` |  | object – Seit 1.2: Stand der Freigabe je Korrektur (lib/pulse-forecast-select.js CORR_GATE) |
+| `feedbackE` |  | object – Seit 1.4: Lernstand der Kombination aller Modelle (v, upto, days; all und types\[Art\] = \[Starts, Σ y², Σ x·y je Basismodell, Σ x_i·x_j oberes Dreieck\], groups\[Gruppe\] = \[Starts, Σ y², Σ x·y, Σ x² je Basismodell\], nur Gruppen ab ENS.minGroupY Starts; Halbwertszeit 7 Tage) |
 | `ptScore` |  | object – Seit 1.2: gezielter Abgleich der Störungskorrektur je Ortstag und Gemeinde \[Ist, Fehler ohne, Fehler mit, Stunden\] |
 | `ptPending` |  | object – Seit 1.2: vorgemerkte Prognosen gestörter Gemeinden für den gezielten Abgleich |
 
