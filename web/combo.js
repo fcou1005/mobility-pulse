@@ -32,9 +32,11 @@ export function searchable(/** @type {HTMLSelectElement | null} */ sel) {
   const id = `combo${++seq}`, wrap = document.createElement('span'), input = document.createElement('input');
   const pop = document.createElement('div'), list = document.createElement('div'), note = document.createElement('div'), live = document.createElement('span');
   wrap.className = 'combo';
-  Object.assign(input, { type: 'text', id: `${id}-in`, autocomplete: 'off', spellcheck: false, placeholder: t('combo.placeholder') });
+  // Suchfeld statt Textfeld (21.11.2026): Safari bot am Mac im Feld „Gebiet“ Kontakte zum automatischen Ausfüllen an und übergeht dabei
+  // autocomplete="off"; für type="search" und einen Namen mit „search“ füllt es nicht aus. Die data-Attribute halten Passwort-Manager fern.
+  Object.assign(input, { type: 'search', id: `${id}-in`, name: `${id}-search`, autocomplete: 'off', spellcheck: false, placeholder: t('combo.placeholder') });
   input.dataset.i18nPlaceholder = 'combo.placeholder';
-  for (const [k, v] of [['role', 'combobox'], ['aria-autocomplete', 'list'], ['aria-expanded', 'false'], ['aria-controls', `${id}-list`], ['autocapitalize', 'off']]) input.setAttribute(k, v);
+  for (const [k, v] of [['role', 'combobox'], ['aria-autocomplete', 'list'], ['aria-expanded', 'false'], ['aria-controls', `${id}-list`], ['autocapitalize', 'off'], ['autocorrect', 'off'], ['data-1p-ignore', ''], ['data-lpignore', 'true'], ['data-form-type', 'other']]) input.setAttribute(k, v);
   pop.className = 'combo-pop'; pop.hidden = true;
   list.id = `${id}-list`; list.setAttribute('role', 'listbox');
   note.className = 'combo-note';

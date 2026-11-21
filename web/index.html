@@ -121,7 +121,8 @@ main{min-width:0;padding:0 max(var(--gut),env(safe-area-inset-right,0px)) 64px m
 .filters select{width:100%}
 /* Suchfeld für lange Auswahllisten (web/combo.js): sieht aus wie die Auswahl, Liste darunter */
 .combo{position:relative;display:block;width:100%;min-width:12em}
-.combo>input{width:100%;padding-right:30px;text-overflow:ellipsis;cursor:pointer}.combo>input:focus{cursor:text}
+.combo>input{width:100%;padding-right:30px;text-overflow:ellipsis;cursor:pointer;-webkit-appearance:none;appearance:none}.combo>input:focus{cursor:text}
+.combo>input::-webkit-search-cancel-button,.combo>input::-webkit-search-decoration{-webkit-appearance:none;display:none}
 .combo::after{content:"";position:absolute;right:13px;top:50%;width:6px;height:6px;border-right:2px solid var(--fg);border-bottom:2px solid var(--fg);transform:translateY(-70%) rotate(45deg);pointer-events:none}
 .combo-pop{position:absolute;left:0;top:calc(100% + 4px);z-index:1100;min-width:100%;width:max-content;max-width:min(360px,calc(100vw - 24px));max-height:min(360px,55vh);overflow:auto;overscroll-behavior:contain;padding:4px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow)}
 .combo-pop[hidden]{display:none}

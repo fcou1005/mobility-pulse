@@ -11,7 +11,7 @@ const LINE_PREFIX = () => t('pt.findLinePrefix');
 /** @param {any} ctx @param {any} live @param {any[][]} lineRows */
 export function findHtml(ctx, live, lineRows) {
   const ix = TF.searchIndex(live), cl = TF.cancelledLines(lineRows || []), pct = (/** @type {number} */ x) => `${ctx.fmt(Math.round(x * 100))} %`;
-  return `<div class="pt-find"><label for="pt-find">${t('pt.findLabel')}</label> <input id="pt-find" list="pt-find-list" autocomplete="off" placeholder="${ctx.esc(t('pt.findPh'))}">
+  return `<div class="pt-find"><label for="pt-find">${t('pt.findLabel')}</label> <input type="search" id="pt-find" name="pt-find-search" list="pt-find-list" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-form-type="other" placeholder="${ctx.esc(t('pt.findPh'))}">
     <datalist id="pt-find-list">${ix.lines.slice(0, 200).map(l => `<option value="${ctx.esc(`${LINE_PREFIX()} ${l.name}`)}"></option>`).join('')}${ix.stations.slice(0, 800).map(s => `<option value="${ctx.esc(s.name)}"></option>`).join('')}</datalist>
     <button type="button" class="chip" id="pt-find-clear" hidden>${t('pt.findClear')}</button>
     ${cl.length ? `<p class="small" id="pt-cl">${t('pt.clLead')} ${cl.map(x => `<button type="button" class="chip" data-line="${ctx.esc(x.linie)}">${ctx.esc(x.linie)} (${pct(x.share)})</button>`).join(' ')}</p>` : ''}
