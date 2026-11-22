@@ -53,7 +53,7 @@ export async function renderOepnv(el, ctx) {
   // Lückenstunden des Echtzeit-Stroms (H.gap, lib gapHours) zählen nicht mit
   const keep = (/** @type {number[]} */ a, /** @type {number} */ i) => (a || []).map((x, h) => (H.gap?.[i]?.[h] ? 0 : x));
   const dayRow = (i) => { const n = sum(keep(H.n[i], i)), sk = sum(keep(H.skip[i], i)), la = sum(keep(H.late[i], i)); return { day: H.days[i], n, sk, la, ok: n ? (n - sk - la) / n : null, flag: sum(keep(H.flag?.[i], i)), cancel: H.cancel?.[i] ?? 0, gaps: sum(H.gap?.[i] || []) }; };
-  const today = last >= 0 ? dayRow(last) : null, liveN = live ? (live.trips || []).length : 0;
+  const today = last >= 0 ? dayRow(last) : null, liveN = live ? (live.trips || []).filter(r => r[7] !== 'fahrplan').length : 0; // nur Fahrten mit Echtzeit (nach Fahrplan gezeigte zählen nicht)
   // ---------- Antwort ----------
   if (city && today && today.n) {
     putAnswer(el, { id: 'oepnv', sentence: t('pt.answer', { name, p: `<strong>${pct(ctx, today.ok)}</strong>`, n: f(today.n), skip: f(today.sk), late: f(today.la), day: dayTxt(today.day) }),

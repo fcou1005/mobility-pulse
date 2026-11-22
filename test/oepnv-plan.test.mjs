@@ -1,6 +1,8 @@
 // Fahrplan für die Live-Karte (lib/pulse-oepnv-plan.js, 20.11.2026): Dienste, Muster, Tabelle, Zusammenführen mit dem Strom, Fahrten ohne Echtzeit
 import * as PL from '../lib/pulse-oepnv-plan.js';
 import * as NZ from '../lib/pulse-oepnv-netz.js';
+import * as OE from '../lib/pulse-oepnv.js';
+import { encodeFeed } from './fixtures/gtfs.mjs';
 let ok = 0, bad = 0;
 const assert = (c, m) => { if (!c) { bad++; console.error('FEHLER:', m); } else { ok++; console.log('ok:', m); } };
 
@@ -41,6 +43,17 @@ assert(!PL.planStale({ v: 1, day0: '2026-11-19', days: 14 }, now) && PL.planStal
 
 // Zusammenführen: der Strom meldet von A1 nur den letzten Halt (3 Min. verspätet) → ganzer Weg, Verspätung nach vorn übernommen
 const t = (hm) => Date.parse(`2026-11-20T${hm}:00+01:00`);
+
+// Strom nur mit Verspätungen (gtfs.de seit 22.11.2026: kein time, kein start_time): Zeit = Fahrplan + Verspätung; a2 liegt an derselben Station wie a
+{
+  const buf = encodeFeed([{ id: 'A1', startDate: '20261120', stops: [{ stop: 'a', delay: 120, delayOnly: true }, { stop: 'a2', delay: 120, delayOnly: true }, { stop: 'b', delay: 180, delayOnly: true }, { stop: 'c', delay: 240, delayOnly: true }] }], { ts: t('12:00') });
+  const lk = new Map([['a', '08416041'], ['a2', '08416041'], ['b', '08416041'], ['c', '08416041']]), seen = [];
+  const without = OE.ptCounts(buf, lk, t('12:00')), withPlan = OE.ptCounts(buf, lk, t('12:00'), { timeOf: PL.scheduleTimes(V, stLookup), onStop: (s, tt, sk, d) => seen.push([s, tt, d]) });
+  const at = Object.fromEntries(seen.map(([s, tt]) => [s, tt]));
+  assert(without.stats.matched === 0 && without.stats.noTime === 4 && withPlan.stats.matched === 4 && withPlan.stats.fromPlan === 3 && at.a === t('11:03') && at.a2 === t('11:03') && at.b === t('11:08') && at.c === t('11:16'),
+    `nur Verspätungen: ohne Fahrplan ${without.stats.noTime} Halte ohne Zeit, mit Fahrplan ${withPlan.stats.fromPlan} aus Fahrplan + Verspätung, b ${new Date(at.b).toISOString().slice(11, 16)} UTC`);
+  assert(PL.scheduleTimes(V, stLookup)('A1', '2026-11-21') === null && PL.scheduleTimes(V, stLookup)('nix', '2026-11-20') === null, 'nur Verspätungen: Fahrt fährt an dem Tag nicht oder fehlt im Fahrplan → keine Zeit');
+}
 const m = PL.mergeTrip(V, 'A1', [{ q: 2, t: t('11:15'), d: 180 }], [], null, now);
 assert(m && m.day === '2026-11-20' && m.pts.map(p => p.q).join() === '0,1,2' && m.pts.map(p => (p.t - t('11:00')) / 60e3).join() === '4,8,15' && m.pts.every(p => p.d === 180), `Weg aus dem Fahrplan, Zeiten mit Verspätung (${m?.pts.map(p => (p.t - t('11:00')) / 60e3)})`);
 const m2 = PL.mergeTrip(V, 'A1', [{ q: 0, t: t('11:02'), d: null }, { q: 2, t: t('11:16'), d: null }], [1], '2026-11-20', now);

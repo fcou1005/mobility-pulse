@@ -40,7 +40,10 @@ export async function run(ctx) {
       // Stationen (Name, Lage) nur für Gemeinden mit Flotte: kommt eine dazu, wird der Index neu gebaut
       // Fahrplan fällig (fehlt, andere Fassung, Tage laufen aus, anderer Stationsindex); nach einem Fehlschlag frühestens nach checkEveryH wieder
       const planNeed = !!planFile && !(planMeta?.failedAt && now - planMeta.failedAt < OE.OEPNV.checkEveryH * 3600e3) && (PL.planStale(planMeta, now) || !existsSync(planFile) || planMeta?.ixBuilt !== ix?.builtAt);
-      const keptOk = !keep || (Array.isArray(ix?.kept) && [...keep].every(g => ix.kept.includes(g))), rebuild = !ix || ix.version !== OE.OEPNV.version || !keptOk || (!!tripFile && !existsSync(tripFile) && ix.trips !== 'failed') || planNeed;
+      // neue Gemeinden mit Flotte: erst keepRebuildH nach dem letzten Bau neu bauen (sie kommen und gehen je Lauf); gebaut wird für die alten und neuen zusammen
+      const newKeep = keep && Array.isArray(ix?.kept) ? [...keep].filter(g => !ix.kept.includes(g)) : [], keptOk = !keep || (Array.isArray(ix?.kept) && (!newKeep.length || now - Date.parse(ix.builtAt || 0) < OE.OEPNV.keepRebuildH * 3600e3));
+      const why = !ix ? 'kein Index' : ix.version !== OE.OEPNV.version ? 'neue Fassung' : !keptOk ? `${newKeep.length} Gemeinden neu mit Flotte` : !!tripFile && !existsSync(tripFile) && ix.trips !== 'failed' ? 'Fahrten-Tabelle fehlt' : planNeed ? 'Fahrplan fällig' : null, rebuild = !!why;
+      const keepIx = keep && Array.isArray(ix?.kept) ? new Set([...keep, ...ix.kept]) : keep; // Index für bisherige und neue Gemeinden (fällt eine weg, bleiben ihre Stationen)
       const stale = rebuild || !(now - Date.parse(ix.checkedAt || 0) < OE.OEPNV.checkEveryH * 3600e3);
       if (stale) {
         const url = process.env.OEPNV_STATIC_URL || OE.OEPNV.staticUrl, { r: h } = await getBuf(url, { method: 'HEAD', ms: 30e3 });
@@ -67,7 +70,7 @@ export async function run(ctx) {
               for await (const chunk of out) { const s = carry + dec.write(chunk); let p = 0, i; while ((i = s.indexOf('\n', p)) >= 0) { onLine(i > p && s.charCodeAt(i - 1) === 13 ? s.slice(p, i - 1) : s.slice(p, i)); p = i + 1; } carry = s.slice(p); }
               carry += dec.end(); if (carry) onLine(carry.replace(/\r$/, '')); } finally { clearTimeout(timer); } };
           const text = await member('stops.txt', true);
-          const si = OE.stopIndex(text, (lat, lon) => C.assignMunicipality(ctx.index, lat, lon)?.ags ?? null, keep);
+          const si = OE.stopIndex(text, (lat, lon) => C.assignMunicipality(ctx.index, lat, lon)?.ags ?? null, keepIx);
           // Linien (Name, Art) für die Karte: fehlt die Datei oder scheitert der Abruf, bleiben die Fahrzeuge ohne Liniennamen
           let routes = {}; try { const rt = await member('routes.txt', false); if (rt) routes = OE.routeIndex(rt); } catch (e) { log(`ÖPNV-Linien: ${e.message} – ohne Liniennamen`); }
           let tripsState = tripFile ? 'failed' : 'off', tb = null;
@@ -84,8 +87,8 @@ export async function run(ctx) {
             log(`ÖPNV-Fahrplan: ${table.trips} Fahrten an Stationen mit Flotte in ${table.patterns} Mustern (${g.used} von ${g.rows} Halten, ${masks.size} Dienste ab ${day0} für ${table.days} Tage), ${(gz.length / 1e6).toFixed(1)} MB in ${((Date.now() - tp0) / 1000).toFixed(1)} s`);
           } catch (e) { planMeta = { v: PL.PLAN.version, failedAt: now, error: String(e.message).slice(0, 200) }; log(`ÖPNV-Fahrplan: ${e.message} – Karte nur mit Echtzeit`); }
           if (planMetaFile && planMeta) await writeFile(planMetaFile, JSON.stringify(planMeta));
-          ix = { version: OE.OEPNV.version, trips: tripsState, builtAt: new Date(now).toISOString(), checkedAt: new Date(now).toISOString(), ...stand, source: url, license: 'CC BY 4.0 (gtfs.de, Germany Full free)', rows: si.rows, stops: si.stops, mapped: si.mapped, ags: si.ags, id: si.id, a: si.a, s: si.s, st: si.st, routes, kept: keep ? [...keep].sort() : null };
-          log(`ÖPNV-Haltestellen: ${si.mapped} von ${si.stops} Halten (${si.rows} Zeilen) ${si.ags.length} Gemeinden zugeordnet, ${si.st.id.length} Stationen in Gemeinden mit Flotte, ${Object.keys(routes).length} Linien, Feed ${stand.lastModified || '?'} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+          ix = { version: OE.OEPNV.version, trips: tripsState, builtAt: new Date(now).toISOString(), checkedAt: new Date(now).toISOString(), ...stand, source: url, license: 'CC BY 4.0 (gtfs.de, Germany Full free)', rows: si.rows, stops: si.stops, mapped: si.mapped, ags: si.ags, id: si.id, a: si.a, s: si.s, st: si.st, routes, kept: keepIx ? [...keepIx].sort() : null };
+          log(`ÖPNV-Haltestellen: ${si.mapped} von ${si.stops} Halten (${si.rows} Zeilen) ${si.ags.length} Gemeinden zugeordnet, ${si.st.id.length} Stationen in Gemeinden mit Flotte, ${Object.keys(routes).length} Linien, Feed ${stand.lastModified || '?'}, Anlass: ${why || 'neuer Feed'} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
         }
         await mkdir(dir, { recursive: true }); await writeFile(ixFile, gzipSync(JSON.stringify(ix), { level: 9 }));
       }
@@ -95,14 +98,16 @@ export async function run(ctx) {
       let routeOf = null; if (tripFile && existsSync(tripFile)) try { routeOf = LN.tripLookup(gunzipSync(await readFile(tripFile))).of; } catch (e) { log(`ÖPNV-Fahrten: ${e.message} – Tabelle wird neu gebaut`); await rm(tripFile, { force: true }); }
       let plan = null; if (planFile && planMeta?.ixBuilt === ix.builtAt && existsSync(planFile)) try { plan = PL.planView(PL.unpackPlan(gunzipSync(await readFile(planFile)))); } catch (e) { log(`ÖPNV-Fahrplan: ${e.message} – Tabelle wird neu gebaut`); await rm(planFile, { force: true }); }
       const stLk = OE.stationLookup(ix), counter = NZ.stationCounter(stLk, ix.st?.id || []), paths = NZ.pathCollector(stLk, ix, now, { routeOf, plan }), lines = LN.lineCounter(stLk, ix, now, { routeOf, backH: OE.OEPNV.backH }), recent = LN.recentCounter(stLk, now);
-      const { by, cancel, stats } = OE.ptCounts(buf, OE.stopLookup(ix), now, { keep, onStop: (s, t, sk, d) => { counter.onStop(s, t, sk, d); recent.onStop(s, t, sk, d); }, onTrip: (id, rid, canc, stu, date) => { paths.onTrip(id, rid, canc, stu, date); lines.onTrip(id, rid, canc, stu); } });
+      const timeOf = plan ? PL.scheduleTimes(plan, stLk) : null; // Strom nur mit Verspätungen (gtfs.de seit 22.11.2026): Zeit aus dem Fahrplan
+      const { by, cancel, stats } = OE.ptCounts(buf, OE.stopLookup(ix), now, { keep, timeOf, onStop: (s, t, sk, d) => { counter.onStop(s, t, sk, d); recent.onStop(s, t, sk, d); }, onTrip: (id, rid, canc, stu, date) => { paths.onTrip(id, rid, canc, stu, date); lines.onTrip(id, rid, canc, stu); } });
       paths.planPass();
       // alle Tage laden, die addPt berührt (Fenster der Halte, ganz ausgefallene Fahrten gestern bis morgen), sonst überschriebe ein leeres Dokument die Datei
       const docs = await incidentDocs([T.dayOf(now - OE.OEPNV.backH * 3600e3), T.dayOf(now - 86400e3), T.dayOf(now - 12 * 3600e3), T.dayOf(now), T.dayOf(now + 86400e3)]), w = OE.addPt(docs, by, cancel);
-      const src = { at: new Date(now).toISOString(), feedAt: stats.ts ? new Date(stats.ts).toISOString() : null, bytes: buf.length, ms: Date.now() - t1, trips: stats.trips, stops: stats.stops, matched: stats.matched, unmatched: stats.unmatched, noTime: stats.noTime, inWindow: stats.inWindow, ags: stats.ags, flagged: w.flagged, cancelTrips: stats.cancelTrips, cancelAgs: stats.cancelAgs, stopsFeed: ix.lastModified || null };
+      const src = { at: new Date(now).toISOString(), feedAt: stats.ts ? new Date(stats.ts).toISOString() : null, bytes: buf.length, ms: Date.now() - t1, trips: stats.trips, stops: stats.stops, matched: stats.matched, unmatched: stats.unmatched, noTime: stats.noTime, fromPlan: stats.fromPlan, inWindow: stats.inWindow, ags: stats.ags, flagged: w.flagged, cancelTrips: stats.cancelTrips, cancelAgs: stats.cancelAgs, stopsFeed: ix.lastModified || null };
       docs.get(T.dayOf(now)).sources.pt = src;
       await writeIncidents(docs);
-      log(`ÖPNV (gtfs.de): ${stats.trips} Fahrten, ${stats.stops} Halte, ${stats.matched} zugeordnet (${stats.unmatched} ohne Haltestelle), ${stats.inWindow} in den letzten ${OE.OEPNV.backH} h in ${stats.ags} Gemeinden mit Flotte, ${w.flagged} Gemeinde-Stunden gestört, ${stats.cancelTrips} ganz ausgefallene Fahrten in ${stats.cancelAgs} Gemeinden (ohne Uhrzeit, je Tag), ${(buf.length / 1e6).toFixed(1)} MB in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+      log(`ÖPNV (gtfs.de): ${stats.trips} Fahrten, ${stats.stops} Halte, ${stats.matched} zugeordnet (${stats.unmatched} ohne Haltestelle${stats.fromPlan ? `, ${stats.fromPlan} mit Zeit aus Fahrplan + Verspätung` : ''}${stats.noTime ? `, ${stats.noTime} ohne Zeit` : ''}), ${stats.inWindow} in den letzten ${OE.OEPNV.backH} h in ${stats.ags} Gemeinden mit Flotte, ${w.flagged} Gemeinde-Stunden gestört, ${stats.cancelTrips} ganz ausgefallene Fahrten in ${stats.cancelAgs} Gemeinden (ohne Uhrzeit, je Tag), ${(buf.length / 1e6).toFixed(1)} MB in ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+      if (stats.stops > 1000 && !stats.matched) log(`ÖPNV-Echtzeit: keiner der ${stats.stops} Halte hat eine Zeit${plan ? '' : ' und kein Fahrplan geladen'} – Strom geändert? Karte und Pünktlichkeit nur nach Fahrplan`);
       // ---------- Reiter ÖPNV (lib/pulse-oepnv-netz.js): Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing ----------
       try {
         const t2 = Date.now(), stFile = ctx.TRACK_DIR ? path.join(ctx.TRACK_DIR, 'oepnv-netz.json.gz') : path.join(dir, 'zustand.json.gz');

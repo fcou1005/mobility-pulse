@@ -19,7 +19,7 @@ export function encodeFeed(trips, { ts = Date.now(), alerts = 0 } = {}) {
   const ents = trips.map((tr, k) => pbMsg(2, pbStr(1, `e${k}`), pbMsg(3,
     pbMsg(1, pbStr(1, tr.id || `t${k}`), ...(tr.startTime ? [pbStr(2, tr.startTime)] : []), ...(tr.startDate ? [pbStr(3, tr.startDate)] : []), ...(tr.canceled ? [pbInt(4, 3)] : []), ...(tr.route ? [pbStr(5, tr.route)] : [])),
     ...tr.stops.map((s, i) => pbMsg(2, pbInt(1, i + 1),
-      ...(s.t != null ? [pbMsg(2, pbInt(1, s.delay ?? 0), pbInt(2, Math.floor(s.t / 1000))), pbMsg(3, pbInt(1, s.delay ?? 0), pbInt(2, Math.floor(s.t / 1000)))] : []),
+      ...(s.t != null ? [pbMsg(2, pbInt(1, s.delay ?? 0), pbInt(2, Math.floor(s.t / 1000))), pbMsg(3, pbInt(1, s.delay ?? 0), pbInt(2, Math.floor(s.t / 1000)))] : s.delayOnly ? [pbMsg(2, pbInt(1, s.delay ?? 0)), pbMsg(3, pbInt(1, s.delay ?? 0))] : []), // delayOnly: wie gtfs.de seit 22.11.2026
       pbStr(4, String(s.stop)), ...(s.skipped ? [pbInt(5, 1)] : []))))));
   for (let i = 0; i < alerts; i++) ents.push(pbMsg(2, pbStr(1, `a${i}`), pbMsg(5, pbInt(6, 1), pbInt(7, 8))));
   return Buffer.concat([head, ...ents]);

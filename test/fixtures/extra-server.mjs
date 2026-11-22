@@ -142,7 +142,7 @@ export async function startExtra() {
     if (kind === 'big') { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"data":"'); for (let i = 0; i < 30; i++) res.write('x'.repeat(10000)); return res.end('"}'); }
     if (kind === 'oepnv') { // gtfs.de: statischer Feed nur per Range (ganzer Abruf wird gezählt), Echtzeit gzip; Halte in Stuttgart, Tübingen, Berlin
       if (file === 'feed.zip') {
-        // Fahrplan (20.11.2026): s2 auch im Strom (dort nur der Halt in Tübingen), p1 nur im Fahrplan; Zeiten relativ zu jetzt, Betriebstag = Ortsdatum vor einer Stunde
+        // Fahrplan (20.11.2026): s2 auch im Strom (dort nur der Halt in Tübingen, seit 22.11.2026 wie bei gtfs.de nur mit Verspätung), p1 nur im Fahrplan; Zeiten relativ zu jetzt, Betriebstag = Ortsdatum vor einer Stunde
         const sd = Date.now() - 3600e3, ymd = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date(sd)), mid = Date.parse(`${ymd}T00:00:00Z`) - (+new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }).format(new Date(Date.parse(`${ymd}T12:00:00Z`))) - 12) * 3600e3;
         const hms = (min) => { const x = Math.round((Date.now() + min * 60e3 - mid) / 60e3); return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}:00`; };
         const z = (st.gtfsZip ||= makeZip({ 'agency.txt': 'agency_id\n1\n', 'stops.txt': 'stop_name,parent_station,stop_id,stop_lat,stop_lon,location_type,platform_code\n"Stuttgart, Mitte",,101,48.772,9.172,,\nStuttgart,,100,48.772,9.172,1,\nTübingen,,102,48.525,9.05,,\nBerlin,,103,52.52,13.40,,\n',
@@ -157,7 +157,7 @@ export async function startExtra() {
       if (file === 'rt.pb') {
         const t = Date.now() - 5 * 60e3, stops = [...Array(25)].map((_, i) => ({ stop: 101, t: i >= 20 ? null : t, skipped: i >= 20, delay: i < 2 ? 600 : 0 }));
         const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date()).replace(/-/g, '');
-        const body = gzipSync(encodeFeed([{ id: 's1', stops }, { id: 's2', stops: [{ stop: 102, t }, { stop: 103, t }, { stop: 999, t }] }, { id: 's3', startDate: today, stops: [{ stop: 101, t: null, skipped: true }, { stop: 101, t: null, skipped: true }] }], { alerts: 1 }));
+        const body = gzipSync(encodeFeed([{ id: 's1', stops }, { id: 's2', startDate: new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date(Date.now() - 3600e3)).replace(/-/g, ''), stops: [102, 103, 999].map(stop => ({ stop, delay: 300, delayOnly: true })) }, { id: 's3', startDate: today, stops: [{ stop: 101, t: null, skipped: true }, { stop: 101, t: null, skipped: true }] }], { alerts: 1 }));
         res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-encoding': 'gzip', 'content-length': body.length }); return res.end(body);
       }
     }
