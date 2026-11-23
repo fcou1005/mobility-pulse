@@ -433,6 +433,23 @@ export function memoryResize(mem) {
   for (const [d, x] of Object.entries(mem?.days || {})) mem.days[d] = { ...x, H: mat(x.H), u: vec(x.u), n: vec(x.n) };
   return mem;
 }
+/**
+ * Vorwissen zum Wetter (23.11.2026), damit die Prognose Sommer, Frost und Schnee nicht erst erleben muss: Wirkungen auf der Log-Skala aus den
+ * Rad-Dauerzählstellen München (offene Daten der Landeshauptstadt München, dl-de/by-2-0; Tageswerte 2017–2019, 2022, 2026 mit Temperatur und
+ * Niederschlag, 6 Zählstellen, 1.610 Tage, Corona-Jahre 2020/21 ausgelassen): log(Zählung) ~ Zählstelle × Jahr + Wochentag + Feiertag + Ferien +
+ * Temperatur mit Knicken bei 0, 10, 25 °C (Tagestemperatur 0,25·min + 0,75·max) + Regen + Schnee. Ergebnis (Standardfehler): unter 10 °C 0,655 (0,04)
+ * je 10 K, darunter Frost zusätzlich 0,33 (0,16), 10–25 °C 0,484 (0,02), über 25 °C −0,60 (0,12), Schneetag −0,10 (0,09). Radfahrer, keine Roller:
+ * Hitze bremst Roller weniger (Brisbane, Kimpton u. a. 2022), daher −0,3; Streuung bewusst weit, damit die eigenen Daten das Vorwissen schnell
+ * überstimmen. Wirkt als Prior (Mittel, Präzision 1/sd²) zusammen mit dem Langzeitgedächtnis; Regen lernt die Prognose stündlich selbst.
+ */
+export const WX_PRIOR = Object.freeze({ v: 1, effects: Object.freeze({ cold: [0.655, 0.15], warm: [0.484, 0.15], frost: [0.33, 0.2], heat: [-0.3, 0.25], snow: [-0.1, 0.15] }) });
+/** Langzeitgedächtnis (oder null) um das Vorwissen WX_PRIOR ergänzen: Präzisionen addieren, Mittel gewichtet */
+export function withWxPrior(prior) {
+  const P = prior ? Float64Array.from(prior.P) : new Float64Array(NE * NE), h = new Array(NE).fill(0);
+  if (prior) for (let i = 0; i < NE; i++) { let s = 0; for (let j = 0; j < NE; j++) s += prior.P[i * NE + j] * (prior.b[j] ?? 0); h[i] = s; }
+  for (const [name, [b0, sd]] of Object.entries(WX_PRIOR.effects)) { const e = EFFECTS.indexOf(name); if (e < 0) continue; const p0 = 1 / (sd * sd); P[e * NE + e] += p0; h[e] += p0 * b0; }
+  return { n: new Array(NE).fill(0), dk: new Array(NE).fill(0), days: 0, ...(prior || {}), b: solveSmall(Array.from(P), h), P };
+}
 export function memoryPrior(mem, day) {
   const o = mem?.old; if (!o || !(o.days > 0)) return null;
   const f = decayTo(o, day), Pm = o.P.map(v => v * f), h = o.h.map(v => v * f);

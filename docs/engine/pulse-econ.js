@@ -220,6 +220,8 @@ export const calendarLands = (cal, day, v) => (calendarCovers(cal, day) ? LANDS.
 /**
  * Tagtyp eines Kalendertags 'YYYY-MM-DD' in einem Land ('BW' …): 'W' | 'F' | 'S' | 'H' (Sonntag = 'H'). land null = Deutschland: Feiertag
  * nur, wenn er in allen Ländern gilt; Ferien zählen dann nicht. Ohne Kalender Rückfall auf die lokale Feiertagsrechnung.
+ * Seit 23.11.2026: Heiligabend gilt als Feiertag ('H'; Läden schließen mittags, der Abend ist leer), Silvester als Samstag ('S') – beide stehen in
+ * keinem Feiertagskalender, und ohne Vorjahresdaten kann die Prognose sie sonst nur als gewöhnlichen (Ferien-)Werktag rechnen.
  */
 export function dayType(day, land = null, calendar = null) {
   if (!isDay(day)) return null;
@@ -227,8 +229,8 @@ export function dayType(day, land = null, calendar = null) {
   let ex = null;
   if (calendarCovers(calendar, day)) ex = land ? calendar.states[land]?.[day] ?? null : LANDS.every(l => calendar.states[l]?.[day] === 'H') ? 'H' : null;
   else ex = localHolidays(day).some(h => (land ? h.lands.includes(land) : h.lands.length === LANDS.length)) ? 'H' : null;
-  if (wd === 0 || ex === 'H') return 'H';
-  if (wd === 6) return 'S';
+  if (wd === 0 || ex === 'H' || day.endsWith('-12-24')) return 'H';
+  if (wd === 6 || day.endsWith('-12-31')) return 'S';
   return ex === 'F' ? 'F' : 'W';
 }
 /**

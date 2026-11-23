@@ -358,6 +358,8 @@ assert(near(E.kpis({ g: gv, obsMin: full, obsMinV: obsV, plan: bolt, type: 'scoo
     'calendarFromApi: nur Ausnahmen je Land, Feiertag vor Ferien, Ferien nur Mo–Fr, örtliche (DE-BY-AU) und halbe Tage ausgelassen');
   assert(E.dayType('2026-11-02', 'BY', cal) === 'F' && E.dayType('2026-11-02', 'BW', cal) === 'W' && E.dayType('2026-11-04', 'BY', cal) === 'H' && E.dayType('2026-11-07', 'BY', cal) === 'S' && E.dayType('2027-01-01', 'BW', cal) === 'H' && E.dayType('2027-01-06', 'NI', cal) === 'W',
     'dayType mit Kalender: Ferienwerktag F, Feiertag aus dem Kalender, außerhalb des Zeitraums lokale Rechnung');
+  assert(E.dayType('2026-12-24', 'BE', cal) === 'H' && E.dayType('2026-12-24', null) === 'H' && E.dayType('2026-12-31', 'BW', cal) === 'S' && E.dayType('2027-12-31', null) === 'S' && E.dayType('2026-12-23', 'BW') === 'W',
+    'dayType: Heiligabend wie Feiertag (H), Silvester wie Samstag (S) – mit und ohne Kalender, Vortag bleibt Werktag');
   assert(E.calendarFromApi({ error: 'x' }, [], { from: '2026-10-30', to: '2026-12-31' }) === null && E.calendarFromApi([], [], { from: '2025-09-28', to: '2027-12-06' }) === null && E.calendarFromApi(pub, school, { from: '2025-09-28', to: '2027-12-06' }) === null,
     'calendarFromApi: Fehlerobjekt, leere oder für 800 Tage zu dünne Antwort → null (alte Datei bleibt)');
   // Tagesgang je Tagtyp: 3 Werktage mit Spitze um 8 Uhr, ein Sonntag mit Spitze um 15 Uhr

@@ -2,7 +2,7 @@
 // Mobility Pulse — Prognose – Stundenreihen für das Prognose-Dashboard (aus pulse-forecast.js geschnitten; pulse-forecast.js bleibt die Fassade für alle Importe).
 import { hourOf, dayOf } from './pulse-track.js';
 import { CTX_KEYS, ctxLookup } from './pulse-context.js';
-import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, NOWCAST, PEAK, PTADJ, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, sum } from './pulse-forecast-model.js';
+import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, NOWCAST, PEAK, PTADJ, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, withWxPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, sum } from './pulse-forecast-model.js';
 import { ENSEMBLE, compactEns, emptyEns, ensSummary, loadEns } from './pulse-forecast-ens.js';
 import { BIAS, DECIDE, DM, MIN_VOLUME, agsFactors, assignEras, biasFactorOf, buildFuture, chooseModel, dayFromDoc, evaluateDays, localToUtcMs, nowcastApply, nowcastRatios, nowcastWindow, portableModel, ptApply, ptFactors, ptScoreAdd, corrGate, CORR_GATE, ptUnits, nowcastUnits, predictAll, predictLag, predictNaive, shiftDay, typeFactors, volumeOf, wxLookup } from './pulse-forecast-select.js';
 
@@ -178,7 +178,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   const pm = prev?.memory?.v === MEMORY.v ? prev.memory : null;
   const mem = pm ? memoryResize({ v: MEMORY.v, upto: pm.upto, old: pm.old ? { ...pm.old } : null, days: { ...(pm.days || {}) }, wxDays: { ...(pm.wxDays || {}) } }) : emptyMemory();
   if (days.length) memoryMerge(mem, days[0].day);
-  const prior = memoryPrior(mem, today);
+  const prior = withWxPrior(memoryPrior(mem, today)); // Vorwissen zum Wetter (WX_PRIOR) zusammen mit dem Langzeitgedächtnis
   // Lernstand aus den eigenen Fehlern (log.feedback); fehlt er (erster Lauf, neue Fassung), wird das Fenster neu ausgewertet, damit das lernende
   // Modell sofort Vergleichswerte hat – Tage werden in zeitlicher Reihenfolge bewertet und erst danach in den Lernstand übernommen
   const pfb = evalSame && prev?.feedback?.v === FEEDBACK.v ? prev.feedback : null;

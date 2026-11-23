@@ -79,6 +79,12 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   { const docsF = docs.map(d0 => { const doc = structuredClone(d0), d = d0.day; for (const gg of groups) { const s = doc.groups[gg[0]].start; for (let h = 0; h < 24; h++) { const [t] = wxOf(d, h); if (t < 0) s[h] = Math.round(trueMu(gg, d, h) * Math.exp(-0.8 * t / 10)); } } return doc; }); // ohne pois: der Zufallsstrom der übrigen Tests bleibt gleich
     const dsF = F.assignEras(docsF.map(d => F.dayFromDoc(d, null))), RF = F.buildRows(dsF, F.wxLookup(WX)), eF = F.wxEffects(F.fitPooled(RF, Array.from({ length: RF.n }, (_, i) => i), { weather: true }));
     assert(eF.frost === 0 && e.frost >= 0 && e.snow <= 1 && e.heat <= 0, `Wettervorzeichen: Frost mit „mehr Fahrten“ in den Daten → ${eF.frost}, sonst Frost ${e.frost.toFixed(3)}, Schnee ×${e.snow.toFixed(2)}, Hitze ${e.heat}`); }
+  // Vorwissen (WX_PRIOR): ohne Gedächtnis landet die Startschätzung bei den Münchner Zählwerten, ein vorhandenes Gedächtnis bleibt erhalten
+  { const p0 = F.withWxPrior(null), NE = F.EFFECTS.length, ix = n => F.EFFECTS.indexOf(n);
+    const mem = { n: new Array(NE).fill(3), dk: new Array(NE).fill(0), days: 7, b: F.EFFECTS.map((_, i) => i === ix('rain') ? -0.4 : 0), P: Array.from({ length: NE * NE }, (_, k) => (k % (NE + 1) === 0 ? 400 : 0)) };
+    const p1 = F.withWxPrior(mem), ok = (v, w, tol = 1e-6) => Math.abs(v - w) < tol;
+    assert(ok(p0.b[ix('cold')], 0.655) && ok(p0.b[ix('heat')], -0.3) && p0.b[ix('rain')] === 0 && p0.days === 0 && p1.days === 7 && ok(p1.b[ix('rain')], -0.4) && ok(p1.b[ix('cold')], 0.655 / 10, 1e-3) && mem.P[ix('cold') * (NE + 1)] === 400,
+      `Wetter-Vorwissen: leer → kalt ${p0.b[ix('cold')].toFixed(3)}, Hitze ${p0.b[ix('heat')].toFixed(2)}; mit Gedächtnis (Präzision 400 = 9× Vorwissen → 1/10) kalt ${p1.b[ix('cold')].toFixed(3)}, Regen ${p1.b[ix('rain')]}, Gedächtnis unverändert`); }
   const g = F.weatherGate(R, all);
   assert(g.ok && g.tempRangeK >= 5 && g.rainDays >= 2 && g.dryDays >= 2, `Wetter-Gate offen bei ${NDAY} Tagen mit Spanne ${g.tempRangeK} K, ${g.rainDays} Regen- und ${g.dryDays} Trockentagen`);
   const R1 = F.buildRows(ds.slice(0, 1), F.wxLookup(WX)), g1 = F.weatherGate(R1, Array.from({ length: R1.n }, (_, i) => i));
