@@ -7,7 +7,9 @@ const norm = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * 
 const pois = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Math.round(l + Math.sqrt(l) * norm())); let k = 0, p = 1; const L = Math.exp(-l); do { k++; p *= rnd(); } while (p > L); return k - 1; };
 
 // ---------- kleine Bausteine
-assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
+assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1, 0, 0, 0]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
+assert(JSON.stringify(F.wxFeatures(-5, 0.5, 0.2)) === JSON.stringify([-1.5, 0, 1, 0, 0, 1, -0.5, 1, 0]) && JSON.stringify(F.wxFeatures(35, 0)) === JSON.stringify([0, 2.5, 0, 0, 0, 0, 0, 0, 1]) && F.wxFeaturesFc(0, 0.2)[7] === 0.28 && F.wxFeaturesFc(3, 0.2)[7] === 0,
+  'Wettermerkmale seit 23.11.2026: Frost (weitere Steigung unter 0 °C), Schnee (Niederschlag bis 1 °C, in der Vorhersage als Anteil), Hitze (über 25 °C)');
 assert(F.localToUtcMs('2026-11-04', 0) === Date.parse('2026-11-03T23:00:00Z') && F.localToUtcMs('2026-07-01', 12) === Date.parse('2026-07-01T10:00:00Z'), 'Ortszeit → UTC: Winterzeit +1, Sommerzeit +2');
 {
   const d = [{ rule: 'a' }, { rule: 'a' }, { rule: 'b' }, { rule: 'b' }, { rule: 'c' }]; F.assignEras(d);
@@ -73,6 +75,10 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   // A13: die synthetische Welt regnet immer mit genau 1 mm/h – Stufe „≥ 0,1“ und „≥ 1“ fallen zusammen, zählt also ihre Summe
   assert(Math.abs(e.cold - TRUE.cold) < 0.1 && Math.abs(e.warm - TRUE.warm) < 0.1 && Math.abs(Math.log(e.rain) + Math.log(e.rain1) - TRUE.rain) < 0.1 && Math.abs(Math.log(e.rain4)) < 0.05 && Math.abs(Math.log(e.rainPrev)) < 0.1,
     `Wetterwirkung gelernt: kalt ${e.cold.toFixed(2)} (0,3), warm ${e.warm.toFixed(2)} (0,2), Regen bei 1 mm/h ×${(e.rain * e.rain1).toFixed(2)} (×${Math.exp(TRUE.rain).toFixed(2)}), Vorstunde ×${e.rainPrev.toFixed(2)} (×1)`);
+  // Vorzeichen fest (WX_SIGN): zeigen die Daten bei Frost mehr Fahrten, bleibt die Frost-Wirkung 0 statt „Frost hilft“
+  { const docsF = docs.map(d0 => { const doc = structuredClone(d0), d = d0.day; for (const gg of groups) { const s = doc.groups[gg[0]].start; for (let h = 0; h < 24; h++) { const [t] = wxOf(d, h); if (t < 0) s[h] = Math.round(trueMu(gg, d, h) * Math.exp(-0.8 * t / 10)); } } return doc; }); // ohne pois: der Zufallsstrom der übrigen Tests bleibt gleich
+    const dsF = F.assignEras(docsF.map(d => F.dayFromDoc(d, null))), RF = F.buildRows(dsF, F.wxLookup(WX)), eF = F.wxEffects(F.fitPooled(RF, Array.from({ length: RF.n }, (_, i) => i), { weather: true }));
+    assert(eF.frost === 0 && e.frost >= 0 && e.snow <= 1 && e.heat <= 0, `Wettervorzeichen: Frost mit „mehr Fahrten“ in den Daten → ${eF.frost}, sonst Frost ${e.frost.toFixed(3)}, Schnee ×${e.snow.toFixed(2)}, Hitze ${e.heat}`); }
   const g = F.weatherGate(R, all);
   assert(g.ok && g.tempRangeK >= 5 && g.rainDays >= 2 && g.dryDays >= 2, `Wetter-Gate offen bei ${NDAY} Tagen mit Spanne ${g.tempRangeK} K, ${g.rainDays} Regen- und ${g.dryDays} Trockentagen`);
   const R1 = F.buildRows(ds.slice(0, 1), F.wxLookup(WX)), g1 = F.weatherGate(R1, Array.from({ length: R1.n }, (_, i) => i));
@@ -588,7 +594,7 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   // Volksfest als eigenes Merkmal fest (hinten in CTX_KEYS), geprüft wie Veranstaltungen; Gedächtnis älterer Fassungen wird aufgefüllt
   { const fe = [{ art: 'volksfest', von: '2027-09-25T11:00', bis: '2027-09-25T23:30', gebiet: { ags: ['08111000'] }, titel: 'Cannstatter Volksfest', quelle: 'https://x.example' }];
     const iF = CX.CTX_KEYS.indexOf('fest'), iE = CX.CTX_KEYS.indexOf('event'), cx = CX.ctxLookup([], CX.checkCurated({ ereignisse: fe }).ok);
-    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-3).join() === 'rain1,rain4,rainPrev' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
+    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-6).join() === 'rain1,rain4,rainPrev,frost,snow,heat' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
       'Volksfest: eigenes Merkmal fest (hinten in CTX_KEYS/EFFECTS, danach sport), nicht event, nur in den Öffnungsstunden');
     const NE = F.EFFECTS.length, k = NE - 2, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
     const d = mem.days['2026-11-02'];
