@@ -275,7 +275,7 @@ export default {
   "fv.gTempSub": "Spanne der Tagesmittel je Gemeinde (10.–90. Perzentil); Wetter wird erst genutzt, wenn sie reicht, um einen Effekt zu lernen",
   "fv.gRain": "Regen- und Trockentage",
   "fv.gRainSub": "bisher {rain} Regentage und {dry} Trockentage (Tage mit bzw. ohne Regen in mindestens 10 % der Gemeinden); von beiden braucht es genug",
-  "fv.wxOn": "Wetter fließt in die Prognose ein (Temperatur und Regen).",
+  "fv.wxOn": "Wetter fließt in die Prognose ein (Temperatur, Regen, Schnee, Wind, Dunkelheit).",
   "fv.wxOff": "Wetter fließt noch nicht ein: Es wird erst genutzt, wenn Temperaturspanne sowie Regen- und Trockentage reichen und es die Selbstprüfung messbar verbessert.",
   "fv.chartAhead": "Heute und morgen, Stunde für Stunde",
   "fv.chartDay": "{d}: Plan gegen Ist",

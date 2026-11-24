@@ -117,7 +117,7 @@ function partsHtml(ctx, G, L) {
 /** Umgebung und Langzeitgedächtnis: was gelernt ist (Faktor mit 90-%-Bereich), wie viel Erfahrung dahintersteht, ob es im Modell ist */
 const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).format(x)}`);
 // Einflüsse nach Art gruppiert (24.11.2026); was hier fehlt, landet unter „Sonstiges“
-const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['cold', 'frost', 'warm', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow']], ['traffic', ['warn', 'road']], ['strike', ['strike', 'rail']], ['events', ['event', 'fest', 'sport']]]);
+const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['cold', 'frost', 'warm', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow', 'wind']], ['light', ['dark']], ['traffic', ['warn', 'road']], ['strike', ['strike', 'rail']], ['events', ['event', 'fest', 'sport']]]);
 const envGroups = (/** @type {string[]} */ keys) => { const seen = new Set(ENV_GROUPS.flatMap(([, ks]) => ks)), out = /** @type {[string, string[]][]} */ (ENV_GROUPS.map(([g, ks]) => [g, ks.filter(k => keys.includes(k))])); out.push(['other', keys.filter(k => !seen.has(k))]); return out.filter(([, ks]) => ks.length); };
 export function envHtml(ctx, L, { title = true } = {}) {
   const M = L?.memory, E = L?.env, esc = ctx.esc;
@@ -142,7 +142,7 @@ export function envHtml(ctx, L, { title = true } = {}) {
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
-  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
+  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
 }
 export function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));

@@ -7,9 +7,20 @@ const norm = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * 
 const pois = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Math.round(l + Math.sqrt(l) * norm())); let k = 0, p = 1; const L = Math.exp(-l); do { k++; p *= rnd(); } while (p > L); return k - 1; };
 
 // ---------- kleine Bausteine
-assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1, 0, 0, 0]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
-assert(JSON.stringify(F.wxFeatures(-5, 0.5, 0.2)) === JSON.stringify([-1.5, 0, 1, 0, 0, 1, -0.5, 1, 0]) && JSON.stringify(F.wxFeatures(35, 0)) === JSON.stringify([0, 2.5, 0, 0, 0, 0, 0, 0, 1]) && F.wxFeaturesFc(0, 0.2)[7] === 0.28 && F.wxFeaturesFc(3, 0.2)[7] === 0,
+assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
+assert(JSON.stringify(F.wxFeatures(-5, 0.5, 0.2)) === JSON.stringify([-1.5, 0, 1, 0, 0, 1, -0.5, 1, 0, 0, 0]) && JSON.stringify(F.wxFeatures(35, 0)) === JSON.stringify([0, 2.5, 0, 0, 0, 0, 0, 0, 1, 0, 0]) && F.wxFeaturesFc(0, 0.2)[7] === 0.28 && F.wxFeaturesFc(3, 0.2)[7] === 0,
   'Wettermerkmale seit 23.11.2026: Frost (weitere Steigung unter 0 °C), Schnee (Niederschlag bis 1 °C, in der Vorhersage als Anteil), Hitze (über 25 °C)');
+assert(F.wxFeatures(5, 0, null, 35, 0.4)[9] === 1.5 && F.wxFeatures(5, 0, null, 12, 1)[9] === 0 && F.wxFeatures(5, 0, null, 12, 1)[10] === 1 && F.wxFeaturesFc(5, 0, null, 40, 0.25).slice(9).join() === '2,0.25' && F.wxFeatures(5, 0)[9] === 0,
+  'Wettermerkmale seit 24.11.2026: Wind je 10 km/h über 20 km/h, Dunkelheit als Anteil der Stunde, ohne Wert 0');
+{ const S = await import('../lib/pulse-sun.js'), hm = (m) => m + 60; const [r, st] = S.sunTimes(48.78, 9.18, '2026-11-24'), [, sj] = S.sunTimes(48.78, 9.18, '2027-06-21');
+  assert(Math.abs(hm(r) - (7 * 60 + 45)) < 5 && Math.abs(hm(st) - (16 * 60 + 36)) < 5 && Math.abs(sj + 120 - (21 * 60 + 30)) < 6 && S.darkShare(48.78, 9.18, '2026-11-24', 16) === 1 && S.darkShare(48.78, 9.18, '2026-11-24', 11) === 0 && S.darkShare(48.78, 9.18, '2026-11-24', 15) > 0.3 && S.darkShare(48.78, 9.18, '2026-11-24', 15) < 0.5,
+    `Sonnenzeiten Stuttgart: 24.11. ${Math.round(hm(r))} / ${Math.round(hm(st))} Min. MEZ (07:45 = 465 / 16:36 = 996), 21.6. Untergang ${Math.round(sj + 120)} Min. MESZ (21:30 = 1290); Dunkelanteil 15–16 Uhr UTC ${S.darkShare(48.78, 9.18, '2026-11-24', 15)}`); }
+{ const t = [Date.parse('2026-11-22T06:00:00Z'), Date.parse('2026-11-22T06:20:00Z'), Date.parse('2026-11-22T06:40:00Z'), Date.parse('2026-11-22T07:00:00Z'), Date.parse('2026-11-22T07:20:00Z'), Date.parse('2026-11-22T09:00:00Z')];
+  const m = F.outageMask({ t, series: { 'a|X|scooter': { total: [100, 100, null, 100, 100, 100] }, 'b|Y|car': { total: [40, 3, null, 40, 2, 40] }, 'c|Z|bike': { total: [200, 200, 15, 200, 200, 200] } } });
+  assert(m['a|X|scooter'] === ((1 << 7) | (1 << 8)) && !m['b|Y|car'] && m['c|Z|bike'] === ((1 << 7) | (1 << 8)) && JSON.stringify(F.outageSummary({ d: m })) === '{"d":[2,4]}',
+    `Ausfallstunden: Lauf ohne Wert oder unter 10 % des Medians markiert seine Ortsstunde (7 Uhr MEZ) und die des nächsten Laufs (8 Uhr); kleine Gruppen nie (${JSON.stringify(m)})`);
+  const day = { day: '2026-11-22', cls: () => 0, hourMin: Array(24).fill(60), groups: { 'a|X|scooter': { start: Array(24).fill(3), vmin: Array(24).fill(600) } }, out: m };
+  assert(F.buildRows([day]).n === 22 && F.buildRows([{ ...day, out: null }]).n === 24, 'Ausfallstunden: buildRows lässt die markierte Gruppen-Stunde weg'); }
 assert(F.localToUtcMs('2026-11-04', 0) === Date.parse('2026-11-03T23:00:00Z') && F.localToUtcMs('2026-07-01', 12) === Date.parse('2026-07-01T10:00:00Z'), 'Ortszeit → UTC: Winterzeit +1, Sommerzeit +2');
 {
   const d = [{ rule: 'a' }, { rule: 'a' }, { rule: 'b' }, { rule: 'b' }, { rule: 'c' }]; F.assignEras(d);
@@ -607,7 +618,7 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   // Volksfest als eigenes Merkmal fest (hinten in CTX_KEYS), geprüft wie Veranstaltungen; Gedächtnis älterer Fassungen wird aufgefüllt
   { const fe = [{ art: 'volksfest', von: '2027-09-25T11:00', bis: '2027-09-25T23:30', gebiet: { ags: ['08111000'] }, titel: 'Cannstatter Volksfest', quelle: 'https://x.example' }];
     const iF = CX.CTX_KEYS.indexOf('fest'), iE = CX.CTX_KEYS.indexOf('event'), cx = CX.ctxLookup([], CX.checkCurated({ ereignisse: fe }).ok);
-    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-6).join() === 'rain1,rain4,rainPrev,frost,snow,heat' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
+    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-8).join() === 'rain1,rain4,rainPrev,frost,snow,heat,wind,dark' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
       'Volksfest: eigenes Merkmal fest (hinten in CTX_KEYS/EFFECTS, danach sport), nicht event, nur in den Öffnungsstunden');
     const NE = F.EFFECTS.length, k = NE - 2, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
     const d = mem.days['2026-11-02'];

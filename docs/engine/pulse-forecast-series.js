@@ -160,11 +160,13 @@ const wape = (rows) => { let y = 0, a = 0, m = 0; for (const [yy, mm] of rows) {
  * log = Rolling-Origin-Auswertungen je Tag (evals), ausgegebene Prognosen mit Live-Abgleich (issued/live), Verlauf der Modellwahl.
  */
 // ext = chronosLookup(chronos.json) aus lib/pulse-chronos.js oder null (ohne Chronos: kein „chronos“, „blend“ = Hybrid)
-export function runForecast({ docs, calendar = null, weather = [], weatherFc = null, breaks = null, incidents = [], curated = [], prevLog = null, prevSeries = null, now = Date.now(), horizon = 24, minGroupDay = 3, issueEveryMs = 6 * 3600e3, exclude = null, ext = null, pending = [], pendingFrom = null, family = null, pt = null }) {
+export function runForecast({ docs, calendar = null, weather = [], weatherFc = null, breaks = null, incidents = [], curated = [], prevLog = null, prevSeries = null, now = Date.now(), horizon = 24, minGroupDay = 3, issueEveryMs = 6 * 3600e3, exclude = null, ext = null, pending = [], pendingFrom = null, family = null, pt = null, outages = null }) {
   const days = assignEras((docs || []).filter(d => d?.day && d.groups).map(d => dayFromDoc(d, calendar)).sort((a, b) => (a.day < b.day ? -1 : 1)));
   // Gruppen mit rotem Befund der Ereignis-Ampel (nicht plausibel gezählt) bleiben aus Training und Prognose
   if (exclude?.size) for (const d of days) { const g = {}; for (const [k, v] of Object.entries(d.groups)) if (!exclude.has(k)) g[k] = v; d.groups = g; }
   // S2.8: Strukturbruch je Gruppe (calib.json → breaks: erster Tag mit neuer Zählregel) – Tage davor lernen für diese Gruppe nicht mit (Ist bleibt im Verlauf)
+  // Ausfallstunden je Gruppe (outages = { Tag: outageMask(history/<Tag>.json) }): lernen und zählen in der Selbstprüfung nicht mit
+  if (outages) for (const d of days) if (outages[d.day]) d.out = outages[d.day];
   let broken = 0; if (breaks) for (const d of days) for (const k of Object.keys(d.groups)) if (breaks[k] && d.day < breaks[k]) { if (d.groups === d.groupsRaw) d.groups = { ...d.groups }; delete d.groups[k]; broken++; }
   const today = dayOf(now), wx = wxLookup(weather);
   const prev = prevLog?.version === FORECAST_VERSION ? prevLog : null;
@@ -175,7 +177,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   const ctx = ctxLookup(incidents, curated), R = buildRows(days, wx, { ctx });
   const trainDays = new Set(Array.from(R.day)).size;
   // Langzeitgedächtnis (bleibt auch bei neuer Prüffassung): Tage, die das Fenster verlassen haben, übernehmen; Prior für das Fenstermodell
-  const pm = prev?.memory?.v === MEMORY.v ? prev.memory : prev?.memory?.v === 1 ? { ...prev.memory, days: {} } : null; // v 1 → 2: Fenstertage neu (MEMORY)
+  const pm = prev?.memory?.v === MEMORY.v ? prev.memory : prev?.memory?.v >= 1 && prev.memory.v < MEMORY.v ? { ...prev.memory, days: {} } : null; // ältere Fassung: Fenstertage neu (MEMORY)
   const mem = pm ? memoryResize({ v: MEMORY.v, upto: pm.upto, old: pm.old ? { ...pm.old } : null, days: { ...(pm.days || {}) }, wxDays: { ...(pm.wxDays || {}) } }) : emptyMemory();
   if (days.length) memoryMerge(mem, days[0].day);
   const prior = withWxPrior(memoryPrior(mem, today)); // Vorwissen zum Wetter (WX_PRIOR) zusammen mit dem Langzeitgedächtnis
@@ -225,6 +227,8 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   // (Deutschland-Summe und je Anbieter) und die Trefferquote des 80-%-Bands der veröffentlichten Prognose. lead = Abweichung der Summe je Vorlaufstunde.
   const dayBy = new Map(days.map(d => [d.day, d]));
   const actualOp = (day, h) => { const d = dayBy.get(day); if (!d || !(d.hourMin[h] >= GATES.hourMinObserved)) return null; const m = new Map(); for (const [k, g] of Object.entries(d.groups)) { const op = k.split('|')[1]; m.set(op, (m.get(op) || 0) + (g.start?.[h] || 0)); } return m; };
+  // Anbieter mit Ausfallstunde (d.out) zählen in dieser Stunde nicht: Prognose und Ist fallen beide weg (24.11.2026)
+  const outOp = (day, h) => { const o = dayBy.get(day)?.out; if (!o) return null; const s = new Set(); for (const [k, m] of Object.entries(o)) if ((m >> h) & 1) s.add(k.split('|')[1]); return s.size ? s : null; };
   let conf = prev?.conformal?.v === CONFORMAL.v ? prev.conformal : emptyConformal();
   for (const [at, rec] of Object.entries(log.issued)) {
     const endAt = rec.local?.length ? localToUtcMs(rec.local.at(-1)[0], rec.local.at(-1)[1]) + 3600e3 : Infinity;
@@ -237,16 +241,16 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
       hours++;
       // Vergleichswerte, die bei Ausgabe bekannt waren
       let nv = null; for (let k = 1; k <= 7 && !nv; k++) { const pd = shiftDay(day, -k); if (localToUtcMs(pd, h) + 3600e3 <= +at) nv = actualOp(pd, h); }
-      const wv = actualOp(shiftDay(day, -7), h) || nv;
+      const wv = actualOp(shiftDay(day, -7), h) || nv, oo = outOp(day, h), opsH = oo ? ops.filter(op => !oo.has(op)) : ops;
       let tot = 0, totM = 0;
-      for (const op of ops) { const y = a.get(op) || 0, f = rec.byOp[op][i]; rows.push([y, f]); tot += y; totM += f;
+      for (const op of opsH) { const y = a.get(op) || 0, f = rec.byOp[op][i]; rows.push([y, f]); tot += y; totM += f;
         const b = bandIx(h), wq = rec.bandQ?.[op]?.[i], [lo, hi] = wq ? bandOfQ(f, wq, kB[b] ?? 1) : bandOf80(f, rec.phi || 1, kB[b] ?? 1); nBand++; const ok = y >= lo && y <= hi; if (ok) inside++; miss[b][0] += ok ? 0 : 1; miss[b][1]++;
         pin += pinball(0.1, y, lo) + pinball(0.9, y, hi); pinY += y; }
       rowsTot.push([tot, totM]); lead.push(tot > 0 ? +(Math.abs(tot - totM) / tot).toFixed(3) : null);
       if (!nv) continue;
       hoursC++;
       const val = (m, op) => (m === 'naive' ? nv.get(op) || 0 : m === 'week' ? wv.get(op) || 0 : comps[m]?.[op]?.[i] ?? 0);
-      for (const m of Object.keys(C)) for (const op of ops) {
+      for (const m of Object.keys(C)) for (const op of opsH) {
         const y = a.get(op) || 0, f = val(m, op); C[m].push([y, f]);
         const P = pk[m], o = P.ops.get(op) || (P.ops.set(op, { a: new Map(), f: new Map() }), P.ops.get(op));
         for (const x of [P.de, o]) { x.a.set(i, (x.a.get(i) || 0) + y); x.f.set(i, (x.f.get(i) || 0) + f); }
@@ -383,6 +387,8 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   } else log.history.push({ at: out.generatedAt, active: null, status: out.status, reason: out.status === 'small' ? out.reason : `${trainDays} Tage Daten – zu wenig` });
   log.history = log.history.slice(-60);
   out.memory = memorySummary(mem, today, out.phi ?? 1);
+  // Ausfallstunden im Fenster (outageMask): Tage mit Ausfall, Gruppen-Stunden ausgenommen
+  if (outages) { const s = days.filter(d => d.out).map(d => Object.values(d.out).reduce((a, m) => { let c = 0; for (let x = m; x; x &= x - 1) c++; return a + c; }, 0)); out.outages = { days: s.filter(n => n > 0).length, groupHours: s.reduce((a, n) => a + n, 0) }; }
   // Tageskorrektur: Stand im Live-Abgleich (Fehler ÷ Fehler des jeweils veröffentlichten Modells über dieselben Stunden)
   { let a = 0, b = 0, n = 0; for (const v of Object.values(log.live)) { const x = v.models?.nowcast?.w, y = v.models?.[v.model]?.w; if (x != null && y > 0) { a += x; b += y; n++; } }
     out.nowcast = { rule: { ...NOWCAST }, live: { n, ratio: n ? +(a / b).toFixed(4) : null }, gate: { ...log.gates.nowcast, need: { ...CORR_GATE.nowcast } }, now: ncNow, applied: corrections.includes('nowcast') }; }

@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.6",
+ "x-version": "1.7",
  "$defs": {
   "latest": {
    "type": "object",
@@ -106,7 +106,11 @@
     },
     "memory": {
      "type": "object",
-     "description": "Langzeitgedächtnis der Wirkungen (memorySummary in lib/pulse-forecast-model.js): upto, days, oldDays, windowDays, since, halfLifeDays; effects[Wirkung] = {b (log-Wirkung), se, lo, hi (90-%-Bereich als Faktor), n (Gemeinde-Stunden), days}. Seit 1.6: b und Bereich mit Vorwissen WX_PRIOR (prior: true) und festgelegten Vorzeichen (fixed: true = Daten zeigen das Gegenteil, b = 0 wie im Modell)."
+     "description": "Langzeitgedächtnis der Wirkungen (memorySummary in lib/pulse-forecast-model.js): upto, days, oldDays, windowDays, since, halfLifeDays; effects[Wirkung] = {b (log-Wirkung), se, lo, hi (90-%-Bereich als Faktor), n (Gemeinde-Stunden), days}. Seit 1.6: b und Bereich mit Vorwissen WX_PRIOR (prior: true) und festgelegten Vorzeichen (fixed: true = Daten zeigen das Gegenteil, b = 0 wie im Modell). Seit 1.7 zusätzlich wind und dark (Wind, Dunkelheit)."
+    },
+    "outages": {
+     "type": "object",
+     "description": "Seit 1.7: Ausfallstunden im Trainingsfenster (lib/pulse-forecast-outage.js) – days (Tage mit Ausfall), groupHours (Gruppen-Stunden, die nicht mitlernen und in der Selbstprüfung nicht zählen)."
     }
    }
   },

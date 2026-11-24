@@ -272,7 +272,7 @@ export default {
   "fv.gTempSub": "Range of daily means per town (10th–90th percentile); weather is only used once it is wide enough to learn an effect",
   "fv.gRain": "Rain and dry days",
   "fv.gRainSub": "so far {rain} rain days and {dry} dry days (days with or without rain in at least 10 % of towns); enough of both are needed",
-  "fv.wxOn": "Weather is part of the forecast (temperature and rain).",
+  "fv.wxOn": "Weather is part of the forecast (temperature, rain, snow, wind, darkness).",
   "fv.wxOff": "Weather is not used yet: it only joins once temperature range and rain and dry days are sufficient and it measurably improves the self-check.",
   "fv.chartAhead": "Today and tomorrow, hour by hour",
   "fv.chartDay": "{d}: plan against actuals",
