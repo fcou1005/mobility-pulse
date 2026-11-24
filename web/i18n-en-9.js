@@ -149,4 +149,10 @@ export default {
   "fv.envExpPrior": " + prior knowledge",
   "fv.envPrior": "Prior knowledge: cold, warmth, frost, snow and heat start from values of the City of Munich's permanent bicycle counters (open data, 1,610 days 2017–2026; heat halved for scooters), so the forecast does not have to live through winter and summer first. A few days of own data already outweigh them. Frost, snow and heat can only lower trips; if the own data show the opposite, the model uses ×1.00 (“sign fixed”).",
   "fv.envDays": "Day type: the forecast treats Christmas Eve like a public holiday and New Year's Eve like a Saturday – neither is in any holiday calendar.",
+  "fv.envGrp.temp": "Weather: temperature",
+  "fv.envGrp.wet": "Weather: rain and snow",
+  "fv.envGrp.traffic": "Warnings and traffic",
+  "fv.envGrp.strike": "Strikes",
+  "fv.envGrp.events": "Events",
+  "fv.envGrp.other": "Other",
 };

@@ -149,4 +149,10 @@ export default {
   "fv.envExpPrior": " + Vorwissen",
   "fv.envPrior": "Vorwissen: Kälte, Wärme, Frost, Schnee und Hitze starten mit Werten aus den Rad-Dauerzählstellen der Stadt München (offene Daten, 1.610 Tage 2017–2026; Hitze für Roller halbiert), damit die Prognose Winter und Sommer nicht erst erleben muss. Schon wenige eigene Tage überstimmen sie. Frost, Schnee und Hitze können Fahrten nur senken; zeigen die eigenen Daten das Gegenteil, rechnet das Modell mit ×1,00 („Vorzeichen fest“).",
   "fv.envDays": "Tagtyp: Heiligabend rechnet die Prognose wie einen Feiertag, Silvester wie einen Samstag – beide stehen in keinem Feiertagskalender.",
+  "fv.envGrp.temp": "Wetter: Temperatur",
+  "fv.envGrp.wet": "Wetter: Regen und Schnee",
+  "fv.envGrp.traffic": "Warnungen und Verkehr",
+  "fv.envGrp.strike": "Streiks",
+  "fv.envGrp.events": "Veranstaltungen",
+  "fv.envGrp.other": "Sonstiges",
 };

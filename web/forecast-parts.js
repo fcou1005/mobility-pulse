@@ -116,6 +116,9 @@ function partsHtml(ctx, G, L) {
 }
 /** Umgebung und Langzeitgedächtnis: was gelernt ist (Faktor mit 90-%-Bereich), wie viel Erfahrung dahintersteht, ob es im Modell ist */
 const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).format(x)}`);
+// Einflüsse nach Art gruppiert (24.11.2026); was hier fehlt, landet unter „Sonstiges“
+const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['cold', 'frost', 'warm', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow']], ['traffic', ['warn', 'road']], ['strike', ['strike', 'rail']], ['events', ['event', 'fest', 'sport']]]);
+const envGroups = (/** @type {string[]} */ keys) => { const seen = new Set(ENV_GROUPS.flatMap(([, ks]) => ks)), out = /** @type {[string, string[]][]} */ (ENV_GROUPS.map(([g, ks]) => [g, ks.filter(k => keys.includes(k))])); out.push(['other', keys.filter(k => !seen.has(k))]); return out.filter(([, ks]) => ks.length); };
 export function envHtml(ctx, L, { title = true } = {}) {
   const M = L?.memory, E = L?.env, esc = ctx.esc;
   if (!M && !E) return '';
@@ -133,7 +136,9 @@ export function envHtml(ctx, L, { title = true } = {}) {
   const chip = (st) => `<span class="fv-chip${st === 'on' || st === 'fixed' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: heldFrom })}</span>`;
   // Vorwissen (WX_PRIOR): ohne eigene Fälle „nur Vorwissen“, sonst eigene Erfahrung + Vorwissen
   const exp = (r) => (r.prior && !(r.n > 0) ? t('fv.envExpPrior0') : `${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}${r.prior ? t('fv.envExpPrior') : ''}`);
-  const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${chip(r.st)}</td></tr>`).join('')}</tbody></table></div>`;
+  const byK = new Map(rows.map(r => [r.k, r])), row = (r) => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${chip(r.st)}</td></tr>`;
+  const body = envGroups(rows.map(r => r.k)).map(([g, ks]) => `<tbody><tr><th colspan="5" scope="rowgroup" class="fv-grp">${t(`fv.envGrp.${g}`)}</th></tr>${ks.map(k => row(byK.get(k))).join('')}</tbody>`).join('');
+  const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead>${body}</table></div>`;
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
@@ -197,7 +202,7 @@ export function steckbrief(ctx, S0, L, G, sel) {
     if (rows.length) out.push(mdTable([t('fv.colGroup'), t('fv.colLearnsFrom'), t('fv.colOwnW'), t('fv.colErrOwn'), t('fv.colErrPool'), t('fv.colStarts')], rows.map(([dir, k, w, eo, ep, y]) => [groupLabel(ctx, k), dir, pc(w), pc(eo), pc(ep), n0(y)])));
   } else out.push(`${t('fv.learnedNone')}\n`);
   if (L?.memory) { out.push(`\n## ${t('fv.envTitle')}\n`, `${strip(envHtml({ esc: (x) => x }, L, { title: false }).replace(/<table>[\s\S]*<\/table>/, '').replace(/<\/(p|div)>/g, '\n'))}\n`);
-    out.push(mdTable([t('fv.envColWhat'), t('fv.envColEffect'), t('fv.envColRange'), t('fv.envColExp')], (FC.EFFECTS || []).map(k => { const e = L.memory.effects?.[k] || {}, inv = k === 'cold' || k === 'frost'; return [t(`fv.env.${k}`), e.b == null ? '–' : fx(Math.exp(inv ? -e.b : e.b)), e.b == null ? '–' : `${fx(inv ? 1 / e.hi : e.lo)} – ${fx(inv ? 1 / e.lo : e.hi)}`, e.prior && !(e.n > 0) ? t('fv.envExpPrior0') : t('fv.envExp', { n: n0(e.n), d: n1(e.days) }) + (e.prior ? t('fv.envExpPrior') : '')]; }))); }
+    for (const [g, ks] of envGroups(FC.EFFECTS || [])) out.push(`\n**${t(`fv.envGrp.${g}`)}**\n\n`, mdTable([t('fv.envColWhat'), t('fv.envColEffect'), t('fv.envColRange'), t('fv.envColExp')], ks.map(k => { const e = L.memory.effects?.[k] || {}, inv = k === 'cold' || k === 'frost'; return [t(`fv.env.${k}`), e.b == null ? '–' : fx(Math.exp(inv ? -e.b : e.b)), e.b == null ? '–' : `${fx(inv ? 1 / e.hi : e.lo)} – ${fx(inv ? 1 / e.lo : e.hi)}`, e.prior && !(e.n > 0) ? t('fv.envExpPrior0') : t('fv.envExp', { n: n0(e.n), d: n1(e.days) }) + (e.prior ? t('fv.envExpPrior') : '')]; }))); }
   const ev = G?.evals || {}, evRows = [];
   for (const d of Object.keys(ev).sort()) for (const m of MODEL_ORDER) { const r = ev[d]?.models?.[m]; if (r) evRows.push([d, ev[d].trainDays ?? '–', modelName(m), pc(FC.scoreOf(r), 1), pc(r.wapeGD, 1), pc(r.wapeGH, 1), sg(r.bias, 1), pc(r.cover80)]); }
   out.push(`\n## ${t('fv.mdEval')}\n`, `${strip(t('fv.raceNote'))}\n`, evRows.length ? mdTable([t('fv.colDay'), t('fv.colTrain'), t('fv.colModel'), t('fv.colScore'), t('fv.colGD'), t('fv.colGH'), t('fv.colBias'), t('fv.colCover')], evRows) : `${t('fv.accNone')}\n`);

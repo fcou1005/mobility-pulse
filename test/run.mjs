@@ -293,7 +293,7 @@ if (TR.trainReady(ydM, Date.now())) {
   const pr = l4.presence, mp = Object.values(l4.municipalities || {});
   assert(pr?.version === 1 && pr.days >= 1 && mp.length && mp.every(m => ['fest', 'aktiv', 'neu', 'vereinzelt'].includes(m.presence?.status)) && l4.counts.municipalitiesShown === mp.filter(m => m.presence.status !== 'vereinzelt').length,
     `Betriebsgebiete: jede Gemeinde eingestuft (${JSON.stringify(pr?.counts)}), gezeigt ${l4.counts?.municipalitiesShown} von ${mp.length}`);
-  assert(fl.env?.sources?.days >= 1 && fl.env.sources.warnAt && fl.env.sources.roadAt && fg.memory?.v === 1, `Prognose kennt die Umgebung (${fl.env?.sources?.days} Tagesdateien, Ereignisliste ${fl.env?.sources?.curated} Einträge) und führt das Gedächtnis`);
+  assert(fl.env?.sources?.days >= 1 && fl.env.sources.warnAt && fl.env.sources.roadAt && fg.memory?.v === 2, `Prognose kennt die Umgebung (${fl.env?.sources?.days} Tagesdateien, Ereignisliste ${fl.env?.sources?.curated} Einträge) und führt das Gedächtnis`);
 }
 {
   const E2 = await import('../lib/pulse-econ.js'), ecL = l4.eventChecks?.groups?.['08111000|Lime|scooter'], mY = l4.measure?.days?.[ydM];

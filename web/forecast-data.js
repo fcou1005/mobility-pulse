@@ -112,7 +112,7 @@ details.fv-data{margin-top:var(--s3)}details.fv-data summary{cursor:pointer;font
 .fv-tag.assumed{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 18%,transparent);font-weight:600}
 .fv-tag.rule,.fv-tag.external{color:var(--fg-2)}.fv-tag.external{border-style:dashed}
 .fv-formula{display:block;white-space:pre-wrap;margin:var(--s3) 0 0;padding:var(--s3);background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-sm);font-family:var(--mono);font-size:.75rem;line-height:1.55;overflow-x:auto}
-.fv-tbl.full{max-height:none}.fv-tbl td.wrap{white-space:normal;min-width:22ch}.fv-tbl td code{font-family:var(--mono);font-size:.75rem}
+.fv-tbl.full{max-height:none}.fv-tbl tbody th.fv-grp{position:static;padding-top:var(--s3);font-size:.8125rem;font-weight:600;color:var(--fg);background:transparent}.fv-tbl td.wrap{white-space:normal;min-width:22ch}.fv-tbl td code{font-family:var(--mono);font-size:.75rem}
 .fv-links{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
 .fv-flag{color:var(--fg);font-weight:600}
 .fv-list{margin:var(--s3) 0 0;padding-left:1.2em;display:grid;gap:var(--s1);max-width:100ch}
