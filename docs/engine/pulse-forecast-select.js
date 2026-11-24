@@ -4,7 +4,7 @@ import * as E from './pulse-econ.js';
 import { hourOf, dayOf } from './pulse-track.js';
 import { CTX_KEYS } from './pulse-context.js';
 import { ALPHA, CLS, EFFECTS, GATES, I_CLS, I_CTX, I_HOUR, I_TH, I_WE, I_WX, MODELS, NE, NOWCAST, NW, PTADJ, SHADOW_ONLY, TYPES, WE_CLS, WX_EFF, classOf, envOf, eta, feedbackUpdate, feedbackWeights, fitPooled, pos, predictAdaptive, predictPooled, predictProfile, scoreDay, scoreOf, sum, typeIx, wxFeatures, wxFeaturesFc } from './pulse-forecast-model.js';
-import { darkShare, sunTimes } from './pulse-sun.js';
+import { darkShare, sunTimes } from './pulse-forecast-sun.js';
 import { lastExposure } from './pulse-forecast-series.js';
 import { ENS, ensBases, ensUpdate, ensWeights, predictEns, predictMean } from './pulse-forecast-ens.js';
 
