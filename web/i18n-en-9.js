@@ -144,4 +144,9 @@ export default {
   "fv.ensWeights": "Learned so far ({days} days): {w}.",
   "fv.mMittel": "Control, not selectable: the five models of the combination weighted equally. If the combination does not beat this simple mean, it has learned nothing.",
   "fv.scHowEns": "Active is {model}: per group a mix of five models, weighted by the best mix of past days.",
+  "fv.envSt.fixed": "in the model, sign fixed",
+  "fv.envExpPrior0": "prior knowledge only",
+  "fv.envExpPrior": " + prior knowledge",
+  "fv.envPrior": "Prior knowledge: cold, warmth, frost, snow and heat start from values of the City of Munich's permanent bicycle counters (open data, 1,610 days 2017–2026; heat halved for scooters), so the forecast does not have to live through winter and summer first. A few days of own data already outweigh them. Frost, snow and heat can only lower trips; if the own data show the opposite, the model uses ×1.00 (“sign fixed”).",
+  "fv.envDays": "Day type: the forecast treats Christmas Eve like a public holiday and New Year's Eve like a Saturday – neither is in any holiday calendar.",
 };

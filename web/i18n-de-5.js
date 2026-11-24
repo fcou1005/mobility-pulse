@@ -290,7 +290,7 @@ export default {
   "fv.nStrike": "Streiks, die weder in der Ereignisliste noch in den Nachrichten erkannt werden",
   "fv.nTrain": "Zug- und Streckenausfälle, Störungen im ÖPNV",
   "fv.nEvents": "Spieltage, Messen und Konzerte, solange sie nicht eingetragen sind",
-  "fv.nWarn": "Unwetter- und Hitzewarnungen (Wetter geht nur als Temperatur und Regen ein)",
+  "fv.nWarn": "Unwetter- und Hitzewarnungen (Wetter geht als Temperatur, Regen und Schnee ein)",
   "fv.nRoad": "Sperrungen, Baustellen und Stau in der Stadt",
   "fv.nOp": "Eingriffe der Anbieter: Aktionen, Preisänderungen, Flottenwechsel, Betriebsunterbrechungen",
   "fv.nZones": "Änderungen an Sperr- und Betriebszonen",

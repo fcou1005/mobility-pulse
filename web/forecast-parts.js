@@ -124,18 +124,20 @@ export function envHtml(ctx, L, { title = true } = {}) {
     const e = M?.effects?.[k] || {}, isWx = (FC.WX_NAMES || ['cold', 'warm', 'rain']).includes(k), inv = k === 'cold' || k === 'frost'; // kalt/Frost: Merkmal ≤ 0, „10 K kälter“ = exp(−b)
     const f = e.b == null ? null : Math.exp(inv ? -e.b : e.b), lo = e.b == null ? null : inv ? 1 / e.hi : e.lo, hi = e.b == null ? null : inv ? 1 / e.lo : e.hi;
     const sup = E?.support?.[k], n = isWx ? e.n : (sup ? sup.rows + sup.memRows : e.n), days = isWx ? e.days : (sup ? sup.days + sup.memDays : e.days);
-    let st = isWx ? (wxUsed ? 'on' : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : n > 0 ? 'wait' : 'none';
+    let st = isWx ? (wxUsed ? (e.fixed ? 'fixed' : 'on') : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : n > 0 ? 'wait' : 'none';
     // Lernphase: erfasst, aber noch zurückgehalten (Sport, Veranstaltungen, Volksfeste ab E.pendingFrom) – Erfahrung = was sie kennzeichnen würden
     if (!isWx && st === 'none' && sup?.pending?.rows) return { k, f, lo, hi, n: sup.pending.rows, days: sup.pending.days, st: 'held' };
-    return { k, f, lo, hi, n, days, st };
+    return { k, f, lo, hi, n, days, st, prior: !!e.prior };
   });
   const heldFrom = E?.pendingFrom && Number.isFinite(Date.parse(E.pendingFrom)) ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(E.pendingFrom)) : '–';
-  const chip = (st) => `<span class="fv-chip${st === 'on' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: heldFrom })}</span>`;
-  const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}</td><td>${chip(r.st)}</td></tr>`).join('')}</tbody></table></div>`;
+  const chip = (st) => `<span class="fv-chip${st === 'on' || st === 'fixed' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: heldFrom })}</span>`;
+  // Vorwissen (WX_PRIOR): ohne eigene Fälle „nur Vorwissen“, sonst eigene Erfahrung + Vorwissen
+  const exp = (r) => (r.prior && !(r.n > 0) ? t('fv.envExpPrior0') : `${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}${r.prior ? t('fv.envExpPrior') : ''}`);
+  const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${chip(r.st)}</td></tr>`).join('')}</tbody></table></div>`;
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
-  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
+  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
 }
 export function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));
@@ -195,7 +197,7 @@ export function steckbrief(ctx, S0, L, G, sel) {
     if (rows.length) out.push(mdTable([t('fv.colGroup'), t('fv.colLearnsFrom'), t('fv.colOwnW'), t('fv.colErrOwn'), t('fv.colErrPool'), t('fv.colStarts')], rows.map(([dir, k, w, eo, ep, y]) => [groupLabel(ctx, k), dir, pc(w), pc(eo), pc(ep), n0(y)])));
   } else out.push(`${t('fv.learnedNone')}\n`);
   if (L?.memory) { out.push(`\n## ${t('fv.envTitle')}\n`, `${strip(envHtml({ esc: (x) => x }, L, { title: false }).replace(/<table>[\s\S]*<\/table>/, '').replace(/<\/(p|div)>/g, '\n'))}\n`);
-    out.push(mdTable([t('fv.envColWhat'), t('fv.envColEffect'), t('fv.envColRange'), t('fv.envColExp')], (FC.EFFECTS || []).map(k => { const e = L.memory.effects?.[k] || {}, inv = k === 'cold' || k === 'frost'; return [t(`fv.env.${k}`), e.b == null ? '–' : fx(Math.exp(inv ? -e.b : e.b)), e.b == null ? '–' : `${fx(inv ? 1 / e.hi : e.lo)} – ${fx(inv ? 1 / e.lo : e.hi)}`, t('fv.envExp', { n: n0(e.n), d: n1(e.days) })]; }))); }
+    out.push(mdTable([t('fv.envColWhat'), t('fv.envColEffect'), t('fv.envColRange'), t('fv.envColExp')], (FC.EFFECTS || []).map(k => { const e = L.memory.effects?.[k] || {}, inv = k === 'cold' || k === 'frost'; return [t(`fv.env.${k}`), e.b == null ? '–' : fx(Math.exp(inv ? -e.b : e.b)), e.b == null ? '–' : `${fx(inv ? 1 / e.hi : e.lo)} – ${fx(inv ? 1 / e.lo : e.hi)}`, e.prior && !(e.n > 0) ? t('fv.envExpPrior0') : t('fv.envExp', { n: n0(e.n), d: n1(e.days) }) + (e.prior ? t('fv.envExpPrior') : '')]; }))); }
   const ev = G?.evals || {}, evRows = [];
   for (const d of Object.keys(ev).sort()) for (const m of MODEL_ORDER) { const r = ev[d]?.models?.[m]; if (r) evRows.push([d, ev[d].trainDays ?? '–', modelName(m), pc(FC.scoreOf(r), 1), pc(r.wapeGD, 1), pc(r.wapeGH, 1), sg(r.bias, 1), pc(r.cover80)]); }
   out.push(`\n## ${t('fv.mdEval')}\n`, `${strip(t('fv.raceNote'))}\n`, evRows.length ? mdTable([t('fv.colDay'), t('fv.colTrain'), t('fv.colModel'), t('fv.colScore'), t('fv.colGD'), t('fv.colGH'), t('fv.colBias'), t('fv.colCover')], evRows) : `${t('fv.accNone')}\n`);

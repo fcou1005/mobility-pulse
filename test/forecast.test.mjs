@@ -85,6 +85,13 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
     const p1 = F.withWxPrior(mem), ok = (v, w, tol = 1e-6) => Math.abs(v - w) < tol;
     assert(ok(p0.b[ix('cold')], 0.655) && ok(p0.b[ix('heat')], -0.3) && p0.b[ix('rain')] === 0 && p0.days === 0 && p1.days === 7 && ok(p1.b[ix('rain')], -0.4) && ok(p1.b[ix('cold')], 0.655 / 10, 1e-3) && mem.P[ix('cold') * (NE + 1)] === 400,
       `Wetter-Vorwissen: leer → kalt ${p0.b[ix('cold')].toFixed(3)}, Hitze ${p0.b[ix('heat')].toFixed(2)}; mit Gedächtnis (Präzision 400 = 9× Vorwissen → 1/10) kalt ${p1.b[ix('cold')].toFixed(3)}, Regen ${p1.b[ix('rain')]}, Gedächtnis unverändert`); }
+  // Anzeige (memorySummary): Vorwissen eingerechnet, Schnee mit „mehr Fahrten“ in den Daten → 0 wie im Modell (fixed), Hitze ohne Fall → nur Vorwissen
+  { const NE = F.EFFECTS.length, ix = n => F.EFFECTS.indexOf(n), P = new Array(NE * NE).fill(0), h = new Array(NE).fill(0);
+    P[ix('snow') * (NE + 1)] = 100; h[ix('snow')] = 100 * 0.5; P[ix('rain') * (NE + 1)] = 400; h[ix('rain')] = 400 * -0.2;
+    const mem = { v: 1, upto: '2026-11-20', old: { at: '2026-11-20', P, h, n: F.EFFECTS.map(e => (e === 'snow' ? 35 : e === 'rain' ? 900 : 0)), dk: F.EFFECTS.map(e => (e === 'snow' || e === 'rain' ? 1 : 0)), days: 5 }, days: {}, wxDays: {} };
+    const E = F.memorySummary(mem, '2026-11-20', 1).effects;
+    assert(E.snow.b === 0 && E.snow.fixed && E.snow.prior && E.snow.hi === 1 && E.heat.b === -0.3 && E.heat.prior && E.heat.n === 0 && E.heat.hi === 1 && E.rain.b === -0.2 && !E.rain.prior && !E.rain.fixed && E.event.b === null,
+      `Wirkungsanzeige: Schnee ${JSON.stringify(E.snow)}, Hitze ${JSON.stringify(E.heat)}, Regen ohne Vorwissen ${E.rain.b}`); }
   const g = F.weatherGate(R, all);
   assert(g.ok && g.tempRangeK >= 5 && g.rainDays >= 2 && g.dryDays >= 2, `Wetter-Gate offen bei ${NDAY} Tagen mit Spanne ${g.tempRangeK} K, ${g.rainDays} Regen- und ${g.dryDays} Trockentagen`);
   const R1 = F.buildRows(ds.slice(0, 1), F.wxLookup(WX)), g1 = F.weatherGate(R1, Array.from({ length: R1.n }, (_, i) => i));

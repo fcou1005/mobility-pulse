@@ -287,7 +287,7 @@ export default {
   "fv.nStrike": "Strikes that are neither in the event list nor detected in the news",
   "fv.nTrain": "Train and line cancellations, disruptions in public transport",
   "fv.nEvents": "Match days, fairs and concerts as long as they are not entered",
-  "fv.nWarn": "Storm and heat warnings (weather enters only as temperature and rain)",
+  "fv.nWarn": "Storm and heat warnings (weather enters as temperature, rain and snow)",
   "fv.nRoad": "Closures, roadworks and congestion in town",
   "fv.nOp": "Operator actions: promotions, price changes, fleet changes, service interruptions",
   "fv.nZones": "Changes to no-ride and operating zones",

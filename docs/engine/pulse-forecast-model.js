@@ -479,25 +479,32 @@ export function memoryAddDays(mem, R, m, sel, dayIdx, dayName) {
   }
   return mem;
 }
-/** Stand je Wirkung (Gedächtnis + Tage im Fenster): Faktor exp(b), 90-%-Bereich (mit Überstreuung phi), Gemeinde-Stunden mit Ereignis, Tage mit Ereignis */
+/**
+ * Stand je Wirkung (Gedächtnis + Tage im Fenster + Vorwissen WX_PRIOR, wie es die Prognose als Prior nutzt): Faktor exp(b), 90-%-Bereich (Überstreuung
+ * phi nur auf den Datenanteil), Gemeinde-Stunden mit Ereignis, Tage mit Ereignis. prior: Vorwissen eingerechnet; fixed: Vorzeichen festgelegt (WX_SIGN)
+ * und die Daten zeigen das Gegenteil – dann 0 wie im Modell (fitPooled), der Bereich endet bei ×1.
+ */
 export function memorySummary(mem, day, phi = 1) {
   if (!mem) return null;
   const o = mem.old, f = decayTo(o, day), Pm = new Array(NE * NE).fill(0), h = new Array(NE).fill(0), n = new Array(NE).fill(0), dk = new Array(NE).fill(0);
   if (o) for (let i = 0; i < NE * NE; i++) Pm[i] = o.P[i] * f;
   if (o) for (let i = 0; i < NE; i++) { h[i] = o.h[i] * f; n[i] = o.n[i] * f; dk[i] = o.dk[i] * f; }
   const win = Object.values(mem.days); for (const x of win) { for (let i = 0; i < NE * NE; i++) Pm[i] += x.H[i] || 0; for (let i = 0; i < NE; i++) { h[i] += x.u[i] || 0; n[i] += x.n[i] || 0; dk[i] += x.n[i] > 0 ? 1 : 0; } }
-  const b = solveSmall(Pm, h), effects = {};
+  const pp = new Array(NE).fill(0), Pt = Pm.slice(), ph = Math.max(1, phi);
+  for (const [name, [b0, sd]] of Object.entries(WX_PRIOR.effects)) { const e = EFFECTS.indexOf(name); if (e < 0) continue; pp[e] = 1 / (sd * sd); Pt[e * NE + e] += pp[e]; h[e] += pp[e] * b0; }
+  const b = solveSmall(Pt, h), effects = {};
   EFFECTS.forEach((e, i) => {
-    const info = Pm[i * NE + i]; if (!(info > 1e-9)) { effects[e] = { b: null, n: Math.round(n[i]), days: +dk[i].toFixed(1) }; return; }
-    // Randvarianz aus der Inversen (über die Wirkungen mit Information)
-    const idx = EFFECTS.map((_, j) => j).filter(j => Pm[j * NE + j] > 1e-9), k = idx.length, A = new Float64Array(k * k);
-    idx.forEach((p, a) => idx.forEach((q, c) => { A[a * k + c] = Pm[p * NE + q] + (a === c ? 1e-9 : 0); }));
+    const info = Pt[i * NE + i]; if (!(info > 1e-9)) { effects[e] = { b: null, n: Math.round(n[i]), days: +dk[i].toFixed(1) }; return; }
+    // Randvarianz aus der Inversen (über die Wirkungen mit Information); Daten mit Überstreuung, Vorwissen ohne
+    const idx = EFFECTS.map((_, j) => j).filter(j => Pt[j * NE + j] > 1e-9), k = idx.length, A = new Float64Array(k * k);
+    idx.forEach((p, a) => idx.forEach((q, c) => { A[a * k + c] = Pm[p * NE + q] / ph + (a === c ? pp[p] + 1e-9 : 0); }));
     const ei = new Float64Array(k); ei[idx.indexOf(i)] = 1;
     const col = (() => { const L = new Float64Array(k * k); for (let r = 0; r < k; r++) for (let c = 0; c <= r; c++) { let s0 = A[r * k + c]; for (let t = 0; t < c; t++) s0 -= L[r * k + t] * L[c * k + t]; L[r * k + c] = r === c ? Math.sqrt(Math.max(s0, 1e-18)) : s0 / L[c * k + c]; }
       const z = new Float64Array(k), x = new Float64Array(k); for (let r = 0; r < k; r++) { let s0 = ei[r]; for (let t = 0; t < r; t++) s0 -= L[r * k + t] * z[t]; z[r] = s0 / L[r * k + r]; }
       for (let r = k - 1; r >= 0; r--) { let s0 = z[r]; for (let t = r + 1; t < k; t++) s0 -= L[t * k + r] * x[t]; x[r] = s0 / L[r * k + r]; } return x; })();
-    const se = Math.sqrt(Math.max(col[idx.indexOf(i)], 0) * Math.max(1, phi));
-    effects[e] = { b: +b[i].toFixed(4), se: +se.toFixed(4), lo: +Math.exp(b[i] - 1.645 * se).toFixed(3), hi: +Math.exp(b[i] + 1.645 * se).toFixed(3), n: Math.round(n[i]), days: +dk[i].toFixed(1) };
+    const se = Math.sqrt(Math.max(col[idx.indexOf(i)], 0)), sg = WX_SIGN[i] || 0, fixed = sg !== 0 && b[i] * sg < 0, bi = fixed ? 0 : b[i];
+    let lo = Math.exp(bi - 1.645 * se), hi = Math.exp(bi + 1.645 * se); if (sg < 0) hi = Math.min(hi, 1); if (sg > 0) lo = Math.max(lo, 1);
+    effects[e] = { b: +bi.toFixed(4), se: +se.toFixed(4), lo: +lo.toFixed(3), hi: +hi.toFixed(3), n: Math.round(n[i]), days: +dk[i].toFixed(1), ...(pp[i] ? { prior: true } : {}), ...(fixed ? { fixed: true } : {}) };
   });
   return { v: mem.v, upto: mem.upto, days: +((o?.days || 0) * f + win.length).toFixed(1), oldDays: +((o?.days || 0) * f).toFixed(1), windowDays: win.length, since: [...Object.keys(mem.wxDays), ...Object.keys(mem.days)].sort()[0] || null, halfLifeDays: MEMORY.halfLifeDays, effects };
 }
