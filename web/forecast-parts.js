@@ -127,7 +127,7 @@ export function envHtml(ctx, L, { title = true } = {}) {
     const e = M?.effects?.[k] || {}, isWx = (FC.WX_NAMES || ['cold', 'warm', 'rain']).includes(k), inv = k === 'cold' || k === 'frost'; // kalt/Frost: Merkmal ≤ 0, „10 K kälter“ = exp(−b)
     const f = e.b == null ? null : Math.exp(inv ? -e.b : e.b), lo = e.b == null ? null : inv ? 1 / e.hi : e.lo, hi = e.b == null ? null : inv ? 1 / e.lo : e.hi;
     const sup = E?.support?.[k], n = isWx ? e.n : (sup ? sup.rows + sup.memRows : e.n), days = isWx ? e.days : (sup ? sup.days + sup.memDays : e.days);
-    let st = isWx ? (wxUsed ? (e.fixed ? 'fixed' : 'on') : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : n > 0 ? 'wait' : 'none';
+    let st = isWx ? (wxUsed ? (e.fixed ? 'fixed' : 'on') : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : (FC.CTX_OFF || []).includes(k) ? 'off' : n > 0 ? 'wait' : 'none';
     // Lernphase: erfasst, aber noch zurückgehalten (Sport, Veranstaltungen, Volksfeste ab E.pendingFrom) – Erfahrung = was sie kennzeichnen würden
     if (!isWx && st === 'none' && sup?.pending?.rows) return { k, f, lo, hi, n: sup.pending.rows, days: sup.pending.days, st: 'held' };
     return { k, f, lo, hi, n, days, st, prior: !!e.prior };
@@ -142,7 +142,7 @@ export function envHtml(ctx, L, { title = true } = {}) {
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
-  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
+  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')} ${t('fv.envTested')}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
 }
 export function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));

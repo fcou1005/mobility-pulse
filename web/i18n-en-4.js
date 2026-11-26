@@ -586,7 +586,7 @@ export default {
   "fv.env.warm": "10 degrees warmer (above 10 °C)",
   "fv.env.rain": "rainy hour",
   "fv.env.warn": "severe weather warning (moderate or higher)",
-  "fv.env.road": "motorway: closure or jam in town",
+  "fv.env.road": "motorway: closure or jam in the municipality",
   "fv.env.strike": "public transport strike",
   "fv.env.rail": "rail strike",
   "fv.env.event": "event (arena, concert, fair)",

@@ -67,11 +67,12 @@ export function roadItem(it, service, now) {
   return jam ? { lat, lon, kind: 'jam' } : null;
 }
 
-/** Autobahn-Beobachtung zur aktuellen Ortsstunde eintragen: items [{lat, lon}], locate(lat, lon) → ags | null; Rückgabe: Gemeinden mit Meldung */
+/** Autobahn-Beobachtung zur aktuellen Ortsstunde eintragen: items [{lat, lon, kind}], locate(lat, lon) → ags | null; Rückgabe: Gemeinden mit Meldung.
+ *  road = Sperrung oder Stau (wie bisher); seit 26.11.2026 getrennt roadC (Sperrung) und roadJ (Stau), damit sich beide einzeln prüfen lassen. */
 export function addRoad(docs, items, locate, now) {
   const day = dayOf(now), h = hourOf(now); let doc = docs.get(day); if (!doc) docs.set(day, doc = emptyIncidentDoc(day));
   const hit = new Set();
-  for (const it of items || []) { const ags = locate(it.lat, it.lon); if (ags) hit.add(ags); }
+  for (const it of items || []) { const ags = locate(it.lat, it.lon); if (!ags) continue; hit.add(ags); if (it.kind === 'closure' || it.kind === 'jam') slot(doc, ags, it.kind === 'closure' ? 'roadC' : 'roadJ')[h] = 1; }
   for (const ags of hit) slot(doc, ags, 'road')[h] = 1;
   return hit.size;
 }

@@ -96,6 +96,11 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
     const p1 = F.withWxPrior(mem), ok = (v, w, tol = 1e-6) => Math.abs(v - w) < tol;
     assert(ok(p0.b[ix('cold')], 0.655) && ok(p0.b[ix('heat')], -0.3) && p0.b[ix('rain')] === 0 && p0.days === 0 && p1.days === 7 && ok(p1.b[ix('rain')], -0.4) && ok(p1.b[ix('cold')], 0.655 / 10, 1e-3) && mem.P[ix('cold') * (NE + 1)] === 400,
       `Wetter-Vorwissen: leer → kalt ${p0.b[ix('cold')].toFixed(3)}, Hitze ${p0.b[ix('heat')].toFixed(2)}; mit Gedächtnis (Präzision 400 = 9× Vorwissen → 1/10) kalt ${p1.b[ix('cold')].toFixed(3)}, Regen ${p1.b[ix('rain')]}, Gedächtnis unverändert`); }
+  // Bahnstreik mit Vorwissen: im Modell ohne eigenen Fall (ein angekündigter Streik wirkt am ersten Tag), Autobahn bleibt aus
+  { const iRail = CX.CTX_KEYS.indexOf('rail'), iRoad = CX.CTX_KEYS.indexOf('road'), Rr = { c: CX.CTX_KEYS.map(() => new Int8Array(3)), day: new Int32Array(3) };
+    for (let i = 0; i < 3; i++) { Rr.c[iRoad][i] = 1; Rr.day[i] = i; }
+    const on = F.ctxActive(Rr, [0, 1, 2], { n: new Array(F.EFFECTS.length).fill(200), dk: new Array(F.EFFECTS.length).fill(5) });
+    assert(on.includes(iRail) && !on.includes(iRoad) && Math.abs(F.withWxPrior(null).b[F.EFFECTS.indexOf('rail')] - 0.12) < 1e-6, `Bahnstreik ohne Fall im Modell (Vorwissen ×1,13), Autobahn aus trotz Erfahrung: ${on.map(k => CX.CTX_KEYS[k]).join(',')}`); }
   // Anzeige (memorySummary): Vorwissen eingerechnet, Schnee mit „mehr Fahrten“ in den Daten → 0 wie im Modell (fixed), Hitze ohne Fall → nur Vorwissen
   { const NE = F.EFFECTS.length, ix = n => F.EFFECTS.indexOf(n), P = new Array(NE * NE).fill(0), h = new Array(NE).fill(0);
     P[ix('snow') * (NE + 1)] = 100; h[ix('snow')] = 100 * 0.5; P[ix('rain') * (NE + 1)] = 400; h[ix('rain')] = 400 * -0.2;
@@ -429,8 +434,8 @@ import * as CX from '../lib/pulse-context.js';
   assert(r[0]?.kind === 'closure' && !r[1] && r[2]?.kind === 'jam' && !r[3] && r[4]?.kind === 'jam', 'Autobahn: Sperrung zählt, geplante nicht; Stau zählt, Dauer-Baustellenhinweis nicht');
   const old1 = CX.roadItem(it({ startTimestamp: '2026-09-19T00:00:00+02:00' }), 'closure', now), old2 = CX.roadItem(it({ abnormalTrafficType: 'QUEUING_TRAFFIC', startTimestamp: new Date(now - 26 * 3600e3).toISOString() }), 'warning', now);
   assert(!old1 && !old2, 'Autobahn: monatelange Bauphasen-Sperrung und 26 Stunden alte Staumeldung zählen nicht (sonst fast konstant je Gemeinde, Zukunft unbekannt)');
-  const hit = CX.addRoad(docsI, [{ lat: 48.5, lon: 9.0 }, { lat: 1, lon: 1 }], (lat) => (lat > 40 ? '08416041' : null), now);
-  assert(hit === 1 && docsI.get(T_dayOf(now)).ags['08416041'].road[T_hourOf(now)] === 1, 'Autobahn: Meldung → Gemeinde zur Stunde der Beobachtung');
+  const hit = CX.addRoad(docsI, [{ lat: 48.5, lon: 9.0, kind: 'jam' }, { lat: 1, lon: 1, kind: 'closure' }], (lat) => (lat > 40 ? '08416041' : null), now), aR = docsI.get(T_dayOf(now)).ags['08416041'];
+  assert(hit === 1 && aR.road[T_hourOf(now)] === 1 && aR.roadJ[T_hourOf(now)] === 1 && !aR.roadC, 'Autobahn: Meldung → Gemeinde zur Stunde der Beobachtung, Stau und Sperrung getrennt (roadJ, roadC)');
   const cur = CX.checkCurated({ ereignisse: [{ art: 'streik-oepnv', von: '2026-11-10', gebiet: { laender: ['BW'] }, quelle: 'https://x' }, { art: 'streik-bahn', von: '2026-11-11T04:00', bis: '2026-11-11T10:00', gebiet: 'DE', quelle: 'https://y' }, { art: 'veranstaltung', von: '2026-11-12', gebiet: { ags: ['08111000'] }, quelle: 'https://z' }, { art: 'demo', von: '2026-11-10', gebiet: 'DE', quelle: 'q' }, { art: 'streik-oepnv', von: '2026-11-10', gebiet: 'DE' }] });
   assert(cur.ok.length === 3 && cur.bad.length === 2, `Ereignisliste: unbekannte Art und fehlende Quelle werden abgewiesen (${cur.bad.join('; ')})`);
   const L = CX.ctxLookup([...docsI.values()], cur.ok), K = (a) => CX.CTX_KEYS.filter((_, i) => a[i]).join('+') || '–';

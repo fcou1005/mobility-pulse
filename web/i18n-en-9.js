@@ -147,7 +147,7 @@ export default {
   "fv.envSt.fixed": "in the model, sign fixed",
   "fv.envExpPrior0": "prior knowledge only",
   "fv.envExpPrior": " + prior knowledge",
-  "fv.envPrior": "Prior knowledge: cold, warmth, frost, snow and heat start from values of the City of Munich's permanent bicycle counters (open data, 1,610 days 2017–2026; heat halved for scooters), so the forecast does not have to live through winter and summer first. A few days of own data already outweigh them. Frost, snow, heat, wind and darkness can only lower trips; if the own data show the opposite, the model uses ×1.00 (“sign fixed”).",
+  "fv.envPrior": "Prior knowledge: cold, warmth, frost, snow and heat start from values of the City of Munich's permanent bicycle counters (open data, 1,610 days 2017–2026; heat halved for scooters), so the forecast does not have to live through winter and summer first. Rail strikes start at ×1.13 (operators reported +13 to +20 % trips during GDL strikes), so the first announced strike already counts. A few days of own data already outweigh the prior. Frost, snow, heat, wind and darkness can only lower trips; if the own data show the opposite, the model uses ×1.00 (“sign fixed”).",
   "fv.envDays": "Day type: the forecast treats Christmas Eve like a public holiday and New Year's Eve like a Saturday – neither is in any holiday calendar.",
   "fv.envGrp.temp": "Weather: temperature",
   "fv.envGrp.wet": "Weather: rain, snow and wind",
@@ -159,4 +159,6 @@ export default {
   "fv.env.dark": "Darkness (hour after sunset or before sunrise)",
   "fv.envGrp.light": "Daylight",
   "fv.envOutage": "Hours in which a group's source did not deliver are left out of training and the self-check (latest {n} group-hours on {d} days).",
+  "fv.envSt.off": "off: no measurable effect",
+  "fv.envTested": "Tested and not in the model (review 12–25 Nov 2026, error of the active model 16.73 %): motorway switched on 16.77 %, public transport outages from real-time data (15 % cancelled or 30 % delayed stops) 16.75 %, roadworks and closures in the city (Baden-Württemberg, Hamburg, Munich) 16.73 %. Motorway closures and jams are recorded separately since 26 Nov 2026 and will be tested one by one once two weeks are available.",
 };

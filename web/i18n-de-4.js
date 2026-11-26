@@ -589,7 +589,7 @@ export default {
   "fv.env.warm": "10 Grad wärmer (über 10 °C)",
   "fv.env.rain": "Regenstunde",
   "fv.env.warn": "Unwetterwarnung (ab markant)",
-  "fv.env.road": "Autobahn: Sperrung oder Stau im Ort",
+  "fv.env.road": "Autobahn: Sperrung oder Stau in der Gemeinde",
   "fv.env.strike": "Streik im Nahverkehr",
   "fv.env.rail": "Bahnstreik",
 };

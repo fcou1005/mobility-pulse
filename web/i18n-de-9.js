@@ -147,7 +147,7 @@ export default {
   "fv.envSt.fixed": "im Modell, Vorzeichen fest",
   "fv.envExpPrior0": "nur Vorwissen",
   "fv.envExpPrior": " + Vorwissen",
-  "fv.envPrior": "Vorwissen: Kälte, Wärme, Frost, Schnee und Hitze starten mit Werten aus den Rad-Dauerzählstellen der Stadt München (offene Daten, 1.610 Tage 2017–2026; Hitze für Roller halbiert), damit die Prognose Winter und Sommer nicht erst erleben muss. Schon wenige eigene Tage überstimmen sie. Frost, Schnee, Hitze, Wind und Dunkelheit können Fahrten nur senken; zeigen die eigenen Daten das Gegenteil, rechnet das Modell mit ×1,00 („Vorzeichen fest“).",
+  "fv.envPrior": "Vorwissen: Kälte, Wärme, Frost, Schnee und Hitze starten mit Werten aus den Rad-Dauerzählstellen der Stadt München (offene Daten, 1.610 Tage 2017–2026; Hitze für Roller halbiert), damit die Prognose Winter und Sommer nicht erst erleben muss. Bahnstreik startet mit ×1,13 (Anbieter meldeten bei GDL-Streiks +13 bis +20 % Fahrten) und wirkt so schon beim ersten angekündigten Streik. Schon wenige eigene Tage überstimmen das Vorwissen. Frost, Schnee, Hitze, Wind und Dunkelheit können Fahrten nur senken; zeigen die eigenen Daten das Gegenteil, rechnet das Modell mit ×1,00 („Vorzeichen fest“).",
   "fv.envDays": "Tagtyp: Heiligabend rechnet die Prognose wie einen Feiertag, Silvester wie einen Samstag – beide stehen in keinem Feiertagskalender.",
   "fv.envGrp.temp": "Wetter: Temperatur",
   "fv.envGrp.wet": "Wetter: Regen, Schnee und Wind",
@@ -159,4 +159,6 @@ export default {
   "fv.env.dark": "Dunkelheit (Stunde nach Sonnenuntergang oder vor Sonnenaufgang)",
   "fv.envGrp.light": "Tageslicht",
   "fv.envOutage": "Stunden, in denen die Quelle einer Gruppe nicht geliefert hat, lernen nicht mit und zählen in der Selbstprüfung nicht (zuletzt {n} Gruppen-Stunden an {d} Tagen).",
+  "fv.envSt.off": "aus: ohne messbare Wirkung",
+  "fv.envTested": "Geprüft und nicht im Modell (Rückblick 12.–25.11.2026, Fehler des aktiven Modells 16,73 %): Autobahn eingeschaltet 16,77 %, Ausfälle im Nahverkehr aus der Echtzeit (ab 15 % ausgefallene oder 30 % verspätete Halte) 16,75 %, Baustellen und Sperrungen in der Stadt (Baden-Württemberg, Hamburg, München) 16,73 %. Autobahn-Sperrungen und -Staus werden seit 26.11.2026 getrennt erfasst und einzeln geprüft, sobald zwei Wochen da sind.",
 };
