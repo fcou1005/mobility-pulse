@@ -11,6 +11,7 @@ import * as TMN from '../../lib/pulse-termine.js';
 import * as SV from '../../lib/pulse-schema.js';
 import * as OPS from '../../lib/pulse-ops.js';
 import * as FB from '../../lib/pulse-fehlbestand.js';
+import * as PG from '../../lib/pulse-oepnv-prog.js';
 
 export async function run(ctx) {
   const { DATA, ROOT, fetchJson, latest, log, now } = ctx;
@@ -35,6 +36,9 @@ export async function run(ctx) {
         { const mut = new Set(latest.carTrips?.unmeasurable || []); if (mut.size) for (const d of docs) for (const k of Object.keys(d.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) red.add(k); } }
         // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
         const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
+        // erwartete ÖPNV-Verspätung je Gemeinde, Tag und Stunde (Merkmal ptRisk): Prognose aus den Vortagen wie auf der ÖPNV-Seite, für vergangene und kommende Tage
+        const ptMap = new Map(incidents.filter(d => d?.day).map(d => [d.day, d])), ptCity = new Map(), ptDay = new Map();
+        const ptRisk = (ags, day, h) => { const k = `${ags}|${day}`; let p = ptDay.get(k); if (p === undefined) { let cd = ptCity.get(ags); if (cd === undefined) ptCity.set(ags, cd = PG.cityDays(ptMap, ags)); p = cd.size ? PG.predictDay(cd, day) : null; ptDay.set(k, p); } const v = p?.late?.[h]; return v != null && (p.n?.[h] ?? 0) >= PG.PTP.minN ? v : null; };
         const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
         // Termine aus dem Workflow „Termine“ (Branch termine, lib/pulse-termine.js, wöchentlich): wie Veranstaltungen der Liste (erst ab veranstaltungenAb);
         // Doppel zur Liste fallen für die Anzeige weg (das Merkmal je Gemeinde und Stunde ist 0/1). TERMINE_URL leer = aus.
@@ -65,7 +69,7 @@ export async function run(ctx) {
           try {
             const fdocs = FC.familyDocs(docs, fam); if (fam !== 'micro' && !FC.familyHasData(fdocs)) continue;
             const fdir = path.join(DATA, FC.FAMILY_DIR[fam]), fL = path.join(fdir, 'latest.json'), fG = path.join(fdir, 'log.json'), fS = path.join(fdir, 'series.json');
-            const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, weatherFc, breaks: calibBreaks, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam, pt: ptIn, outages });
+            const t0 = Date.now(), res = FC.runForecast({ docs: fdocs, calendar, weather, weatherFc, breaks: calibBreaks, incidents, curated: curatedAll, prevLog: await rd(fG), prevSeries: await rd(fS), now, exclude: red, ext, pending, pendingFrom, family: fam === 'micro' ? null : fam, pt: ptIn, outages, ptRisk });
             if (chronos) CH.chronosSeries(res.series, chronos); // Linie „Chronos-2“ im Verlauf (Feld c)
             if (chronos) res.latest.external = { chronos: { model: chronos.model, package: chronos.package ?? null, at: chronos.at, ranAt: chronos.ranAt ?? null, runSec: chronos.runSec ?? null, from: chronos.from, hours: chronos.hours, groups: Object.keys(chronos.groups).length, minStarts: CH.CHRONOS.minStarts } };
             await mkdir(fdir, { recursive: true });

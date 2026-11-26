@@ -419,8 +419,8 @@ export function weatherGate(R, sel, memDays = []) {
 // v 2 (24.11.2026): Tage im Fenster neu mit Frost, Schnee und Hitze (v 1 hatte sie nur ab 23.11.; ohne Neuberechnung ginge die Frost-Erfahrung vom 22.11.
 // verloren, sobald der Tag das Fenster verlässt). Das ältere Gedächtnis (mem.old) bleibt, Prior und Prognose ändern sich dadurch nicht.
 // v 3 (24.11.2026 abends): ebenso mit Wind und Dunkelheit und ohne Ausfallstunden (lib/pulse-forecast-outage.js).
-// v 4 (26.11.2026): ebenso mit roadC, roadJ, works, ptOut (Erfahrung für die Anzeige ab Erfassungsbeginn).
-export const MEMORY = { v: 4, halfLifeDays: 180, keepWxDays: 365 };
+// v 4 (26.11.2026): ebenso mit roadC, roadJ, works, ptOut (Erfahrung für die Anzeige ab Erfassungsbeginn); v 5 (26.11.2026 abends): mit ptRisk.
+export const MEMORY = { v: 5, halfLifeDays: 180, keepWxDays: 365 };
 export const emptyMemory = () => ({ v: MEMORY.v, names: [...EFFECTS], upto: null, old: null, days: {}, wxDays: {} });
 const gapDays = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400e3);
 const decayTo = (o, day) => (o ? 2 ** (-Math.max(0, gapDays(o.at, day)) / MEMORY.halfLifeDays) : 1);
@@ -545,7 +545,8 @@ export function memorySummary(mem, day, phi = 1) {
 }
 export const compactMemory = (mem) => { const r = (v) => (v === 0 ? 0 : +(+v).toPrecision(6)); const o = mem.old ? { at: mem.old.at, P: mem.old.P.map(r), h: mem.old.h.map(r), n: mem.old.n.map(r), dk: mem.old.dk.map(r), days: r(mem.old.days) } : null; return { v: mem.v, names: [...EFFECTS], upto: mem.upto, old: o, days: mem.days, wxDays: mem.wxDays }; };
 /** Umgebungsmerkmale, die ins Modell dürfen: genug Gemeinde-Stunden mit Ereignis an genug Tagen (Fenster sel + Gedächtnis prior) */
-export const CTX_OFF = ['road', 'roadC', 'roadJ', 'works', 'ptOut']; // erfasst und gelernt (Anzeige), nicht im Modell: Rückblick 26.11.2026 ohne Gewinn
+// ptRisk: Rückblick 12.–25.11. adaptive 16,74 → 16,73 %, pooledWx 17,95 → 17,92 %, gelernt ×0,99 – zu klein, um es einzuschalten
+export const CTX_OFF = ['road', 'roadC', 'roadJ', 'works', 'ptOut', 'ptRisk']; // erfasst und gelernt (Anzeige), nicht im Modell: Rückblick 26.11.2026 ohne Gewinn
 export function ctxActive(R, sel, prior = null) {
   if (!R.c) return [];
   const out = [];

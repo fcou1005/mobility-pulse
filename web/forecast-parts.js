@@ -118,7 +118,7 @@ function partsHtml(ctx, G, L) {
 const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).format(x)}`);
 // Einflüsse nach Art gruppiert (24.11.2026); was hier fehlt, landet unter „Sonstiges“
 const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['frost', 'cold', 'warm', 'warm20', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow', 'wind']], ['light', ['dark']],
-  ['warnings', ['warn']], ['traffic', ['roadC', 'roadJ', 'works']], ['strike', ['strike', 'rail']], ['disrupt', ['ptOut']], ['events', ['event', 'fest', 'sport']]]);
+  ['warnings', ['warn']], ['traffic', ['roadC', 'roadJ', 'works']], ['strike', ['strike', 'rail']], ['disrupt', ['ptOut', 'ptRisk']], ['events', ['event', 'fest', 'sport']]]);
 // road = Autobahn-Sperrung oder -Stau zusammen (bis 26.11.2026 nur so erfasst): ersetzt durch roadC und roadJ, nicht mehr angezeigt
 const ENV_HIDE = ['road'], ENV_NEW = { roadC: '26.11.', roadJ: '26.11.' };
 const envGroups = (/** @type {string[]} */ keys) => { const seen = new Set([...ENV_GROUPS.flatMap(([, ks]) => ks), ...ENV_HIDE]), out = /** @type {[string, string[]][]} */ (ENV_GROUPS.map(([g, ks]) => [g, ks.filter(k => keys.includes(k))])); out.push(['other', keys.filter(k => !seen.has(k))]); return out.filter(([, ks]) => ks.length); };

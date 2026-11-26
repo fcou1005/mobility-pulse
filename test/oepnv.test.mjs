@@ -256,6 +256,14 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(out && out.next[0][0] === '2026-11-18' && out.next[0][1] === 11 && out.eval && out.eval.hours > 0 && out.eval.mae <= out.eval.maeNaive && out.lines.length === 1 && out.lines[0][0] === 'S4',
     `Ausblick: ab der nächsten vollen Ortsstunde, Selbstprüfung ${JSON.stringify(out?.eval)}, Linien ab 40 Halten`);
   assert(PG.cityOutlook(new Map([...docs].slice(-2)), 'A', Date.now(), []) === null, 'Ohne mindestens drei Tage keine Prognose');
+  // Ausfälle (v 2): halten über Tage – am Vortag 10 % statt 1 % ausgefallen → Prognose zur Hälfte Vortagsstunde, zur Hälfte Vortagsmittel
+  { const d2 = new Map(docs), last = day(0), a0 = docs.get(last).ags.A; d2.set(last, { ags: { A: { ...a0, ptSkip: a0.ptN.map((x, h) => Math.round(x * (h === 8 ? 0.3 : 0.1))) } } });
+    const q = PG.predictDay(PG.cityDays(d2, 'A'), '2026-11-19'), lvl = (0.3 + 0.1 * 18) / 19;
+    assert(Math.abs(q.skip[8] - (0.5 * 0.3 + 0.5 * lvl)) < 0.002 && Math.abs(q.skip[12] - (0.5 * 0.1 + 0.5 * lvl)) < 0.002 && PG.PTP.k === 1,
+      `Ausfälle aus dem Vortag: Stunde 8 ${q.skip[8]} (Vortag 30 %, Mittel ${lvl.toFixed(3)}), Stunde 12 ${q.skip[12]}`); }
+  // Einfluss ptRisk für die Sharing-Prognose: erwartete Verspätung ab 20 % setzt das Merkmal, auch für kommende Tage
+  { const CX = await import('../lib/pulse-context.js'), L = CX.ctxLookup([], [], { ptRisk: (ags, d, h) => (h === 17 ? 0.25 : 0.05) }), i = CX.CTX_KEYS.indexOf('ptRisk');
+    assert(L('A', '2026-11-30', 17)[i] === 1 && L('A', '2026-11-30', 10)[i] === 0 && CX.ctxLookup([], [])('A', '2026-11-30', 17)[i] === 0, 'ptRisk: ab 20 % erwarteter Verspätung, ohne Prognose 0'); }
 }
 
 console.log(`${oks} ok, ${fails} Fehler`);
