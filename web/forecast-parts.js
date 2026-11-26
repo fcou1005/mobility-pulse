@@ -252,10 +252,13 @@ export async function fillGaps(box, ctx, sel, n = 8) {
   if (!doc) { box.closest('#fv-gaps')?.remove(); return; }
   if (!all.length) { box.innerHTML = `<p class="fv-sub">${t('fv.gapsNone')}</p>`; return; }
   const sumF = (f) => all.reduce((a, r) => a + (r[f] || 0), 0), hz = all[0].horizonH || 3, rows = all.slice(0, n);
-  const nv = (x) => (Number.isInteger(x) ? n0(x) : n1(x)), spotTxt = (r) => r.top.map(x => `${esc(x.label || t('fv.gapsNoName'))} (${nv(x.missing)})`).join(', ');
-  const tbl = `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${esc(t('fv.gapsTitle'))}"><table><thead><tr><th>${t('fv.gapsColPlace')}</th><th class="n">${t('fv.gapsColMiss')}</th><th class="n">${t('fv.gapsColAB')}</th><th class="mh">${t('fv.gapsColTop')}</th><th class="mh"></th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap"><a class="lv" href="#prognose-spots" data-gap-ags="${esc(r.ags)}" data-gap-op="${esc(r.op)}">${esc(ctx.muniName?.(r.ags) || r.ags)}</a><span class="lvs">${esc(r.op)}, ${t('fv.gapsSpots', { n: n0(r.spotsMissing), of: n0(r.spots) })}</span></td><td class="n">${n0(r.missing)}</td><td class="n">${n0(r.missingAB)}</td><td class="wrap mh">${spotTxt(r)}</td><td class="mh"><button type="button" class="chip" data-gap-ags="${esc(r.ags)}" data-gap-op="${esc(r.op)}">${t('fv.gapsOpen')}</button></td></tr>`).join('')}</tbody></table></div>`;
-  box.innerHTML = `<p class="fv-lead">${t('fv.gapsLead', { h: n0(hz), miss: `<b>${n0(sumF('missing'))}</b>`, ab: `<b>${n0(sumF('missingAB'))}</b>`, spots: n0(sumF('spotsMissing')), n: n0(all.length) })}</p>${tbl}${all.length > n ? `<button type="button" class="chip" id="fv-gaps-more">${t('fv.gapsMore', { n: n0(Math.min(all.length - n, 10)) })}</button>` : ''}<p class="fv-sub">${t('fv.gapsNote')}${doc.generatedAt ? ` ${t('fv.gapsAsOf', { time: timeTxt(doc.generatedAt) })}` : ''}</p>`;
-  box.querySelectorAll('[data-gap-ags]').forEach(b => b.addEventListener('click', (e) => { e.preventDefault(); ctx.setFilter?.('scope', b.dataset.gapAgs); ctx.setFilter?.('op', b.dataset.gapOp); location.hash = '#prognose-spots'; }));
+  const nv = (x) => (Number.isInteger(x) ? n0(x) : n1(x)), spotTxt = (r) => r.top.slice(0, 3).map(x => `${esc(x.label || t('fv.gapsNoName'))} (${nv(x.missing)})`).join(', ');
+  const single = !!sel.ags && sel.ags !== 'DE', mapH = `<div class="fv-map fv-gaps-map" role="region" aria-label="${esc(t('fv.gapsMapAria'))}"></div><div class="fv-keys">${single ? [...new Set(all.map(r => r.op))].map(o => `<span><i style="background:${ctx.opColor?.(o) || COLORS.miss}"></i>${esc(o)}</span>`).join('') : `<span><i style="background:${COLORS.miss}"></i></span>`}<span>${t(single ? 'fv.gapsKeyCity' : 'fv.gapsKeyDE')}</span></div>`;
+  const tbl = `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${esc(t('fv.gapsTitle'))}"><table><thead><tr><th>${t('fv.gapsColPlace')}</th><th class="n">${t('fv.gapsColMiss')}</th><th class="n">${t('fv.gapsColAB')}</th><th class="mh">${t('fv.gapsColTop')}</th><th class="mh"></th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap"><a class="lv" href="#prognose-spots" data-gap-ags="${esc(r.ags)}" data-gap-op="${esc(r.op)}">${esc(single ? r.op : ctx.muniName?.(r.ags) || r.ags)}</a><span class="lvs">${single ? '' : `${esc(r.op)}, `}${t('fv.gapsSpots', { n: n0(r.spotsMissing), of: n0(r.spots) })}</span></td><td class="n">${n0(r.missing)}</td><td class="n">${n0(r.missingAB)}</td><td class="wrap mh">${spotTxt(r)}</td><td class="mh"><button type="button" class="chip" data-gap-ags="${esc(r.ags)}" data-gap-op="${esc(r.op)}">${t('fv.gapsOpen')}</button></td></tr>`).join('')}</tbody></table></div>`;
+  box.innerHTML = `<p class="fv-lead">${t('fv.gapsLead', { h: n0(hz), miss: `<b>${n0(sumF('missing'))}</b>`, ab: `<b>${n0(sumF('missingAB'))}</b>`, spots: n0(sumF('spotsMissing')), n: n0(all.length) })}</p>${mapH}${tbl}${all.length > n ? `<button type="button" class="chip" id="fv-gaps-more">${t('fv.gapsMore', { n: n0(Math.min(all.length - n, 10)) })}</button>` : ''}<p class="fv-sub">${t('fv.gapsNote')}${doc.generatedAt ? ` ${t('fv.gapsAsOf', { time: timeTxt(doc.generatedAt) })}` : ''}</p>`;
+  const go = (e) => { e.preventDefault(); const b = e.currentTarget; ctx.setFilter?.('scope', b.dataset.gapAgs); ctx.setFilter?.('op', b.dataset.gapOp); location.hash = '#prognose-spots'; };
+  box.querySelectorAll('[data-gap-ags]').forEach(b => b.addEventListener('click', go));
+  drawGaps(box.querySelector('.fv-gaps-map'), ctx, all, single, go);
   box.querySelector('#fv-gaps-more')?.addEventListener('click', () => fillGaps(box, ctx, sel, n + 10));
 }
 
@@ -325,6 +328,37 @@ function drawMap(mapEl, ctx, s, R, rows) {
   setTimeout(() => { map.invalidateSize(); if (pts.length) map.fitBounds(pts, { padding: [24, 24], maxZoom: 16, animate: false }); }, 150);
   try { mapKeys(map); } catch { /* optional */ }
   mapEl.closest('#fv-spots-body')?.querySelectorAll('button.fv-link[data-i]').forEach(b => b.addEventListener('click', () => { const x = rows[+b.dataset.i]; if (!x) return; map.setView([x.lat, x.lon], Math.max(map.getZoom(), 16)); byRank.get(x.rank)?.openPopup(); mapEl.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }));
+}
+
+/** Karte zu „Wo Fahrzeuge fehlen“: ganz Deutschland ein Kreis je Gemeinde (Fläche ~ Lücken an wichtigen Spots), eine Gemeinde die größten Lücken je Anbieter */
+function drawGaps(mapEl, ctx, rows, single, go) {
+  const Lf = globalThis.L; if (!Lf || !mapEl) return;
+  if (mapEl._map) { try { mapEl._map.remove(); } catch { /* weg */ } }
+  const map = mapEl._map = Lf.map(mapEl, { zoomControl: true, preferCanvas: true }), esc = ctx.esc, pts = [];
+  Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(map);
+  const link = (ags, op) => `<a href="#prognose-spots" data-gap-ags="${esc(ags)}" data-gap-op="${esc(op)}">${t('fv.gapsOpen')}</a>`;
+  if (single) {
+    for (const r of rows) for (const x of r.top || []) {
+      const c = ctx.opColor?.(r.op) || COLORS.miss, imp = x.cls === 'A' || x.cls === 'B';
+      Lf.circleMarker([x.lat, x.lon], { radius: 5 + Math.min(9, Math.round(x.missing * 2)), color: c, weight: 2, fillColor: c, fillOpacity: imp ? 0.7 : 0.3 }).addTo(map)
+        .bindPopup(`<b>${esc(x.label || t('fv.gapsNoName'))}</b><br>${esc(t('fv.gapsPopSpot', { op: r.op, n: n1(x.missing), cls: x.cls }))}<br>${link(r.ags, r.op)}`);
+      pts.push([x.lat, x.lon]);
+    }
+  } else {
+    const by = new Map(); for (const r of rows) { let a = by.get(r.ags); if (!a) by.set(r.ags, a = { ags: r.ags, miss: 0, ab: 0, ops: [] }); a.miss += r.missing; a.ab += r.missingAB; a.ops.push(r); }
+    const list = [...by.values()].sort((a, b) => b.ab - a.ab), maxAB = Math.max(1, ...list.map(a => a.ab));
+    for (const a of list.reverse()) { // große Kreise zuerst, kleine obenauf
+      const c0 = ctx.state?.latest?.municipalities?.[a.ags]?.c; if (!Array.isArray(c0) || c0.length < 2) continue; const c = /** @type {[number, number]} */ ([+c0[0], +c0[1]]);
+      const ops = a.ops.map(r => `${esc(r.op)} ${n0(r.missing)} (${n0(r.missingAB)}) ${link(r.ags, r.op)}`).join('<br>');
+      Lf.circleMarker(c, { radius: 4 + 22 * Math.sqrt(a.ab / maxAB), color: COLORS.miss, weight: 1.5, fillColor: COLORS.miss, fillOpacity: 0.45 }).addTo(map)
+        .bindPopup(`<b>${esc(ctx.muniName?.(a.ags) || a.ags)}</b><br>${esc(t('fv.gapsPopMiss', { n: n0(a.miss), ab: n0(a.ab) }))}<br>${ops}`);
+      pts.push(c);
+    }
+  }
+  map.on('popupopen', (e) => e.popup.getElement()?.querySelectorAll('[data-gap-ags]').forEach(b => b.addEventListener('click', go)));
+  const fit = () => { map.invalidateSize(); if (pts.length) map.fitBounds(pts, { padding: [24, 24], maxZoom: single ? 15 : 9, animate: false }); else map.setView([51.1, 10.4], 6); };
+  fit(); setTimeout(fit, 150);
+  try { mapKeys(map); } catch { /* optional */ }
 }
 
 // ---------- Kopfleiste: gewählte Filter sichtbar und einzeln lösbar (die Auswahl selbst steht in der Filterleiste oben) ----------

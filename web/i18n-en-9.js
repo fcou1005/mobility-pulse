@@ -184,4 +184,9 @@ export default {
   "fv.gapsNoName": "unnamed spot",
   "fv.gapsNote": "Target per spot: expected trip starts of the next hours in its cell (the cell's share of the municipality's measured demand × the operator's forecast) plus measured outflow. Actual: the operator's available vehicles nearby. Sorted by gaps at important spots; micromobility only, all of the operator's vehicle types. Spots come from operator deployments and the open feeds.",
   "fv.gapsAsOf": "As of {time}.",
+  "fv.gapsMapAria": "Map: where the forecast is short of vehicles",
+  "fv.gapsKeyDE": "Circle area: missing vehicles at important spots per municipality; tap a circle for the operators",
+  "fv.gapsKeyCity": "Dots: largest gaps per operator (colour = operator, solid = important spot, size = missing vehicles)",
+  "fv.gapsPopMiss": "missing {n}, at important spots {ab}; per operator missing (of which important):",
+  "fv.gapsPopSpot": "{op}: missing {n}, class {cls}",
 };

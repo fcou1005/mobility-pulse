@@ -184,4 +184,9 @@ export default {
   "fv.gapsNoName": "Spot ohne Namen",
   "fv.gapsNote": "Soll je Spot: erwartete Fahrtbeginne der nächsten Stunden in seiner Zelle (Anteil der Zelle an der gemessenen Nachfrage der Gemeinde × Prognose des Anbieters) plus gemessener Abfluss. Ist: verfügbare Fahrzeuge des Anbieters im Umkreis. Sortiert nach Lücken an wichtigen Spots; nur Mikromobilität, alle Fahrzeugarten des Anbieters. Spots kennt die Seite aus den Einsätzen der Anbieter und den offenen Feeds.",
   "fv.gapsAsOf": "Stand: {time}.",
+  "fv.gapsMapAria": "Karte: wo laut Prognose Fahrzeuge fehlen",
+  "fv.gapsKeyDE": "Kreisfläche: fehlende Fahrzeuge an wichtigen Spots je Gemeinde; Tipp auf einen Kreis zeigt die Anbieter",
+  "fv.gapsKeyCity": "Punkte: größte Lücken je Anbieter (Farbe = Anbieter, kräftig = wichtiger Spot, Größe = fehlende Fahrzeuge)",
+  "fv.gapsPopMiss": "fehlen {n}, davon an wichtigen Spots {ab}; je Anbieter fehlen (davon wichtig):",
+  "fv.gapsPopSpot": "{op}: fehlen {n}, Klasse {cls}",
 };
