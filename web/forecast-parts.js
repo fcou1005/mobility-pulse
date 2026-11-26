@@ -6,7 +6,7 @@ import { VEHICLE_TYPE_LABEL, familyOf } from './pulse-core.js';
 import { toCsv } from './pulse-report.js';
 import { t, tMap, lang, dateFmt, numFmt, fcReason } from './i18n.js';
 import { mapKeys } from './mapkeys.js';
-import { DEMAND_DAYS, FAM, MODEL_COLOR, MODEL_ORDER, SPOT_ROWS, TZ, accRows, allTag, blendTxt, ensTxt, dayTxt, famNow, head, loadDemand, loadFleet, loadGroups, mature, modelName, n0, n1, pc, raceOf, setFam, setLastRated, sg, sum, tile } from './forecast-data.js';
+import { fj, DEMAND_DAYS, FAM, MODEL_COLOR, MODEL_ORDER, SPOT_ROWS, TZ, accRows, allTag, blendTxt, ensTxt, dayTxt, famNow, head, loadDemand, loadFleet, loadGroups, mature, modelName, n0, n1, pc, raceOf, setFam, setLastRated, sg, sum, tile } from './forecast-data.js';
 import { renderForecastView, scopeLabel, timeTxt } from './forecast-view.js';
 import { HIT } from './tokens.js';
 import { chartSpec, tableButton } from './charttip.js';
@@ -242,6 +242,23 @@ export function bindDl(el, ctx, S0, L, G, sel) {
 
 // ---------- Spots ----------
 const COLORS = HIT;
+// ---------- Wo Fahrzeuge fehlen (forecast/fehlbestand.json, lib/pulse-fehlbestand.js, 26.11.2026) ----------
+export const gapsShell = () => `<div class="panel" id="fv-gaps">${head(t('fv.gapsTitle'), t('fv.gapsSub'))}<div class="fv-gaps-body"><div class="note small">${t('fv.loading')}</div></div></div>`;
+/** Gemeinden und Anbieter mit dem größten Fehlbestand laut Prognose (Filter Gemeinde und Anbieter); Klick führt zu Prognose › Spots */
+export async function fillGaps(box, ctx, sel, n = 8) {
+  if (!box) return;
+  const doc = await fj(ctx, 'forecast/fehlbestand.json'), op = ctx.state?.operator && ctx.state.operator !== 'all' ? ctx.state.operator : null, esc = ctx.esc;
+  const all = (doc?.rows || []).filter(r => (!sel.ags || sel.ags === 'DE' || r.ags === sel.ags) && (!op || r.op === op));
+  if (!doc) { box.closest('#fv-gaps')?.remove(); return; }
+  if (!all.length) { box.innerHTML = `<p class="fv-sub">${t('fv.gapsNone')}</p>`; return; }
+  const sumF = (f) => all.reduce((a, r) => a + (r[f] || 0), 0), hz = all[0].horizonH || 3, rows = all.slice(0, n);
+  const nv = (x) => (Number.isInteger(x) ? n0(x) : n1(x)), spotTxt = (r) => r.top.map(x => `${esc(x.label || t('fv.gapsNoName'))} (${nv(x.missing)})`).join(', ');
+  const tbl = `<div class="tbl fv-tbl" tabindex="0" role="region" aria-label="${esc(t('fv.gapsTitle'))}"><table><thead><tr><th>${t('fv.gapsColPlace')}</th><th class="n">${t('fv.gapsColMiss')}</th><th class="n">${t('fv.gapsColAB')}</th><th class="mh">${t('fv.gapsColTop')}</th><th class="mh"></th></tr></thead><tbody>${rows.map(r => `<tr><td class="wrap"><a class="lv" href="#prognose-spots" data-gap-ags="${esc(r.ags)}" data-gap-op="${esc(r.op)}">${esc(ctx.muniName?.(r.ags) || r.ags)}</a><span class="lvs">${esc(r.op)}, ${t('fv.gapsSpots', { n: n0(r.spotsMissing), of: n0(r.spots) })}</span></td><td class="n">${n0(r.missing)}</td><td class="n">${n0(r.missingAB)}</td><td class="wrap mh">${spotTxt(r)}</td><td class="mh"><button type="button" class="chip" data-gap-ags="${esc(r.ags)}" data-gap-op="${esc(r.op)}">${t('fv.gapsOpen')}</button></td></tr>`).join('')}</tbody></table></div>`;
+  box.innerHTML = `<p class="fv-lead">${t('fv.gapsLead', { h: n0(hz), miss: `<b>${n0(sumF('missing'))}</b>`, ab: `<b>${n0(sumF('missingAB'))}</b>`, spots: n0(sumF('spotsMissing')), n: n0(all.length) })}</p>${tbl}${all.length > n ? `<button type="button" class="chip" id="fv-gaps-more">${t('fv.gapsMore', { n: n0(Math.min(all.length - n, 10)) })}</button>` : ''}<p class="fv-sub">${t('fv.gapsNote')}${doc.generatedAt ? ` ${t('fv.gapsAsOf', { time: timeTxt(doc.generatedAt) })}` : ''}</p>`;
+  box.querySelectorAll('[data-gap-ags]').forEach(b => b.addEventListener('click', (e) => { e.preventDefault(); ctx.setFilter?.('scope', b.dataset.gapAgs); ctx.setFilter?.('op', b.dataset.gapOp); location.hash = '#prognose-spots'; }));
+  box.querySelector('#fv-gaps-more')?.addEventListener('click', () => fillGaps(box, ctx, sel, n + 10));
+}
+
 export function spotsPanelShell(ctx, s0) { return `<div class="panel" id="fv-spots">${head(t('fv.spotsTitle'), t('fv.spotsSub'))}<div id="fv-spots-body">${s0 || ''}</div></div>`; }
 export async function paintSpots(el, ctx, s, S0, L, sel) {
   const box = el.querySelector('#fv-spots-body'); if (!box) return; const tok = s.tok;

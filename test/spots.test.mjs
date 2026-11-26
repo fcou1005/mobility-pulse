@@ -146,6 +146,13 @@ assert(S.analyzeSpots({ vehicles: [], stations: [] }, { ags: A }).rows.length ==
   // Prognose höher → Soll nicht niedriger; ohne Prognose gilt das gemessene Soll
   const hi = S.rateSpots(fleet, { ags: A, op: 'Voi', demand, groups: grp, quota, fc: { day24: fc.day24.map(x => x * 4) } }), none = S.rateSpots(fleet, { ags: A, op: 'Voi', demand, groups: grp, quota, fc: null });
   assert(hi.items.find(x => x.deploy?.count === 12).targetFc >= hub.targetFc && none.fc === null && none.items.find(x => x.deploy?.count === 12).targetFc === none.items.find(x => x.deploy?.count === 12).target && none.items.find(x => x.deploy?.count === 12).expected24 === null, 'Soll steigt mit der Prognose; ohne Prognose bleibt das gemessene Soll');
+  // Übersicht „Wo Fahrzeuge fehlen“ (lib/pulse-fehlbestand.js): dieselbe Rechnung je Gemeinde × Anbieter, Arten summiert, Carsharing ausgelassen
+  { const FB = await import('../lib/pulse-fehlbestand.js');
+    const half = fc.day24.map(x => x / 2), rows = FB.shortageRows({ groups: { [`${A}|Voi|scooter`]: { start: half }, [`${A}|Voi|ebike`]: { start: half }, [`${A}|Voi|car`]: { start: fc.day24 }, [`${A}|Bolt|scooter`]: { start: [] } },
+      landOf: () => 'BW', fleetOf: () => fleet, demandOf: () => demand, placesOf: () => grp, quota });
+    const v = rows.find(x => x.op === 'Voi');
+    assert(v && v.missing === Math.round(r.total.missing) && v.spotsMissing === r.total.spotsMissing && v.top.length >= 1 && v.top[0].missing === Math.round(r.items[0].missing * 10) / 10 && rows[0] === v && FB.shortageRows({ groups: { [`${A}|Voi|scooter`]: { start: fc.day24 } }, landOf: () => null, fleetOf: () => fleet, demandOf: () => demand, placesOf: () => grp }).length === 0,
+      `Fehlbestand je Gemeinde × Anbieter wie rateSpots (fehlen ${v?.missing}, ${v?.spotsMissing} Spots), Scooter und E-Bike zusammen, ohne Land nichts`); }
   // ohne Nachfragemodell: keine Klassen außer D, kein Fehler
   const nd = S.rateSpots(fleet, { ags: A, op: 'Voi', demand: null, groups: grp, quota, fc });
   assert(nd.items.length > 0 && nd.items.every(x => x.cls === 'D' && x.missing === 0) && nd.hours === 0, 'Ohne Nachfragemodell: alle Orte Klasse D, kein Fehler');

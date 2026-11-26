@@ -9,6 +9,8 @@ import * as CX from '../../lib/pulse-context.js';
 import * as CH from '../../lib/pulse-chronos.js';
 import * as TMN from '../../lib/pulse-termine.js';
 import * as SV from '../../lib/pulse-schema.js';
+import * as OPS from '../../lib/pulse-ops.js';
+import * as FB from '../../lib/pulse-fehlbestand.js';
 
 export async function run(ctx) {
   const { DATA, ROOT, fetchJson, latest, log, now } = ctx;
@@ -71,6 +73,9 @@ export async function run(ctx) {
             if (res.model) await writeFile(path.join(fdir, 'model.json'), JSON.stringify(res.model)); // vortrainiertes Modell zum Mitnehmen (tools/prognose-modell.mjs)
             // Disposition: Prognose und gemessenes Mittel je Gemeinde und Horizont-Stunde (lib/pulse-ops-extern.js), nur Mikromobilität
             if (fam === 'micro' && res.latest.status === 'active') { const dp = OX.dispoForecast(res.latest, res.series); await writeFile(path.join(fdir, 'dispo.json'), JSON.stringify(SV.withSchema('forecast', dp))); }
+            // Wo fehlen Fahrzeuge (lib/pulse-fehlbestand.js): Spot-Bewertung wie Prognose › Spots für alle Gemeinden mit Prognose, nur Mikromobilität
+            if (fam === 'micro') { try { const t1 = Date.now(), rows = await gapRows(DATA, latest, res.latest.groups || {}, rd); await writeFile(path.join(fdir, 'fehlbestand.json'), JSON.stringify(SV.withSchema('forecast', { generatedAt: new Date(now).toISOString(), forecastAt: res.latest.generatedAt ?? null, rows })));
+              log(`Fehlbestand: ${rows.length} Gemeinde-Anbieter mit Lücke, ${rows.reduce((a, r) => a + r.missing, 0)} Fahrzeuge (${((Date.now() - t1) / 1000).toFixed(1)} s)`); } catch (e) { log(`Fehlbestand: ${e.message} – übersprungen`); } }
             const l = res.latest;
             // Korrekturen: Stand der Freigabe (lib/pulse-forecast-select.js CORR_GATE) – eine Zeile, damit der Wechsel im Lauf-Protokoll steht
             if (fam === 'micro') { const gs = (k, x) => (x?.gate ? `${k} ${x.applied ? 'eingerechnet' : x.gate.on ? 'frei' : `Probe (${x.gate.why}, ${x.gate.n}/${x.gate.need?.minN ?? '?'}${x.gate.ratio != null ? `, ${x.gate.ratio}` : ''})`}` : `${k} –`); log(`Prognose-Korrekturen: ${gs('Tageskorrektur', l.nowcast)}, ${gs('Störungskorrektur', l.stoerung)}${l.stoerung?.now ? ` in ${Object.keys(l.stoerung.now.c).length} gestörten Gemeinden` : ''}`); }
@@ -94,4 +99,17 @@ export async function run(ctx) {
   // Eingriffe der Anbieter und Ausfälle je abgeschlossenem Ortstag (lib/pulse-train.js opsSignals) → eingriffe.json (120 Tage) und train/ (ops)
   const opsByDay = new Map();
   ctx.opsByDay = opsByDay;
+}
+
+/** Eingaben der Spot-Bewertung aus dem Datenstand: Flotte je Land (ops/<Land>.json), Nachfrage der letzten 7 Tage (cells/<Tag>/<Land>.json), Einsatzorte (groups/), Stationsbestand */
+async function gapRows(DATA, latest, groups, rd) {
+  const landOf = (ags) => latest?.municipalities?.[ags]?.state ?? null, lands = new Set(Object.keys(groups).map(k => landOf(k.split('|')[0])).filter(Boolean));
+  const fleets = new Map(), cellDocs = new Map(), list = existsSync(path.join(DATA, 'cells')) ? (await readdir(path.join(DATA, 'cells'))).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-7) : [];
+  for (const land of lands) { const f = await rd(path.join(DATA, 'ops', `${land}.json`)); fleets.set(land, f ? OPS.decodeFleet(f) : null); const ds = []; for (const d of list) { const c = await rd(path.join(DATA, 'cells', d, `${land}.json`)); if (c) ds.push(c); } cellDocs.set(land, ds); }
+  const idx = await rd(path.join(DATA, 'groups', 'index.json')), gdocs = [];
+  if (Array.isArray(idx?.months)) for (const m of idx.months) { const g = await rd(path.join(DATA, 'groups', `${m}.json`)); if (Array.isArray(g?.events)) gdocs.push(g); }
+  else { const g = await rd(path.join(DATA, 'groups.json')); if (Array.isArray(g?.events)) gdocs.push(g); }
+  const quota = await rd(path.join(DATA, 'stations-quota.json')), dem = new Map();
+  const demandOf = (land, ags) => { if (!dem.has(ags)) { const ds = cellDocs.get(land) || [], m = ds.length ? OPS.buildDemandModel(ds, ags, 'day') : null; dem.set(ags, m?.hours > 0 ? m : null); } return dem.get(ags); };
+  return FB.shortageRows({ groups, landOf, fleetOf: (land) => fleets.get(land) ?? null, demandOf, placesOf: (ags) => OPS.groupPlaces(gdocs, { ags }), quota });
 }

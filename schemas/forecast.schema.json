@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.7",
+ "x-version": "1.8",
  "$defs": {
   "latest": {
    "type": "object",
@@ -296,6 +296,100 @@
       },
       "minItems": 2,
       "maxItems": 2
+     }
+    }
+   }
+  },
+  "fehlbestand": {
+   "type": "object",
+   "description": "Seit 1.8: Wo laut Prognose Fahrzeuge fehlen (lib/pulse-fehlbestand.js, Spot-Bewertung wie Prognose › Spots) – rows je Gemeinde × Anbieter mit Fehlbestand: missing, missingAB (an Spots der Klasse A und B), spotsMissing, spots, have, expected (erwartete Fahrtbeginne im Horizont), horizonH, prelim, top (größte Lücken: label, lat, lon, missing, cls).",
+   "required": [
+    "schemaVersion",
+    "generatedAt",
+    "rows"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$"
+    },
+    "generatedAt": {
+     "type": "string"
+    },
+    "forecastAt": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "rows": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "ags",
+       "op",
+       "missing",
+       "missingAB",
+       "spotsMissing",
+       "spots",
+       "top"
+      ],
+      "properties": {
+       "ags": {
+        "type": "string"
+       },
+       "op": {
+        "type": "string"
+       },
+       "missing": {
+        "type": "number"
+       },
+       "missingAB": {
+        "type": "number"
+       },
+       "spotsMissing": {
+        "type": "integer"
+       },
+       "spots": {
+        "type": "integer"
+       },
+       "have": {
+        "type": "number"
+       },
+       "expected": {
+        "type": "number"
+       },
+       "horizonH": {
+        "type": "integer"
+       },
+       "prelim": {
+        "type": "boolean"
+       },
+       "top": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "label": {
+           "type": "string"
+          },
+          "lat": {
+           "type": "number"
+          },
+          "lon": {
+           "type": "number"
+          },
+          "missing": {
+           "type": "number"
+          },
+          "cls": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
      }
     }
    }

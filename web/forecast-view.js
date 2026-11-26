@@ -10,7 +10,7 @@ import { weatherFor, weatherSvg } from './weather.js';
 import { chartExtra } from './charttip.js';
 import { putAnswer } from './answer.js';
 import { FAM, LAST_RATED, TZ, accRows, accuracyPanel, addDays, badge, berlinNow, blendTxt, ensTxt, corrNote, corrPanel, css, dayStats, dayTxt, gateTxt, famFile, famNow, fj, head, learnPanel, memo, modelName, n0, n1, pc, pickScope, raceOf, scopePanel, seriesOf, sg, st, sum, tile, timeline } from './forecast-data.js';
-import { NOT_KEYS, NOT_STATE, bindDl, bindTop, csvBtn, curvePanel, dlRow, download, envHtml, fileTag, gradeOf, gradePanel, verdictMain, verdictMore, judge, paintSpots, paramRows, spotsPanelShell, topBar } from './forecast-parts.js';
+import { NOT_KEYS, NOT_STATE, bindDl, bindTop, csvBtn, curvePanel, dlRow, download, envHtml, fileTag, fillGaps, gapsShell, gradeOf, gradePanel, verdictMain, verdictMore, judge, paintSpots, paramRows, spotsPanelShell, topBar } from './forecast-parts.js';
 
 // ---------- Hauptansicht ----------
 /** part: 'verlauf' (Standard) | 'spots' | 'basis' – jedes Segment des Reiters „Prognose“ hat einen eigenen Container */
@@ -126,7 +126,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
     + `<div class="fv-ctl"><div class="fv-tog" role="group" aria-label="${esc(t('fv.dayAria'))}">${segs.map(([v, l]) => `<button data-v="${esc(v)}" aria-pressed="${v === view}">${esc(l)}</button>`).join('')}</div>`
     + `<div class="fv-tog fv-norm" role="group" aria-label="${esc(t('fv.normAria'))}"><button data-n="1" aria-pressed="${norm}" title="${esc(t('fv.normTip'))}">${t('fv.normOn')}</button><button data-n="0" aria-pressed="${!norm}">${t('fv.normOff')}</button></div></div>`
     + (noSeries ? '' : `${tiles}<div class="fv-legend" style="margin-top:var(--s3)"><span><i class="k-a"></i>${t('fv.ist')}</span><span><i class="k-l"></i>${t('fv.live')}</span><span><i class="k-p"></i>${t('fv.plan')}</span>${rows.some(r => r.u) ? `<span title="${esc(t('fv.usualTip'))}"><i class="k-u"></i>${t('fv.usual')}</span>` : ''}${rows.some(r => r.c != null) ? `<span title="${esc(t('fv.chronosTip'))}"><i class="k-c"></i>${t('fv.chronos')}</span>` : ''}</div>${timeline(ctx, rows, { nowIdx: view === 'ahead' && !stale ? nowIdx : null, width: el.clientWidth - 40, blocks, peaks: peaks.filter(Boolean).map(p => p.i) })}<div class="fv-chart fv-wx"></div><div class="fv-sub">${t('fv.chartNote')} ${norm ? t('fv.normNote') : ''} ${esc(notes)}</div>${dataTable}`) + '</div>'
-    + `${gradePanel(ctx, S0, sel, G, L)}${scopePanel(ctx, S0, sel, G, L)}`
+    + `${gradePanel(ctx, S0, sel, G, L)}${famNow(ctx) === 'micro' ? gapsShell() : ''}${scopePanel(ctx, S0, sel, G, L)}`
     + `${eventsMainShell(ctx, sel)}${accuracyPanel(ctx, S0, sel, G, L)}${curvePanel(ctx, G, L, el.clientWidth - 40)}${learnPanel(ctx, L, G)}<p class="fv-sub">${t('fv.moreBasis')} <a href="#prognose-basis">${t('fv.segBasis')}</a>.</p></div>`;
   bindTop(el, ctx); bindDl(el, ctx, S0, L, G, sel);
   el.querySelectorAll('.fv-tog button[data-v]').forEach(b => b.addEventListener('click', () => { s.day = b.dataset.v; renderForecastView(el, ctx, { part: 'verlauf' }); }));
@@ -135,6 +135,7 @@ async function renderVerlauf(el, ctx, s, tok, S0, L, G) {
   if (!noSeries) fillWx(el.querySelector('.fv-wx'), ctx, rows, sel, el.clientWidth - 40);
   if (!noSeries) markEvents(el, ctx, rows, sel);
   fillEventsMain(el.querySelector('#fv-ev-main .fv-ev-body'), ctx, sel, S0);
+  fillGaps(el.querySelector('#fv-gaps .fv-gaps-body'), ctx, sel);
   el.querySelector('[data-fv-csv="series"]')?.addEventListener('click', () => download(`prognose_stundenreihe_${fileTag(ctx, sel)}_${view === 'ahead' ? today : view}.csv`,
     [[t('fv.colScope'), t('fv.colDay'), t('fv.colHour'), t('fv.colIst'), t('fv.colPlan'), t('fv.colLive'), t('fv.chronos'), t('fv.colUsualLo'), t('fv.colUsualHi'), t('fv.colUnit')], ...rows.map(r => [scopeTxt, r.day, r.h, r.a == null ? null : [r.a, 1], r.p == null ? null : [r.p, 1], r.l == null ? null : [r.l, 1], r.c == null ? null : [r.c, 0], r.u ? [r.u[0], 1] : null, r.u ? [r.u[1], 1] : null, norm ? t('fv.normOn') : t('fv.normOff')])]));
   el.querySelector('[data-fv-csv="days"]')?.addEventListener('click', () => download(`prognose_tage_${fileTag(ctx, sel)}.csv`,
