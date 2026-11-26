@@ -189,5 +189,5 @@ export default {
   "fv.gapsKeyCity": "Dots: largest gaps per operator (colour = operator, solid = important spot, size = missing vehicles)",
   "fv.gapsPopMiss": "missing {n}, at important spots {ab}; per operator missing (of which important):",
   "fv.gapsPopSpot": "{op}: missing {n}, class {cls}",
-  "fv.env.ptRisk": "public transport: the transit forecast expects many delays (20 % of stops late or more; forecast from the previous days, known for tomorrow too)",
+  "fv.env.ptRisk": "transit forecast (bus and rail): many delays expected (20 % of stops late or more; from our own transit forecast, known for tomorrow too)",
 };

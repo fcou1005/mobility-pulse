@@ -189,5 +189,5 @@ export default {
   "fv.gapsKeyCity": "Punkte: größte Lücken je Anbieter (Farbe = Anbieter, kräftig = wichtiger Spot, Größe = fehlende Fahrzeuge)",
   "fv.gapsPopMiss": "fehlen {n}, davon an wichtigen Spots {ab}; je Anbieter fehlen (davon wichtig):",
   "fv.gapsPopSpot": "{op}: fehlen {n}, Klasse {cls}",
-  "fv.env.ptRisk": "Nahverkehr: laut ÖPNV-Prognose viele Verspätungen erwartet (ab 20 % verspätete Halte; Prognose aus den Vortagen, auch für morgen bekannt)",
+  "fv.env.ptRisk": "ÖPNV-Prognose (Bus und Bahn): viele Verspätungen erwartet (ab 20 % verspätete Halte; aus der eigenen ÖPNV-Prognose, auch für morgen bekannt)",
 };

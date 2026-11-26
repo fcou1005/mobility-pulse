@@ -75,6 +75,12 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Thema `oepnv` in den Alarmen und Feeds je Gemeinde: Die letzte volle Stunde wechselt auf stark gestört, das heißt mindestens 15 % der Halte ausgefallen oder 50 % verspätet (`PT_ALARM`; strenger als das Kennzeichen „gestört“, weil im Feierabendverkehr des 16.11. 13 Großstädte in einem Lauf bei 30 bis 44 % verspätet lagen). Nur Gemeinden ab 100 Fahrzeugen und 150 Halten mit Echtzeit in der Stunde (mit 20 Fahrzeugen ohne Halte-Grenze kamen am 16.11. in drei Stunden 42 Alarme, 34 aus Kleinstädten), höchstens ein Alarm je Gemeinde in 6 Stunden, der erste Lauf meldet nichts.
 - Der Text nennt Stunde, Anteile und die verfügbaren Sharing-Fahrzeuge im Stadtgebiet; Push über ntfy wie bei den anderen Themen.
 
+## ÖPNV-Prognose (`lib/pulse-oepnv-prog.js`, Tafel `#pt-prog`)
+
+- Rechnung: siehe [Prognose](prognose.md) (PTP v 2: gleiche Stunde an Tagen desselben Typs der letzten drei Wochen, Ausfälle zur Hälfte vom Vortag). Sie steht je Gemeinde in `oepnv/<AGS>.json` `prognose`.
+- Tafel (seit 26.11.2026 abends, direkt unter „Jetzt gestört“): zuerst das Urteil aus der Selbstprüfung der letzten 7 Tage (`eval`: Abweichung in Prozentpunkten gegen „wie gestern“, Verspätungen und Ausfälle), dann ein Diagramm: verspätete Halte je Stunde der letzten 3 geprüften Tage (tatsächlich, Prognose, „wie gestern“; `eval.series`), heute bis zur letzten vollen Stunde tatsächlich (`hours`), danach die Prognose der nächsten 24 Stunden (`next`). Darunter die Genauigkeit je Tag (`eval.byDay`), die nächsten 12 Stunden als Tabelle und die Linien.
+- Einfluss auf die Sharing-Prognose: Die Tafel nennt das Merkmal `ptRisk` (Stunden mit erwartet ab 20 % verspäteten Halten) mit Zustand und gelernter Wirkung aus `forecast/latest.json` (`env`, `memory.effects`), wie die Einflüsse-Tabelle der Prognose. Stand 26.11.: aus, weil es die Sharing-Prognose im Nachrechnen nicht genauer gemacht hat.
+
 ## Wirkung auf Sharing (`ptEffect`)
 
 - Je Stunde zwischen 6 und 22 Uhr: Sharing-Fahrtbeginne ÷ Prognose des Vortags − 1. Je Gemeinde und Tag ein Wert: Mittel der gestörten Stunden minus Mittel der übrigen Stunden desselben Tages.

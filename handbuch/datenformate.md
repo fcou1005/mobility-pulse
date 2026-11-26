@@ -21,7 +21,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [markt](#markt) | 1.2 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `markt/regen.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
-| [oepnv](#oepnv) | 1.9 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
+| [oepnv](#oepnv) | 1.10 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
 
@@ -729,7 +729,7 @@ Seit 1.3: Übersicht der Streckenverläufe je Stadt (Verbindungen, mit Verlauf, 
 
 ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV). oepnv/&lt;AGS&gt;.json (Stationen und Stunden einer Gemeinde), oepnv/live/&lt;AGS&gt;.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Fahrplan und Haltestellen CC BY 4.0 (seit 1.9 auch Fahrten ohne Echtzeit nach Fahrplan). Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.
 
-Version 1.9 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
+Version 1.10 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
 
 ### oepnv · ags
 
@@ -753,7 +753,7 @@ Stationen einer Gemeinde mit Flotte (höchstens 300, nach Halten) und Halte je S
 | `profile` |  | object / null – Tagesgang je Ortsstunde, Mittel der Tage vor heute: ÖPNV-Halte mit Echtzeit gegen Sharing-Fahrtbeginne; gap = Stunden mit ÖPNV unter gapShare des Höchstwerts und mindestens minSharing Fahrtbeginnen; seit 1.1 |
 | `jetzt` |  | object – Stationen, die in den letzten windowH Stunden gestört waren (ab minN Halten, mindestens 30 % ausgefallen oder verspätet oder 15 % ausgefallen); seit 1.3 |
 | `gebiet` |  | object / null – Seit 1.8 (19.11.2026): Geschäftsgebiet der Sharing-Anbieter – Zellen (≈ 280 × 250 m), in denen in den letzten days Tagen ein verfügbares Fahrzeug stand, plus ring Zellen Rand. outside = Station-IDs der Gemeinde außerhalb (sichtbar, aber kein Bedarf an Sharing-Fahrzeugen: Jetzt gestört, Stationsvorschläge, Disposition), names = bis zu 12 davon mit den meisten Halten. null bei unter 10 bedienten Zellen (dann zählt jede Station). |
-| `prognose` |  | object / null – Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: \[Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet\] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: \[Linie, Art, erwartet verspätet, erwartet ausgefallen\] für die nächsten 3 Stunden. |
+| `prognose` |  | object / null – Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: \[Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet\] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: \[Linie, Art, erwartet verspätet, erwartet ausgefallen\] für die nächsten 3 Stunden. Seit 1.10: eval zusätzlich maeSkip, maeSkipNaive (Ausfälle), byDay \[Tag, mae, maeNaive, maeSkip, maeSkipNaive, Stunden\] und series \[Tag, Ortsstunde, Prognose verspätet, Ist verspätet, „wie gestern“\] der letzten drei geprüften Tage. |
 
 ### oepnv · live
 

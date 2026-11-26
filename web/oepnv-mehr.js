@@ -4,6 +4,7 @@
 import { t, dateFmt } from './i18n.js';
 import { modeTxt as artTxt } from './oepnv-karte.js';
 import * as TF from './pulse-oepnv-tafel.js';
+import { chartSpec, tableButton } from './charttip.js';
 
 const csvNum = (/** @type {number | null} */ x, d = 1) => (x == null ? '' : (+x).toFixed(d).replace('.', ','));
 const pct = (/** @type {any} */ ctx, /** @type {number | null} */ x, d = 1) => (x == null || !Number.isFinite(x) ? '–' : `${ctx.fmt(x * 100, d)} %`);
@@ -90,18 +91,56 @@ export function atStopsPanel(ctx, doc, live, fleet, name) {
     ${R.rows.length ? `<p>${t('pt.asLead', { n: `<b>${f(R.total)}</b>`, s: f(R.stations) })}</p>` : ''}${body}<p class="muted small">${t('pt.asNote')}</p></div>`;
 }
 
-/** Verspätungsprognose (F28): nächste Stunden der Gemeinde, Linien für die nächsten 3 Stunden, Selbstprüfung gegen „wie gestern“ */
-/** @param {any} ctx @param {any} doc @param {string} name */
-export function progPanel(ctx, doc, name) {
+/** Verspätungsprognose (F28): wie gut sie war (letzte Tage, gegen „wie gestern“), was sie erwartet (nächste 24 Stunden), Linien, Einfluss auf die Sharing-Prognose */
+/** @param {any} ctx @param {any} doc @param {string} name @param {any} [fcDoc] forecast/latest.json (Einfluss ptRisk) */
+export function progPanel(ctx, doc, name, fcDoc = null) {
   const P = doc?.prognose; if (!P?.next?.length) return '';
-  const pc = (/** @type {number} */ x, d = 1) => `${ctx.fmt(Math.round(x * 100 * 10 ** d) / 10 ** d, d)} %`, f = (/** @type {number} */ x) => ctx.fmt(x);
-  const a3 = P.next.slice(0, 3), mL = a3.reduce((s, x) => s + x[2], 0) / a3.length, mS = a3.reduce((s, x) => s + x[3], 0) / a3.length, max = Math.max(0.01, ...P.next.map((/** @type {any[]} */ x) => x[2] + x[3]));
-  const ev = P.eval ? t(P.eval.better ? 'pt.pgEvalBetter' : 'pt.pgEvalWorse', { m: ctx.fmt(P.eval.mae * 100, 1), n: ctx.fmt(P.eval.maeNaive * 100, 1), d: f(P.eval.days), h: f(P.eval.hours) }) : t('pt.pgEvalNone');
+  const pc = (/** @type {number} */ x, d = 1) => `${ctx.fmt(Math.round(x * 100 * 10 ** d) / 10 ** d, d)} %`, pp = (/** @type {number} */ x) => ctx.fmt(Math.round(x * 1000) / 10, 1), f = (/** @type {number} */ x) => ctx.fmt(x);
+  const a3 = P.next.slice(0, 3), mL = a3.reduce((/** @type {number} */ s, /** @type {any[]} */ x) => s + x[2], 0) / a3.length, mS = a3.reduce((/** @type {number} */ s, /** @type {any[]} */ x) => s + x[3], 0) / a3.length, max = Math.max(0.01, ...P.next.map((/** @type {any[]} */ x) => x[2] + x[3]));
+  const E = P.eval, gain = E && E.maeNaive > 0 ? 1 - E.mae / E.maeNaive : null;
+  const verdict = E ? t(E.better ? 'pt.pgVerdict' : 'pt.pgVerdictWorse', { m: pp(E.mae), n: pp(E.maeNaive), g: ctx.fmt(Math.round(Math.abs(gain ?? 0) * 100)), d: f(E.days), s: E.maeSkip != null ? pp(E.maeSkip) : '–', sn: E.maeSkipNaive != null ? pp(E.maeSkipNaive) : '–' }) : t('pt.pgEvalNone');
   const hours = P.next.slice(0, 12).map((/** @type {any[]} */ x) => `<tr><td>${x[1]}–${x[1] + 1} h</td><td class="n bars"><span class="t">${pc(x[2])}</span><span class="fv-bar" style="width:${Math.round(x[2] / max * 110)}px"></span></td><td class="n">${pc(x[3])}</td><td class="n">${f(x[4])}</td></tr>`).join('');
   const lines = (P.lines || []).map((/** @type {any[]} */ l) => `<tr><td>${ctx.esc(l[0])}</td><td>${artTxt(l[1])}</td><td class="n">${pc(l[2], 0)}</td><td class="n">${pc(l[3], 0)}</td></tr>`).join('');
+  const days = (E?.byDay || []).map((/** @type {any[]} */ r) => { const mx = Math.max(0.001, ...(E.byDay || []).map((/** @type {any[]} */ x) => Math.max(x[1], x[2]))); return `<tr><td>${dateFmt({ weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(new Date(`${r[0]}T12:00:00Z`))}</td><td class="n bars"><span class="t">${pp(r[1])}</span><span class="fv-bar" style="width:${Math.round(r[1] / mx * 90)}px"></span></td><td class="n bars"><span class="t">${pp(r[2])}</span><span class="fv-bar" style="width:${Math.round(r[2] / mx * 90)}px;opacity:.45"></span></td></tr>`; }).join('');
+  // Einfluss auf die Sharing-Prognose (Merkmal ptRisk): Stand und gelernte Wirkung aus forecast/latest.json
+  // Zustand wie in der Einflüsse-Tabelle der Prognose: an (env.active), aus (CTX_OFF, Wirkung wird weiter gemessen), noch nicht gemessen (Prognose-Stand vor dem 26.11.)
+  const E2 = fcDoc?.env, eff = fcDoc?.memory?.effects?.ptRisk, sup = E2?.support?.ptRisk, nC = sup ? sup.rows + sup.memRows : eff?.n;
+  const inflKey = !E2 || !(E2.keys || []).includes('ptRisk') ? 'pt.pgInflNew' : (E2.active || []).includes('ptRisk') ? 'pt.pgInflOn' : 'pt.pgInflOff';
+  const infl = t(inflKey, { f: eff?.b != null ? ctx.fmt(Math.round(Math.exp(eff.b) * 100) / 100, 2) : '–', n: nC != null ? f(nC) : '–' });
   return `<div class="panel" id="pt-prog"><div class="panel-head"><div><h2>${t('pt.pgTitle', { name })}</h2><div class="sub">${t('pt.pgSub')}</div></div></div>
+    <p><b>${verdict}</b></p>${progChart(ctx, P, doc.hours)}
     <p>${t('pt.pgLead', { l: `<b>${pc(mL)}</b>`, s: `<b>${pc(mS)}</b>`, ml: pc(P.mean?.late || 0), ms: pc(P.mean?.skip || 0) })}</p>
-    <div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.pgTitle', { name }))}"><table><thead><tr><th>${t('pt.colHour')}</th><th class="n">${t('pt.pgColLate')}</th><th class="n">${t('pt.pgColSkip')}</th><th class="n">${t('pt.pgColN')}</th></tr></thead><tbody>${hours}</tbody></table></div>
+    <p class="pt-infl">${infl}${document.body.classList.contains('mode-client') ? '' : ` <a href="#prognose-basis">${t('pt.pgInflLink')}</a>`}</p>
+    ${days ? `<details><summary>${t('pt.pgDaysToggle')}</summary><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.pgDaysToggle'))}"><table><thead><tr><th>${t('pt.colDay')}</th><th class="n">${t('pt.pgColModel')}</th><th class="n">${t('pt.pgColNaive')}</th></tr></thead><tbody>${days}</tbody></table></div></details>` : ''}
+    <details><summary>${t('pt.pgHoursToggle')}</summary><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.pgTitle', { name }))}"><table><thead><tr><th>${t('pt.colHour')}</th><th class="n">${t('pt.pgColLate')}</th><th class="n">${t('pt.pgColSkip')}</th><th class="n">${t('pt.pgColN')}</th></tr></thead><tbody>${hours}</tbody></table></div></details>
     ${lines ? `<h3>${t('pt.pgLines')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${ctx.esc(t('pt.pgLines'))}"><table><thead><tr><th>${t('pt.colLine')}</th><th>${t('pt.pgColArt')}</th><th class="n">${t('pt.pgColLate')}</th><th class="n">${t('pt.pgColSkip')}</th></tr></thead><tbody>${lines}</tbody></table></div>` : ''}
-    <p class="muted small">${ev} ${t('pt.pgNote')}</p></div>`;
+    <p class="muted small">${t('pt.pgNote')}</p></div>`;
+}
+/** Diagramm: verspätete Halte der letzten geprüften Tage (Ist, Prognose, „wie gestern“) und die Prognose der nächsten 24 Stunden */
+// Stunden mit weniger Halten zählen nicht (wie PTP.minN in lib/pulse-oepnv-prog.js)
+const PG_MIN_N = 100;
+/** @param {any} ctx @param {any} P doc.prognose @param {any} [Hrs] doc.hours (heute bisher: tatsächlicher Anteil) */
+function progChart(ctx, P, Hrs) {
+  const tOf = (/** @type {string} */ d, /** @type {number} */ h) => Date.parse(`${d}T00:00:00Z`) / 3600e3 + h;
+  const past = (P.eval?.series || []).map((/** @type {any[]} */ r) => ({ t: tOf(r[0], r[1]), d: r[0], h: r[1], p: r[2], a: r[3], n: r[4], fut: false }));
+  const fut = P.next.map((/** @type {any[]} */ r) => ({ t: tOf(r[0], r[1]), d: r[0], h: r[1], p: r[2], a: null, n: null, fut: true }));
+  // heute bis zur letzten vollen Stunde: tatsächlicher Anteil aus doc.hours (noch ohne Prüfung, daher ohne Prognose und „wie gestern“)
+  const seen = new Set(past.map((/** @type {any} */ q) => q.t)), tNow = fut[0] ? fut[0].t - 1 : Infinity, today = [];
+  (Hrs?.days || []).forEach((/** @type {string} */ d, /** @type {number} */ i) => { for (let h = 0; h < 24; h++) { const tt = tOf(d, h), n = Hrs.n?.[i]?.[h]; if (tt < tNow && !seen.has(tt) && (past.length ? tt > past[past.length - 1].t : true) && n >= PG_MIN_N) today.push({ t: tt, d, h, p: null, a: Math.round(Hrs.late[i][h] / n * 1e4) / 1e4, n: null, fut: false }); } });
+  const pts = [...past, ...today, ...fut].sort((a, b) => a.t - b.t); if (pts.length < 6) return '';
+  // Breite wie der Platz auf dem Bildschirm (wie web/forecast-parts.js), damit die Schrift nicht mitschrumpft
+  const W = Math.max(300, Math.min(980, Math.round((document.getElementById('view-oepnv')?.clientWidth || window.innerWidth || 800) - 40))), H = 230, Pd = { l: 40, r: 10, t: 12, b: 28 }, t0 = pts[0].t, t1 = pts[pts.length - 1].t, ymax = Math.max(0.05, ...pts.map(x => Math.max(x.p ?? 0, x.a ?? 0, x.n ?? 0))) * 1.1;
+  const x = (/** @type {number} */ tt) => Pd.l + (tt - t0) / Math.max(1, t1 - t0) * (W - Pd.l - Pd.r), y = (/** @type {number} */ v) => H - Pd.b - v / ymax * (H - Pd.t - Pd.b);
+  const path = (/** @type {(p: any) => number | null} */ val, /** @type {string} */ attrs) => { let d = '', prev = null; for (const q of pts) { const v = val(q); if (v == null) { prev = null; continue; } d += `${prev != null && q.t - prev === 1 ? 'L' : 'M'}${x(q.t).toFixed(1)},${y(v).toFixed(1)}`; prev = q.t; } return d ? `<path d="${d}" fill="none" ${attrs}/>` : ''; };
+  const step = ymax > 0.4 ? 0.1 : ymax > 0.2 ? 0.05 : 0.02; let g = '';
+  for (let v = 0; v <= ymax + 1e-9; v += step) g += `<line class="grid" x1="${Pd.l}" x2="${W - Pd.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${Pd.l - 4}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${ctx.fmt(Math.round(v * 100))} %</text>`;
+  for (let m = Math.ceil(t0 / 24) * 24 - 24; m <= t1; m += 24) { const d = new Date(m * 3600e3).toISOString().slice(0, 10), mt = tOf(d, 0), xx = Math.max(Pd.l, x(mt)); if (mt + 6 > t1 || mt + 18 < t0 || !pts.some(q => q.d === d)) continue; g += `${mt >= t0 ? `<line class="grid" x1="${xx.toFixed(1)}" x2="${xx.toFixed(1)}" y1="${Pd.t}" y2="${H - Pd.b}"/>` : ''}<text x="${(xx + 3).toFixed(1)}" y="${H - 8}">${dateFmt(W < 560 ? { day: 'numeric', month: 'numeric', timeZone: 'UTC' } : { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`))}</text>`; }
+  const f0 = fut[0], now = f0 ? `<rect x="${x(f0.t).toFixed(1)}" y="${Pd.t}" width="${(W - Pd.r - x(f0.t)).toFixed(1)}" height="${H - Pd.t - Pd.b}" fill="color-mix(in srgb,var(--accent) 7%,transparent)"/><text x="${(x(f0.t) + 4).toFixed(1)}" y="${Pd.t + 11}">${t('pt.pgAhead')}</text>` : '';
+  const sp = chartSpec({ n: pts.length, x: (i) => x(pts[i].t), top: Pd.t, bottom: H - Pd.b, head: (i) => `${dateFmt({ weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(new Date(`${pts[i].d}T12:00:00Z`))}, ${pts[i].h}–${pts[i].h + 1} h`,
+    label: t('pt.pgChartAria'), colHead: t('pt.colHour'), cols: [t('pt.pgIst'), t('pt.pgFc'), t('pt.pgNaive')],
+    cell: (i, k) => { const v = [pts[i].a, pts[i].p, pts[i].n][k]; return v == null ? '–' : `${ctx.fmt(Math.round(v * 1000) / 10, 1)} %`; },
+    rows: (i) => [[pts[i].a, 'var(--fg)', 'pt.pgIst'], [pts[i].p, 'var(--accent)', 'pt.pgFc'], [pts[i].n, 'var(--muted)', 'pt.pgNaive']].filter(([v]) => v != null).map(([v, c, k]) => ({ color: c, label: t(k), value: `${ctx.fmt(Math.round(v * 1000) / 10, 1)} %`, sort: v })) });
+  const svg = `<svg class="chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" ${sp.attrs} aria-label="${ctx.esc(t('pt.pgChartAria'))}" style="width:100%;height:auto">${g}${now}${path(q => q.n, 'stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="2 3"')}${path(q => q.a, 'stroke="var(--fg)" stroke-width="2"')}${path(q => q.p, 'stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4"')}</svg>`;
+  const key = `<div class="fv-keys"><span><i style="background:var(--fg)"></i>${t('pt.pgIst')}</span><span><i style="background:var(--accent)"></i>${t('pt.pgFc')}</span><span><i style="background:var(--muted)"></i>${t('pt.pgNaive')}</span></div>`;
+  return `<div class="pt-prog-chart">${svg}${tableButton(sp.id)}${key}</div>`;
 }
