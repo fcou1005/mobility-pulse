@@ -7,11 +7,11 @@ const norm = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * 
 const pois = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Math.round(l + Math.sqrt(l) * norm())); let k = 0, p = 1; const L = Math.exp(-l); do { k++; p *= rnd(); } while (p > L); return k - 1; };
 
 // ---------- kleine Bausteine
-assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
-assert(JSON.stringify(F.wxFeatures(-5, 0.5, 0.2)) === JSON.stringify([-1.5, 0, 1, 0, 0, 1, -0.5, 1, 0, 0, 0]) && JSON.stringify(F.wxFeatures(35, 0)) === JSON.stringify([0, 2.5, 0, 0, 0, 0, 0, 0, 1, 0, 0]) && F.wxFeaturesFc(0, 0.2)[7] === 0.28 && F.wxFeaturesFc(3, 0.2)[7] === 0,
+assert(JSON.stringify(F.wxFeatures(0, 0)) === JSON.stringify([-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(20, 1.2)) === JSON.stringify([0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(10, 5, 0.2)) === JSON.stringify([0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]) && F.wxFeatures(null, 0) === null, 'Wettermerkmale: kalt/warm mit Knick bei 10 °C, Regen ab 0,1 mm/h, ohne Messwert null');
+assert(JSON.stringify(F.wxFeatures(-5, 0.5, 0.2)) === JSON.stringify([-1.5, 0, 1, 0, 0, 1, -0.5, 1, 0, 0, 0, 0]) && JSON.stringify(F.wxFeatures(35, 0)) === JSON.stringify([0, 2.5, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1.5]) && F.wxFeaturesFc(0, 0.2)[7] === 0.28 && F.wxFeaturesFc(3, 0.2)[7] === 0,
   'Wettermerkmale seit 23.11.2026: Frost (weitere Steigung unter 0 °C), Schnee (Niederschlag bis 1 °C, in der Vorhersage als Anteil), Hitze (über 25 °C)');
-assert(F.wxFeatures(5, 0, null, 35, 0.4)[9] === 1.5 && F.wxFeatures(5, 0, null, 12, 1)[9] === 0 && F.wxFeatures(5, 0, null, 12, 1)[10] === 1 && F.wxFeaturesFc(5, 0, null, 40, 0.25).slice(9).join() === '2,0.25' && F.wxFeatures(5, 0)[9] === 0,
-  'Wettermerkmale seit 24.11.2026: Wind je 10 km/h über 20 km/h, Dunkelheit als Anteil der Stunde, ohne Wert 0');
+assert(F.wxFeatures(5, 0, null, 35, 0.4)[9] === 1.5 && F.wxFeatures(5, 0, null, 12, 1)[9] === 0 && F.wxFeatures(5, 0, null, 12, 1)[10] === 1 && F.wxFeaturesFc(5, 0, null, 40, 0.25).slice(9).join() === '2,0.25,0' && F.wxFeatures(22, 0)[11] === 0.2 && F.wxFeatures(5, 0)[9] === 0,
+  'Wettermerkmale seit 24.11.2026: Wind je 10 km/h über 20 km/h, Dunkelheit als Anteil der Stunde, ohne Wert 0; seit 26.11. Knick bei 20 °C');
 { const S = await import('../lib/pulse-forecast-sun.js'), hm = (m) => m + 60; const [r, st] = S.sunTimes(48.78, 9.18, '2026-11-24'), [, sj] = S.sunTimes(48.78, 9.18, '2027-06-21');
   assert(Math.abs(hm(r) - (7 * 60 + 45)) < 5 && Math.abs(hm(st) - (16 * 60 + 36)) < 5 && Math.abs(sj + 120 - (21 * 60 + 30)) < 6 && S.darkShare(48.78, 9.18, '2026-11-24', 16) === 1 && S.darkShare(48.78, 9.18, '2026-11-24', 11) === 0 && S.darkShare(48.78, 9.18, '2026-11-24', 15) > 0.3 && S.darkShare(48.78, 9.18, '2026-11-24', 15) < 0.5,
     `Sonnenzeiten Stuttgart: 24.11. ${Math.round(hm(r))} / ${Math.round(hm(st))} Min. MEZ (07:45 = 465 / 16:36 = 996), 21.6. Untergang ${Math.round(sj + 120)} Min. MESZ (21:30 = 1290); Dunkelanteil 15–16 Uhr UTC ${S.darkShare(48.78, 9.18, '2026-11-24', 15)}`); }
@@ -94,19 +94,25 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
   { const p0 = F.withWxPrior(null), NE = F.EFFECTS.length, ix = n => F.EFFECTS.indexOf(n);
     const mem = { n: new Array(NE).fill(3), dk: new Array(NE).fill(0), days: 7, b: F.EFFECTS.map((_, i) => i === ix('rain') ? -0.4 : 0), P: Array.from({ length: NE * NE }, (_, k) => (k % (NE + 1) === 0 ? 400 : 0)) };
     const p1 = F.withWxPrior(mem), ok = (v, w, tol = 1e-6) => Math.abs(v - w) < tol;
-    assert(ok(p0.b[ix('cold')], 0.655) && ok(p0.b[ix('heat')], -0.3) && p0.b[ix('rain')] === 0 && p0.days === 0 && p1.days === 7 && ok(p1.b[ix('rain')], -0.4) && ok(p1.b[ix('cold')], 0.655 / 10, 1e-3) && mem.P[ix('cold') * (NE + 1)] === 400,
+    assert(ok(p0.b[ix('cold')], 0.55, 1e-6) && ok(p0.b[ix('heat')], -0.12, 1e-6) && p0.b[ix('rain')] === 0 && p0.days === 0 && p1.days === 7 && ok(p1.b[ix('rain')], -0.4) && ok(p1.b[ix('cold')], 0.55 / 10, 1e-3) && mem.P[ix('cold') * (NE + 1)] === 400,
       `Wetter-Vorwissen: leer → kalt ${p0.b[ix('cold')].toFixed(3)}, Hitze ${p0.b[ix('heat')].toFixed(2)}; mit Gedächtnis (Präzision 400 = 9× Vorwissen → 1/10) kalt ${p1.b[ix('cold')].toFixed(3)}, Regen ${p1.b[ix('rain')]}, Gedächtnis unverändert`); }
   // Bahnstreik mit Vorwissen: im Modell ohne eigenen Fall (ein angekündigter Streik wirkt am ersten Tag), Autobahn bleibt aus
   { const iRail = CX.CTX_KEYS.indexOf('rail'), iRoad = CX.CTX_KEYS.indexOf('road'), Rr = { c: CX.CTX_KEYS.map(() => new Int8Array(3)), day: new Int32Array(3) };
     for (let i = 0; i < 3; i++) { Rr.c[iRoad][i] = 1; Rr.day[i] = i; }
     const on = F.ctxActive(Rr, [0, 1, 2], { n: new Array(F.EFFECTS.length).fill(200), dk: new Array(F.EFFECTS.length).fill(5) });
     assert(on.includes(iRail) && !on.includes(iRoad) && Math.abs(F.withWxPrior(null).b[F.EFFECTS.indexOf('rail')] - 0.12) < 1e-6, `Bahnstreik ohne Fall im Modell (Vorwissen ×1,13), Autobahn aus trotz Erfahrung: ${on.map(k => CX.CTX_KEYS[k]).join(',')}`); }
+  // Gedächtnis nach Namen (26.11.2026): ein Gedächtnis in der alten Reihenfolge (EFFECTS_V3, ohne names) behält je Wirkung seine Werte
+  { const K = F.EFFECTS_V3.length, iO = (n) => F.EFFECTS_V3.indexOf(n), mOld = { v: 3, upto: '2026-11-20', old: { at: '2026-11-20', P: new Array(K * K).fill(0), h: new Array(K).fill(0), n: new Array(K).fill(0), dk: new Array(K).fill(0), days: 3 }, days: { '2026-11-21': { H: new Array(K * K).fill(0), u: new Array(K).fill(0), n: new Array(K).fill(0) } }, wxDays: {} };
+    mOld.old.n[iO('dark')] = 77; mOld.old.P[iO('frost') * K + iO('cold')] = 5; mOld.days['2026-11-21'].u[iO('strike')] = 9;
+    const r = F.memoryResize(mOld), iN = (n) => F.EFFECTS.indexOf(n), NE = F.EFFECTS.length;
+    assert(r.old.n.length === NE && r.old.n[iN('dark')] === 77 && r.old.P[iN('frost') * NE + iN('cold')] === 5 && r.days['2026-11-21'].u[iN('strike')] === 9 && r.old.n[iN('ptOut')] === 0 && r.names.join() === F.EFFECTS.join() && F.compactMemory(r).names.length === NE,
+      'Gedächtnis: alte Reihenfolge nach Namen auf neue Wirkungen umsortiert (Dunkelheit, Frost×Kälte, Streik behalten ihre Werte, neue Merkmale 0)'); }
   // Anzeige (memorySummary): Vorwissen eingerechnet, Schnee mit „mehr Fahrten“ in den Daten → 0 wie im Modell (fixed), Hitze ohne Fall → nur Vorwissen
   { const NE = F.EFFECTS.length, ix = n => F.EFFECTS.indexOf(n), P = new Array(NE * NE).fill(0), h = new Array(NE).fill(0);
     P[ix('snow') * (NE + 1)] = 100; h[ix('snow')] = 100 * 0.5; P[ix('rain') * (NE + 1)] = 400; h[ix('rain')] = 400 * -0.2;
     const mem = { v: 1, upto: '2026-11-20', old: { at: '2026-11-20', P, h, n: F.EFFECTS.map(e => (e === 'snow' ? 35 : e === 'rain' ? 900 : 0)), dk: F.EFFECTS.map(e => (e === 'snow' || e === 'rain' ? 1 : 0)), days: 5 }, days: {}, wxDays: {} };
     const E = F.memorySummary(mem, '2026-11-20', 1).effects;
-    assert(E.snow.b === 0 && E.snow.fixed && E.snow.prior && E.snow.hi === 1 && E.heat.b === -0.3 && E.heat.prior && E.heat.n === 0 && E.heat.hi === 1 && E.rain.b === -0.2 && !E.rain.prior && !E.rain.fixed && E.event.b === null,
+    assert(E.snow.b === 0 && E.snow.fixed && E.snow.prior && E.snow.hi === 1 && E.heat.b === -0.12 && E.heat.prior && E.heat.n === 0 && E.heat.hi === 1 && E.rain.b === -0.2 && !E.rain.prior && !E.rain.fixed && E.event.b === null,
       `Wirkungsanzeige: Schnee ${JSON.stringify(E.snow)}, Hitze ${JSON.stringify(E.heat)}, Regen ohne Vorwissen ${E.rain.b}`); }
   const g = F.weatherGate(R, all);
   assert(g.ok && g.tempRangeK >= 5 && g.rainDays >= 2 && g.dryDays >= 2, `Wetter-Gate offen bei ${NDAY} Tagen mit Spanne ${g.tempRangeK} K, ${g.rainDays} Regen- und ${g.dryDays} Trockentagen`);
@@ -623,8 +629,8 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   // Volksfest als eigenes Merkmal fest (hinten in CTX_KEYS), geprüft wie Veranstaltungen; Gedächtnis älterer Fassungen wird aufgefüllt
   { const fe = [{ art: 'volksfest', von: '2027-09-25T11:00', bis: '2027-09-25T23:30', gebiet: { ags: ['08111000'] }, titel: 'Cannstatter Volksfest', quelle: 'https://x.example' }];
     const iF = CX.CTX_KEYS.indexOf('fest'), iE = CX.CTX_KEYS.indexOf('event'), cx = CX.ctxLookup([], CX.checkCurated({ ereignisse: fe }).ok);
-    assert(CX.CTX_KEYS.slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(-2).join() === 'fest,sport' && F.EFFECTS.slice(-8).join() === 'rain1,rain4,rainPrev,frost,snow,heat,wind,dark' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
-      'Volksfest: eigenes Merkmal fest (hinten in CTX_KEYS/EFFECTS, danach sport), nicht event, nur in den Öffnungsstunden');
+    assert(CX.CTX_KEYS.slice(4, 7).join() === 'event,fest,sport' && F.EFFECTS.slice(3, 3 + CX.CTX_KEYS.length).slice(4, 7).join() === 'event,fest,sport' && F.EFFECTS.slice(-9).join() === 'rain1,rain4,rainPrev,frost,snow,heat,wind,dark,warm20' && cx('08111000', '2027-09-25', 20)[iF] === 1 && cx('08111000', '2027-09-25', 20)[iE] === 0 && cx('08111000', '2027-09-25', 8)[iF] === 0,
+      'Volksfest: eigenes Merkmal fest (in CTX_KEYS/EFFECTS nach event, vor sport), nicht event, nur in den Öffnungsstunden');
     const NE = F.EFFECTS.length, k = NE - 2, H = Array.from({ length: k * k }, (_, i) => i + 1), mem = F.memoryResize({ old: { P: H.slice(), h: Array(k).fill(2), n: Array(k).fill(3), dk: Array(k).fill(1), days: 1 }, days: { '2026-11-02': { H: H.slice(), u: Array(k).fill(5), n: Array(k).fill(7) } } });
     const d = mem.days['2026-11-02'];
     assert(d.H.length === NE * NE && d.H[1 * NE + 2] === H[1 * k + 2] && d.H[k * NE + k] === 0 && d.u.length === NE && d.u[k] === 0 && mem.old.P.length === NE * NE && mem.old.P[(k - 1) * NE + (k - 1)] === H[(k - 1) * k + (k - 1)] && mem.old.dk[k] === 0 && F.memoryResize(mem).days['2026-11-02'].H.length === NE * NE,

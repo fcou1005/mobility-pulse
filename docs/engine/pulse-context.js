@@ -15,7 +15,10 @@
 // Datei incidents/<Ortstag>.json: { version: 1, day, updatedAt, sources: { warn: {at, cells}, road: {at, items} }, ags: { [ags]: { warn: [24], road: [24] } } }
 import { hourOf, dayOf } from './pulse-track.js';
 
-export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport']; // neue Merkmale nur hinten anfügen (Gedächtnis, lib/pulse-forecast.js memoryResize)
+// Seit 26.11.2026 auch roadC (Autobahn-Sperrung), roadJ (Autobahn-Stau), works (Sperrung oder Baustelle im Ort, Baden-Württemberg, Hamburg, München) und
+// ptOut (Nahverkehr: ab 15 % ausgefallene oder 30 % verspätete Halte, Echtzeit) – erfasst und gelernt, im Modell erst mit belegter Wirkung (CTX_OFF).
+// Das Gedächtnis ordnet nach Namen um (memoryResize), neue Merkmale dürfen hier hinten stehen.
+export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport', 'roadC', 'roadJ', 'works', 'ptOut'];
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
 export const WARN_MIN = 2; // Merkmal „warn“ ab Stufe 2 (markant); Stufe 1 (z. B. Frost, leichter Wind) ist fast täglich irgendwo und trägt nichts
 export const CURATED_KINDS = { 'streik-oepnv': 'strike', 'streik-bahn': 'rail', veranstaltung: 'event', volksfest: 'fest', sport: 'sport' };
@@ -103,10 +106,10 @@ export function ctxLookup(docs = [], curated = []) {
   // je Ortstag nur die Einträge, die ihn berühren (Hunderte Veranstaltungen × Zeilen der Prognose wären sonst zu langsam)
   const curByDay = new Map();
   for (const e of cur) { const d0 = e.from.slice(0, 10), d1 = e.to.slice(0, 10); for (let t = Date.parse(`${d0}T12:00:00Z`), n = 0; n < 400; t += 86400e3, n++) { const d = new Date(t).toISOString().slice(0, 10); if (d > d1) break; let l = curByDay.get(d); if (!l) curByDay.set(d, l = []); l.push(e); } }
-  const iW = CTX_KEYS.indexOf('warn'), iR = CTX_KEYS.indexOf('road');
+  const iW = CTX_KEYS.indexOf('warn'), iR = CTX_KEYS.indexOf('road'), iRC = CTX_KEYS.indexOf('roadC'), iRJ = CTX_KEYS.indexOf('roadJ'), iWk = CTX_KEYS.indexOf('works'), iPt = CTX_KEYS.indexOf('ptOut');
   return (ags, day, h) => {
     const out = new Int8Array(CTX_KEYS.length), a = byDay.get(day)?.ags?.[ags];
-    if (a) { if ((a.warn?.[h] || 0) >= WARN_MIN) out[iW] = 1; if (a.road?.[h]) out[iR] = 1; }
+    if (a) { if ((a.warn?.[h] || 0) >= WARN_MIN) out[iW] = 1; if (a.road?.[h]) out[iR] = 1; if (a.roadC?.[h]) out[iRC] = 1; if (a.roadJ?.[h]) out[iRJ] = 1; if ((a.works?.[h] || 0) > 0) out[iWk] = 1; if (a.pt?.[h]) out[iPt] = 1; }
     const list = curByDay.get(day);
     if (list) { const s = stamp(day, h), land = LAND_OF_AGS[String(ags).slice(0, 2)];
       for (const e of list) if (s >= e.from && s <= e.to && (e.all || e.laender.has(land) || e.ags.has(String(ags)))) out[e.k] = 1; }

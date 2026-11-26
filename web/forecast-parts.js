@@ -117,8 +117,17 @@ function partsHtml(ctx, G, L) {
 /** Umgebung und Langzeitgedächtnis: was gelernt ist (Faktor mit 90-%-Bereich), wie viel Erfahrung dahintersteht, ob es im Modell ist */
 const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).format(x)}`);
 // Einflüsse nach Art gruppiert (24.11.2026); was hier fehlt, landet unter „Sonstiges“
-const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['cold', 'frost', 'warm', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow', 'wind']], ['light', ['dark']], ['traffic', ['warn', 'road']], ['strike', ['strike', 'rail']], ['events', ['event', 'fest', 'sport']]]);
-const envGroups = (/** @type {string[]} */ keys) => { const seen = new Set(ENV_GROUPS.flatMap(([, ks]) => ks)), out = /** @type {[string, string[]][]} */ (ENV_GROUPS.map(([g, ks]) => [g, ks.filter(k => keys.includes(k))])); out.push(['other', keys.filter(k => !seen.has(k))]); return out.filter(([, ks]) => ks.length); };
+const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['frost', 'cold', 'warm', 'warm20', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow', 'wind']], ['light', ['dark']],
+  ['warnings', ['warn']], ['traffic', ['roadC', 'roadJ', 'works']], ['strike', ['strike', 'rail']], ['disrupt', ['ptOut']], ['events', ['event', 'fest', 'sport']]]);
+// road = Autobahn-Sperrung oder -Stau zusammen (bis 26.11.2026 nur so erfasst): ersetzt durch roadC und roadJ, nicht mehr angezeigt
+const ENV_HIDE = ['road'], ENV_NEW = { roadC: '26.11.', roadJ: '26.11.' };
+const envGroups = (/** @type {string[]} */ keys) => { const seen = new Set([...ENV_GROUPS.flatMap(([, ks]) => ks), ...ENV_HIDE]), out = /** @type {[string, string[]][]} */ (ENV_GROUPS.map(([g, ks]) => [g, ks.filter(k => keys.includes(k))])); out.push(['other', keys.filter(k => !seen.has(k))]); return out.filter(([, ks]) => ks.length); };
+export const TEMP_POINTS = [-10, -5, 0, 5, 15, 20, 25, 30, 35];
+/** [[°C, Faktor gegenüber 10 °C]] aus den gelernten Wirkungen (memory.effects) oder null */
+export function tempCurve(/** @type {Record<string, { b?: number|null }>|undefined} */ eff) {
+  const names = FC.WX_NAMES || [], idx = ['cold', 'warm', 'frost', 'warm20', 'heat'].map(n => names.indexOf(n)); if (!eff || idx.some(i => i < 0) || eff.cold?.b == null) return null;
+  return TEMP_POINTS.map(tc => { const f = FC.wxFeatures(tc, 0) || []; let s = 0; for (const i of idx) s += (eff[names[i]]?.b ?? 0) * (f[i] || 0); return [tc, Math.exp(s)]; });
+}
 export function envHtml(ctx, L, { title = true } = {}) {
   const M = L?.memory, E = L?.env, esc = ctx.esc;
   if (!M && !E) return '';
@@ -127,17 +136,19 @@ export function envHtml(ctx, L, { title = true } = {}) {
     const e = M?.effects?.[k] || {}, isWx = (FC.WX_NAMES || ['cold', 'warm', 'rain']).includes(k), inv = k === 'cold' || k === 'frost'; // kalt/Frost: Merkmal ≤ 0, „10 K kälter“ = exp(−b)
     const f = e.b == null ? null : Math.exp(inv ? -e.b : e.b), lo = e.b == null ? null : inv ? 1 / e.hi : e.lo, hi = e.b == null ? null : inv ? 1 / e.lo : e.hi;
     const sup = E?.support?.[k], n = isWx ? e.n : (sup ? sup.rows + sup.memRows : e.n), days = isWx ? e.days : (sup ? sup.days + sup.memDays : e.days);
-    let st = isWx ? (wxUsed ? (e.fixed ? 'fixed' : 'on') : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : (FC.CTX_OFF || []).includes(k) ? 'off' : n > 0 ? 'wait' : 'none';
+    let st = isWx ? (wxUsed ? (e.fixed ? 'fixed' : 'on') : e.b == null ? 'none' : 'wait') : act.has(k) ? 'on' : ready.has(k) ? 'ready' : (FC.CTX_OFF || []).includes(k) ? (ENV_NEW[k] && !(n >= FC.GATES.ctxMinRows) ? 'newOff' : 'off') : n > 0 ? 'wait' : 'none';
     // Lernphase: erfasst, aber noch zurückgehalten (Sport, Veranstaltungen, Volksfeste ab E.pendingFrom) – Erfahrung = was sie kennzeichnen würden
     if (!isWx && st === 'none' && sup?.pending?.rows) return { k, f, lo, hi, n: sup.pending.rows, days: sup.pending.days, st: 'held' };
     return { k, f, lo, hi, n, days, st, prior: !!e.prior };
   });
   const heldFrom = E?.pendingFrom && Number.isFinite(Date.parse(E.pendingFrom)) ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(E.pendingFrom)) : '–';
-  const chip = (st) => `<span class="fv-chip${st === 'on' || st === 'fixed' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: heldFrom })}</span>`;
+  const chip = (st, k = '') => `<span class="fv-chip${st === 'on' || st === 'fixed' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: st === 'newOff' ? ENV_NEW[k] : heldFrom })}</span>`;
   // Vorwissen (WX_PRIOR): ohne eigene Fälle „nur Vorwissen“, sonst eigene Erfahrung + Vorwissen
   const exp = (r) => (r.prior && !(r.n > 0) ? t('fv.envExpPrior0') : `${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}${r.prior ? t('fv.envExpPrior') : ''}`);
-  const byK = new Map(rows.map(r => [r.k, r])), row = (r) => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${chip(r.st)}</td></tr>`;
-  const body = envGroups(rows.map(r => r.k)).map(([g, ks]) => `<tbody><tr><th colspan="5" scope="rowgroup" class="fv-grp">${t(`fv.envGrp.${g}`)}</th></tr>${ks.map(k => row(byK.get(k))).join('')}</tbody>`).join('');
+  const byK = new Map(rows.map(r => [r.k, r])), row = (r) => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${chip(r.st, r.k)}</td></tr>`;
+  // Temperatur zusammen: Faktor gegenüber 10 °C bei konkreten Temperaturen (Merkmale wie im Modell, FC.wxFeatures; ohne Regen, Wind, Dunkelheit)
+  const curve = tempCurve(M?.effects), curveRow = curve ? `<tr><td colspan="5" class="wrap fv-sub" style="margin:0">${t('fv.envTempCurve', { list: curve.map(([tc, f]) => `${String(tc).replace('-', '−')} °C ${fx(f)}`).join(', ') })}</td></tr>` : '';
+  const body = envGroups(rows.map(r => r.k)).map(([g, ks]) => `<tbody><tr><th colspan="5" scope="rowgroup" class="fv-grp">${t(`fv.envGrp.${g}`)}</th></tr>${ks.map(k => row(byK.get(k))).join('')}${g === 'temp' ? curveRow : ''}</tbody>`).join('');
   const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead>${body}</table></div>`;
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';

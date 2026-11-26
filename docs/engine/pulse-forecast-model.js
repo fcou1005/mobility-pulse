@@ -69,15 +69,15 @@ export const NTY = TYPES.length, typeIx = (key) => { const t = TYPES.indexOf(Str
 // sonst 4,9 × zu hoch). Kleiner Ridge (2) für den gemeinsamen Teil, 20 für die Tagtyp-Abweichung: der gemeinsame Teil trägt den Großteil.
 // A13: weitere Wettermerkmale hinten angehängt (Parameter ab I_WX2, Wirkungen hinter den Umgebungsmerkmalen – das Gedächtnis wächst nur hinten):
 // Regen ≥ 1 mm/h und ≥ 4 mm/h (mit „Regen ≥ 0,1 mm/h“ drei Stufen: leicht, mäßig, stark) und Regen in der Vorstunde.
-export const NCTX = CTX_KEYS.length, I_HOUR = 0, I_CLS = 24, I_ERA = I_CLS + NCLS * 24, I_WX = I_ERA + NERA, I_CTX = I_WX + 3, I_TH = I_CTX + NCTX, I_WE = I_TH + NTY * 24, I_WX2 = I_WE + 24, P = I_WX2 + 8;
+export const NCTX = CTX_KEYS.length, I_HOUR = 0, I_CLS = 24, I_ERA = I_CLS + NCLS * 24, I_WX = I_ERA + NERA, I_CTX = I_WX + 3, I_TH = I_CTX + NCTX, I_WE = I_TH + NTY * 24, I_WX2 = I_WE + 24, P = I_WX2 + 9;
 export const WE_CLS = 2; // Tagtypen ab hier (S = 2, H = 3) sind Wochenende
 /** Wirkungen mit Langzeitgedächtnis: Wetter (kalt, warm, Regen) und Umgebungsmerkmale, Reihenfolge wie im Parametervektor ab I_WX */
-export const EFFECTS = ['cold', 'warm', 'rain', ...CTX_KEYS, 'rain1', 'rain4', 'rainPrev', 'frost', 'snow', 'heat', 'wind', 'dark'];
-export const WX_NAMES = ['cold', 'warm', 'rain', 'rain1', 'rain4', 'rainPrev', 'frost', 'snow', 'heat', 'wind', 'dark'];
+export const EFFECTS = ['cold', 'warm', 'rain', ...CTX_KEYS, 'rain1', 'rain4', 'rainPrev', 'frost', 'snow', 'heat', 'wind', 'dark', 'warm20'];
+export const WX_NAMES = ['cold', 'warm', 'rain', 'rain1', 'rain4', 'rainPrev', 'frost', 'snow', 'heat', 'wind', 'dark', 'warm20'];
 export const NE = EFFECTS.length, NW = WX_NAMES.length;
 export const WX_EFF = WX_NAMES.map(n => EFFECTS.indexOf(n)); // Wirkung je Wettermerkmal R.w[0..NW-1]
 /** Vorzeichen der neuen Wetterwirkungen (+1: Steigung ≥ 0, −1: ≤ 0): Frost (Merkmal ≤ 0) senkt, Schnee und Hitze senken; nach jedem Newton-Schritt erzwungen */
-export const WX_SIGN = Object.freeze({ [EFFECTS.indexOf('frost')]: 1, [EFFECTS.indexOf('snow')]: -1, [EFFECTS.indexOf('heat')]: -1, [EFFECTS.indexOf('wind')]: -1, [EFFECTS.indexOf('dark')]: -1 });
+export const WX_SIGN = Object.freeze({ [EFFECTS.indexOf('frost')]: 1, [EFFECTS.indexOf('snow')]: -1, [EFFECTS.indexOf('heat')]: -1, [EFFECTS.indexOf('wind')]: -1, [EFFECTS.indexOf('dark')]: -1, [EFFECTS.indexOf('warm20')]: -1 });
 export const pos = (e) => (e < 3 + NCTX ? I_WX + e : I_WX2 + (e - 3 - NCTX)); // Stelle einer Wirkung im Parametervektor
 const LAMBDA = (j) => (j < I_CLS ? 1e-3 : j < I_ERA ? 20 : j < I_WX ? 5 : j < I_TH ? 8 : j < I_WE ? 20 : j < I_WX2 ? 2 : 8);
 export const Z80 = 1.2816, ALPHA = 4;
@@ -115,9 +115,13 @@ export const sum = (a) => a.reduce((s, x) => s + x, 0);
  *  den wenigen kalten Tagen auch „mehr Fahrten bei Frost“ (Rückblick 12.–22.11.: Glätte +0,32, Frost am Wochenende −0,76 – Rauschen).
  *  Seit 24.11.2026: Wind (Mittelwind km/h, je 10 km/h über 20 km/h; Böen liefert die Quelle nicht) und Dunkelheit (Anteil der Stunde nach
  *  Sonnenuntergang oder vor Sonnenaufgang, lib/pulse-forecast-sun.js) – beide können nur senken (WX_SIGN). Dunkelheit trennt das Modell vom Tagesgang
- *  über die Verschiebung des Sonnenuntergangs (Jahreszeit, Zeitumstellung, Ost–West bis 40 Minuten). */
+ *  über die Verschiebung des Sonnenuntergangs (Jahreszeit, Zeitumstellung, Ost–West bis 40 Minuten).
+ *  Seit 26.11.2026 Knick auch bei 20 °C (warm20, nur senkend): in den Münchner Zähldaten (14.416 Zählstellentage 2017–2019, 2022–2026) steigt die
+ *  Nutzung bis 20 °C fast gleichmäßig (0–20 °C: +0,6 je 10 K auf der Log-Skala) und flacht darüber ab (20–30 °C: +0,1); Knicke 0/10/20/25 statt
+ *  0/10/25: AIC −28.888 statt −28.808 (mit Monat −30.240 statt −30.208), weitere Knicke (15, 28, 30, −5) ohne Gewinn. Spanne −20 bis +40 °C:
+ *  stündlich 2023–2025 in 14 Städten 0,1 % unter −8 °C, 1 % über 29 °C, Tiefst −17 °C (Dresden), Höchst 37 °C. */
 export const wxFeatures = (t, p, pPrev = null, w = null, dark = null) => (t == null || p == null ? null : [Math.min(t - 10, 0) / 10, Math.max(t - 10, 0) / 10, p >= 0.1 ? 1 : 0, p >= 1 ? 1 : 0, p >= 4 ? 1 : 0, pPrev != null && pPrev >= 0.1 ? 1 : 0,
-  Math.min(t, 0) / 10, p >= 0.1 && t <= 1 ? 1 : 0, Math.max(t - 25, 0) / 10, w != null ? Math.max(w - 20, 0) / 10 : 0, dark ?? 0]);
+  Math.min(t, 0) / 10, p >= 0.1 && t <= 1 ? 1 : 0, Math.max(t - 25, 0) / 10, w != null ? Math.max(w - 20, 0) / 10 : 0, dark ?? 0, Math.max(t - 20, 0) / 10]);
 
 /**
  * Vorhergesagter statt gemessener Niederschlag (Review 18.11.2026, V8): Die Vorhersage (DWD MOSMIX über Bright Sky) gibt Erwartungswerte; 0,1 bis
@@ -130,7 +134,7 @@ export const WX_FC = Object.freeze({ edges: [0.1, 0.3, 0.5, 1, 4], rain: [0.03, 
 const fcStep = (/** @type {number} */ p) => { let i = 0; while (i < WX_FC.edges.length && p >= WX_FC.edges[i]) i++; return i; };
 /** wie wxFeatures, für vorhergesagte Stunden: Regenmerkmale als Anteil statt 0/1 */
 export const wxFeaturesFc = (t, p, pPrev = null, w = null, dark = null) => (t == null || p == null ? null : [Math.min(t - 10, 0) / 10, Math.max(t - 10, 0) / 10, WX_FC.rain[fcStep(p)], WX_FC.rain1[fcStep(p)], WX_FC.rain4[fcStep(p)], pPrev != null ? WX_FC.rain[fcStep(pPrev)] : 0,
-  Math.min(t, 0) / 10, t <= 1 ? WX_FC.rain[fcStep(p)] : 0, Math.max(t - 25, 0) / 10, w != null ? Math.max(w - 20, 0) / 10 : 0, dark ?? 0]);
+  Math.min(t, 0) / 10, t <= 1 ? WX_FC.rain[fcStep(p)] : 0, Math.max(t - 25, 0) / 10, w != null ? Math.max(w - 20, 0) / 10 : 0, dark ?? 0, Math.max(t - 20, 0) / 10]);
 
 /** Tagtyp 'W' | 'F' | 'S' | 'H' → 0..3 */
 export const classOf = (dt) => CLS[dt] ?? 0;
@@ -182,7 +186,7 @@ const wxPart = (m, R, i) => { let s = 0; for (let k = 0; k < R.w.length && k < N
 /** Gelernte Wetterwirkung eines Modells: Steigung je 10 K unter/über 10 °C (Log-Skala) und Faktor bei Regen */
 export const wxEffects = (m) => ({ cold: m.beta[I_WX], warm: m.beta[I_WX + 1], rain: Math.exp(m.beta[I_WX + 2]), rain1: Math.exp(m.beta[pos(EFFECTS.indexOf('rain1'))]), rain4: Math.exp(m.beta[pos(EFFECTS.indexOf('rain4'))]), rainPrev: Math.exp(m.beta[pos(EFFECTS.indexOf('rainPrev'))]),
   frost: m.beta[pos(EFFECTS.indexOf('frost'))], snow: Math.exp(m.beta[pos(EFFECTS.indexOf('snow'))]), heat: m.beta[pos(EFFECTS.indexOf('heat'))],
-  wind: m.beta[pos(EFFECTS.indexOf('wind'))], dark: Math.exp(m.beta[pos(EFFECTS.indexOf('dark'))]) });
+  wind: m.beta[pos(EFFECTS.indexOf('wind'))], dark: Math.exp(m.beta[pos(EFFECTS.indexOf('dark'))]), warm20: m.beta[pos(EFFECTS.indexOf('warm20'))] });
 /** Wirkung eines Umgebungsmerkmals als Faktor (1 = keine) */
 export const ctxEffect = (m, key) => Math.exp(m.beta[I_CTX + CTX_KEYS.indexOf(key)]);
 
@@ -231,6 +235,8 @@ export function fitPooled(R, sel, { weather = false, ctx = [], prior = null, out
       const d = solveSpd(H, s);
       for (let j = 0; j < P; j++) beta[j] += Math.max(-1, Math.min(1, d[j]));
       for (const e of act) { const sg = WX_SIGN[e]; if (sg && beta[pos(e)] * sg < 0) beta[pos(e)] = 0; } // festgelegte Vorzeichen (Frost, Schnee, Hitze)
+      // über 20 °C flacht der Anstieg höchstens ab, er kehrt sich nicht um (Münchner Zähldaten 20–30 °C: +0,1 je 10 K)
+      if (weather) { const iw = pos(EFFECTS.indexOf('warm')), i20 = pos(EFFECTS.indexOf('warm20')); if (beta[iw] + beta[i20] < 0) beta[i20] = -Math.max(beta[iw], 0); }
     }
     // Gruppeneffekte: Gamma(α, α)-Prior → a_g = log((Σy + α) ÷ (Σμ ohne a + α)); Option hier: Prior-Mittel = Niveau desselben Anbieters und
     // derselben Art über alle Gemeinden (a_g = log((Σy + α·e^{a_ot}) ÷ (Σμ + α))) – eine neue oder kleine Gruppe startet beim Anbieter, nicht beim Durchschnitt
@@ -413,8 +419,9 @@ export function weatherGate(R, sel, memDays = []) {
 // v 2 (24.11.2026): Tage im Fenster neu mit Frost, Schnee und Hitze (v 1 hatte sie nur ab 23.11.; ohne Neuberechnung ginge die Frost-Erfahrung vom 22.11.
 // verloren, sobald der Tag das Fenster verlässt). Das ältere Gedächtnis (mem.old) bleibt, Prior und Prognose ändern sich dadurch nicht.
 // v 3 (24.11.2026 abends): ebenso mit Wind und Dunkelheit und ohne Ausfallstunden (lib/pulse-forecast-outage.js).
-export const MEMORY = { v: 3, halfLifeDays: 180, keepWxDays: 365 };
-export const emptyMemory = () => ({ v: MEMORY.v, upto: null, old: null, days: {}, wxDays: {} });
+// v 4 (26.11.2026): ebenso mit roadC, roadJ, works, ptOut (Erfahrung für die Anzeige ab Erfassungsbeginn).
+export const MEMORY = { v: 4, halfLifeDays: 180, keepWxDays: 365 };
+export const emptyMemory = () => ({ v: MEMORY.v, names: [...EFFECTS], upto: null, old: null, days: {}, wxDays: {} });
 const gapDays = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400e3);
 const decayTo = (o, day) => (o ? 2 ** (-Math.max(0, gapDays(o.at, day)) / MEMORY.halfLifeDays) : 1);
 /** Tage vor beforeDay aus dem Fenster ins Gedächtnis übernehmen (mit Abklingen bis zum jeweiligen Tag) */
@@ -430,11 +437,24 @@ export function memoryMerge(mem, beforeDay) {
 }
 function solveSmall(Pm, h, ridge = 1e-6) { const H = Float64Array.from(Pm); for (let i = 0; i < NE; i++) H[i * NE + i] += ridge; return solveSpd(H, Float64Array.from(h)); }
 /** Prior aus dem Gedächtnis zum Tag day: { b, P, n, dk, days } oder null */
+/** Reihenfolge der Wirkungen bis 26.11.2026 (Gedächtnis ohne names): danach ordnet memoryResize nach Namen um */
+export const EFFECTS_V3 = Object.freeze(['cold', 'warm', 'rain', 'warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport', 'rain1', 'rain4', 'rainPrev', 'frost', 'snow', 'heat', 'wind', 'dark']);
 /**
- * Gedächtnis aus einer Fassung mit weniger Wirkungen (EFFECTS) auf die aktuelle Länge bringen: neue Merkmale stehen hinten (CTX_KEYS),
- * also bleiben alte Einträge an ihrem Platz und die neuen beginnen mit 0 (seit 08.11.2026: fest). Ändert mem an Ort und Stelle.
+ * Gedächtnis auf die aktuellen Wirkungen (EFFECTS) bringen. Seit 26.11.2026 nach Namen (mem.names, ohne names: EFFECTS_V3 bei passender Länge):
+ * jede Wirkung behält ihre Werte, neue beginnen mit 0, wegfallende entfallen – neue Umgebungsmerkmale dürfen damit mitten in EFFECTS stehen.
+ * Ältere Fassungen ohne Namen und mit weniger Wirkungen: neue hinten (wie bis 26.11.2026, seit 08.11.2026: fest). Ändert mem an Ort und Stelle.
  */
 export function memoryResize(mem) {
+  const names = Array.isArray(mem?.names) ? mem.names : null, len = mem?.old?.n?.length ?? Object.values(mem?.days || {})[0]?.n?.length ?? null;
+  const from = names || (len === EFFECTS_V3.length && NE !== EFFECTS_V3.length ? EFFECTS_V3 : null);
+  if (from && from.join() !== EFFECTS.join()) {
+    const map = from.map(n => EFFECTS.indexOf(n)), K = from.length;
+    const rv = (a) => { if (!Array.isArray(a) || a.length !== K) return a; const o = new Array(NE).fill(0); a.forEach((v, i) => { if (map[i] >= 0) o[map[i]] = v; }); return o; };
+    const rm = (a) => { if (!Array.isArray(a) || a.length !== K * K) return a; const o = new Array(NE * NE).fill(0); for (let i = 0; i < K; i++) for (let j = 0; j < K; j++) if (map[i] >= 0 && map[j] >= 0) o[map[i] * NE + map[j]] = a[i * K + j]; return o; };
+    if (mem.old) Object.assign(mem.old, { P: rm(mem.old.P), h: rv(mem.old.h), n: rv(mem.old.n), dk: rv(mem.old.dk) });
+    for (const [d, x] of Object.entries(mem.days || {})) mem.days[d] = { ...x, H: rm(x.H), u: rv(x.u), n: rv(x.n) };
+    mem.names = [...EFFECTS]; return mem;
+  }
   const vec = (a) => (Array.isArray(a) && a.length < NE ? [...a, ...new Array(NE - a.length).fill(0)] : a);
   const mat = (a) => { if (!Array.isArray(a) || a.length >= NE * NE) return a; const k = Math.round(Math.sqrt(a.length)); if (k * k !== a.length) return a; const o = new Array(NE * NE).fill(0); for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) o[i * NE + j] = a[i * k + j]; return o; };
   if (mem?.old) Object.assign(mem.old, { P: mat(mem.old.P), h: vec(mem.old.h), n: vec(mem.old.n), dk: vec(mem.old.dk) });
@@ -453,7 +473,9 @@ export function memoryResize(mem) {
  * und +20 % Fahrten gegenüber der Vorwoche (Tier, Dezember 2023, mit Freifahrten); eigener Wert Nahverkehrsstreik ×1,19 (5 Tage, 11/2026). Vorwissen
  * +0,12 (×1,13), sd 0,1. Merkmale mit Vorwissen sind ohne eigene Fälle im Modell (ctxActive): ein angekündigter Streik wirkt so schon am ersten Tag.
  */
-export const WX_PRIOR = Object.freeze({ v: 1, effects: Object.freeze({ cold: [0.655, 0.15], warm: [0.484, 0.15], frost: [0.33, 0.2], heat: [-0.3, 0.25], snow: [-0.1, 0.15], rail: [0.12, 0.1] }) });
+// v 2 (26.11.2026): Knick bei 20 °C, Münchner Daten bis 2026 (Mittel der Schätzungen ohne und mit Monat): 0–10 °C 0,55, unter 0 °C zusätzlich 0,64,
+// 10–20 °C 0,58, über 20 °C −0,28, über 25 °C −0,23 (für Roller halbiert −0,12) je 10 K
+export const WX_PRIOR = Object.freeze({ v: 2, effects: Object.freeze({ cold: [0.55, 0.15], warm: [0.58, 0.15], frost: [0.64, 0.2], warm20: [-0.28, 0.15], heat: [-0.12, 0.2], snow: [-0.1, 0.15], rail: [0.12, 0.1] }) });
 /** Langzeitgedächtnis (oder null) um das Vorwissen WX_PRIOR ergänzen: Präzisionen addieren, Mittel gewichtet */
 export function withWxPrior(prior) {
   const P = prior ? Float64Array.from(prior.P) : new Float64Array(NE * NE), h = new Array(NE).fill(0);
@@ -497,6 +519,7 @@ export function memoryAddDays(mem, R, m, sel, dayIdx, dayName) {
  */
 export function memorySummary(mem, day, phi = 1) {
   if (!mem) return null;
+  let flat20 = false;
   const o = mem.old, f = decayTo(o, day), Pm = new Array(NE * NE).fill(0), h = new Array(NE).fill(0), n = new Array(NE).fill(0), dk = new Array(NE).fill(0);
   if (o) for (let i = 0; i < NE * NE; i++) Pm[i] = o.P[i] * f;
   if (o) for (let i = 0; i < NE; i++) { h[i] = o.h[i] * f; n[i] = o.n[i] * f; dk[i] = o.dk[i] * f; }
@@ -504,6 +527,7 @@ export function memorySummary(mem, day, phi = 1) {
   const pp = new Array(NE).fill(0), Pt = Pm.slice(), ph = Math.max(1, phi);
   for (const [name, [b0, sd]] of Object.entries(WX_PRIOR.effects)) { const e = EFFECTS.indexOf(name); if (e < 0) continue; pp[e] = 1 / (sd * sd); Pt[e * NE + e] += pp[e]; h[e] += pp[e] * b0; }
   const b = solveSmall(Pt, h), effects = {};
+  { const iw = EFFECTS.indexOf('warm'), i20 = EFFECTS.indexOf('warm20'); if (b[iw] + b[i20] < 0) { b[i20] = -Math.max(b[iw], 0); flat20 = true; } } // wie fitPooled
   EFFECTS.forEach((e, i) => {
     const info = Pt[i * NE + i]; if (!(info > 1e-9)) { effects[e] = { b: null, n: Math.round(n[i]), days: +dk[i].toFixed(1) }; return; }
     // Randvarianz aus der Inversen (über die Wirkungen mit Information); Daten mit Überstreuung, Vorwissen ohne
@@ -513,15 +537,15 @@ export function memorySummary(mem, day, phi = 1) {
     const col = (() => { const L = new Float64Array(k * k); for (let r = 0; r < k; r++) for (let c = 0; c <= r; c++) { let s0 = A[r * k + c]; for (let t = 0; t < c; t++) s0 -= L[r * k + t] * L[c * k + t]; L[r * k + c] = r === c ? Math.sqrt(Math.max(s0, 1e-18)) : s0 / L[c * k + c]; }
       const z = new Float64Array(k), x = new Float64Array(k); for (let r = 0; r < k; r++) { let s0 = ei[r]; for (let t = 0; t < r; t++) s0 -= L[r * k + t] * z[t]; z[r] = s0 / L[r * k + r]; }
       for (let r = k - 1; r >= 0; r--) { let s0 = z[r]; for (let t = r + 1; t < k; t++) s0 -= L[t * k + r] * x[t]; x[r] = s0 / L[r * k + r]; } return x; })();
-    const se = Math.sqrt(Math.max(col[idx.indexOf(i)], 0)), sg = WX_SIGN[i] || 0, fixed = sg !== 0 && b[i] * sg < 0, bi = fixed ? 0 : b[i];
+    const se = Math.sqrt(Math.max(col[idx.indexOf(i)], 0)), sg = WX_SIGN[i] || 0, fixed = (sg !== 0 && b[i] * sg < 0) || (e === 'warm20' && flat20), bi = sg !== 0 && b[i] * sg < 0 ? 0 : b[i];
     let lo = Math.exp(bi - 1.645 * se), hi = Math.exp(bi + 1.645 * se); if (sg < 0) hi = Math.min(hi, 1); if (sg > 0) lo = Math.max(lo, 1);
     effects[e] = { b: +bi.toFixed(4), se: +se.toFixed(4), lo: +lo.toFixed(3), hi: +hi.toFixed(3), n: Math.round(n[i]), days: +dk[i].toFixed(1), ...(pp[i] ? { prior: true } : {}), ...(fixed ? { fixed: true } : {}) };
   });
   return { v: mem.v, upto: mem.upto, days: +((o?.days || 0) * f + win.length).toFixed(1), oldDays: +((o?.days || 0) * f).toFixed(1), windowDays: win.length, since: [...Object.keys(mem.wxDays), ...Object.keys(mem.days)].sort()[0] || null, halfLifeDays: MEMORY.halfLifeDays, effects };
 }
-export const compactMemory = (mem) => { const r = (v) => (v === 0 ? 0 : +(+v).toPrecision(6)); const o = mem.old ? { at: mem.old.at, P: mem.old.P.map(r), h: mem.old.h.map(r), n: mem.old.n.map(r), dk: mem.old.dk.map(r), days: r(mem.old.days) } : null; return { v: mem.v, upto: mem.upto, old: o, days: mem.days, wxDays: mem.wxDays }; };
+export const compactMemory = (mem) => { const r = (v) => (v === 0 ? 0 : +(+v).toPrecision(6)); const o = mem.old ? { at: mem.old.at, P: mem.old.P.map(r), h: mem.old.h.map(r), n: mem.old.n.map(r), dk: mem.old.dk.map(r), days: r(mem.old.days) } : null; return { v: mem.v, names: [...EFFECTS], upto: mem.upto, old: o, days: mem.days, wxDays: mem.wxDays }; };
 /** Umgebungsmerkmale, die ins Modell dürfen: genug Gemeinde-Stunden mit Ereignis an genug Tagen (Fenster sel + Gedächtnis prior) */
-export const CTX_OFF = ['road'];
+export const CTX_OFF = ['road', 'roadC', 'roadJ', 'works', 'ptOut']; // erfasst und gelernt (Anzeige), nicht im Modell: Rückblick 26.11.2026 ohne Gewinn
 export function ctxActive(R, sel, prior = null) {
   if (!R.c) return [];
   const out = [];

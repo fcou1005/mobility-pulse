@@ -108,9 +108,9 @@ assert(cw.week === '2026-W44' && cw.days.join() === '2026-10-31,2026-11-01' && b
   const wm = CX.worksItems(mu, { features: [{ geometry: { type: 'Polygon', coordinates: [[[691600, 5334750], [691620, 5334770], [691600, 5334770], [691600, 5334750]]] }, properties: { beeintraechtigung: 'Vollsperre', beginn_datum_kombiniert: '2026-11-10', ende_datum_kombiniert: '2026-11-12' } }] }, now);
   assert(Math.abs(wh.items[0].lat - 53.55) < 0.01 && Math.abs(wh.items[0].lon - 9.996) < 0.01 && Math.abs(wm.items[0].lat - 48.137) < 0.01 && Math.abs(wm.items[0].lon - 11.5755) < 0.01, 'Hamburg (Punkt) und München (Polygon) aus UTM 32 umgerechnet, deutsche und ISO-Daten');
   const docs = new Map(), n = CX.addWorks(docs, [...wb.items, ...wh.items, ...wm.items, ...wm.items], (lat) => (lat > 53 ? '02000000' : lat > 48.5 ? '08111000' : '09162000'), now), d = docs.get('2026-11-11');
-  assert(n === 3 && d.ags['09162000'].works[11] === 2 && d.ags['02000000'].works[11] === 1 && !CX.CTX_KEYS.includes('works'), 'addWorks: Zahl je Gemeinde zur Ortsstunde; works ist kein Modellmerkmal');
+  assert(n === 3 && d.ags['09162000'].works[11] === 2 && d.ags['02000000'].works[11] === 1 && CX.CTX_KEYS.includes('works'), 'addWorks: Zahl je Gemeinde zur Ortsstunde; works ist seit 26.11.2026 Umgebungsmerkmal (aus, CTX_OFF)');
   const td = TR.trainDoc({ events: { day: '2026-11-11', groups: { '09162000|Voi|scooter': { start: new Array(24).fill(1) } } }, incidents: d });
-  assert(td.ctxExtra.works['09162000'][11] === 2 && !td.ctx.works, 'Archiv: works als ctxExtra, nicht in ctx');
+  assert(td.ctxExtra.works['09162000'][11] === 2 && td.ctx.works?.['09162000'] === (1 << 11), 'Archiv: works als Zahl in ctxExtra und als Kennzeichen in ctx');
   const td2 = TR.trainDoc({ events: { day: '2026-11-11', groups: { '09162000|Voi|scooter': { start: new Array(24).fill(1) } } }, incidents: { ...d, ptDay: { '09162000': [4, 31] } } });
   assert(td2.ptDay['09162000'].join() === '4,31' && !('ptDay' in td), 'Archiv: ganz ausgefallene ÖPNV-Fahrten je Tag (ptDay), nur wenn vorhanden');
 }
