@@ -347,7 +347,7 @@ export function drawRoutes() {
   for (const r of allRuns()) {
     if (!S.show[r.kind] || (S.focus && r.id !== S.focus)) continue;
     const geo = S.routed[r.id]?.coords || [[p.depot.lat, p.depot.lon], ...r.stops.map(s => [s.lat, s.lon]), [p.depot.lat, p.depot.lon]];
-    L.polyline(geo, { color: RUN_COLOR[r.kind], weight: S.routed[r.id]?.coords ? 3.5 : 2.5, opacity: S.routed[r.id]?.coords ? .9 : .65, dashArray: RUN_DASH[r.kind], renderer: S.canvas.runs }) // Luftlinie dünner und blasser, nach Straße kräftig.bindPopup(() => runTitle(r)).addTo(S.layers[r.kind]);
+    L.polyline(geo, { color: RUN_COLOR[r.kind], weight: S.routed[r.id]?.coords ? 3.5 : 2.5, opacity: S.routed[r.id]?.coords ? .9 : .65, dashArray: RUN_DASH[r.kind], renderer: S.canvas.runs }).bindPopup(() => runTitle(r)).addTo(S.layers[r.kind]); // Luftlinie dünner und blasser, nach Straße kräftig
     r.stops.forEach((s, i) => L.circleMarker([s.lat, s.lon], { radius: 5, weight: 2, color: RUN_COLOR[r.kind], fillColor: s.type === 'drop' ? RUN_COLOR[r.kind] : NEUTRAL.white, fillOpacity: 1, renderer: S.canvas.runs })
       .bindTooltip(`${r.id}·${i + 1} ${STOP_LABEL[s.type]} ${s.count}${s.prio != null ? `, ${t('ops.stopPrio', { prio: X.fmt(s.prio, 2), rank: s.rank, n: r.stops.length })}` : ''}${whyText(s) ? `, ${whyText(s)}` : ''}`, { direction: 'top' }).addTo(S.layers[r.kind]));
   }
