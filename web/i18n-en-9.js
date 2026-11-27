@@ -159,7 +159,7 @@ export default {
   "fv.envGrp.light": "Daylight",
   "fv.envOutage": "Hours in which a group's source did not deliver are left out of training and the self-check (latest {n} group-hours on {d} days).",
   "fv.envSt.off": "off: does not improve the forecast",
-  "fv.envTested": "Tested and not in the model (review 12–25 Nov 2026, error of the active model 16.73 %): motorway switched on 16.77 %, public transport outages from real-time data (15 % cancelled or 30 % delayed stops) 16.75 %, roadworks and closures in the city (Baden-Württemberg, Hamburg, Munich) 16.73 %. Motorway closures and jams are recorded separately since 26 Nov 2026 and will be tested one by one once two weeks are available.",
+  "fv.envTested": "Rule since 27 Nov 2026: every influence counts as soon as there is enough data ({rows} municipality-hours with the event on at least {days} days, window and memory together); until then its effect is only measured passively and shown here. In the review 12–25 Nov 2026 (error of the active model 16.73 %) motorway (16.77 %), public transport outages (16.75 %), roadworks (16.73 %) and the transit forecast (16.73 %) brought no gain, but hardly any loss either. Motorway as a whole no longer counts since closures and jams are recorded separately (26 Nov 2026).",
   "fv.env.roadC": "motorway: closure within the municipality",
   "fv.env.roadJ": "motorway: jam within the municipality",
   "fv.env.works": "road closure or roadworks in town (Baden-Württemberg, Hamburg, Munich only)",

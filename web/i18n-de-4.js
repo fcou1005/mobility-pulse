@@ -582,7 +582,7 @@ export default {
   "fv.envColState": "Stand",
   "fv.envSt.on": "im Modell",
   "fv.envSt.ready": "bereit",
-  "fv.envSt.wait": "sammelt",
+  "fv.envSt.wait": "passiv: sammelt Daten",
   "fv.envSt.none": "noch kein Fall",
   "fv.envSt.held": "erfasst, wirkt ab {d}",
   "fv.env.cold": "Kälte unter 10 °C: je 10 Grad kälter",

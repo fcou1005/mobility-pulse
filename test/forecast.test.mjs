@@ -101,6 +101,12 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
     for (let i = 0; i < 3; i++) { Rr.c[iRoad][i] = 1; Rr.day[i] = i; }
     const on = F.ctxActive(Rr, [0, 1, 2], { n: new Array(F.EFFECTS.length).fill(200), dk: new Array(F.EFFECTS.length).fill(5) });
     assert(on.includes(iRail) && !on.includes(iRoad) && Math.abs(F.withWxPrior(null).b[F.EFFECTS.indexOf('rail')] - 0.12) < 1e-6, `Bahnstreik ohne Fall im Modell (Vorwissen ×1,13), Autobahn aus trotz Erfahrung: ${on.map(k => CX.CTX_KEYS[k]).join(',')}`); }
+  // Regel seit 27.11.2026 (Felix): jeder Einfluss geht ins Modell, sobald genug Daten vorliegen (GATES.ctxMinRows an ctxMinDays Tagen), vorher nur
+  // passiv gelernt; Autobahn gesamt (road) bleibt draußen, weil Sperrung (roadC) und Stau (roadJ) sie ersetzen
+  { const Rr2 = { c: CX.CTX_KEYS.map(() => new Int8Array(3)), day: new Int32Array(3) }, pri = (v, d) => ({ n: new Array(F.EFFECTS.length).fill(v), dk: new Array(F.EFFECTS.length).fill(d) });
+    const big = F.ctxActive(Rr2, [0, 1, 2], pri(F.GATES.ctxMinRows, F.GATES.ctxMinDays)).map(k => CX.CTX_KEYS[k]), small = F.ctxActive(Rr2, [0, 1, 2], pri(F.GATES.ctxMinRows - 1, F.GATES.ctxMinDays)).map(k => CX.CTX_KEYS[k]);
+    assert(['warn', 'strike', 'roadC', 'roadJ', 'works', 'ptOut', 'ptRisk'].every(x => big.includes(x)) && !big.includes('road') && small.join() === 'rail',
+      `Einflüsse aktiv ab genug Daten: ${big.join(',')}; knapp darunter nur passiv (im Modell nur Bahnstreik mit Vorwissen: ${small.join(',')})`); }
   // Gedächtnis nach Namen (26.11.2026): ein Gedächtnis in der alten Reihenfolge (EFFECTS_V3, ohne names) behält je Wirkung seine Werte
   { const K = F.EFFECTS_V3.length, iO = (n) => F.EFFECTS_V3.indexOf(n), mOld = { v: 3, upto: '2026-11-20', old: { at: '2026-11-20', P: new Array(K * K).fill(0), h: new Array(K).fill(0), n: new Array(K).fill(0), dk: new Array(K).fill(0), days: 3 }, days: { '2026-11-21': { H: new Array(K * K).fill(0), u: new Array(K).fill(0), n: new Array(K).fill(0) } }, wxDays: {} };
     mOld.old.n[iO('dark')] = 77; mOld.old.P[iO('frost') * K + iO('cold')] = 5; mOld.days['2026-11-21'].u[iO('strike')] = 9;

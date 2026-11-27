@@ -579,7 +579,7 @@ export default {
   "fv.envColState": "State",
   "fv.envSt.on": "in the model",
   "fv.envSt.ready": "ready",
-  "fv.envSt.wait": "collecting",
+  "fv.envSt.wait": "passive: collecting data",
   "fv.envSt.none": "no case yet",
   "fv.envSt.held": "recorded, effective from {d}",
   "fv.env.cold": "cold below 10 °C: per 10 degrees colder",
