@@ -578,7 +578,7 @@ export default {
   "fv.envColExp": "Experience",
   "fv.envColState": "State",
   "fv.envSt.on": "in the model",
-  "fv.envSt.ready": "ready",
+  "fv.envSt.ready": "enough data, model without influences",
   "fv.envSt.wait": "passive: collecting data",
   "fv.envSt.none": "no case yet",
   "fv.envSt.held": "recorded, effective from {d}",

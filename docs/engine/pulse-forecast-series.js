@@ -284,7 +284,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   const volume = volumeOf(days), small = family && MIN_VOLUME[family] != null && volume != null && volume < MIN_VOLUME[family];
   if (small) { const hasWeek = days.some(d => d.day === shiftDay(today, -7)) || days.some(d => d.day === shiftDay(today, -6));
     choice = { ...choice, active: hasWeek ? 'week' : null, status: 'small', reason: `zu wenig Volumen: ${Math.round(volume)} Fahrtbeginne je Tag (Mittel 7 Tage, nötig ${MIN_VOLUME[family]}) – ${hasWeek ? 'veröffentlicht wird die Vorwoche' : 'keine Prognose'}`, why: { small: true, volume: Math.round(volume), min: MIN_VOLUME[family] } }; }
-  const env = envOf(R, all, mem, prior), gate = env.gate, usesEnv = ['pooledWx', 'adaptive', 'hybrid', 'naive', 'week'].includes(choice.active) && env.on;
+  const env = envOf(R, all, mem, prior), gate = env.gate, usesEnv = !!choice.active && !['profile', 'pooled'].includes(choice.active) && env.on; // seit 27.11.2026 auch Chronos, blend, ens (envRelFactor)
   const useWx = usesEnv && env.weather, envFit = env.on ? { weather: env.weather, ctx: env.ctx, prior } : {};
   const incSum = { days: incidents.filter(d => d?.ags).length, warnAt: incidents.map(d => d?.sources?.warn?.at).filter(Boolean).sort().at(-1) ?? null, roadAt: incidents.map(d => d?.sources?.road?.at).filter(Boolean).sort().at(-1) ?? null, curated: curated.length,
     upcoming: curated.filter(e => String(e.bis ?? e.von).slice(0, 10) >= today).slice(0, 10).map(e => ({ art: e.art, von: e.von, bis: e.bis ?? e.von, gebiet: e.gebiet, titel: e.titel ?? null, quelle: e.quelle })) };
