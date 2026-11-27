@@ -265,6 +265,10 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const out = PG.cityOutlook(docs, 'A', Date.parse('2026-11-18T09:20:00Z'), [['S4', 'sbahn', 600, 180, 240, 5.9, 120, 40, 50], ['U6', 'ubahn', 30, 1, 2, 1, 5, 0, 0]]);
   assert(out && out.next[0][0] === '2026-11-18' && out.next[0][1] === 11 && out.eval && out.eval.hours > 0 && out.eval.mae <= out.eval.maeNaive && out.lines.length === 1 && out.lines[0][0] === 'S4',
     `Ausblick: ab der nächsten vollen Ortsstunde, Selbstprüfung ${JSON.stringify(out?.eval)}, Linien ab 40 Halten`);
+  // heute im Diagramm (27.11.2026): Prognose aus den Vortagen für die Stunden bis jetzt, gezählt nur volle Stunden – sonst fehlte die Prognose für heute
+  { const td = (out?.eval?.series || []).filter(r => r[0] === day(0)), h9 = td.find(r => r[1] === 9), h10 = td.find(r => r[1] === 10);
+    assert(td.length === 6 && td[0][1] === 5 && h9 && Math.abs(+h9[2] - p.late[9]) < 1e-9 && Math.abs(+h9[3] - docs.get(day(0)).ags.A.ptLate[9] / 4000) < 1e-3 && h10 && h10[3] === null && h10[2] != null,
+      `Diagramm heute: Prognose 5–10 Uhr, laufende Stunde ohne Zählung (${JSON.stringify(td.slice(-2))})`); }
   assert(PG.cityOutlook(new Map([...docs].slice(-2)), 'A', Date.now(), []) === null, 'Ohne mindestens drei Tage keine Prognose');
   // Ausfälle (v 2): halten über Tage – am Vortag 10 % statt 1 % ausgefallen → Prognose zur Hälfte Vortagsstunde, zur Hälfte Vortagsmittel
   { const d2 = new Map(docs), last = day(0), a0 = docs.get(last).ags.A; d2.set(last, { ags: { A: { ...a0, ptSkip: a0.ptN.map((x, h) => Math.round(x * (h === 8 ? 0.3 : 0.1))) } } });
