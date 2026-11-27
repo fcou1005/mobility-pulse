@@ -124,8 +124,8 @@
    "operator": "Ryde",
    "city": "Köln",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -134,8 +134,8 @@
    "operator": "Ryde",
    "city": "Dortmund",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -144,8 +144,8 @@
    "operator": "Ryde",
    "city": "Bochum",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -154,8 +154,8 @@
    "operator": "Ryde",
    "city": "Essen",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -164,8 +164,8 @@
    "operator": "Ryde",
    "city": "Duisburg",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -174,8 +174,8 @@
    "operator": "Ryde",
    "city": "Wuppertal",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -184,8 +184,8 @@
    "operator": "Ryde",
    "city": "Bonn",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -194,8 +194,8 @@
    "operator": "Ryde",
    "city": "Aachen",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -204,8 +204,8 @@
    "operator": "Ryde",
    "city": "Oberhausen",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
@@ -214,8 +214,8 @@
    "operator": "Ryde",
    "city": "Herne",
    "since": "2026-10-31",
-   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); der Abruf dort braucht Registrierung und Schlüssel (Antrag gestellt am 03.11.2026). Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
-   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); access there needs registration and a key (requested on 3 Nov 2026). According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
+   "note": "Ryde liefert GBFS 2.3 an die Multimodale Datendrehscheibe NRW (Datenlieferant 465, 10 Zonen in NRW); laut MDD NRW (05.11.2026) gibt Ryde die Daten dort nur an Kommunen und Verkehrsunternehmen weiter, nicht an private Nutzer. Laut Mobidrom (04.11.2026) kommt Ryde in ca. 4 Wochen auch auf die offene Mobidrom-Plattform; dann übernimmt der Sammler den Feed automatisch.",
+   "note_en": "Ryde supplies GBFS 2.3 to the NRW multimodal data hub (MDD NRW, data supplier 465, 10 zones in NRW); according to MDD NRW (5 Nov 2026) Ryde shares the data there only with municipalities and transport companies, not with private users. According to Mobidrom (4 Nov 2026), Ryde will also be on the open Mobidrom platform in about 4 weeks; the collector then picks the feed up automatically.",
    "types": [
     "scooter"
    ]
