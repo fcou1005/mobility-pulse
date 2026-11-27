@@ -78,7 +78,7 @@ export default {
   "pt.pgAhead": "ahead",
   "pt.pgInflOn": "<b>Influence on the sharing forecast:</b> the transit forecast feeds into the forecast for sharing vehicles as an influence of its own: hours for which it expects many delays (20 % of stops late or more). Currently included, learned effect ×{f} on demand ({n} cases).",
   "pt.pgInflOff": "<b>Influence on the sharing forecast:</b> the transit forecast is set up as an influence of its own in the forecast for sharing vehicles: hours for which it expects many delays (20 % of stops late or more). Measured effect ×{f} on demand ({n} cases). Currently off because it did not make the sharing forecast more accurate in the replay; its effect keeps being measured.",
-  "pt.pgInflNew": "<b>Influence on the sharing forecast:</b> since 26 Nov the transit forecast is set up as an influence of its own in the forecast for sharing vehicles: hours for which it expects many delays (20 % of stops late or more). Its effect appears with the next forecast run; it is only included once it makes the sharing forecast more accurate.",
+  "pt.pgInflNew": "<b>Influence on the sharing forecast:</b> the transit forecast is set up as an influence of its own in the forecast for sharing vehicles: hours for which it expects many delays (20 % of stops late or more). Its current state is listed among the influences of the sharing forecast.",
   "pt.pgInflLink": "All influences of the sharing forecast",
   "pt.pgDaysToggle": "Accuracy per day",
   "pt.pgColModel": "forecast off (percentage points)",

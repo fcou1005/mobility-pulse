@@ -748,6 +748,11 @@ assert(O.needsSwap({ battery: null, rangeKm: 30 }, { swapRangeKm: O.presetOf('ca
   const d2 = O.dispoForecast(lat2, series), pc = O.ptCorrectionOf(d2, 'A'), lf = [1, Math.exp(-0.5), Math.exp(-1)].map(e => 1 + 0.2 * e);
   assert(d2.corrections.stoerung.cities.A === 1.2 && !d2.corrections.stoerung.on && d2.corrections.stoerung.gate.why === 'few' && d2.corrections.nowcast.ratio === 1.1 && O.dispoCorrections({}).stoerung === null,
     'Disposition: Korrekturen mit Stand der Freigabe und Faktor je gestörter Gemeinde');
+  // Einfluss der ÖPNV-Prognose (ptRisk) für den Reiter ÖPNV: Stand und Wirkung wie in der Einflüsse-Tabelle (27.11.2026: Reiter las dispo.json ohne ihn)
+  { const env = { keys: ['warn', 'ptRisk'], active: ['warn'], support: { ptRisk: { rows: 100, days: 3, memRows: 20, memDays: 1 } } }, mem = { effects: { ptRisk: { b: -0.0151, n: 90 } } };
+    const off = O.dispoForecast({ ...latest, env, memory: mem }, series).ptRisk, on = O.dispoForecast({ ...latest, env: { ...env, active: ['ptRisk'] }, memory: mem }, series).ptRisk;
+    assert(off && off.state === 'off' && off.b === -0.0151 && off.n === 120 && on.state === 'on' && d.ptRisk === null,
+      `Disposition: ÖPNV-Prognose als Einfluss (aus, b ${off?.b}, ${off?.n} Fälle; an; ohne Angabe null)`); }
   const ex = d.ags.A[0].slice(0, 3).reduce((s, x, k) => s + x * (lf[k] - 1), 0);
   assert(pc && !pc.on && Math.abs(pc.extra - Math.round(ex * 10) / 10) < 1e-9 && pc.hours === 3 && O.ptCorrectionOf(d2, 'B') === null, `Störungskorrektur angezeigt: +${pc?.extra} Fahrten in 3 Stunden (+${(pc?.share * 100).toFixed(1)} %)`);
   const dOn = { ...d2, ags: { A: [d.ags.A[0].map((x, k) => (k < 3 ? x * lf[k] : x)), d.ags.A[1]] }, corrections: { ...d2.corrections, stoerung: { ...d2.corrections.stoerung, on: true } } }, pOn = O.ptCorrectionOf(dOn, 'A');

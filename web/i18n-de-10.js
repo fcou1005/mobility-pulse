@@ -78,7 +78,7 @@ export default {
   "pt.pgAhead": "Vorhersage",
   "pt.pgInflOn": "<b>Einfluss auf die Sharing-Prognose:</b> Die ÖPNV-Prognose geht als eigener Einfluss in die Prognose für Sharing-Fahrzeuge ein: Stunden, für die sie viele Verspätungen erwartet (ab 20 % verspätete Halte). Derzeit eingerechnet, gelernte Wirkung ×{f} auf die Nachfrage ({n} Fälle).",
   "pt.pgInflOff": "<b>Einfluss auf die Sharing-Prognose:</b> Die ÖPNV-Prognose ist als eigener Einfluss in der Prognose für Sharing-Fahrzeuge angelegt: Stunden, für die sie viele Verspätungen erwartet (ab 20 % verspätete Halte). Gemessene Wirkung ×{f} auf die Nachfrage ({n} Fälle). Derzeit aus, weil sie die Sharing-Prognose im Nachrechnen nicht genauer gemacht hat; die Wirkung wird weiter gemessen.",
-  "pt.pgInflNew": "<b>Einfluss auf die Sharing-Prognose:</b> Die ÖPNV-Prognose ist seit 26.11. als eigener Einfluss in der Prognose für Sharing-Fahrzeuge angelegt: Stunden, für die sie viele Verspätungen erwartet (ab 20 % verspätete Halte). Ihre Wirkung erscheint mit dem nächsten Prognose-Lauf; eingerechnet wird sie erst, wenn sie die Sharing-Prognose genauer macht.",
+  "pt.pgInflNew": "<b>Einfluss auf die Sharing-Prognose:</b> Die ÖPNV-Prognose ist als eigener Einfluss in der Prognose für Sharing-Fahrzeuge angelegt: Stunden, für die sie viele Verspätungen erwartet (ab 20 % verspätete Halte). Ihr aktueller Stand steht unter den Einflüssen der Sharing-Prognose.",
   "pt.pgInflLink": "Alle Einflüsse der Sharing-Prognose",
   "pt.pgDaysToggle": "Genauigkeit je Tag",
   "pt.pgColModel": "Prognose daneben (Prozentpunkte)",

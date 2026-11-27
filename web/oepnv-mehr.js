@@ -92,7 +92,7 @@ export function atStopsPanel(ctx, doc, live, fleet, name) {
 }
 
 /** Verspätungsprognose (F28): wie gut sie war (letzte Tage, gegen „wie gestern“), was sie erwartet (nächste 24 Stunden), Linien, Einfluss auf die Sharing-Prognose */
-/** @param {any} ctx @param {any} doc @param {string} name @param {any} [fcDoc] forecast/latest.json (Einfluss ptRisk) */
+/** @param {any} ctx @param {any} doc @param {string} name @param {any} [fcDoc] forecast/dispo.json (Einfluss ptRisk) */
 export function progPanel(ctx, doc, name, fcDoc = null) {
   const P = doc?.prognose; if (!P?.next?.length) return '';
   const pc = (/** @type {number} */ x, d = 1) => `${ctx.fmt(Math.round(x * 100 * 10 ** d) / 10 ** d, d)} %`, pp = (/** @type {number} */ x) => ctx.fmt(Math.round(x * 1000) / 10, 1), f = (/** @type {number} */ x) => ctx.fmt(x);
@@ -103,10 +103,9 @@ export function progPanel(ctx, doc, name, fcDoc = null) {
   const lines = (P.lines || []).map((/** @type {any[]} */ l) => `<tr><td>${ctx.esc(l[0])}</td><td>${artTxt(l[1])}</td><td class="n">${pc(l[2], 0)}</td><td class="n">${pc(l[3], 0)}</td></tr>`).join('');
   const days = (E?.byDay || []).map((/** @type {any[]} */ r) => { const mx = Math.max(0.001, ...(E.byDay || []).map((/** @type {any[]} */ x) => Math.max(x[1], x[2]))); return `<tr><td>${dateFmt({ weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(new Date(`${r[0]}T12:00:00Z`))}</td><td class="n bars"><span class="t">${pp(r[1])}</span><span class="fv-bar" style="width:${Math.round(r[1] / mx * 90)}px"></span></td><td class="n bars"><span class="t">${pp(r[2])}</span><span class="fv-bar" style="width:${Math.round(r[2] / mx * 90)}px;opacity:.45"></span></td></tr>`; }).join('');
   // Einfluss auf die Sharing-Prognose (Merkmal ptRisk): Stand und gelernte Wirkung aus forecast/latest.json
-  // Zustand wie in der Einflüsse-Tabelle der Prognose: an (env.active), aus (CTX_OFF, Wirkung wird weiter gemessen), noch nicht gemessen (Prognose-Stand vor dem 26.11.)
-  const E2 = fcDoc?.env, eff = fcDoc?.memory?.effects?.ptRisk, sup = E2?.support?.ptRisk, nC = sup ? sup.rows + sup.memRows : eff?.n;
-  const inflKey = !E2 || !(E2.keys || []).includes('ptRisk') ? 'pt.pgInflNew' : (E2.active || []).includes('ptRisk') ? 'pt.pgInflOn' : 'pt.pgInflOff';
-  const infl = t(inflKey, { f: eff?.b != null ? ctx.fmt(Math.round(Math.exp(eff.b) * 100) / 100, 2) : '–', n: nC != null ? f(nC) : '–' });
+  // Stand wie in der Einflüsse-Tabelle der Prognose, aus forecast/dispo.json ptRisk (seit Format 1.9; vorher fehlte er dort und der Absatz blieb auf „neu“)
+  const R = fcDoc?.ptRisk, inflKey = !R ? 'pt.pgInflNew' : R.state === 'on' ? 'pt.pgInflOn' : 'pt.pgInflOff';
+  const infl = t(inflKey, { f: R?.b != null ? ctx.fmt(Math.round(Math.exp(R.b) * 100) / 100, 2) : '–', n: R?.n != null ? f(R.n) : '–' });
   return `<div class="panel" id="pt-prog"><div class="panel-head"><div><h2>${t('pt.pgTitle', { name })}</h2><div class="sub">${t('pt.pgSub')}</div></div></div>
     <p><b>${verdict}</b></p>${progChart(ctx, P, doc.hours)}
     <p>${t('pt.pgLead', { l: `<b>${pc(mL)}</b>`, s: `<b>${pc(mS)}</b>`, ml: pc(P.mean?.late || 0), ms: pc(P.mean?.skip || 0) })}</p>

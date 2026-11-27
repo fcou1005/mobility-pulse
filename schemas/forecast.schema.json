@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.8",
+ "x-version": "1.9",
  "$defs": {
   "latest": {
    "type": "object",
@@ -296,6 +296,30 @@
       },
       "minItems": 2,
       "maxItems": 2
+     }
+    },
+    "ptRisk": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Seit 1.9: Einfluss der ÖPNV-Prognose (Merkmal ptRisk) für den Reiter ÖPNV: state on (im Modell) oder off, b gelernte Wirkung auf die Nachfrage (log, Faktor exp(b), wie memory.effects), n Fälle wie in der Einflüsse-Tabelle; null, solange die Prognose das Merkmal nicht kennt",
+     "properties": {
+      "state": {
+       "enum": [
+        "on",
+        "off"
+       ]
+      },
+      "b": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "n": {
+       "type": "number"
+      }
      }
     }
    }
