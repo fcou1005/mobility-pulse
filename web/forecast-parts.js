@@ -151,12 +151,16 @@ export function envHtml(ctx, L, { title = true } = {}) {
   const wxP = FC.wxProgress(L?.weather?.gate), isWxK = (/** @type {string} */ k) => (FC.WX_NAMES || []).includes(k);
   const progOf = (/** @type {any} */ r) => /** @type {any} */ (isWxK(r.k) ? wxP : FC.ctxProgress(E?.support?.[r.k], r.k, today, { windowDays: M?.windowDays || 21 }));
   const bar = (/** @type {number} */ share, /** @type {string} */ what) => { const p = Math.round(share * 100); return `<span class="fv-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}" aria-label="${esc(t('fv.envProgAria', { what }))}"><i style="width:${p}%"></i></span><b>${p} %</b>`; };
+  const ctxDetail = (/** @type {any} */ P) => t('fv.envProgCtx', { n: n0(Math.min(P.rows, P.needRows)), need: n0(P.needRows), d: Number.isInteger(P.days) ? n0(Math.min(P.days, P.needDays)) : n1(Math.min(P.days, P.needDays)), nd: P.needDays });
   const stateCell = (/** @type {any} */ r) => {
     if (r.st === 'on' || r.st === 'fixed') { const since = E?.since?.[isWxK(r.k) ? 'weather' : r.k]; return `${chip(r.st, r.k)}${since ? `<div class="fv-sub" style="margin:2px 0 0">${t('fv.envSinceT', { d: esc(dateFmt({ day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: TZ }).format(new Date(since))) })}</div>` : ''}`; }
-    if (r.st === 'held' || r.st === 'ready') return chip(r.st, r.k);
+    // zurückgehalten (Lernphase bis pendingFrom): Fortschritt aus dem Vorgemerkten; greift frühestens mit dem Ende der Lernphase
+    if (r.st === 'held') { const pf = String(E?.pendingFrom || '').slice(0, 10), P = FC.ctxProgress(E?.support?.[r.k]?.pending, r.k, today, { windowDays: M?.windowDays || 21 }), d = P.eta && P.eta > pf ? P.eta : pf;
+      return `<span class="fv-chip">${t('fv.envSt.wait')}</span><div class="fv-progrow">${bar(P.share, shortName(r.k))}</div><div class="fv-sub" style="margin:2px 0 0">${ctxDetail(P)}. ${t(P.share >= 1 ? 'fv.envEtaHeld' : 'fv.envEta', { d: when(d) })}</div>`; }
+    if (r.st === 'ready') return chip(r.st, r.k);
     const P = progOf(r); if (!P) return chip(r.st, r.k);
     const what = shortName(r.k), detail = isWxK(r.k) ? t('fv.envProgWx', { t: n1((L?.weather?.gate?.tempRangeK) || 0), tn: FC.GATES.wxTempRangeK, r: n0(L?.weather?.gate?.rainDays || 0), d: n0(L?.weather?.gate?.dryDays || 0), rn: FC.GATES.wxRainDays })
-      : t('fv.envProgCtx', { n: n0(Math.min(P.rows, P.needRows)), need: n0(P.needRows), d: Number.isInteger(P.days) ? n0(Math.min(P.days, P.needDays)) : n1(Math.min(P.days, P.needDays)), nd: P.needDays });
+      : ctxDetail(P);
     const eta = isWxK(r.k) ? t('fv.envEtaWx') : P.from ? t('fv.envEtaFrom', { from: when(P.from), d: when(P.eta) }) : P.share >= 1 ? t('fv.envEtaNext') : P.eta ? t('fv.envEta', { d: when(P.eta) }) : t(P.rows > 0 ? 'fv.envEtaSlow' : 'fv.envEtaNone');
     return `<span class="fv-chip">${t('fv.envSt.wait')}</span><div class="fv-progrow">${bar(P.share, what)}</div><div class="fv-sub" style="margin:2px 0 0">${P.from ? '' : `${detail}. `}${eta}</div>`;
   };

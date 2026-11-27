@@ -94,6 +94,7 @@ export default {
   "geo.popCheck": "Census check: in {w} of {n} municipalities, the census total deviates at most ±{d} % from the population of the municipal boundaries (VG250-EW).",
   "geo.popCheckAdj": "The two figures have different reference dates; after removing the common shift per state (median), it is {w} of {n}. The rest are assignment errors or genuine deviations of individual municipalities.",
   "geo.sources": "Sources: 2022 census © Federal Statistical Office (dl-de/by-2-0), accident atlas © statistical offices of the Federation and the Länder (dl-de/by-2-0), timetable gtfs.de (CC BY 4.0), OpenStreetMap contributors (ODbL).",
+  "fv.envEtaHeld": "Threshold reached; applies from {d} (end of the learning phase).",
   "fv.envShort.ptRisk": "transit forecast",
   "fv.envShort.ptOut": "public transport disrupted",
   "fv.envShort.works": "roadworks in town",

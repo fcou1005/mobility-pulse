@@ -1,6 +1,6 @@
 {
   "hinweis": "Spielorte für Sport-Ereignisse (Merkmal event der Prognose). Der Sammler holt die Spielpläne aus OpenLigaDB (ODbL) und macht aus jedem Heimspiel eines hier geführten Vereins eine Veranstaltung in der Gemeinde des Stadions (ort + land, aufgelöst über die Gemeindegrenzen; ags optional). Ligen „alle“: jeder Heimverein muss hier stehen, fehlende meldet der Sammler (sport.json → unbekannt). Ligen „liste“: nur die hier geführten Vereine (3. Liga: Vereine mit großem Publikum, Auswahl ohne Zuschauerzahlen geprüft; DFB-Pokal und Champions League: nur hier geführte Vereine; DEL: Eishockey, alle Vereine). Vereinsnamen wie in OpenLigaDB (team1.teamName); alias für abweichende Schreibweisen. aktivAb: erst ab dann gehen die Spiele in die Prognose (Ende der Lernphase); gesammelt werden sie vorher schon.",
-  "aktivAb": "2026-11-28T10:00:00+01:00",
+  "aktivAb": "2026-11-27T17:00:00+01:00",
   "ligen": {
     "bl1": "alle",
     "bl2": "alle",

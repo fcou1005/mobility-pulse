@@ -94,6 +94,7 @@ export default {
   "geo.popCheck": "Zensus-Abgleich: in {w} von {n} Gemeinden weicht die Zensus-Summe höchstens ±{d} % von der Einwohnerzahl der Gemeindegrenzen (VG250-EW) ab.",
   "geo.popCheckAdj": "Beide Zahlen haben verschiedene Stichtage; rechnet man die gemeinsame Verschiebung je Land heraus (Median), sind es {w} von {n}. Der Rest sind Zuordnungsfehler oder echte Abweichungen einzelner Gemeinden.",
   "geo.sources": "Quellen: Zensus 2022 © Statistisches Bundesamt (dl-de/by-2-0), Unfallatlas © Statistische Ämter des Bundes und der Länder (dl-de/by-2-0), Fahrplan gtfs.de (CC BY 4.0), OpenStreetMap-Mitwirkende (ODbL).",
+  "fv.envEtaHeld": "Schwelle erreicht; greift ab {d} (Ende der Lernphase).",
   "fv.envShort.ptRisk": "ÖPNV-Prognose",
   "fv.envShort.ptOut": "Nahverkehr gestört",
   "fv.envShort.works": "Baustellen im Ort",
