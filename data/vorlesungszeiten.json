@@ -1,6 +1,6 @@
 {
  "version": 1,
- "hinweis": "Vorlesungsfreie Zeiten der Universitäten in Städten mit Sharing-Flotte (Merkmal semfrei der Prognose, lib/pulse-context.js). Je Eintrag die Seite der Hochschule als Beleg; nur Zeiträume, die dort stehen. Stand 27.11.2026 (Wintersemester 2026/27, Sommersemester 2027). Gezählt wird die Gemeinde der Universität; Fachhochschulen mit abweichenden Zeiten sind nicht eingetragen.",
+ "hinweis": "Vorlesungsfreie Zeiten der Universitäten in Städten mit Sharing-Flotte (Merkmal semfrei der Prognose, lib/pulse-context.js). Je Eintrag die Seite der Hochschule als Beleg; nur Zeiträume, die dort stehen. Stand 27.11.2026 (ergänzt nachts um Berlin, Mainz, Marburg, Dresden) (Wintersemester 2026/27, Sommersemester 2027). Gezählt wird die Gemeinde der Universität; Fachhochschulen mit abweichenden Zeiten sind nicht eingetragen.",
  "stand": "2026-11-27",
  "ereignisse": [
   {
@@ -488,6 +488,110 @@
    },
    "titel": "Universität Potsdam: akademische Weihnachtsferien",
    "quelle": "https://uni-potsdam.de/fileadmin/projects/ambek/Amtliche_Bekanntmachungen/2025/Ausgabe_01/ambek-2025-01-004a.pdf"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-21",
+   "bis": "2027-01-02",
+   "gebiet": {
+    "ags": [
+     "11000000"
+    ]
+   },
+   "titel": "Humboldt-Universität und Freie Universität Berlin: akademische Ferien",
+   "quelle": "https://www.hu-berlin.de/de/studium/bewerbung/fristen/akademische_fristen_2026-2027.pdf/@@download/file/Akademische_Fristen_2026-2027.pdf",
+   "hinweis": "FU Berlin mit derselben Vorlesungszeit und denselben akademischen Ferien (Wintersemester 12.10.2026–13.02.2027); TU Berlin nicht geprüft; Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-14",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "11000000"
+    ]
+   },
+   "titel": "Humboldt-Universität und Freie Universität Berlin: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.hu-berlin.de/de/studium/bewerbung/fristen/akademische_fristen_2026-2027.pdf/@@download/file/Akademische_Fristen_2026-2027.pdf",
+   "hinweis": "FU Berlin mit derselben Vorlesungszeit und denselben akademischen Ferien (Wintersemester 12.10.2026–13.02.2027); TU Berlin nicht geprüft; Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-18",
+   "bis": "2027-09-30",
+   "gebiet": {
+    "ags": [
+     "11000000"
+    ]
+   },
+   "titel": "Humboldt-Universität und Freie Universität Berlin: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.hu-berlin.de/de/studium/bewerbung/fristen/akademische_fristen_2026-2027.pdf/@@download/file/Akademische_Fristen_2026-2027.pdf",
+   "hinweis": "FU Berlin mit derselben Vorlesungszeit und denselben akademischen Ferien (Wintersemester 12.10.2026–13.02.2027); TU Berlin nicht geprüft; Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-23",
+   "bis": "2027-01-05",
+   "gebiet": {
+    "ags": [
+     "07315000"
+    ]
+   },
+   "titel": "Johannes Gutenberg-Universität Mainz: Weihnachtspause",
+   "quelle": "https://www.studium.uni-mainz.de/en/?p=46403",
+   "hinweis": "Vorlesungsende 13.02.2027; Beginn des Sommersemesters 2027 nicht in der Quelle, daher nur die Weihnachtspause"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-21",
+   "bis": "2027-01-08",
+   "gebiet": {
+    "ags": [
+     "06534014"
+    ]
+   },
+   "titel": "Universität Marburg: veranstaltungsfrei zum Jahreswechsel",
+   "quelle": "https://www.uni-marburg.de/de/studium/quicklinks/semestertermine",
+   "hinweis": "Sommersemester 2027 und Wintersemester 2027/28 laut Quelle unter Vorbehalt"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-13",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "06534014"
+    ]
+   },
+   "titel": "Universität Marburg: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.uni-marburg.de/de/studium/quicklinks/semestertermine",
+   "hinweis": "Sommersemester 2027 und Wintersemester 2027/28 laut Quelle unter Vorbehalt"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-10-10",
+   "gebiet": {
+    "ags": [
+     "06534014"
+    ]
+   },
+   "titel": "Universität Marburg: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.uni-marburg.de/de/studium/quicklinks/semestertermine",
+   "hinweis": "Sommersemester 2027 und Wintersemester 2027/28 laut Quelle unter Vorbehalt"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-21",
+   "bis": "2027-01-03",
+   "gebiet": {
+    "ags": [
+     "14612000"
+    ]
+   },
+   "titel": "TU Dresden: Jahreswechsel, lehrveranstaltungsfrei",
+   "quelle": "https://tu-dresden.de/bu/umwelt/forst/ressourcen/dateien/plaene/wise-2026-2027-stundenplaene/Ablaufplan-ws-26-27.pdf",
+   "hinweis": "Ablaufplan einer Fakultät; Lehrveranstaltungen 04.01.–05.02.2027, Beginn des Sommersemesters 2027 nicht in der Quelle"
   }
  ]
 }

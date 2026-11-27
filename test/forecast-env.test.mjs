@@ -27,6 +27,11 @@ assert(big?.[0] === FC.ENV_REL.max && FC.envRelFactor({ beta, ctx: [], weather: 
 { const W = FC.wxProgress({ ok: false, tempRangeK: 2.5, rainDays: 3, dryDays: 5, missingShare: 0.1 });
   assert(Math.abs(W.share - 0.5) < 1e-9 && FC.wxProgress({ ok: true }).share === 1 && FC.wxProgress(null) === null, 'Wetter: knappster Teil (Temperaturspanne 2,5 von 5 K) = 50 %'); }
 
+// Chronos mit oder ohne Einflüsse (27.11.2026 nachts): ab CHRONOS_ENV.minDays Prüftagen nach dem Schatten chronosEnv, davor mit
+{ const mk = (n, a, b) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`2026-11-${String(10 + i).padStart(2, '0')}`, { trainDays: 10, models: { chronos: { wapeGD: a, wapeGH: a }, chronosEnv: { wapeGD: b, wapeGH: b }, hybrid: { wapeGD: 0.4, wapeGH: 0.4 } } }]));
+  const few = FC.chronosEnvChoice(mk(3, 0.3, 0.35)), worse = FC.chronosEnvChoice(mk(9, 0.3, 0.32)), better = FC.chronosEnvChoice(mk(9, 0.3, 0.28)), view = FC.evalsForChoice(mk(2, 0.3, 0.28), better);
+  assert(few.on && !few.decided && !worse.on && worse.decided && better.on && Object.values(view)[0].models.chronos.wapeGD === 0.28 && FC.evalsForChoice(mk(2, 0.3, 0.28), worse)['2026-11-10'].models.chronos.wapeGD === 0.3,
+    `Chronos-Einflüsse: 3 Tage → mit (noch offen); ${worse.days} Tage schlechter → ohne; besser → mit, Modellwahl wertet dann chronosEnv`); }
 // Semesterferien (semfrei, 27.11.2026): gepflegte Liste mit Beleg je Eintrag; erster Fall = Erfassungsbeginn in FEATURE_SINCE
 { const { readFileSync } = await import('node:fs'), CX = await import('../lib/pulse-context.js'), doc = JSON.parse(readFileSync(new URL('../data/vorlesungszeiten.json', import.meta.url), 'utf8'));
   const chk = CX.checkCurated(doc), first = chk.ok.map(e => e.von).sort()[0], L = CX.ctxLookup([], chk.ok), i = CX.CTX_KEYS.indexOf('semfrei');
@@ -36,6 +41,13 @@ assert(big?.[0] === FC.ENV_REL.max && FC.envRelFactor({ beta, ctx: [], weather: 
     'semfrei: Tübingen in der Weihnachtspause und den Semesterferien, nicht im Semester, nicht im Nachbarort');
   const P = FC.ctxProgress(null, 'semfrei', '2026-11-27');
   assert(P.share === 0 && P.from === '2026-12-19' && P.eta === '2026-12-20', `Fortschritt semfrei: ab ${P.from}, frühestens ${P.eta}`); }
+
+// Brückentage (bruecke, 27.11.2026 nachts): aus dem Feiertagskalender je Land, erster Fall = FEATURE_SINCE.bruecke
+{ const E = await import('../lib/pulse-econ.js'), CX = await import('../lib/pulse-context.js'), b = E.bridgeEntries(null, '2026-11-01', '2027-12-31'), chk = CX.checkCurated({ ereignisse: b });
+  const L = CX.ctxLookup([], chk.ok), i = CX.CTX_KEYS.indexOf('bruecke');
+  assert(chk.bad.length === 0 && b.map(e => e.von).join() === '2027-05-07,2027-05-28' && b[0].von === FC.FEATURE_SINCE.bruecke && b[1].gebiet.laender.includes('BW') && !b[1].gebiet.laender.includes('BE')
+    && L('08416041', '2027-05-28', 9)[i] === 1 && L('11000000', '2027-05-28', 9)[i] === 0 && L('11000000', '2027-05-07', 9)[i] === 1 && L('08416041', '2027-05-06', 9)[i] === 0,
+    `Brückentage 2026/27: ${b.map(e => `${e.von} (${e.gebiet.laender.length} Länder)`).join(', ')}; Fronleichnam-Brücke nicht in Berlin`); }
 
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);

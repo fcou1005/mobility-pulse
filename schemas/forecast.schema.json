@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.11",
+ "x-version": "1.12",
  "$defs": {
   "latest": {
    "type": "object",
@@ -114,7 +114,7 @@
     },
     "env": {
      "type": "object",
-     "description": "Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support[Merkmal] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since[Merkmal oder weather] = Zeitpunkt, seit dem es ununterbrochen greift. Seit 1.11: chronos = { days, with, without } – Chronos-2 mit (Schatten chronosEnv) und ohne eingerechnete Einflüsse über dieselben reifen Tage der Selbstprüfung (Abweichung wie scoreOf), null ohne Tage."
+     "description": "Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support[Merkmal] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since[Merkmal oder weather] = Zeitpunkt, seit dem es ununterbrochen greift. Seit 1.11: chronos = { days, with, without } – Chronos-2 mit (Schatten chronosEnv) und ohne eingerechnete Einflüsse über dieselben reifen Tage der Selbstprüfung (Abweichung wie scoreOf), null ohne Tage. Seit 1.12: chronos zusätzlich on (Einflüsse bei Chronos im Betrieb) und decided (ab CHRONOS_ENV.minDays Prüftagen entschieden: on nur, wenn with ≤ without; davor on)."
     }
    }
   },

@@ -12,6 +12,7 @@ import * as SV from '../../lib/pulse-schema.js';
 import * as OPS from '../../lib/pulse-ops.js';
 import * as FB from '../../lib/pulse-fehlbestand.js';
 import * as PG from '../../lib/pulse-oepnv-prog.js';
+import { bridgeEntries } from '../../lib/pulse-econ.js';
 
 export async function run(ctx) {
   const { DATA, ROOT, fetchJson, latest, log, now } = ctx;
@@ -64,7 +65,9 @@ export async function run(ctx) {
         // getrennt in forecast/moped/ und forecast/car/; eine Familie ohne Fahrzeugminuten in den Tagesdateien wird übersprungen (keine Dateien)
         // vorlesungsfreie Zeiten der Universitäten (Merkmal semfrei, 27.11.2026): gepflegte Liste im Repo, je Eintrag mit Beleg der Hochschule
         const semDoc = await rd(path.join(ROOT, 'data', 'vorlesungszeiten.json')), sem = CX.checkCurated(semDoc); if (sem.bad.length) log(`Vorlesungszeiten: ${sem.bad.length} Einträge übersprungen (${sem.bad.slice(0, 3).join('; ')})`);
-        const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...sem.ok, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
+        // Brückentage (Merkmal bruecke) aus dem Feiertagskalender: 60 Tage zurück (Training) bis 400 Tage voraus
+        const calendar = await rd(path.join(DATA, 'calendar.json')), bridges = bridgeEntries(calendar, FC.shiftDay(FC.dayOfLocal(now), -60), FC.shiftDay(FC.dayOfLocal(now), 400));
+        const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...sem.ok, ...bridges, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])];
         ctx.trainCtx = { curated: curatedAll, pending };
         // Störungskorrektur (angezeigt, nach Freigabe eingerechnet): letzte volle Stunde je Gemeinde (Phase oepnv) und belegte Wirkung (oepnv/wirkung.json)
         let ptIn = null; try { const w = ctx.ptNow ? await rd(path.join(DATA, 'oepnv', 'wirkung.json')) : null; if (w?.learn) ptIn = { now: ctx.ptNow, effect: Object.fromEntries(Object.entries(w.learn.cities || {}).map(([a, r]) => [a, r[1]])), pooled: w.learn.pooled?.effect ?? 0, since: w.learn.since, until: w.learn.until }; } catch { ptIn = null; }

@@ -2,9 +2,9 @@
 // Mobility Pulse — Prognose – Stundenreihen für das Prognose-Dashboard (aus pulse-forecast.js geschnitten; pulse-forecast.js bleibt die Fassade für alle Importe).
 import { hourOf, dayOf } from './pulse-track.js';
 import { CTX_KEYS, ctxLookup } from './pulse-context.js';
-import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, NOWCAST, PEAK, PTADJ, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, withWxPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, scoreOf, sum } from './pulse-forecast-model.js';
+import { BLEND, CONFORMAL, EVAL_VERSION, FEEDBACK, FORECAST_VERSION, GATES, MEMORY, MODELS, NCTX, NOWCAST, PEAK, PTADJ, QBAND_MODELS, SHADOW_ONLY, Z80, bandIx, bandOf80, bandOfQ, buildRows, compactFeedback, compactMemory, conformalUpdate, emptyConformal, emptyFeedback, emptyMemory, envOf, feedbackWeights, fitPooled, learnSummary, memoryAddDays, memoryMerge, memoryPrior, withWxPrior, memoryResize, memorySummary, peakScore, pinball, quantileBands, scoreDay, sum } from './pulse-forecast-model.js';
 import { ENSEMBLE, compactEns, emptyEns, ensSummary, loadEns } from './pulse-forecast-ens.js';
-import { BIAS, DECIDE, DM, MIN_VOLUME, agsFactors, assignEras, biasFactorOf, buildFuture, chooseModel, dayFromDoc, evaluateDays, localToUtcMs, nowcastApply, nowcastRatios, nowcastWindow, portableModel, ptApply, ptFactors, ptScoreAdd, corrGate, CORR_GATE, ptUnits, nowcastUnits, predictAll, predictLag, predictNaive, shiftDay, typeFactors, volumeOf, wxLookup } from './pulse-forecast-select.js';
+import { BIAS, DECIDE, DM, MIN_VOLUME, agsFactors, chronosEnvChoice, evalsForChoice, assignEras, biasFactorOf, buildFuture, chooseModel, dayFromDoc, evaluateDays, localToUtcMs, nowcastApply, nowcastRatios, nowcastWindow, portableModel, ptApply, ptFactors, ptScoreAdd, corrGate, CORR_GATE, ptUnits, nowcastUnits, predictAll, predictLag, predictNaive, shiftDay, typeFactors, volumeOf, wxLookup } from './pulse-forecast-select.js';
 
 // ---------- Stundenreihen für das Prognose-Dashboard (forecast/series.json) ----------
 // Je Gebiet (scope) und Ortstag drei Reihen zu 24 Stunden: p = Plan (Tagesprognose, mit Tagen < Tag gerechnet und beim ersten Lauf des Tags
@@ -90,17 +90,18 @@ export function planDay(R, days, di, day, wx, calendar, evals, fb = null, { mem 
   // Entscheidungsregel wie im Betrieb, mit dem, was vor dem Tag bekannt war (Selbstprüfung bis Vortag, Live-Prognosen, die vor Tagesbeginn ausgewertet waren)
   const dayStart = localToUtcMs(day, 0);
   const gate = []; // S2.3: Chronos/Mischung über den DM-Test in chooseModel (Selbstprüfung bis vor dem Tag)
-  let model = pick(chooseModel(prior, { trainDays, live, untilMs: dayStart, nowMs: dayStart, without: gate }).active);
+  const ceP = chronosEnvChoice(prior), priorC = evalsForChoice(prior, ceP); // Chronos mit oder ohne Einflüsse wie damals entschieden
+  let model = pick(chooseModel(priorC, { trainDays, live, untilMs: dayStart, nowMs: dayStart, without: gate }).active);
   // lernendes Modell nur, wenn der Lernstand ausschließlich Tage vor dem geplanten Tag kennt (rückwirkende Pläne sonst ohne Rückkopplung)
-  if (model === 'adaptive' && !(fb?.upto && fb.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['adaptive', ...gate], live, untilMs: dayStart, nowMs: dayStart }).active);
-  if (model === 'blend' && !(fbC?.upto && fbC.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
-  if (model === 'ens' && !(fbE?.upto && fbE.upto < day)) model = pick(chooseModel(prior, { trainDays, without: ['ens', 'blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
+  if (model === 'adaptive' && !(fb?.upto && fb.upto < day)) model = pick(chooseModel(priorC, { trainDays, without: ['adaptive', ...gate], live, untilMs: dayStart, nowMs: dayStart }).active);
+  if (model === 'blend' && !(fbC?.upto && fbC.upto < day)) model = pick(chooseModel(priorC, { trainDays, without: ['blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
+  if (model === 'ens' && !(fbE?.upto && fbE.upto < day)) model = pick(chooseModel(priorC, { trainDays, without: ['ens', 'blend', 'adaptive'], live, untilMs: dayStart, nowMs: dayStart }).active);
   const rec = dayFromDoc({ day, runs: [], groups: {} }, calendar), fut = Array.from({ length: 24 }, (_, h) => ({ day, h, cls: rec.cls }));
   const last = lastExposure(days, di, { target: rec.cls }), F = buildFuture(R, fut, (k, h) => last.get(k)?.[h] ?? 0, wx, ctx), sel = Array.from({ length: F.n }, (_, i) => i);
   // Chronos für den Plan: Vortagsprognose des Tags, sonst der Lauf, der den Tag abdeckt
   const tH = Array.from({ length: 24 }, (_, h) => localToUtcMs(day, h)), useBack = !!ext?.hasBack(day);
   const chronosOf = ext ? (i) => { const t = tH[F.hr[i]], k = R.keys[F.g[i]]; return useBack ? ext.back(k, t) : ext.live(k, t); } : null;
-  let mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC, fbE }).mu.get(model);
+  let mu = predictAll(R, days, di, trainSel, F, sel, new Set([model]), { envFit: model === 'pooled' ? {} : envFit, fb, dayOfRow: () => day, chronosOf, fbC, fbE, chronosEnv: ceP.on }).mu.get(model);
   // S2.8: Plan mit derselben Verzerrungskorrektur wie die Veröffentlichung, aus den Prüfungen vor dem Tag
   let bias = null;
   if (BIAS.models.includes(model) && mu) { const tf = typeFactors(prior, model); if (Object.keys(tf).length) { const af = agsFactors(prior, model, tf); bias = { ...tf, ...(Object.keys(af).length ? { ags: af } : {}) }; mu = Float64Array.from(mu, (x, j) => x * biasFactorOf(R.keys[F.g[sel[j]]], tf, af)); } }
@@ -284,13 +285,14 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
   const prevActive = [...(prev?.history || [])].reverse().find(h => h.active)?.active ?? null;
   // S2.3: seit wann das aktive Modell gilt (log.activeSince, ab 13.11.2026 mitgeschrieben) – höchstens ein Wechsel je DECIDE.minSwitchDays
   const switchedAt = prev?.activeSince?.model && prev.activeSince.model === prevActive ? Date.parse(prev.activeSince.at) : null;
-  let choice = chooseModel(log.evals, { trainDays, live: log.live, prevActive, switchedAt, nowMs: now }); const fbw = feedbackWeights(fb);
+  const ce = chronosEnvChoice(log.evals); // Chronos mit Einflüssen nur, solange der Schatten chronosEnv nicht schlechter ist (CHRONOS_ENV)
+  let choice = chooseModel(evalsForChoice(log.evals, ce), { trainDays, live: log.live, prevActive, switchedAt, nowMs: now }); const fbw = feedbackWeights(fb);
   // S2.6: E-Roller und Carsharing erst ab MIN_VOLUME Fahrtbeginnen je Tag (Mittel der letzten 7 vollständigen Tage, gezählt); darunter wird die
   // Vorwoche veröffentlicht (gleicher Wochentag, als Vergleichswert ausgewiesen) oder – ohne Vorwoche – nichts
   const volume = volumeOf(days), small = family && MIN_VOLUME[family] != null && volume != null && volume < MIN_VOLUME[family];
   if (small) { const hasWeek = days.some(d => d.day === shiftDay(today, -7)) || days.some(d => d.day === shiftDay(today, -6));
     choice = { ...choice, active: hasWeek ? 'week' : null, status: 'small', reason: `zu wenig Volumen: ${Math.round(volume)} Fahrtbeginne je Tag (Mittel 7 Tage, nötig ${MIN_VOLUME[family]}) – ${hasWeek ? 'veröffentlicht wird die Vorwoche' : 'keine Prognose'}`, why: { small: true, volume: Math.round(volume), min: MIN_VOLUME[family] } }; }
-  const env = envOf(R, all, mem, prior), gate = env.gate, usesEnv = !!choice.active && !['profile', 'pooled'].includes(choice.active) && env.on; // seit 27.11.2026 auch Chronos, blend, ens (envRelFactor)
+  const env = envOf(R, all, mem, prior), gate = env.gate, usesEnv = !!choice.active && !['profile', 'pooled'].includes(choice.active) && env.on && !(choice.active === 'chronos' && !ce.on); // seit 27.11.2026 auch Chronos, blend, ens (envRelFactor); Chronos nicht, wenn der Schatten dagegen spricht
   const useWx = usesEnv && env.weather, envFit = env.on ? { weather: env.weather, ctx: env.ctx, prior } : {};
   const incSum = { days: incidents.filter(d => d?.ags).length, warnAt: incidents.map(d => d?.sources?.warn?.at).filter(Boolean).sort().at(-1) ?? null, roadAt: incidents.map(d => d?.sources?.road?.at).filter(Boolean).sort().at(-1) ?? null, curated: curated.length,
     upcoming: curated.filter(e => String(e.bis ?? e.von).slice(0, 10) >= today).slice(0, 10).map(e => ({ art: e.art, von: e.von, bis: e.bis ?? e.von, gebiet: e.gebiet, titel: e.titel ?? null, quelle: e.quelle })) };
@@ -314,9 +316,8 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     horizon: null, totals: null, groups: {}, municipalities: {} };
   // seit wann jeder Einfluss im Algorithmus greift (27.11.2026): bleibt, solange er greift; neu = dieser Lauf (Anzeige „greift seit …“)
   log.envSince = Object.fromEntries([...out.env.active, ...(useWx ? ['weather'] : [])].map(k => [k, prev?.envSince?.[k] ?? out.generatedAt])); out.env.since = log.envSince;
-  // Chronos mit und ohne Einflüsse über dieselben reifen Tage der Selbstprüfung (Schatten chronosEnv): Abweichung wie scoreOf, kleiner ist besser
-  { const ds = Object.keys(log.evals).sort().filter(d => !(log.evals[d]?.trainDays < GATES.minEvalTrainDays)).slice(-GATES.evalWindow).filter(d => scoreOf(log.evals[d]?.models?.chronos) != null && scoreOf(log.evals[d]?.models?.chronosEnv) != null);
-    out.env.chronos = ds.length ? { days: ds.length, with: +(ds.reduce((a, d) => a + /** @type {number} */ (scoreOf(log.evals[d].models.chronosEnv)), 0) / ds.length).toFixed(4), without: +(ds.reduce((a, d) => a + /** @type {number} */ (scoreOf(log.evals[d].models.chronos)), 0) / ds.length).toFixed(4) } : null; }
+  // Chronos mit und ohne Einflüsse über dieselben reifen Tage der Selbstprüfung (Schatten chronosEnv); on = Faktor im Betrieb, decided ab CHRONOS_ENV.minDays
+  out.env.chronos = ce.days ? ce : null;
   const tomorrow = dayOf(localToUtcMs(today, 12) + 24 * 3600e3);
   let live = new Map(); const liveFrom = {}; let portable = null, ncR = null, ncNow = null, ptNow = null; const corrections = [];
   if (out.active) {
@@ -336,7 +337,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     const lastIssued = Math.max(0, ...Object.keys(log.issued).map(Number)), issuing = now - lastIssued >= issueEveryMs;
     const chronosOn = !!ext?.usable(t0), chronosOf = chronosOn ? (i) => ext.live(R.keys[F.g[i]], fut[F.fh[i]].t) : null;
     const cands = [...MODELS.filter(m => (m !== 'pooledWx' || env.on) && (m !== 'blend' || chronosOn)), ...(chronosOn ? SHADOW_ONLY : []), ...ENSEMBLE], want = new Set([out.active, ...(issuing ? cands : [])]);
-    const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day, chronosOf, fbC, fbE });
+    const PA = predictAll(R, days, days.length, all, F, sel, want, { envFit, fb, dayOfRow: (i) => fut[F.fh[i]].day, chronosOf, fbC, fbE, chronosEnv: ce.on });
     try { portable = portableModel(PA.fitted(), R, { family: family || 'micro', now, trainDays: out.trainDays, active: out.active, days: days.map(d => d.day) }); } catch { portable = null; }
     // S2.8: Verzerrung je Art korrigieren (je Modell aus dessen Selbstprüfung; Vergleichswerte bleiben roh)
     const biasCorr = {}, biasFn = {};
@@ -352,7 +353,7 @@ export function runForecast({ docs, calendar = null, weather = [], weatherFc = n
     const tRec = dayBy.get(today), nh = fut[0].day === today && NOWCAST.models.includes(out.active) ? nowcastWindow(tRec?.hourMin, fut[0].h) : null;
     if (nh) {
       const Fp = buildFuture(R, nh.map(h => ({ day: today, h, cls: fut[0].cls, t: localToUtcMs(today, h) })), expo, wx, ctx), selP = Array.from({ length: Fp.n }, (_, i) => i);
-      const muP = predictAll(R, days, days.length, all, Fp, selP, new Set([out.active]), { envFit, fb, dayOfRow: () => today, fbC, fbE }).mu.get(out.active), bf = biasFn[out.active], pred = new Map(), obs = new Map();
+      const muP = predictAll(R, days, days.length, all, Fp, selP, new Set([out.active]), { envFit, fb, dayOfRow: () => today, fbC, fbE, chronosEnv: ce.on }).mu.get(out.active), bf = biasFn[out.active], pred = new Map(), obs = new Map();
       selP.forEach((i, j) => { const key = R.keys[Fp.g[i]]; pred.set(key, (pred.get(key) || 0) + muP[j] * (bf ? bf(key) : 1)); obs.set(key, (obs.get(key) || 0) + (tRec.groups[key]?.start?.[Fp.hr[i]] || 0)); });
       ncR = nowcastRatios(obs, pred); const so = sum([...obs.values()]), sp = sum([...pred.values()]); ncNow = { hours: nh, groups: ncR.size, ratio: sp > 0 ? +(so / sp).toFixed(3) : null };
     }
