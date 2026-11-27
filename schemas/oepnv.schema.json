@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/oepnv.schema.json",
  "title": "ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV)",
  "description": "oepnv/<AGS>.json (Stationen und Stunden einer Gemeinde), oepnv/live/<AGS>.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Fahrplan und Haltestellen CC BY 4.0 (seit 1.9 auch Fahrten ohne Echtzeit nach Fahrplan). Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.",
- "x-version": "1.10",
+ "x-version": "1.11",
  "$defs": {
   "ags": {
    "type": "object",
@@ -286,7 +286,7 @@
       "object",
       "null"
      ],
-     "description": "Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: [Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: [Linie, Art, erwartet verspätet, erwartet ausgefallen] für die nächsten 3 Stunden. Seit 1.10: eval zusätzlich maeSkip, maeSkipNaive (Ausfälle), byDay [Tag, mae, maeNaive, maeSkip, maeSkipNaive, Stunden] und series [Tag, Ortsstunde, Prognose verspätet, Ist verspätet, „wie gestern“] der letzten drei geprüften Tage. Seit 27.11.2026 hängen an series die Stunden des laufenden Tages bis zur laufenden Stunde (Prognose aus den Vortagen; Ist null für die laufende Stunde, „wie gestern“ null ohne Wert); sie zählen nicht in mae.",
+     "description": "Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: [Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: [Linie, Art, erwartet verspätet, erwartet ausgefallen] für die nächsten 3 Stunden. Seit 1.10: eval zusätzlich maeSkip, maeSkipNaive (Ausfälle), byDay [Tag, mae, maeNaive, maeSkip, maeSkipNaive, Stunden] und series [Tag, Ortsstunde, Prognose verspätet, Ist verspätet, „wie gestern“] der letzten drei geprüften Tage. Seit 27.11.2026 hängen an series die Stunden des laufenden Tages bis zur laufenden Stunde (Prognose aus den Vortagen; Ist null für die laufende Stunde, „wie gestern“ null ohne Wert); sie zählen nicht in mae. Seit 1.11 (PTP v 3): next mit Tageskorrektur aus der letzten vollen Stunde (Abweichung × nowBeta^Abstand), Tagtyp mit Feiertagen und Schulferien (calendar.json); eval.nowcast { lead, beta, hours, mae, maeBase, maeSkip, maeSkipBase } = Rückblick mit und ohne diese Korrektur lead Stunden voraus (null ohne Stunden); eval.adj { lvl, rain, days } = Lage aller Städte (Median der Reste der letzten days Tage, Regen-Aufschlag je Regenanteil), in next, series und mae enthalten; gelernt je Prüftag nur aus den Tagen davor.",
      "properties": {
       "at": {
        "type": "number"

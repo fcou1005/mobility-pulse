@@ -12,6 +12,7 @@ export default {
   "fv.envArt.veranstaltung": "Veranstaltung",
   "fv.envArt.volksfest": "Volksfest",
   "fv.envArt.sport": "Heimspiel",
+  "fv.envArt.vorlesungsfrei": "vorlesungsfrei",
   "fv.envLead": "Gedächtnis seit {since}: {days} Tage Erfahrung, davon {old} schon außerhalb des 21-Tage-Fensters (ältere zählen weniger, Halbwertszeit {hl} Tage). Wirkung = Faktor auf die erwarteten Fahrtbeginne (×1,00 = keine).",
   "fv.envSources": "Warnungen zuletzt abgerufen: {warn}, Autobahn: {road}, Ereignisliste: {n} Einträge.",
   "fv.envNever": "noch nie",

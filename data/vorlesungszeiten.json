@@ -1,0 +1,493 @@
+{
+ "version": 1,
+ "hinweis": "Vorlesungsfreie Zeiten der Universitäten in Städten mit Sharing-Flotte (Merkmal semfrei der Prognose, lib/pulse-context.js). Je Eintrag die Seite der Hochschule als Beleg; nur Zeiträume, die dort stehen. Stand 27.11.2026 (Wintersemester 2026/27, Sommersemester 2027). Gezählt wird die Gemeinde der Universität; Fachhochschulen mit abweichenden Zeiten sind nicht eingetragen.",
+ "stand": "2026-11-27",
+ "ereignisse": [
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-23",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "08416041"
+    ]
+   },
+   "titel": "Universität Tübingen: Weihnachtspause",
+   "quelle": "https://uni-tuebingen.de/de/103544",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 noch nicht veröffentlicht"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-07",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "08416041"
+    ]
+   },
+   "titel": "Universität Tübingen: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://uni-tuebingen.de/de/103544",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 noch nicht veröffentlicht"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-05-17",
+   "bis": "2027-05-22",
+   "gebiet": {
+    "ags": [
+     "08416041"
+    ]
+   },
+   "titel": "Universität Tübingen: Pfingstpause",
+   "quelle": "https://uni-tuebingen.de/de/103544",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 noch nicht veröffentlicht"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-25",
+   "bis": "2027-09-30",
+   "gebiet": {
+    "ags": [
+     "08416041"
+    ]
+   },
+   "titel": "Universität Tübingen: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://uni-tuebingen.de/de/103544",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 noch nicht veröffentlicht"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-21",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "08221000"
+    ]
+   },
+   "titel": "Universität Heidelberg: vorlesungsfrei zum Jahreswechsel",
+   "quelle": "https://www.uni-heidelberg.de/de/studium/studienorganisation/termine-und-fristen/weitere-semesterzeiten"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-07",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "08221000"
+    ]
+   },
+   "titel": "Universität Heidelberg: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.uni-heidelberg.de/de/studium/studienorganisation/termine-und-fristen/weitere-semesterzeiten"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-25",
+   "bis": "2027-10-10",
+   "gebiet": {
+    "ags": [
+     "08221000"
+    ]
+   },
+   "titel": "Universität Heidelberg: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.uni-heidelberg.de/de/studium/studienorganisation/termine-und-fristen/weitere-semesterzeiten"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-24",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "08311000"
+    ]
+   },
+   "titel": "Universität Freiburg: Weihnachtspause",
+   "quelle": "https://uni-freiburg.de/studium/im-studium/semester-und-vorlesungszeiten/",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-14",
+   "bis": "2027-04-18",
+   "gebiet": {
+    "ags": [
+     "08311000"
+    ]
+   },
+   "titel": "Universität Freiburg: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://uni-freiburg.de/studium/im-studium/semester-und-vorlesungszeiten/",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-05-17",
+   "bis": "2027-05-22",
+   "gebiet": {
+    "ags": [
+     "08311000"
+    ]
+   },
+   "titel": "Universität Freiburg: Pfingstpause",
+   "quelle": "https://uni-freiburg.de/studium/im-studium/semester-und-vorlesungszeiten/",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-25",
+   "bis": "2027-09-30",
+   "gebiet": {
+    "ags": [
+     "08311000"
+    ]
+   },
+   "titel": "Universität Freiburg: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://uni-freiburg.de/studium/im-studium/semester-und-vorlesungszeiten/",
+   "hinweis": "Ende 30.09.2027 = Semesterende; Vorlesungsbeginn Wintersemester 2027/28 nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-24",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "08212000"
+    ]
+   },
+   "titel": "Karlsruher Institut für Technologie: vorlesungsfrei zum Jahreswechsel",
+   "quelle": "https://www.etit.kit.edu/rd_download/Terminliste%20WS%202025-26%20nur%20bis%2031.12.2025_Stand%2024.09.2025_Aenderung%20SKOM-Termin%20im%20November.pdf",
+   "hinweis": "Vorlesungszeit Wintersemester 26.10.2026–20.02.2027; Beginn Sommersemester 2027 nicht in der Quelle, daher nur der Jahreswechsel"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-23",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "08111000"
+    ]
+   },
+   "titel": "Universität Stuttgart: vorlesungsfrei zum Jahreswechsel",
+   "quelle": "https://www.uni-stuttgart.de/studium/bewerbung/semestertermine",
+   "hinweis": "Ende der Vorlesungszeit im Wintersemester nicht in der Quelle, daher ohne Semesterferien"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-05-17",
+   "bis": "2027-05-22",
+   "gebiet": {
+    "ags": [
+     "08111000"
+    ]
+   },
+   "titel": "Universität Stuttgart: Pfingstferien",
+   "quelle": "https://www.uni-stuttgart.de/studium/bewerbung/semestertermine",
+   "hinweis": "Ende der Vorlesungszeit im Wintersemester nicht in der Quelle, daher ohne Semesterferien"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-24",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "09162000"
+    ]
+   },
+   "titel": "TU München und LMU: Weihnachtsferien",
+   "quelle": "https://www.tum.de/fileadmin/w00bfo/www/Studium/Im_Studium/Termine_Fristen/251118__Rundschreiben__Termine_und_Feiertage_2026-2027_final.pdf",
+   "hinweis": "LMU mit denselben Vorlesungszeiten (12.10.2026–05.02.2027, 12.04.–16.07.2027)"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-06",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "09162000"
+    ]
+   },
+   "titel": "TU München und LMU: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.tum.de/fileadmin/w00bfo/www/Studium/Im_Studium/Termine_Fristen/251118__Rundschreiben__Termine_und_Feiertage_2026-2027_final.pdf",
+   "hinweis": "LMU mit denselben Vorlesungszeiten (12.10.2026–05.02.2027, 12.04.–16.07.2027)"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-05-15",
+   "bis": "2027-05-18",
+   "gebiet": {
+    "ags": [
+     "09162000"
+    ]
+   },
+   "titel": "TU München und LMU: Pfingstferien",
+   "quelle": "https://www.tum.de/fileadmin/w00bfo/www/Studium/Im_Studium/Termine_Fristen/251118__Rundschreiben__Termine_und_Feiertage_2026-2027_final.pdf",
+   "hinweis": "LMU mit denselben Vorlesungszeiten (12.10.2026–05.02.2027, 12.04.–16.07.2027)"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-10-17",
+   "gebiet": {
+    "ags": [
+     "09162000"
+    ]
+   },
+   "titel": "TU München und LMU: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.lmu.de/de/workspace-fuer-studierende/1x1-des-studiums/vorlesungszeiten/"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-24",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "09663000"
+    ]
+   },
+   "titel": "Universität Würzburg: Weihnachtsferien",
+   "quelle": "https://www.musikwissenschaft.uni-wuerzburg.de/musikpaedagogik/startseite/vorlesungszeiten-im-wintersemester-2026-2027/",
+   "hinweis": "Vorlesungsende 05.02.2027 laut Quelle; Beginn des Sommersemesters 12.04.2027 wie an den übrigen bayerischen Universitäten (LMU, TUM, Bamberg)"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-06",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "09663000"
+    ]
+   },
+   "titel": "Universität Würzburg: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.musikwissenschaft.uni-wuerzburg.de/musikpaedagogik/startseite/vorlesungszeiten-im-wintersemester-2026-2027/",
+   "hinweis": "Vorlesungsende 05.02.2027 laut Quelle; Beginn des Sommersemesters 12.04.2027 wie an den übrigen bayerischen Universitäten (LMU, TUM, Bamberg)"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-06",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "09461000"
+    ]
+   },
+   "titel": "Universität Bamberg: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.uni-bamberg.de/studium/im-studium/studienorganisation/vorlesungszeiten/",
+   "hinweis": "Weihnachtspause nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-10-17",
+   "gebiet": {
+    "ags": [
+     "09461000"
+    ]
+   },
+   "titel": "Universität Bamberg: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.uni-bamberg.de/studium/im-studium/studienorganisation/vorlesungszeiten/",
+   "hinweis": "Weihnachtspause nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-24",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "05314000"
+    ]
+   },
+   "titel": "Universität Bonn: Weihnachtsferien",
+   "quelle": "https://www.uni-bonn.de/de/studium/studienverlauf/semestertermine"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-23",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "05515000"
+    ]
+   },
+   "titel": "Universität Münster: Weihnachtsferien",
+   "quelle": "https://www.uni-muenster.de/Chemie/studium/semesterfristen.html"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-23",
+   "bis": "2027-01-06",
+   "gebiet": {
+    "ags": [
+     "05112000",
+     "05113000"
+    ]
+   },
+   "titel": "Universität Duisburg-Essen: Weihnachtsferien",
+   "quelle": "https://www.uni-due.de/studierendensekretariat/semestertermine.php"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-13",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "06412000"
+    ]
+   },
+   "titel": "Goethe-Universität Frankfurt: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.uni-frankfurt.de/semestertermine",
+   "hinweis": "Weihnachtspause nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-10-10",
+   "gebiet": {
+    "ags": [
+     "06412000"
+    ]
+   },
+   "titel": "Goethe-Universität Frankfurt: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.uni-frankfurt.de/semestertermine",
+   "hinweis": "Weihnachtspause nicht in der Quelle"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-24",
+   "bis": "2027-01-08",
+   "gebiet": {
+    "ags": [
+     "03159016"
+    ]
+   },
+   "titel": "Universität Göttingen: vorlesungsfrei zum Jahreswechsel",
+   "quelle": "https://uni-goettingen.de/en/dates+and+deadlines/53341.html"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-13",
+   "bis": "2027-04-11",
+   "gebiet": {
+    "ags": [
+     "03159016"
+    ]
+   },
+   "titel": "Universität Göttingen: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://e-learning.uni-goettingen.de/de/semestertermine+%28ohne+medizin%29/64720.html",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-09-30",
+   "gebiet": {
+    "ags": [
+     "03159016"
+    ]
+   },
+   "titel": "Universität Göttingen: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://e-learning.uni-goettingen.de/de/semestertermine+%28ohne+medizin%29/64720.html",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-20",
+   "bis": "2027-01-03",
+   "gebiet": {
+    "ags": [
+     "02000000"
+    ]
+   },
+   "titel": "Universität Hamburg: Weihnachtsferien",
+   "quelle": "https://www.uni-hamburg.de/campuscenter/fristen-termine.html",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-01-31",
+   "bis": "2027-04-04",
+   "gebiet": {
+    "ags": [
+     "02000000"
+    ]
+   },
+   "titel": "Universität Hamburg: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://www.uni-hamburg.de/campuscenter/fristen-termine.html",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-05-09",
+   "bis": "2027-05-17",
+   "gebiet": {
+    "ags": [
+     "02000000"
+    ]
+   },
+   "titel": "Universität Hamburg: Pfingstferien",
+   "quelle": "https://www.uni-hamburg.de/campuscenter/fristen-termine.html",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-09-30",
+   "gebiet": {
+    "ags": [
+     "02000000"
+    ]
+   },
+   "titel": "Universität Hamburg: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://www.uni-hamburg.de/campuscenter/fristen-termine.html",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-21",
+   "bis": "2027-01-01",
+   "gebiet": {
+    "ags": [
+     "10041100"
+    ]
+   },
+   "titel": "Universität des Saarlandes: vorlesungsfrei zum Jahreswechsel",
+   "quelle": "https://uni-saarland.de/fileadmin/upload/dezernat/ls/semestertermine/Studienjahr2026-2027.pdf",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-02-06",
+   "bis": "2027-04-04",
+   "gebiet": {
+    "ags": [
+     "10041100"
+    ]
+   },
+   "titel": "Universität des Saarlandes: vorlesungsfrei nach dem Wintersemester",
+   "quelle": "https://uni-saarland.de/fileadmin/upload/dezernat/ls/semestertermine/Studienjahr2026-2027.pdf",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2027-07-17",
+   "bis": "2027-09-30",
+   "gebiet": {
+    "ags": [
+     "10041100"
+    ]
+   },
+   "titel": "Universität des Saarlandes: vorlesungsfrei nach dem Sommersemester",
+   "quelle": "https://uni-saarland.de/fileadmin/upload/dezernat/ls/semestertermine/Studienjahr2026-2027.pdf",
+   "hinweis": "Ende 30.09.2027 = Semesterende"
+  },
+  {
+   "art": "vorlesungsfrei",
+   "von": "2026-12-19",
+   "bis": "2027-01-03",
+   "gebiet": {
+    "ags": [
+     "12054000"
+    ]
+   },
+   "titel": "Universität Potsdam: akademische Weihnachtsferien",
+   "quelle": "https://uni-potsdam.de/fileadmin/projects/ambek/Amtliche_Bekanntmachungen/2025/Ausgabe_01/ambek-2025-01-004a.pdf"
+  }
+ ]
+}

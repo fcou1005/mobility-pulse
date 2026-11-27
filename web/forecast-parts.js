@@ -118,7 +118,7 @@ function partsHtml(ctx, G, L) {
 const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).format(x)}`);
 // Einflüsse nach Art gruppiert (24.11.2026); was hier fehlt, landet unter „Sonstiges“
 const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['frost', 'cold', 'warm', 'warm20', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow', 'wind']], ['light', ['dark']],
-  ['warnings', ['warn']], ['traffic', ['roadC', 'roadJ', 'works']], ['strike', ['strike', 'rail']], ['disrupt', ['ptOut', 'ptRisk']], ['events', ['event', 'fest', 'sport']]]);
+  ['warnings', ['warn']], ['traffic', ['roadC', 'roadJ', 'works']], ['strike', ['strike', 'rail']], ['disrupt', ['ptOut', 'ptRisk']], ['events', ['event', 'fest', 'sport']], ['study', ['semfrei']]]);
 // road = Autobahn-Sperrung oder -Stau zusammen (bis 26.11.2026 nur so erfasst): ersetzt durch roadC und roadJ, nicht mehr angezeigt
 // Kurzname eines Einflusses für Fließtext (alle Wettermerkmale zusammen „Wetter“)
 const shortName = (/** @type {string} */ k) => t(`fv.envShort.${(FC.WX_NAMES || []).includes(k) ? 'weather' : k}`);
@@ -176,10 +176,12 @@ export function envHtml(ctx, L, { title = true } = {}) {
   const fresh = onR.filter(r => { const x = Date.parse(E?.since?.[isWxK(r.k) ? 'weather' : r.k] || ''); return Number.isFinite(x) && x > dayAgo; });
   const nextR = vis.filter(r => !['on', 'fixed', 'ready'].includes(r.st)).map(r => ({ r, d: r.st === 'held' ? today < String(E?.pendingFrom || '').slice(0, 10) ? String(E.pendingFrom).slice(0, 10) : today : isWxK(r.k) ? null : progOf(r)?.eta })).filter(x => x.d).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)).slice(0, 4);
   const nowLine = `<p class="fv-lead" style="margin:var(--s2) 0">${t('fv.envNow', { on: n0(onR.length), all: n0(vis.length) })}${fresh.length ? ` ${t('fv.envNew', { list: [...new Set(fresh.map(r => esc(shortName(r.k))))].join(', ') })}` : ''}${nextR.length ? ` ${t('fv.envNext', { list: nextR.map(x => `${esc(shortName(x.r.k))} (${when(String(x.d))})`).join(', ') })}` : ''}</p>`;
+  // Schatten chronosEnv (27.11.2026): hilft das Einrechnen der Einflüsse Chronos? Gleiche Tage der Selbstprüfung, Abweichung kleiner ist besser
+  const C = E?.chronos, chronosLine = C?.days ? `<p class="fv-sub" style="margin:0 0 var(--s2)">${t(C.with <= C.without ? 'fv.envChronosBetter' : 'fv.envChronosWorse', { w: pc(C.with), wo: pc(C.without), d: n0(C.days) })}</p>` : '';
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
-  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${nowLine}${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')} ${t('fv.envTested', { rows: n0(FC.GATES.ctxMinRows), days: FC.GATES.ctxMinDays })}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
+  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${nowLine}${chronosLine}${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')} ${t('fv.envTested', { rows: n0(FC.GATES.ctxMinRows), days: FC.GATES.ctxMinDays })}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
 }
 export function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));

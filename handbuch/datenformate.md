@@ -16,12 +16,12 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [ops](#ops) | 1.4 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
-| [forecast](#forecast) | 1.10 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/fehlbestand.json`, `forecast/moped/…`, `forecast/car/…` |
+| [forecast](#forecast) | 1.11 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/fehlbestand.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.2 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.2 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `markt/regen.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
-| [oepnv](#oepnv) | 1.10 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
+| [oepnv](#oepnv) | 1.11 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 
 ## status
 
@@ -342,7 +342,7 @@ Version 1.0 · Schema: [schemas/calib.schema.json](../schemas/calib.schema.json)
 
 forecast/ – Prognose. latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.
 
-Version 1.10 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
+Version 1.11 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
 
 ### forecast · latest
 
@@ -362,7 +362,7 @@ Version 1.10 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schem
 | `ens` |  | object / null – Seit 1.4: Kombination aller Modelle (Kandidat ens, lib/pulse-forecast-ens.js) – upto (letzter gelernter Tag), days, bases (Basismodelle), all und types (Gewichte aller Gruppen und je Fahrzeugart, Summe 1), groups/own (Gruppen im Lernstand, davon mit eigener Erfahrung), ownShare, spread (mittlere Abweichung der eigenen Gewichte), activeFrom (wählbar ab); seit 1.5 withoutChronos (true: noch keine Zeile mit Chronos gelernt, all und types sind dann die Gewichte ohne Chronos); null ohne Lernstand. Die Kandidaten ens und mittel stehen zudem in evals, decision und den Schattenprognosen. |
 | `memory` |  | object – Langzeitgedächtnis der Wirkungen (memorySummary in lib/pulse-forecast-model.js): upto, days, oldDays, windowDays, since, halfLifeDays; effects\[Wirkung\] = {b (log-Wirkung), se, lo, hi (90-%-Bereich als Faktor), n (Gemeinde-Stunden), days}. Seit 1.6: b und Bereich mit Vorwissen WX_PRIOR (prior: true) und festgelegten Vorzeichen (fixed: true = Daten zeigen das Gegenteil, b = 0 wie im Modell). Seit 1.7 zusätzlich wind und dark (Wind, Dunkelheit). |
 | `outages` |  | object – Seit 1.7: Ausfallstunden im Trainingsfenster (lib/pulse-forecast-outage.js) – days (Tage mit Ausfall), groupHours (Gruppen-Stunden, die nicht mitlernen und in der Selbstprüfung nicht zählen). |
-| `env` |  | object – Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support\[Merkmal\] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since\[Merkmal oder weather\] = Zeitpunkt, seit dem es ununterbrochen greift. |
+| `env` |  | object – Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support\[Merkmal\] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since\[Merkmal oder weather\] = Zeitpunkt, seit dem es ununterbrochen greift. Seit 1.11: chronos = { days, with, without } – Chronos-2 mit (Schatten chronosEnv) und ohne eingerechnete Einflüsse über dieselben reifen Tage der Selbstprüfung (Abweichung wie scoreOf), null ohne Tage. |
 
 ### forecast · log
 
@@ -731,7 +731,7 @@ Seit 1.3: Übersicht der Streckenverläufe je Stadt (Verbindungen, mit Verlauf, 
 
 ÖPNV – Halte je Station, geschätzte Fahrzeugwege, Wirkung auf Sharing (Reiter ÖPNV). oepnv/&lt;AGS&gt;.json (Stationen und Stunden einer Gemeinde), oepnv/live/&lt;AGS&gt;.json (geschätzte Fahrzeugwege der nächsten Minuten), oepnv/wirkung.json und oepnv/index.json. Quelle: GTFS-Realtime von gtfs.de (CC BY-SA 4.0), Fahrplan und Haltestellen CC BY 4.0 (seit 1.9 auch Fahrten ohne Echtzeit nach Fahrplan). Fahrzeugwege sind aus Haltezeiten geschätzt, keine Ortung. Keine Fahrzeugkennungen, keine Fahrgastzahlen.
 
-Version 1.10 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
+Version 1.11 · Schema: [schemas/oepnv.schema.json](../schemas/oepnv.schema.json)
 
 ### oepnv · ags
 
@@ -755,7 +755,7 @@ Stationen einer Gemeinde mit Flotte (höchstens 300, nach Halten) und Halte je S
 | `profile` |  | object / null – Tagesgang je Ortsstunde, Mittel der Tage vor heute: ÖPNV-Halte mit Echtzeit gegen Sharing-Fahrtbeginne; gap = Stunden mit ÖPNV unter gapShare des Höchstwerts und mindestens minSharing Fahrtbeginnen; seit 1.1 |
 | `jetzt` |  | object – Stationen, die in den letzten windowH Stunden gestört waren (ab minN Halten, mindestens 30 % ausgefallen oder verspätet oder 15 % ausgefallen); seit 1.3 |
 | `gebiet` |  | object / null – Seit 1.8 (19.11.2026): Geschäftsgebiet der Sharing-Anbieter – Zellen (≈ 280 × 250 m), in denen in den letzten days Tagen ein verfügbares Fahrzeug stand, plus ring Zellen Rand. outside = Station-IDs der Gemeinde außerhalb (sichtbar, aber kein Bedarf an Sharing-Fahrzeugen: Jetzt gestört, Stationsvorschläge, Disposition), names = bis zu 12 davon mit den meisten Halten. null bei unter 10 bedienten Zellen (dann zählt jede Station). |
-| `prognose` |  | object / null – Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: \[Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet\] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: \[Linie, Art, erwartet verspätet, erwartet ausgefallen\] für die nächsten 3 Stunden. Seit 1.10: eval zusätzlich maeSkip, maeSkipNaive (Ausfälle), byDay \[Tag, mae, maeNaive, maeSkip, maeSkipNaive, Stunden\] und series \[Tag, Ortsstunde, Prognose verspätet, Ist verspätet, „wie gestern“\] der letzten drei geprüften Tage. Seit 27.11.2026 hängen an series die Stunden des laufenden Tages bis zur laufenden Stunde (Prognose aus den Vortagen; Ist null für die laufende Stunde, „wie gestern“ null ohne Wert); sie zählen nicht in mae. |
+| `prognose` |  | object / null – Seit 1.7 (F28): Verspätungsprognose der Gemeinde (lib/pulse-oepnv-prog.js). next: \[Tag, Ortsstunde, Anteil verspätet ≥ 5 Min., Anteil ausgefallen, Halte erwartet\] für die nächsten 24 Stunden; eval: Selbstprüfung der letzten Tage (mae, maeNaive = „wie gestern“, als Anteil, days, hours, better); mean: Mittel der Tage vor heute; lines: \[Linie, Art, erwartet verspätet, erwartet ausgefallen\] für die nächsten 3 Stunden. Seit 1.10: eval zusätzlich maeSkip, maeSkipNaive (Ausfälle), byDay \[Tag, mae, maeNaive, maeSkip, maeSkipNaive, Stunden\] und series \[Tag, Ortsstunde, Prognose verspätet, Ist verspätet, „wie gestern“\] der letzten drei geprüften Tage. Seit 27.11.2026 hängen an series die Stunden des laufenden Tages bis zur laufenden Stunde (Prognose aus den Vortagen; Ist null für die laufende Stunde, „wie gestern“ null ohne Wert); sie zählen nicht in mae. Seit 1.11 (PTP v 3): next mit Tageskorrektur aus der letzten vollen Stunde (Abweichung × nowBeta^Abstand), Tagtyp mit Feiertagen und Schulferien (calendar.json); eval.nowcast { lead, beta, hours, mae, maeBase, maeSkip, maeSkipBase } = Rückblick mit und ohne diese Korrektur lead Stunden voraus (null ohne Stunden); eval.adj { lvl, rain, days } = Lage aller Städte (Median der Reste der letzten days Tage, Regen-Aufschlag je Regenanteil), in next, series und mae enthalten; gelernt je Prüftag nur aus den Tagen davor. |
 
 ### oepnv · live
 

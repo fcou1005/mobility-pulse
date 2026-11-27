@@ -9,6 +9,7 @@ export default {
   "fv.envArt.veranstaltung": "event",
   "fv.envArt.volksfest": "funfair",
   "fv.envArt.sport": "home match",
+  "fv.envArt.vorlesungsfrei": "no lectures",
   "fv.envLead": "Memory since {since}: {days} days of experience, {old} of them already outside the 21-day window (older days count less, half-life {hl} days). Effect = factor on the expected trip starts (×1.00 = none).",
   "fv.envSources": "Warnings last fetched: {warn}, motorway: {road}, event list: {n} entries.",
   "fv.envNever": "never",

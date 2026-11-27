@@ -275,6 +275,28 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     const q = PG.predictDay(PG.cityDays(d2, 'A'), '2026-11-19'), lvl = (0.3 + 0.1 * 18) / 19;
     assert(Math.abs(q.skip[8] - (0.5 * 0.3 + 0.5 * lvl)) < 0.002 && Math.abs(q.skip[12] - (0.5 * 0.1 + 0.5 * lvl)) < 0.002 && PG.PTP.k === 1,
       `Ausfälle aus dem Vortag: Stunde 8 ${q.skip[8]} (Vortag 30 %, Mittel ${lvl.toFixed(3)}), Stunde 12 ${q.skip[12]}`); }
+  // Tageskorrektur (PTP v 3, 27.11.2026): letzte volle Ortsstunde (9 Uhr bei 10:20) 30 % statt ~6 % → nächste Stunden höher, halbiert je Stunde Abstand
+  { const d3 = new Map(docs), a0 = docs.get(day(0)).ags.A; d3.set(day(0), { ags: { A: { ...a0, ptLate: a0.ptLate.map((x, h) => (h === 9 ? Math.round(a0.ptN[h] * 0.3) : x)) } } });
+    const now = Date.parse('2026-11-18T09:20:00Z'), o3 = PG.cityOutlook(d3, 'A', now, []), q = PG.predictDay(PG.cityDays(d3, 'A'), day(0)), dev = 0.3 - q.late[9];
+    const r11 = o3.next.find(r => r[1] === 11), r14 = o3.next.find(r => r[1] === 14), base = PG.nextHours(PG.cityDays(d3, 'A'), now, /** @type {any} */ ({ ...PG.PTP, nowBeta: 0 }));
+    assert(PG.PTP.nowBeta === 0.5 && Math.abs(r11[2] - (q.late[11] + 0.25 * dev)) < 2e-4 && Math.abs(r14[2] - (q.late[14] + 0.5 ** 5 * dev)) < 2e-4 && base.find(r => r[1] === 11)[2] === q.late[11],
+      `Tageskorrektur: 11 Uhr ${r11[2]} (Profil ${q.late[11]}, Abweichung ${dev.toFixed(3)}), 14 Uhr ${r14[2]}, ohne Korrektur unverändert`);
+    const ev = PG.backtest(PG.cityDays(docs, 'A'), day(0));
+    assert(ev.nowcast && ev.nowcast.lead === 2 && ev.nowcast.hours > 0 && ev.nowcast.maeBase > 0, `Rückblick mit und ohne Tageskorrektur: ${JSON.stringify(ev.nowcast)}`); }
+  // Tagtyp mit Kalender (PTP v 3): Feiertag wie Sonntag, Schulferien eigener Typ (ohne Ferientag im Fenster wie Werktag), Land aus der Gemeindekennzahl
+  { const cal = { from: '2026-01-01', to: '2027-12-31', states: { BY: { '2026-11-18': 'F' }, SN: { '2026-11-18': 'H' } } }, tBY = PG.typeOfFor('09162000', cal), tSN = PG.typeOfFor('14612000', cal), tBW = PG.typeOfFor('08111000', cal);
+    const days = PG.cityDays(docs, 'A'), hol = PG.predictDay(days, day(0), { ...PG.PTP, typeOf: tSN }), fer = PG.predictDay(days, day(0), { ...PG.PTP, typeOf: tBY });
+    assert(tBY('2026-11-18') === 'F' && tSN('2026-11-18') === 'H' && tBW('2026-11-18') === 'W' && PG.typeOfFor('08111000', null)('2026-12-25') === 'H' && tBW('2026-12-24') === 'H' && tBW('2026-12-31') === 'S',
+      'Kalender: BY Ferien, SN Feiertag, BW Werktag; 25.12. ohne Kalender Feiertag, Heiligabend wie Sonntag, Silvester wie Samstag');
+    assert(Math.abs(hol.late[10] - 0.03) < 0.01 && Math.abs(fer.late[10] - p.late[10]) < 1e-9, `Feiertag rechnet wie Sonntag (${hol.late[10]}), Ferientag ohne Ferientag im Fenster wie Werktag (${fer.late[10]})`); }
+  // Lage aller Städte (PTP v 3): Median der Reste, Regen-Aufschlag, je Tag nur aus den Tagen davor gelernt
+  { const rows = /** @type {Array<[string, number, number]>} */ ([]); for (let i = 1; i <= 9; i++) { const d = `2026-11-${17 + i}`; for (let k = 0; k < 400; k++) rows.push([d, k % 4 ? -0.01 : 0.02, k % 4 ? 0 : 1]); }
+    const adj = PG.learnAdj(rows, '2026-11-27'), A = adj.get('2026-11-27'), first = [...adj.keys()][0];
+    const days = PG.cityDays(docs, 'A'), raw = PG.predictDay(days, day(0)), q = PG.predictAdj(days, day(0), { ...PG.PTP, adj: new Map([[day(0), { lvl: -0.01, rain: 0.03, n: 1, nRain: 1 }]]), rainOf: (d, h) => (h === 10 ? 1 : 0) });
+    assert(A && A.lvl === -0.01 && A.rain === 0.03 && A.n === 2800 && first === '2026-11-23' && Math.abs(q.late[10] - (raw.late[10] + 0.02)) < 1e-9 && Math.abs(q.late[9] - (raw.late[9] - 0.01)) < 1e-9,
+      `Lage: Niveau ${A?.lvl}, Regen ${A?.rain} aus ${A?.n} Stunden der 7 Tage davor, erst ab 2.000 Stunden (${first}); Regenstunde 10 Uhr +2, sonst −1 Prozentpunkt`);
+    const rr = PG.residualRows(days, day(0), { ...PG.PTP, rainOf: () => 1 });
+    assert(rr.length > 100 && rr.every(r => r[0] < day(0) && r[2] === 1), `Reste aus den Tagen vor heute (${rr.length})`); }
   // Einfluss ptRisk für die Sharing-Prognose: erwartete Verspätung ab 20 % setzt das Merkmal, auch für kommende Tage
   { const CX = await import('../lib/pulse-context.js'), L = CX.ctxLookup([], [], { ptRisk: (ags, d, h) => (h === 17 ? 0.25 : 0.05) }), i = CX.CTX_KEYS.indexOf('ptRisk');
     assert(L('A', '2026-11-30', 17)[i] === 1 && L('A', '2026-11-30', 10)[i] === 0 && CX.ctxLookup([], [])('A', '2026-11-30', 17)[i] === 0, 'ptRisk: ab 20 % erwarteter Verspätung, ohne Prognose 0'); }

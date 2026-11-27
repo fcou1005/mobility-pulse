@@ -714,6 +714,10 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const better = evs.filter(([, e]) => sc(e, 'chronos') < sc(e, 'hybrid')).length, blendBetter = evs.filter(([, e]) => e.models.blend && sc(e, 'blend') < sc(e, 'hybrid')).length;
   assert(evs.length >= 4 && better === evs.length && blendBetter >= evs.length - 1 && rb.latest.blend?.learn?.ownShare > 0.5 && rb.log.feedbackC?.upto && !['blend', 'chronos'].includes(rb.latest.active),
     `Selbstprüfung: Chronos an ${better} von ${evs.length} Tagen besser als Hybrid, blend an ${blendBetter}; Chronos-Anteil gelernt ${rb.latest.blend?.learn?.ownShare}; vor ${new Date(F.BLEND.activeFrom).toISOString().slice(0, 10)} veröffentlicht ${rb.latest.active}`);
+  // Schatten Chronos mit Einflüssen (27.11.2026): an Tagen mit eingeschalteter Umgebung gewertet, nie wählbar, Vergleich in latest.env.chronos
+  { const envDays = evs.filter(([, e]) => e.wxGate || e.env?.length), withC = evs.filter(([, e]) => e.models.chronosEnv), C = rb.latest.env?.chronos;
+    assert(withC.length === envDays.length && !F.MODELS.includes('chronosEnv') && !F.SHADOW_ONLY.includes('chronosEnv') && rb.latest.active !== 'chronosEnv' && (withC.length ? C?.days >= 1 && C.with > 0 && C.without > 0 : C == null) && rb.log.chronosEnvV === 1,
+      `Chronos mit Einflüssen an ${withC.length} von ${evs.length} Prüftagen (Umgebung an ${envDays.length}), Vergleich ${JSON.stringify(C)}`); }
   // S2.3: wählbar erst mit geprüftem Vorsprung (DM-Test über ≥ 14 Tage); hier liegen weniger Tage vor → gesperrt, mit gesenkter Tagesgrenze wählbar
   assert(rb.latest.decision?.dm?.blend && rb.latest.decision.dm.blend.ok === false && rb.latest.decision.dm.blend.n < F.DM.minDays, `S2.3: blend mit ${rb.latest.decision?.dm?.blend?.n} Prüftagen (< ${F.DM.minDays}) nicht wählbar`);
   const keep = F.DM.minDays; F.DM.minDays = 5;

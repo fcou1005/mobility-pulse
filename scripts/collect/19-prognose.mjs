@@ -38,8 +38,8 @@ export async function run(ctx) {
         const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
         // erwartete ÖPNV-Verspätung je Gemeinde, Tag und Stunde (Merkmal ptRisk): Prognose aus den Vortagen wie auf der ÖPNV-Seite, für vergangene und kommende Tage;
         // seit 27.11.2026 nur aus Haltestellen im Geschäftsgebiet (cityDays area, Tage davor ohne Gebietszählung fehlen)
-        const ptMap = new Map(incidents.filter(d => d?.day).map(d => [d.day, d])), ptCity = new Map(), ptDay = new Map();
-        const ptRisk = (ags, day, h) => { const k = `${ags}|${day}`; let p = ptDay.get(k); if (p === undefined) { let cd = ptCity.get(ags); if (cd === undefined) ptCity.set(ags, cd = PG.cityDays(ptMap, ags, { area: true })); p = cd.size ? PG.predictDay(cd, day) : null; ptDay.set(k, p); } const v = p?.late?.[h]; return v != null && (p.n?.[h] ?? 0) >= PG.PTP.minN ? v : null; };
+        const ptMap = new Map(incidents.filter(d => d?.day).map(d => [d.day, d])), ptCity = new Map(), ptDay = new Map(), calRisk = await rd(path.join(DATA, 'calendar.json')); // Tagtyp mit Feiertagen und Ferien (PTP v 3)
+        const ptRisk = (ags, day, h) => { const k = `${ags}|${day}`; let p = ptDay.get(k); if (p === undefined) { let cd = ptCity.get(ags); if (cd === undefined) ptCity.set(ags, cd = PG.cityDays(ptMap, ags, { area: true })); p = cd.size ? PG.predictDay(cd, day, { ...PG.PTP, typeOf: PG.typeOfFor(ags, calRisk) }) : null; ptDay.set(k, p); } const v = p?.late?.[h]; return v != null && (p.n?.[h] ?? 0) >= PG.PTP.minN ? v : null; };
         const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
         // Termine aus dem Workflow „Termine“ (Branch termine, lib/pulse-termine.js, wöchentlich): wie Veranstaltungen der Liste (erst ab veranstaltungenAb);
         // Doppel zur Liste fallen für die Anzeige weg (das Merkmal je Gemeinde und Stunde ist 0/1). TERMINE_URL leer = aus.
@@ -62,7 +62,9 @@ export async function run(ctx) {
         const ext = chronos ? CH.chronosLookup(chronos) : null;
         // je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR): micro wie bisher in forecast/ (Lernphase unverändert), E-Roller und Carsharing
         // getrennt in forecast/moped/ und forecast/car/; eine Familie ohne Fahrzeugminuten in den Tagesdateien wird übersprungen (keine Dateien)
-        const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
+        // vorlesungsfreie Zeiten der Universitäten (Merkmal semfrei, 27.11.2026): gepflegte Liste im Repo, je Eintrag mit Beleg der Hochschule
+        const semDoc = await rd(path.join(ROOT, 'data', 'vorlesungszeiten.json')), sem = CX.checkCurated(semDoc); if (sem.bad.length) log(`Vorlesungszeiten: ${sem.bad.length} Einträge übersprungen (${sem.bad.slice(0, 3).join('; ')})`);
+        const curatedAll = [...curOk, ...ctx.strikeAuto, ...ctx.sportCurated, ...sem.ok, ...(evOn ? [...ctx.venueCurated, ...termineAuto] : [])], calendar = await rd(path.join(DATA, 'calendar.json'));
         ctx.trainCtx = { curated: curatedAll, pending };
         // Störungskorrektur (angezeigt, nach Freigabe eingerechnet): letzte volle Stunde je Gemeinde (Phase oepnv) und belegte Wirkung (oepnv/wirkung.json)
         let ptIn = null; try { const w = ctx.ptNow ? await rd(path.join(DATA, 'oepnv', 'wirkung.json')) : null; if (w?.learn) ptIn = { now: ctx.ptNow, effect: Object.fromEntries(Object.entries(w.learn.cities || {}).map(([a, r]) => [a, r[1]])), pooled: w.learn.pooled?.effect ?? 0, since: w.learn.since, until: w.learn.until }; } catch { ptIn = null; }

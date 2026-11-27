@@ -12,6 +12,7 @@ import * as PG from '../../lib/pulse-oepnv-prog.js';
 import * as GB from '../../lib/pulse-oepnv-gebiet.js';
 import * as CX from '../../lib/pulse-context.js';
 import * as PL from '../../lib/pulse-oepnv-plan.js';
+import { wxLookup } from '../../lib/pulse-forecast-select.js';
 import { Readable, pipeline } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import * as SV from '../../lib/pulse-schema.js';
@@ -132,6 +133,12 @@ export async function run(ctx) {
         const daysP = Array.from({ length: PG.PTP.days + 1 }, (_, i) => T.dayOf(now - (PG.PTP.days - i) * 86400e3)), histP = await incidentDocs(daysP); let progN = 0;
         const days8 = daysP.slice(-8), hist = new Map(/** @type {Array<[string, any]>} */ (days8.filter(d => histP.has(d)).map(d => [d, histP.get(d)]))), lineBy = LN.lineRows(NZ.stationTotals(st.lines, today)), hot = LN.hotspots(ix, recent.result());
         let series = null; try { series = JSON.parse(await readFile(path.join(DATA, 'forecast', 'series.json'), 'utf8')); } catch { series = null; }
+        let calendar = null; try { calendar = JSON.parse(await readFile(path.join(DATA, 'calendar.json'), 'utf8')); } catch { calendar = null; } // PTP v 3: Feiertage, Schulferien je Land
+        // PTP v 3: Lage aller Städte (Niveau, Regen) aus den Resten der letzten Tage, gelernt ohne Vorgriff (PG.learnAdj); Regen aus weather/<Tag>.json (beobachtet, ab Abruf Vorhersage)
+        const wxDocs = []; for (const d of [...daysP, T.dayOf(now + 86400e3)]) { try { wxDocs.push(JSON.parse(await readFile(path.join(DATA, 'weather', `${d}.json`), 'utf8'))); } catch { /* Tag ohne Wetter */ } }
+        const wxP = wxLookup(wxDocs), optOf = (ags) => ({ ...PG.PTP, typeOf: PG.typeOfFor(ags, calendar), rainOf: (d, h) => wxP(ags, d, h)?.[2] ?? null });
+        const resRows = []; for (const [ags] of byAgs) { const cd = PG.cityDays(histP, ags); if (cd.size >= 3) for (const r of PG.residualRows(cd, today, optOf(ags))) resRows.push(r); }
+        const adjP = PG.learnAdj(resRows, today), adjNow = adjP.get(today);
         const ptNow = {}, hNow = T.hourOf(now - 3600e3), dNow = T.dayOf(now - 3600e3); // letzte volle Ortsstunde je Gemeinde für die Alarme (Phase alarme)
         const liveDir = path.join(dir, 'live'); await mkdir(liveDir, { recursive: true });
         let gebietN = 0;
@@ -140,7 +147,7 @@ export async function run(ctx) {
           const rows = NZ.stationRows(ix, qs, totals), hours = NZ.hoursOf(hist, ags, days8), trips = pr.by.get(ags) || [];
           if (!rows.length && !hours.days.length && !trips.length) continue;
           const lr = lineBy.get(ags) || [], profile = series ? LN.dayProfile(hist, series, ags, { today }) : null;
-          const prognose = PG.cityOutlook(histP, ags, now, lr); if (prognose) progN++;
+          const prognose = PG.cityOutlook(histP, ags, now, lr, { ...optOf(ags), adj: adjP }); if (prognose) progN++;
           const gebiet = GB.gebietOf(rows, served.get(ags), st.gebiet?.days ?? 0); if (gebiet) gebietN++;
           const aN = CX.ptArea(hist.get(dNow), ags); if (aN && aN.n[hNow] >= NZ.NETZ.minHourN) ptNow[ags] = { day: dNow, hour: hNow, n: aN.n[hNow], skip: aN.skip[hNow] || 0, late: aN.late[hNow] || 0, flag: aN.flag[hNow] ? 1 : 0 }; // Alarm: nur Haltestellen im Gebiet
           await writeFile(path.join(dir, `${ags}.json`), JSON.stringify(SV.withSchema('oepnv', { ags, at: now, feedAt: stats.ts ?? null, license: NZ.NETZ_LICENSE, attribution: NZ.NETZ_ATTRIBUTION, halfLifeDays: NZ.NETZ.halfLifeDays, days: Math.round(NZ.netzDays(st, now) * 100) / 100, stations: qs.length, fields: NZ.STATION_FIELDS, rows, hours, lines: { fields: LN.LINE_FIELDS, rows: lr }, profile, jetzt: { windowH: LN.JETZT.windowH, minN: LN.JETZT.minN, fields: LN.JETZT_FIELDS, rows: hot.get(ags) || [] }, prognose, gebiet })));
@@ -149,7 +156,7 @@ export async function run(ctx) {
           const nPlan = trips.filter(r => r[7] === 'fahrplan').length; cities[ags] = [rows.length, sum(hours.n), sum(hours.skip), sum(hours.late), trips.length - nPlan, nPlan]; files++; vehicles += trips.length;
         }
         log(`ÖPNV-Geschäftsgebiet: ${gebietN} Gemeinden mit bedienten Zellen (${st.gebiet?.days ?? 0} Tage), ${[...inArea.values()].filter(v => !v).length} von ${inArea.size} Halten dieser Gemeinden draußen`);
-        log(`ÖPNV-Verspätungsprognose: ${progN} Gemeinden (Tage ${[...histP.values()].filter(d => Object.keys(d?.ags || {}).length).length})`);
+        log(`ÖPNV-Verspätungsprognose: ${progN} Gemeinden (Tage ${[...histP.values()].filter(d => Object.keys(d?.ags || {}).length).length}${adjNow ? `, Lage ${(adjNow.lvl * 100).toFixed(2)} pp, Regen +${(adjNow.rain * 100).toFixed(2)} pp aus ${adjNow.n} Stunden` : ', Lage noch ohne Grundlage'})`);
         // Wirkung auf Sharing: Prognose-Reihen des vorigen Laufs (forecast/series.json) gegen die Störungs-Stunden
         ctx.ptNow = ptNow;
         const { daily, ...eff } = series ? NZ.ptEffect(hist, series, { today }) : { daily: {}, rule: null, pooled: null, cities: [] };

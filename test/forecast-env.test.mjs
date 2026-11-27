@@ -27,5 +27,15 @@ assert(big?.[0] === FC.ENV_REL.max && FC.envRelFactor({ beta, ctx: [], weather: 
 { const W = FC.wxProgress({ ok: false, tempRangeK: 2.5, rainDays: 3, dryDays: 5, missingShare: 0.1 });
   assert(Math.abs(W.share - 0.5) < 1e-9 && FC.wxProgress({ ok: true }).share === 1 && FC.wxProgress(null) === null, 'Wetter: knappster Teil (Temperaturspanne 2,5 von 5 K) = 50 %'); }
 
+// Semesterferien (semfrei, 27.11.2026): gepflegte Liste mit Beleg je Eintrag; erster Fall = Erfassungsbeginn in FEATURE_SINCE
+{ const { readFileSync } = await import('node:fs'), CX = await import('../lib/pulse-context.js'), doc = JSON.parse(readFileSync(new URL('../data/vorlesungszeiten.json', import.meta.url), 'utf8'));
+  const chk = CX.checkCurated(doc), first = chk.ok.map(e => e.von).sort()[0], L = CX.ctxLookup([], chk.ok), i = CX.CTX_KEYS.indexOf('semfrei');
+  assert(chk.bad.length === 0 && chk.ok.length === doc.ereignisse.length && chk.ok.every(e => /^https:\/\//.test(e.quelle) && e.gebiet.ags.every(a => /^\d{8}$/.test(a))) && first === FC.FEATURE_SINCE.semfrei,
+    `Vorlesungszeiten: ${chk.ok.length} Einträge mit Beleg, erster vorlesungsfreier Tag ${first} = FEATURE_SINCE.semfrei ${FC.FEATURE_SINCE.semfrei}`);
+  assert(i >= 0 && FC.EFFECTS.includes('semfrei') && L('08416041', '2026-12-24', 10)[i] === 1 && L('08416041', '2026-12-01', 10)[i] === 0 && L('08416041', '2027-03-01', 9)[i] === 1 && L('08415000', '2026-12-24', 10)[i] === 0,
+    'semfrei: Tübingen in der Weihnachtspause und den Semesterferien, nicht im Semester, nicht im Nachbarort');
+  const P = FC.ctxProgress(null, 'semfrei', '2026-11-27');
+  assert(P.share === 0 && P.from === '2026-12-19' && P.eta === '2026-12-20', `Fortschritt semfrei: ab ${P.from}, frühestens ${P.eta}`); }
+
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);
