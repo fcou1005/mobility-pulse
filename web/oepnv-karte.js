@@ -130,9 +130,10 @@ function rebuild(ctx) {
   }
   // gestörte Stationen der letzten Stunden: Kreis mit 300 m, Farbe nach Ursache (Ausfälle oder Verspätungen), kräftiger, wenn kein Sharing-Fahrzeug in der Nähe steht
   for (const h of M.hot || []) {
-    const skip = h.n > 0 && h.skip >= M.skipShare * h.n, col = skip ? cc : HIT.miss;
-    L.circle(/** @type {any} */ ([h.lat, h.lon]), { radius: 300, color: col, weight: h.level === 'none' ? 3 : 1.5, dashArray: h.level === 'none' ? undefined : '4 4', fillOpacity: h.level === 'none' ? 0.18 : 0.06 })
-      .bindTooltip(`${ctx.esc(h.name)}: ${t(skip ? 'pt.nowTipSkip' : 'pt.nowTipLate', { skip: ctx.fmt(h.skip), late: ctx.fmt(h.late), n: ctx.fmt(h.n) })}`).addTo(M.paths);
+    // außerhalb des Geschäftsgebiets (level out): grau, dort kann kein Sharing einspringen
+    const skip = h.n > 0 && h.skip >= M.skipShare * h.n, out = h.level === 'out', col = out ? HIT.none : skip ? cc : HIT.miss;
+    L.circle(/** @type {any} */ ([h.lat, h.lon]), { radius: 300, color: col, weight: h.level === 'none' ? 3 : 1.5, dashArray: h.level === 'none' ? undefined : '4 4', fillOpacity: h.level === 'none' ? 0.18 : out ? 0.03 : 0.06 })
+      .bindTooltip(`${ctx.esc(h.name)}: ${t(skip ? 'pt.nowTipSkip' : 'pt.nowTipLate', { skip: ctx.fmt(h.skip), late: ctx.fmt(h.late), n: ctx.fmt(h.n) })}${out ? ` · ${t('pt.nowOut')}` : ''}`).addTo(M.paths);
   }
   // ganz ausgefallene Fahrten mit Zeit im Fenster: gestrichelt auf ihrem Weg
   if (M.showCancel) for (const [line, art, w, ziel] of (M.live?.ausfall?.rows || []).filter((/** @type {any[]} */ r) => !M.off.has(r[1]) && (!M.onlyLine || r[0] === M.onlyLine))) {

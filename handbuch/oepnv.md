@@ -75,6 +75,11 @@ Ansicht Heute › ÖPNV (`#oepnv`, `web/oepnv.js`; Kurzlinks `#nahverkehr`, `#ve
 - Thema `oepnv` in den Alarmen und Feeds je Gemeinde: Die letzte volle Stunde wechselt auf stark gestört, das heißt mindestens 15 % der Halte ausgefallen oder 50 % verspätet (`PT_ALARM`; strenger als das Kennzeichen „gestört“, weil im Feierabendverkehr des 16.11. 13 Großstädte in einem Lauf bei 30 bis 44 % verspätet lagen). Nur Gemeinden ab 100 Fahrzeugen und 150 Halten mit Echtzeit in der Stunde (mit 20 Fahrzeugen ohne Halte-Grenze kamen am 16.11. in drei Stunden 42 Alarme, 34 aus Kleinstädten), höchstens ein Alarm je Gemeinde in 6 Stunden, der erste Lauf meldet nichts.
 - Der Text nennt Stunde, Anteile und die verfügbaren Sharing-Fahrzeuge im Stadtgebiet; Push über ntfy wie bei den anderen Themen.
 
+## Geschäftsgebiet in den Rechnungen (27.11.2026)
+
+- Seit 19.11. zählen in „Jetzt gestört“, den Stationsvorschlägen und der Disposition nur Haltestellen im Geschäftsgebiet. Seit 27.11. auch im Alarm „ÖPNV gestört“, in „Was Störungen mit Sharing machen“ (samt gelernter Störungskorrektur) und in den ÖPNV-Merkmalen der Sharing-Prognose (`ptOut`, `ptRisk`): Zählung `ptNg`/`ptSkipg`/`ptLateg`/`ptg` je Gemeinde-Stunde, Einzelheiten in [Prognose](prognose.md).
+- Angezeigt werden weiter alle Haltestellen. Gestörte Stationen draußen sind auf der Karte grau, in der Liste „Stationen mit den meisten Störungen“ steht „außerhalb Geschäftsgebiet“, die CSV hat die Spalte `im_geschaeftsgebiet` (1/0, leer ohne gemessenes Gebiet).
+
 ## ÖPNV-Prognose (`lib/pulse-oepnv-prog.js`, Tafel `#pt-prog`)
 
 - Rechnung: siehe [Prognose](prognose.md) (PTP v 2: gleiche Stunde an Tagen desselben Typs der letzten drei Wochen, Ausfälle zur Hälfte vom Vortag). Sie steht je Gemeinde in `oepnv/<AGS>.json` `prognose`.

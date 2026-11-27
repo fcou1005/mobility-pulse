@@ -36,9 +36,10 @@ export async function run(ctx) {
         { const mut = new Set(latest.carTrips?.unmeasurable || []); if (mut.size) for (const d of docs) for (const k of Object.keys(d.groups || {})) { const [, op, ty] = k.split('|'); if (ty === 'car' && mut.has(op)) red.add(k); } }
         // Umgebung: Warnungen und Autobahn (incidents/), gepflegte Ereignisliste (data/ereignisse.json im Repo; fehlerhafte Einträge werden gemeldet und übersprungen)
         const incidents = []; for (const f of await list(path.join(DATA, 'incidents'), 25)) { try { incidents.push(JSON.parse(await readFile(f, 'utf8'))); } catch {} }
-        // erwartete ÖPNV-Verspätung je Gemeinde, Tag und Stunde (Merkmal ptRisk): Prognose aus den Vortagen wie auf der ÖPNV-Seite, für vergangene und kommende Tage
+        // erwartete ÖPNV-Verspätung je Gemeinde, Tag und Stunde (Merkmal ptRisk): Prognose aus den Vortagen wie auf der ÖPNV-Seite, für vergangene und kommende Tage;
+        // seit 27.11.2026 nur aus Haltestellen im Geschäftsgebiet (cityDays area, Tage davor ohne Gebietszählung fehlen)
         const ptMap = new Map(incidents.filter(d => d?.day).map(d => [d.day, d])), ptCity = new Map(), ptDay = new Map();
-        const ptRisk = (ags, day, h) => { const k = `${ags}|${day}`; let p = ptDay.get(k); if (p === undefined) { let cd = ptCity.get(ags); if (cd === undefined) ptCity.set(ags, cd = PG.cityDays(ptMap, ags)); p = cd.size ? PG.predictDay(cd, day) : null; ptDay.set(k, p); } const v = p?.late?.[h]; return v != null && (p.n?.[h] ?? 0) >= PG.PTP.minN ? v : null; };
+        const ptRisk = (ags, day, h) => { const k = `${ags}|${day}`; let p = ptDay.get(k); if (p === undefined) { let cd = ptCity.get(ags); if (cd === undefined) ptCity.set(ags, cd = PG.cityDays(ptMap, ags, { area: true })); p = cd.size ? PG.predictDay(cd, day) : null; ptDay.set(k, p); } const v = p?.late?.[h]; return v != null && (p.n?.[h] ?? 0) >= PG.PTP.minN ? v : null; };
         const curDoc = await rd(path.join(ROOT, 'data', 'ereignisse.json')), cur = CX.checkCurated(curDoc); if (cur.bad.length) log(`Ereignisliste: ${cur.bad.length} Einträge übersprungen (${cur.bad.slice(0, 3).join('; ')})`);
         // Termine aus dem Workflow „Termine“ (Branch termine, lib/pulse-termine.js, wöchentlich): wie Veranstaltungen der Liste (erst ab veranstaltungenAb);
         // Doppel zur Liste fallen für die Anzeige weg (das Merkmal je Gemeinde und Stunde ist 0/1). TERMINE_URL leer = aus.

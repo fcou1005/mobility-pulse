@@ -107,6 +107,11 @@ const docs = days12.map(d => makeDoc(d)), WX = wxDocs(addDays(DAY0, -1), addDays
     const big = F.ctxActive(Rr2, [0, 1, 2], pri(F.GATES.ctxMinRows, F.GATES.ctxMinDays)).map(k => CX.CTX_KEYS[k]), small = F.ctxActive(Rr2, [0, 1, 2], pri(F.GATES.ctxMinRows - 1, F.GATES.ctxMinDays)).map(k => CX.CTX_KEYS[k]);
     assert(['warn', 'strike', 'roadC', 'roadJ', 'works', 'ptOut', 'ptRisk'].every(x => big.includes(x)) && !big.includes('road') && small.join() === 'rail',
       `Einflüsse aktiv ab genug Daten: ${big.join(',')}; knapp darunter nur passiv (im Modell nur Bahnstreik mit Vorwissen: ${small.join(',')})`); }
+  // Gedächtnis v 6 (27.11.2026): ptOut und ptRisk zählen nur noch Haltestellen im Geschäftsgebiet – ihr Gelerntes fällt weg, der Rest bleibt
+  { const NE2 = F.EFFECTS.length, ix = (n) => F.EFFECTS.indexOf(n), m = { v: 5, names: [...F.EFFECTS], upto: '2026-11-26', old: { at: '2026-11-26', P: new Array(NE2 * NE2).fill(1), h: new Array(NE2).fill(2), n: new Array(NE2).fill(50), dk: new Array(NE2).fill(3), days: 4 }, days: {} };
+    const r = F.memoryResize(m, { drop: F.MEMORY.dropV6 });
+    assert(F.MEMORY.v === 6 && r.old.n[ix('ptOut')] === 0 && r.old.n[ix('ptRisk')] === 0 && r.old.P[ix('ptOut') * NE2 + ix('warn')] === 0 && r.old.n[ix('warn')] === 50 && r.old.P[ix('warn') * NE2 + ix('cold')] === 1,
+      'Gedächtnis v 6: ÖPNV-Merkmale lernen neu, alle anderen Wirkungen bleiben'); }
   // Gedächtnis nach Namen (26.11.2026): ein Gedächtnis in der alten Reihenfolge (EFFECTS_V3, ohne names) behält je Wirkung seine Werte
   { const K = F.EFFECTS_V3.length, iO = (n) => F.EFFECTS_V3.indexOf(n), mOld = { v: 3, upto: '2026-11-20', old: { at: '2026-11-20', P: new Array(K * K).fill(0), h: new Array(K).fill(0), n: new Array(K).fill(0), dk: new Array(K).fill(0), days: 3 }, days: { '2026-11-21': { H: new Array(K * K).fill(0), u: new Array(K).fill(0), n: new Array(K).fill(0) } }, wxDays: {} };
     mOld.old.n[iO('dark')] = 77; mOld.old.P[iO('frost') * K + iO('cold')] = 5; mOld.days['2026-11-21'].u[iO('strike')] = 9;

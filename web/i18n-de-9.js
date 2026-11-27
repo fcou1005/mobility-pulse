@@ -163,7 +163,7 @@ export default {
   "fv.env.roadC": "Autobahn: Sperrung im Gemeindegebiet",
   "fv.env.roadJ": "Autobahn: Stau im Gemeindegebiet",
   "fv.env.works": "Straßensperrung oder Baustelle im Ort (nur Baden-Württemberg, Hamburg, München)",
-  "fv.env.ptOut": "Nahverkehr gestört: Halte fallen aus oder sind stark verspätet (ab 15 % ausgefallen oder 30 % mindestens 5 Minuten zu spät)",
+  "fv.env.ptOut": "Nahverkehr gestört an Haltestellen im Geschäftsgebiet: Halte fallen aus oder sind stark verspätet (ab 15 % ausgefallen oder 30 % mindestens 5 Minuten zu spät)",
   "fv.envGrp.warnings": "Warnungen",
   "fv.envGrp.traffic": "Straßenverkehr",
   "fv.envGrp.disrupt": "Ausfälle und Störungen (Halte werden nicht bedient)",
@@ -189,5 +189,5 @@ export default {
   "fv.gapsKeyCity": "Punkte: größte Lücken je Anbieter (Farbe = Anbieter, kräftig = wichtiger Spot, Größe = fehlende Fahrzeuge)",
   "fv.gapsPopMiss": "fehlen {n}, davon an wichtigen Spots {ab}; je Anbieter fehlen (davon wichtig):",
   "fv.gapsPopSpot": "{op}: fehlen {n}, Klasse {cls}",
-  "fv.env.ptRisk": "ÖPNV-Prognose (Bus und Bahn): viele Verspätungen erwartet (ab 20 % verspätete Halte; aus der eigenen ÖPNV-Prognose, auch für morgen bekannt)",
+  "fv.env.ptRisk": "ÖPNV-Prognose (Bus und Bahn): viele Verspätungen an Haltestellen im Geschäftsgebiet erwartet (ab 20 % verspätete Halte; aus der eigenen ÖPNV-Prognose, auch für morgen bekannt)",
 };

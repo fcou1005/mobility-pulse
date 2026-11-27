@@ -163,7 +163,7 @@ export default {
   "fv.env.roadC": "motorway: closure within the municipality",
   "fv.env.roadJ": "motorway: jam within the municipality",
   "fv.env.works": "road closure or roadworks in town (Baden-Württemberg, Hamburg, Munich only)",
-  "fv.env.ptOut": "public transport disrupted: stops cancelled or badly delayed (15 % cancelled or 30 % at least 5 minutes late)",
+  "fv.env.ptOut": "public transport disrupted at stops in the business area: stops cancelled or heavily delayed (15 % cancelled or 30 % at least 5 minutes late)",
   "fv.envGrp.warnings": "Warnings",
   "fv.envGrp.traffic": "Road traffic",
   "fv.envGrp.disrupt": "Outages and disruptions (stops not served)",
@@ -189,5 +189,5 @@ export default {
   "fv.gapsKeyCity": "Dots: largest gaps per operator (colour = operator, solid = important spot, size = missing vehicles)",
   "fv.gapsPopMiss": "missing {n}, at important spots {ab}; per operator missing (of which important):",
   "fv.gapsPopSpot": "{op}: missing {n}, class {cls}",
-  "fv.env.ptRisk": "transit forecast (bus and rail): many delays expected (20 % of stops late or more; from our own transit forecast, known for tomorrow too)",
+  "fv.env.ptRisk": "transit forecast (bus and rail): many delays expected at stops in the business area (20 % of stops late or more; from our own transit forecast, known for tomorrow too)",
 };

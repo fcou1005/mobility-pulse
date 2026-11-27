@@ -1,1 +1,0 @@
-var s=Object.freeze({days:7,minCells:10,ring:1});function l(t){let e=t?.gebiet;if(!e?.outside)return{on:!1,keepId:()=>!0,g:null};let n=new Set(e.outside.map(String));return{on:!0,g:e,keepId:r=>!n.has(String(r))}}export{l as a};

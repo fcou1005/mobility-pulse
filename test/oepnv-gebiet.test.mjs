@@ -31,5 +31,12 @@ assert(H.length === 2 && H[0].id === '1' && H[0].level === 'none' && H[1].id ===
 const spots = OX.oepnvSpots(jetzt.filter(r => F.keepId(r[0])), { vehicles: [] });
 assert(spots.length === 1 && spots[0].cell === 'pt:1', 'Disposition: Ziel nur an der Station im Gebiet');
 
+// Zählung je Gemeinde-Stunde nur im Gebiet (27.11.2026): Halt → innen/außen über seine Station; Gemeinde ohne Gebiet fehlt in der Map
+{ const [la1, lo1] = ctr(1, 1), [la3, lo3] = ctr(20, 1);
+  const ix = { id: ['h1', 'h2', 'h3', 'h4'], a: [0, 0, 0, 1], ags: ['08416041', '08415061'], s: [0, 1, -1, 2], st: { lat: [la1, la3, 48.49], lon: [lo1, lo3, 9.2], a: [0, 0, 1] } };
+  const m = GB.stopAreaLookup(ix, S), A = GB.areaAgs(S);
+  assert(m.get('h1') === true && m.get('h2') === false && !m.has('h3') && !m.has('h4') && A.has('08416041') && !A.has('08415061'),
+    `Halt im Gebiet: Neckarbrücke ja, Kilchberg nein; Halt ohne Station und Gemeinde ohne Gebiet zählen überall mit (${[...m].join(' ')})`); }
+
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);

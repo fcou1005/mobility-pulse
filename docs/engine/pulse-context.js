@@ -16,9 +16,11 @@
 import { hourOf, dayOf } from './pulse-track.js';
 
 // Seit 26.11.2026 auch roadC (Autobahn-Sperrung), roadJ (Autobahn-Stau), works (Sperrung oder Baustelle im Ort, Baden-Württemberg, Hamburg, München) und
-// ptOut (Nahverkehr: ab 15 % ausgefallene oder 30 % verspätete Halte, Echtzeit) – erfasst und gelernt, im Modell ab genug Daten (ctxActive, seit 27.11.).
+// ptOut (Nahverkehr: ab 15 % ausgefallene oder 30 % verspätete Halte, Echtzeit; seit 27.11. nur Haltestellen im Geschäftsgebiet, ptArea) – erfasst und gelernt,
+// im Modell ab genug Daten (ctxActive, seit 27.11.).
 // Das Gedächtnis ordnet nach Namen um (memoryResize), neue Merkmale dürfen hier hinten stehen.
-// ptRisk (26.11.2026): laut ÖPNV-Prognose (lib/pulse-oepnv-prog.js, nur aus Vortagen) mindestens PT_RISK der Halte verspätet – kennt die Prognose auch für morgen.
+// ptRisk (26.11.2026): laut ÖPNV-Prognose (lib/pulse-oepnv-prog.js, nur aus Vortagen; seit 27.11. nur Haltestellen im Geschäftsgebiet) mindestens PT_RISK
+// der Halte verspätet – kennt die Prognose auch für morgen.
 export const CTX_KEYS = ['warn', 'road', 'strike', 'rail', 'event', 'fest', 'sport', 'roadC', 'roadJ', 'works', 'ptOut', 'ptRisk'];
 export const PT_RISK = 0.2;
 export const SEVERITY = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -28,6 +30,17 @@ const LAND_OF_AGS = { '01': 'SH', '02': 'HH', '03': 'NI', '04': 'HB', '05': 'NW'
 
 export const emptyIncidentDoc = (day) => ({ version: 1, day, updatedAt: null, sources: {}, ags: {} });
 const slot = (doc, ags, key) => { const a = (doc.ags[ags] ||= {}); return (a[key] ||= new Array(24).fill(0)); };
+const ZERO24 = Object.freeze(new Array(24).fill(0));
+/**
+ * Halte im Geschäftsgebiet je Stunde (seit 27.11.2026, Dokument mit ptGebiet): Sharing kann nur dort aufgestellt werden, darum rechnen Alarm,
+ * Störungswirkung und die ÖPNV-Merkmale der Prognose nur mit diesen Haltestellen. Gemeinde mit gemessenem Gebiet: ptNg/ptSkipg/ptLateg/ptg;
+ * ohne Gebiet (zu wenige bediente Zellen): alle Halte. Ältere Dokumente: null – sie zählen dafür nicht.
+ * @param {any} doc incidents/<Tag>.json @param {string} ags @returns {{ n: number[], skip: number[], late: number[], flag: number[] } | null}
+ */
+export function ptArea(doc, ags) {
+  const a = doc?.ags?.[ags]; if (!doc?.ptGebiet || !a?.ptN) return null;
+  return a.ptNg ? { n: a.ptNg, skip: a.ptSkipg || ZERO24, late: a.ptLateg || ZERO24, flag: a.ptg || ZERO24 } : { n: a.ptN, skip: a.ptSkip || ZERO24, late: a.ptLate || ZERO24, flag: a.pt || ZERO24 };
+}
 
 /** Stunden (UTC-Beginn) im Intervall [from, to) */
 function* hoursBetween(from, to) { for (let t = Math.floor(from / 3600e3) * 3600e3; t < to; t += 3600e3) yield t; }
@@ -111,8 +124,9 @@ export function ctxLookup(docs = [], curated = [], { ptRisk = null } = {}) {
   for (const e of cur) { const d0 = e.from.slice(0, 10), d1 = e.to.slice(0, 10); for (let t = Date.parse(`${d0}T12:00:00Z`), n = 0; n < 400; t += 86400e3, n++) { const d = new Date(t).toISOString().slice(0, 10); if (d > d1) break; let l = curByDay.get(d); if (!l) curByDay.set(d, l = []); l.push(e); } }
   const iW = CTX_KEYS.indexOf('warn'), iR = CTX_KEYS.indexOf('road'), iRC = CTX_KEYS.indexOf('roadC'), iRJ = CTX_KEYS.indexOf('roadJ'), iWk = CTX_KEYS.indexOf('works'), iPt = CTX_KEYS.indexOf('ptOut'), iPR = CTX_KEYS.indexOf('ptRisk');
   return (ags, day, h) => {
-    const out = new Int8Array(CTX_KEYS.length), a = byDay.get(day)?.ags?.[ags];
-    if (a) { if ((a.warn?.[h] || 0) >= WARN_MIN) out[iW] = 1; if (a.road?.[h]) out[iR] = 1; if (a.roadC?.[h]) out[iRC] = 1; if (a.roadJ?.[h]) out[iRJ] = 1; if ((a.works?.[h] || 0) > 0) out[iWk] = 1; if (a.pt?.[h]) out[iPt] = 1; }
+    const out = new Int8Array(CTX_KEYS.length), doc = byDay.get(day), a = doc?.ags?.[ags];
+    // ptOut nur aus Haltestellen im Geschäftsgebiet (ptArea, seit 27.11.2026; ältere Tage ohne Gebietszählung: kein Fall)
+    if (a) { if ((a.warn?.[h] || 0) >= WARN_MIN) out[iW] = 1; if (a.road?.[h]) out[iR] = 1; if (a.roadC?.[h]) out[iRC] = 1; if (a.roadJ?.[h]) out[iRJ] = 1; if ((a.works?.[h] || 0) > 0) out[iWk] = 1; if (doc.ptGebiet && (a.ptNg ? a.ptg : a.pt)?.[h]) out[iPt] = 1; }
     if (ptRisk) { const v = ptRisk(ags, day, h); if (v != null && v >= PT_RISK) out[iPR] = 1; }
     const list = curByDay.get(day);
     if (list) { const s = stamp(day, h), land = LAND_OF_AGS[String(ags).slice(0, 2)];

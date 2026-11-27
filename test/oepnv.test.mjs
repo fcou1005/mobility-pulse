@@ -60,6 +60,13 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   assert(d.ags['08111000'].ptN[h] === 25 && d.ags['08111000'].ptSkip[h] === 5 && d.ags['08111000'].pt[h] === 1, 'Maximum über die Läufe: späterer Lauf mit weniger Halten ändert nichts');
   OE.addPt(docs, new Map([['08111000', new Map([[h0, [40, 1, 2]]])]]));
   assert(d.ags['08111000'].ptN[h] === 40 && d.ags['08111000'].pt[h] === 0, 'mehr Halte: neue Zahlen, Kennzeichen neu berechnet');
+  // Gebietszählung (27.11.2026): Halt 1 liegt draußen, Halt 2 drinnen; nur Gemeinden mit Gebiet bekommen ptNg…, das Dokument ptGebiet
+  { const inArea = new Map([['1', false], ['2', true]]), rg = OE.ptCounts(buf, lookup, now, { keep: new Set(['08111000', '08416041']), inArea });
+    const cs = rg.by.get('08111000')?.get(h0), ct = rg.by.get('08416041')?.get(h0), dg = new Map(); OE.addPt(dg, rg.by, new Map(), { areaAgs: new Set(['08111000']) });
+    const dd = dg.get(T.dayOf(h0)), aS = CX.ptArea(dd, '08111000'), aT = CX.ptArea(dd, '08416041');
+    assert(cs.join() === '25,5,3,0,0,0' && ct.join() === '1,0,0,1,0,0' && dd.ptGebiet === 1 && dd.ags['08111000'].ptNg[h] === 0 && dd.ags['08111000'].pt[h] === 1 && dd.ags['08111000'].ptg[h] === 0
+      && !dd.ags['08416041'].ptNg && aS.n[h] === 0 && aS.flag[h] === 0 && aT.n[h] === 1 && CX.ptArea(d, '08111000') === null,
+      `Gebietszählung: Stuttgart 25 Halte alle draußen → im Gebiet 0, nicht gestört; Tübingen ohne Gebiet zählt ganz; altes Dokument liest null (${cs} | ${ct})`); }
   assert(OE.ptFlag(20, 0, 6) === 1 && OE.ptFlag(19, 19, 19) === 0 && OE.ptFlag(100, 14, 29) === 0, 'Kennzeichen: Schwellen 15 % ausgefallen oder 30 % verspätet ab 20 Halten');
   assert(OE.OEPNV.keys.every(k => !CX.CTX_KEYS.includes(k)), 'ÖPNV-Felder sind keine Modellmerkmale (Lernphase)');
   // ganz ausgefallene Fahrten ohne Zeit (nur trip_id und start_date): je Betriebstag und Gemeinde, Fahrten einmal je Gemeinde
@@ -125,7 +132,7 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
     assert(g[2].slice(11, 19).every(x => x === 1) && g[2][10] === 0 && g[0].every(x => x === 0) && g[4][18] === 0 && g[4][17] === 1 && NZ.gapHours([lowSat, day(4000)])[0][12] === 0,
       `Lücken: 8 Stunden am Samstag erkannt, leere Stunden (noch nicht vorbei) zählen nicht, erst ab 3 Vergleichstagen (${g[2].join('')})`); }
   // Stunden aus den Störungs-Dokumenten
-  const doc = (day, flagH, mult) => ({ ags: { '08111000': { ptN: new Array(24).fill(100), ptSkip: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 20 : 2)), ptLate: new Array(24).fill(5), pt: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 1 : 0)) } }, ptDay: { '08111000': [4, 30] }, mult });
+  const doc = (day, flagH, mult) => ({ ptGebiet: 1, ags: { '08111000': { ptN: new Array(24).fill(100), ptSkip: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 20 : 2)), ptLate: new Array(24).fill(5), pt: new Array(24).fill(0).map((_, h) => (flagH.includes(h) ? 1 : 0)) } }, ptDay: { '08111000': [4, 30] }, mult });
   const days = ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'], docs = new Map(days.map((d, i) => [d, doc(d, i < 3 ? [8, 9, 17] : [], 1)]));
   const hrs = NZ.hoursOf(docs, '08111000', [...days, '2026-11-14']);
   assert(hrs.days.length === 4 && hrs.skip[0][8] === 20 && hrs.flag[3][8] === 0 && hrs.cancel.join() === '4,4,4,4', 'Stunden je Tag aus den Störungs-Dokumenten, Tag ohne Daten fehlt');
@@ -133,6 +140,9 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   const series = { days: Object.fromEntries(days.map((d, i) => [d, { 'ags:08111000': { p: new Array(24).fill(100), a: new Array(24).fill(0).map((_, h) => (i < 3 && [8, 9, 17].includes(h) ? 120 + i : 100 + (h % 3) - 1)) } }])) };
   const eff = NZ.ptEffect(docs, series, { today: '2026-11-14' }), c = eff.cities[0];
   assert(eff.cities.length === 1 && c.days === 3 && c.hours === 9 && c.verdict === 'mehr' && Math.abs(c.effect - 0.21) < 0.005 && c.ci[0] > 0.15 && eff.pooled === null, `Wirkung: +21 % in gestörten Stunden, je Tag ein Wert, Intervall über der Null (${JSON.stringify(c)})`);
+  // nur Haltestellen im Gebiet (27.11.2026): Tage ohne Gebietszählung fehlen; wo ptNg steht, zählt dessen Kennzeichen
+  { const old = new Map([...docs].map(([k, v]) => [k, { ...v, ptGebiet: undefined }])), area = new Map([...docs].map(([k, v]) => [k, { ...v, ags: { '08111000': { ...v.ags['08111000'], ptNg: v.ags['08111000'].ptN, ptg: new Array(24).fill(0) } } }]));
+    assert(NZ.ptEffect(old, series, { today: '2026-11-14' }).cities.length === 0 && NZ.ptEffect(area, series, { today: '2026-11-14' }).cities.length === 0, 'Wirkung: nur gestörte Stunden an Haltestellen im Gebiet; ohne Gebietszählung kein Tag'); }
   assert(NZ.ptEffect(docs, series, { today: '2026-11-11' }).cities[0].verdict === 'zu wenig Tage' && NZ.ptEffect(new Map(), series).cities.length === 0, 'Wirkung: unter 3 gestörten Tagen kein Urteil');
   // Vorschläge für Sharing-Stationen
   const sr = [['a', 'Viel und gestört', 48.78, 9.18, 4000, 400, 800, 3, 0, 0, 0], ['b', 'Viel, pünktlich', 48.79, 9.19, 4000, 10, 40, 1, 0, 0, 0], ['c', 'Hat Fläche', 48.77, 9.17, 5000, 500, 900, 3, 0, 0, 0], ['d', 'Klein', 48.76, 9.16, 40, 0, 0, 0, 0, 0, 0]];
@@ -264,6 +274,13 @@ const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); fails++; } els
   // Einfluss ptRisk für die Sharing-Prognose: erwartete Verspätung ab 20 % setzt das Merkmal, auch für kommende Tage
   { const CX = await import('../lib/pulse-context.js'), L = CX.ctxLookup([], [], { ptRisk: (ags, d, h) => (h === 17 ? 0.25 : 0.05) }), i = CX.CTX_KEYS.indexOf('ptRisk');
     assert(L('A', '2026-11-30', 17)[i] === 1 && L('A', '2026-11-30', 10)[i] === 0 && CX.ctxLookup([], [])('A', '2026-11-30', 17)[i] === 0, 'ptRisk: ab 20 % erwarteter Verspätung, ohne Prognose 0'); }
+  // ptOut und ptRisk nur aus Haltestellen im Geschäftsgebiet (27.11.2026): Kennzeichen aller Halte zählt nicht; Tage ohne Gebietszählung auch nicht
+  { const CX = await import('../lib/pulse-context.js'), i = CX.CTX_KEYS.indexOf('ptOut'), z = () => new Array(24).fill(0), one = () => new Array(24).fill(1), n = () => new Array(24).fill(200);
+    const dA = { day: '2026-11-27', ptGebiet: 1, ags: { A: { ptN: n(), pt: one(), ptNg: n(), ptg: z() }, B: { ptN: n(), pt: one() } } }, dOld = { day: '2026-11-26', ags: { A: { ptN: n(), pt: one() } } };
+    const L = CX.ctxLookup([dA, dOld], []);
+    assert(L('A', '2026-11-27', 9)[i] === 0 && L('B', '2026-11-27', 9)[i] === 1 && L('A', '2026-11-26', 9)[i] === 0, 'ptOut: Gebietskennzeichen statt aller Halte; Gemeinde ohne Gebiet zählt ganz; Tag davor ohne Fall');
+    const m = new Map([['2026-11-26', dOld], ['2026-11-27', dA]]), all = PG.cityDays(m, 'A'), ar = PG.cityDays(m, 'A', { area: true });
+    assert(all.size === 2 && ar.size === 1 && ar.get('2026-11-27').n[9] === 200, 'ÖPNV-Prognose für ptRisk: nur Tage mit Gebietszählung'); }
 }
 
 console.log(`${oks} ok, ${fails} Fehler`);
