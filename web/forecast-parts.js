@@ -120,6 +120,8 @@ const fx = (x) => (x == null || !Number.isFinite(x) ? '–' : `×${numFmt(2).for
 const ENV_GROUPS = /** @type {[string, string[]][]} */ ([['temp', ['frost', 'cold', 'warm', 'warm20', 'heat']], ['wet', ['rain', 'rain1', 'rain4', 'rainPrev', 'snow', 'wind']], ['light', ['dark']],
   ['warnings', ['warn']], ['traffic', ['roadC', 'roadJ', 'works']], ['strike', ['strike', 'rail']], ['disrupt', ['ptOut', 'ptRisk']], ['events', ['event', 'fest', 'sport']]]);
 // road = Autobahn-Sperrung oder -Stau zusammen (bis 26.11.2026 nur so erfasst): ersetzt durch roadC und roadJ, nicht mehr angezeigt
+// Kurzname eines Einflusses für Fließtext (alle Wettermerkmale zusammen „Wetter“)
+const shortName = (/** @type {string} */ k) => t(`fv.envShort.${(FC.WX_NAMES || []).includes(k) ? 'weather' : k}`);
 const ENV_HIDE = ['road'], ENV_NEW = { roadC: '26.11.', roadJ: '26.11.' };
 const envGroups = (/** @type {string[]} */ keys) => { const seen = new Set([...ENV_GROUPS.flatMap(([, ks]) => ks), ...ENV_HIDE]), out = /** @type {[string, string[]][]} */ (ENV_GROUPS.map(([g, ks]) => [g, ks.filter(k => keys.includes(k))])); out.push(['other', keys.filter(k => !seen.has(k))]); return out.filter(([, ks]) => ks.length); };
 export const TEMP_POINTS = [-10, -5, 0, 5, 15, 20, 25, 30, 35];
@@ -143,17 +145,37 @@ export function envHtml(ctx, L, { title = true } = {}) {
   });
   const heldFrom = E?.pendingFrom && Number.isFinite(Date.parse(E.pendingFrom)) ? dateFmt({ day: 'numeric', month: 'numeric', timeZone: TZ }).format(new Date(E.pendingFrom)) : '–';
   const chip = (st, k = '') => `<span class="fv-chip${st === 'on' || st === 'fixed' ? ' A' : st === 'ready' || st === 'held' ? ' B' : ''}">${t(`fv.envSt.${st}`, { d: st === 'newOff' ? ENV_NEW[k] : heldFrom })}</span>`;
+  // Greift es im Algorithmus? Wenn ja seit wann, sonst Fortschritt bis zur Schwelle und voraussichtliches Datum (27.11.2026, lib/pulse-forecast-progress.js)
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(L?.generatedAt ? new Date(L.generatedAt) : new Date()), tmrw = new Date(Date.parse(`${today}T12:00:00Z`) + 864e5).toISOString().slice(0, 10);
+  const when = (/** @type {string} */ d) => (d <= today ? t('fv.envToday') : d === tmrw ? t('fv.envTomorrow') : esc(dayTxt(d, /** @type {any} */ ({ weekday: 'short', day: 'numeric', month: 'numeric' }))));
+  const wxP = FC.wxProgress(L?.weather?.gate), isWxK = (/** @type {string} */ k) => (FC.WX_NAMES || []).includes(k);
+  const progOf = (/** @type {any} */ r) => /** @type {any} */ (isWxK(r.k) ? wxP : FC.ctxProgress(E?.support?.[r.k], r.k, today, { windowDays: M?.windowDays || 21 }));
+  const bar = (/** @type {number} */ share, /** @type {string} */ what) => { const p = Math.round(share * 100); return `<span class="fv-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}" aria-label="${esc(t('fv.envProgAria', { what }))}"><i style="width:${p}%"></i></span><b>${p} %</b>`; };
+  const stateCell = (/** @type {any} */ r) => {
+    if (r.st === 'on' || r.st === 'fixed') { const since = E?.since?.[isWxK(r.k) ? 'weather' : r.k]; return `${chip(r.st, r.k)}${since ? `<div class="fv-sub" style="margin:2px 0 0">${t('fv.envSinceT', { d: esc(dateFmt({ day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: TZ }).format(new Date(since))) })}</div>` : ''}`; }
+    if (r.st === 'held' || r.st === 'ready') return chip(r.st, r.k);
+    const P = progOf(r); if (!P) return chip(r.st, r.k);
+    const what = shortName(r.k), detail = isWxK(r.k) ? t('fv.envProgWx', { t: n1((L?.weather?.gate?.tempRangeK) || 0), tn: FC.GATES.wxTempRangeK, r: n0(L?.weather?.gate?.rainDays || 0), d: n0(L?.weather?.gate?.dryDays || 0), rn: FC.GATES.wxRainDays })
+      : t('fv.envProgCtx', { n: n0(Math.min(P.rows, P.needRows)), need: n0(P.needRows), d: Number.isInteger(P.days) ? n0(Math.min(P.days, P.needDays)) : n1(Math.min(P.days, P.needDays)), nd: P.needDays });
+    const eta = isWxK(r.k) ? t('fv.envEtaWx') : P.from ? t('fv.envEtaFrom', { from: when(P.from), d: when(P.eta) }) : P.share >= 1 ? t('fv.envEtaNext') : P.eta ? t('fv.envEta', { d: when(P.eta) }) : t(P.rows > 0 ? 'fv.envEtaSlow' : 'fv.envEtaNone');
+    return `<span class="fv-chip">${t('fv.envSt.wait')}</span><div class="fv-progrow">${bar(P.share, what)}</div><div class="fv-sub" style="margin:2px 0 0">${P.from ? '' : `${detail}. `}${eta}</div>`;
+  };
   // Vorwissen (WX_PRIOR): ohne eigene Fälle „nur Vorwissen“, sonst eigene Erfahrung + Vorwissen
   const exp = (r) => (r.prior && !(r.n > 0) ? t('fv.envExpPrior0') : `${t('fv.envExp', { n: n0(r.n), d: n1(r.days) })}${r.prior ? t('fv.envExpPrior') : ''}`);
-  const byK = new Map(rows.map(r => [r.k, r])), row = (r) => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${chip(r.st, r.k)}</td></tr>`;
+  const byK = new Map(rows.map(r => [r.k, r])), row = (r) => `<tr><td class="wrap">${t(`fv.env.${r.k}`)}</td><td class="n">${fx(r.f)}</td><td class="n mh">${r.lo == null ? '–' : `${fx(r.lo)} – ${fx(r.hi)}`}</td><td class="n mh">${exp(r)}</td><td>${stateCell(r)}</td></tr>`;
   // Temperatur zusammen: Faktor gegenüber 10 °C bei konkreten Temperaturen (Merkmale wie im Modell, FC.wxFeatures; ohne Regen, Wind, Dunkelheit)
   const curve = tempCurve(M?.effects), curveRow = curve ? `<tr><td colspan="5" class="wrap fv-sub" style="margin:0">${t('fv.envTempCurve', { list: curve.map(([tc, f]) => `${String(tc).replace('-', '−')} °C ${fx(f)}`).join(', ') })}</td></tr>` : '';
   const body = envGroups(rows.map(r => r.k)).map(([g, ks]) => `<tbody><tr><th colspan="5" scope="rowgroup" class="fv-grp">${t(`fv.envGrp.${g}`)}</th></tr>${ks.map(k => row(byK.get(k))).join('')}${g === 'temp' ? curveRow : ''}</tbody>`).join('');
   const tbl = `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.envTitle'))}"><table><thead><tr><th>${t('fv.envColWhat')}</th><th class="n">${t('fv.envColEffect')}</th><th class="n mh">${t('fv.envColRange')}</th><th class="n mh">${t('fv.envColExp')}</th><th>${t('fv.envColState')}</th></tr></thead>${body}</table></div>`;
+  // Kurzfassung: wie viele greifen, was ist neu, was kommt als Nächstes (mit Datum)
+  const vis = rows.filter(r => !ENV_HIDE.includes(r.k)), onR = vis.filter(r => r.st === 'on' || r.st === 'fixed'), dayAgo = Date.parse(L?.generatedAt || '') - 864e5;
+  const fresh = onR.filter(r => { const x = Date.parse(E?.since?.[isWxK(r.k) ? 'weather' : r.k] || ''); return Number.isFinite(x) && x > dayAgo; });
+  const nextR = vis.filter(r => !['on', 'fixed', 'ready'].includes(r.st)).map(r => ({ r, d: r.st === 'held' ? today < String(E?.pendingFrom || '').slice(0, 10) ? String(E.pendingFrom).slice(0, 10) : today : isWxK(r.k) ? null : progOf(r)?.eta })).filter(x => x.d).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)).slice(0, 4);
+  const nowLine = `<p class="fv-lead" style="margin:var(--s2) 0">${t('fv.envNow', { on: n0(onR.length), all: n0(vis.length) })}${fresh.length ? ` ${t('fv.envNew', { list: [...new Set(fresh.map(r => esc(shortName(r.k))))].join(', ') })}` : ''}${nextR.length ? ` ${t('fv.envNext', { list: nextR.map(x => `${esc(shortName(x.r.k))} (${when(String(x.d))})`).join(', ') })}` : ''}</p>`;
   const S = E?.sources || {}, up = (S.upcoming || []).map(e => `${esc(e.titel || t(`fv.envArt.${e.art}`))} (${esc(String(e.von))}${e.bis && e.bis !== e.von ? `–${esc(String(e.bis))}` : ''})`).join(', ');
   const lead = M ? t('fv.envLead', { since: M.since ? esc(dayTxt(M.since, { day: 'numeric', month: 'short', year: 'numeric' })) : '–', days: n1(M.days), old: n1(M.oldDays), hl: M.halfLifeDays }) : '';
   const src = t('fv.envSources', { warn: S.warnAt ? timeTxt(S.warnAt) : t('fv.envNever'), road: S.roadAt ? timeTxt(S.roadAt) : t('fv.envNever'), n: n0(S.curated || 0) }) + (up ? ` ${t('fv.envUpcoming')} ${up}` : '');
-  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')} ${t('fv.envTested', { rows: n0(FC.GATES.ctxMinRows), days: FC.GATES.ctxMinDays })}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
+  return `${title ? `<h3 class="rp-h3" style="margin:var(--s4) 0 var(--s2);font-size:.875rem">${t('fv.envTitle')}</h3>` : ''}<p class="fv-sub" style="margin-top:0">${lead}</p>${nowLine}${tbl}<div class="fv-sub">${src}</div><div class="fv-sub">${t('fv.envPrior')} ${t('fv.envDays')} ${t('fv.envTested', { rows: n0(FC.GATES.ctxMinRows), days: FC.GATES.ctxMinDays })}${L?.outages?.groupHours ? ` ${t('fv.envOutage', { n: n0(L.outages.groupHours), d: n0(L.outages.days) })}` : ''}</div><div class="fv-sub">${t('fv.envNote', { rows: FC.GATES.ctxMinRows, days: FC.GATES.ctxMinDays })}</div>`;
 }
 export function curvePanel(ctx, G, L, width) {
   const race = raceOf(G, L), cand = race.filter(r => r.m !== 'naive'), best = cand.length ? Math.min(...cand.map(r => r.sc.v)) : null, maxS = Math.max(0.01, ...race.map(r => r.sc.v));

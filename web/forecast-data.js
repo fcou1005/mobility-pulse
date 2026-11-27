@@ -71,6 +71,7 @@ ${WX_CSS}
 .fv-st{display:inline-flex;align-items:flex-start;gap:8px;font-size:.875rem;font-weight:500}
 .fv-st i{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;font:700 .75rem/1 var(--sans);font-style:normal;color:var(--panel);background:var(--muted);flex:none;margin-top:1px}
 .fv-st.ok i{background:var(--ok)}.fv-st.near i{background:var(--warn)}.fv-st.none i{background:transparent;color:var(--fg-2);box-shadow:inset 0 0 0 1.5px var(--fg-2)}
+@media (max-width:640px){.fv-tbl td .fv-chip{white-space:normal;line-height:1.3;padding:1px 8px}}.fv-progrow{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:.75rem}.fv-prog{display:inline-block;width:72px;height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex:none}.fv-prog i{display:block;height:100%;background:var(--accent)}
 .fv-bar{display:inline-block;height:9px;border-radius:3px;background:var(--accent);vertical-align:middle;min-width:2px}
 .fv-bar.n{background:var(--muted);opacity:.7}
 .fv-split{display:inline-block;width:72px;height:9px;border-radius:3px;background:color-mix(in srgb,var(--info) 35%,transparent);vertical-align:middle;overflow:hidden}

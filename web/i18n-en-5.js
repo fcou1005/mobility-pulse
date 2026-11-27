@@ -13,7 +13,7 @@ export default {
   "fv.envSources": "Warnings last fetched: {warn}, motorway: {road}, event list: {n} entries.",
   "fv.envNever": "never",
   "fv.envUpcoming": "Announced:",
-  "fv.envNote": "An influence enters the model once it occurred in at least {rows} town-hours on {days} days; then the model with environment must score better in the self-check than without. The collector detects strikes hourly from the tagesschau app news search (date and place required, link per report); strikes and events from the curated list data/ereignisse.json (with source) are added.",
+  "fv.envNote": "An influence applies in the algorithm once it occurred in at least {rows} town-hours on {days} days; until then it is only measured. The collector detects strikes hourly from the tagesschau app news search (date and place required, link per report); strikes and events from the curated list data/ereignisse.json (with source) are added.",
   "fv.pCtxRows": "Environment: town-hours with an event an influence needs before it may enter the model",
   "fv.pCtxDays": "Environment: on this many different days",
   "fv.pMemHl": "Long-term memory: half-life in days (older experience counts less)",

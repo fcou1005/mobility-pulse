@@ -18,5 +18,14 @@ assert(f && Math.abs(f[0] - 0.6) < 1e-9 && Math.abs(f[1] - 1.25) < 1e-9 && Math.
 const big = FC.envRelFactor({ beta: Float64Array.from(beta, (x, k) => (k === FC.I_CTX + iW ? 3 : x)), ctx: [iW], weather: false }, R, all, n, F, [0]);
 assert(big?.[0] === FC.ENV_REL.max && FC.envRelFactor({ beta, ctx: [], weather: false }, R, all, n, F, [0]) === null, `Faktor begrenzt auf ${FC.ENV_REL.min}–${FC.ENV_REL.max}; ohne eingeschaltete Einflüsse keiner`);
 
+// Fortschritt bis „greift“ (27.11.2026): knapperer Teil der Schwelle, Datum aus dem Tempo seit Erfassungsbeginn
+{ const P = FC.ctxProgress({ rows: 87, days: 1, memRows: 0, memDays: 0 }, 'ptOut', '2026-11-27'), done = FC.ctxProgress({ rows: 4652, days: 17, memRows: 0, memDays: 0 }, 'works', '2026-11-27');
+  const none = FC.ctxProgress({ rows: 0, days: 0, memRows: 0, memDays: 0 }, 'strike', '2026-11-27'), later = FC.ctxProgress(null, 'ptRisk', '2026-11-27');
+  const slow = FC.ctxProgress({ rows: 30, days: 3, memRows: 0, memDays: 0 }, 'warn', '2026-11-27', { windowDays: 21 });
+  assert(Math.abs(P.share - 0.5) < 1e-9 && P.eta === '2026-11-28' && done.share === 1 && done.eta === '2026-11-27' && none.eta === null && later.from === '2026-11-30' && later.eta === '2026-12-01' && slow.eta === '2027-01-15',
+    `ptOut 87/100 Stunden, 1/2 Tagen → 50 %, morgen; Baustellen fertig; Streik ohne Fall ohne Datum; ÖPNV-Prognose ab 30.11. (frühestens 1.12.); 30 Stunden in 21 Tagen → ${slow.eta}`); }
+{ const W = FC.wxProgress({ ok: false, tempRangeK: 2.5, rainDays: 3, dryDays: 5, missingShare: 0.1 });
+  assert(Math.abs(W.share - 0.5) < 1e-9 && FC.wxProgress({ ok: true }).share === 1 && FC.wxProgress(null) === null, 'Wetter: knappster Teil (Temperaturspanne 2,5 von 5 K) = 50 %'); }
+
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);

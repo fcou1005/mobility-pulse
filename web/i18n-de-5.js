@@ -16,7 +16,7 @@ export default {
   "fv.envSources": "Warnungen zuletzt abgerufen: {warn}, Autobahn: {road}, Ereignisliste: {n} Einträge.",
   "fv.envNever": "noch nie",
   "fv.envUpcoming": "Angekündigt:",
-  "fv.envNote": "Ein Einfluss kommt ins Modell, sobald er in mindestens {rows} Gemeinde-Stunden an {days} Tagen vorkam; dann muss das Modell mit Umgebung in der Selbstprüfung besser abschneiden als ohne. Streiks erkennt der Sammler stündlich aus der Nachrichtensuche der tagesschau-App (Tag und Ort nötig, Link je Meldung); dazu kommen Streiks und Veranstaltungen aus der gepflegten Liste data/ereignisse.json (mit Quelle).",
+  "fv.envNote": "Ein Einfluss greift im Algorithmus, sobald er in mindestens {rows} Gemeinde-Stunden an {days} Tagen vorkam; bis dahin wird er nur gemessen. Streiks erkennt der Sammler stündlich aus der Nachrichtensuche der tagesschau-App (Tag und Ort nötig, Link je Meldung); dazu kommen Streiks und Veranstaltungen aus der gepflegten Liste data/ereignisse.json (mit Quelle).",
   "fv.pCtxRows": "Umgebung: so viele Gemeinde-Stunden mit Ereignis braucht ein Einfluss, bevor er ins Modell darf",
   "fv.pCtxDays": "Umgebung: an so vielen verschiedenen Tagen",
   "fv.pMemHl": "Langzeitgedächtnis: Halbwertszeit in Tagen (ältere Erfahrung zählt weniger)",

@@ -20,5 +20,6 @@ export * from './pulse-forecast-small.js';
 export * from './pulse-forecast-ens.js';
 export * from './pulse-forecast-outage.js';
 export * from './pulse-forecast-sun.js';
+export * from './pulse-forecast-progress.js';
 export { CTX_KEYS } from './pulse-context.js';
 export { FAMILIES } from './pulse-core.js';

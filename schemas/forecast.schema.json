@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.9",
+ "x-version": "1.10",
  "$defs": {
   "latest": {
    "type": "object",
@@ -111,6 +111,10 @@
     "outages": {
      "type": "object",
      "description": "Seit 1.7: Ausfallstunden im Trainingsfenster (lib/pulse-forecast-outage.js) – days (Tage mit Ausfall), groupHours (Gruppen-Stunden, die nicht mitlernen und in der Selbstprüfung nicht zählen)."
+    },
+    "env": {
+     "type": "object",
+     "description": "Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support[Merkmal] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since[Merkmal oder weather] = Zeitpunkt, seit dem es ununterbrochen greift."
     }
    }
   },
