@@ -141,6 +141,18 @@ if (has('tokio/index.json')) {
   const SYN = path.join(ROOT, 'test/fixtures/tokio-synth');
   if (existsSync(SYN)) for (const f of await readdir(SYN)) await put(`tokio/${f}`, JSON.parse(await readFile(path.join(SYN, f), 'utf8')));
 }
+// Länder (Reiter Länder): echte Dateien (Index, je Land latest/punkte und der letzte Tag), sonst der synthetische Stand aus scripts/welt-fixture.mjs
+if (has('welt/index.json')) {
+  const wi = await rd('welt/index.json'); await put('welt/index.json', wi);
+  for (const c of wi.countries.filter(x => x.at)) for (const f of ['latest.json', 'punkte.json']) if (has(`welt/${c.land}/${f}`)) {
+    const doc = await rd(`welt/${c.land}/${f}`); await put(`welt/${c.land}/${f}`, f === 'latest.json' ? { ...doc, days: (doc.days || []).slice(-1) } : doc);
+    if (f === 'latest.json') for (const d of (doc.days || []).slice(-1)) if (has(`welt/${c.land}/${d}.json`)) await put(`welt/${c.land}/${d}.json`, await rd(`welt/${c.land}/${d}.json`));
+  }
+} else {
+  const SYN = path.join(ROOT, 'test/fixtures/welt-synth');
+  const walk = async (rel) => { for (const e of await readdir(path.join(SYN, rel), { withFileTypes: true })) { const r = rel ? `${rel}/${e.name}` : e.name; if (e.isDirectory()) await walk(r); else await put(`welt/${r}`, JSON.parse(await readFile(path.join(SYN, r), 'utf8'))); } };
+  if (existsSync(SYN)) await walk('');
+}
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
 

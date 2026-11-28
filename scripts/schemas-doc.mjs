@@ -21,6 +21,7 @@ const FILES = {
   oepnv: ['oepnv/<AGS>.json', 'oepnv/live/<AGS>.json', 'oepnv/wirkung.json', 'oepnv/index.json'],
   geo: ['versorgung/<AGS>.json', 'versorgung/index.json', 'zubringer/index.json', 'abstell/<AGS>.json', 'unfall/<AGS>.json', 'unfall/index.json', 'umweg/<AGS>.json', 'umweg/index.json', 'pop/index.json'],
   tokio: ['tokio/index.json', 'tokio/stationen.json', 'tokio/stand.json', 'tokio/<Tag>.json'],
+  welt: ['welt/index.json', 'welt/<Land>/latest.json', 'welt/<Land>/<Tag>.json', 'welt/<Land>/punkte.json'],
 };
 
 // Fließtext aus den Schemas: <Tag>, [i] außerhalb von `Code` maskieren (sonst HTML bzw. Verweis in Markdown)

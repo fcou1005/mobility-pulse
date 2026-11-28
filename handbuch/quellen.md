@@ -11,9 +11,19 @@
 | Direktfeeds Dott, Lime, Zeus, Bird | `data/sources-manual.json` → `direct_candidates` | offen, Kandidaten werden je Lauf geprüft |
 | [DB API Marketplace](https://developers.deutschebahn.com/db-api-marketplace/apis/) | Call a Bike, StadtRAD Hamburg (GBFS) | kostenlose Registrierung, Secrets `DB_CLIENT_ID`/`DB_API_KEY` |
 
-## Tokio (Reiter Vergleich)
+## Länder (Reiter Länder)
 
-Seit 28.11.2026 als Gegenbild zu Deutschland: stationsgebundene Leihräder in Tokio, nur Anzeige im Reiter Vergleich (keine Prognose, kein Archiv). Phase `tokio` (`scripts/collect/30-tokio.mjs`, Rechenlogik `lib/pulse-tokio.js`), Abruf über die offenen GBFS-Feeds des Public Transportation Open Data Center (ODPT, ohne Schlüssel):
+Seit 28.11.2026, Stufe 1: alle übrigen Länder Europas und Japan aus dem GBFS-Verzeichnis von MobilityData ([systems.csv](https://github.com/MobilityData/gbfs/blob/master/systems.csv), Stand 28.11.2026: 843 Systeme in 31 Ländern Europas ohne Deutschland, 4 in Japan). Deutschland bleibt im bestehenden Sammler.
+
+- Ein Prozess je Land (`scripts/welt.mjs <Land>`, Rechenlogik `lib/pulse-welt.js`): ein Absturz oder ein hängender Feed trifft nur dieses Land. Die Phase `welt-start` stößt die Länder gleich nach dem Start des Sammlers an (vier gleichzeitig), sie laufen parallel zum deutschen Lauf; die Phase `welt` wartet am Ende höchstens bis zur Frist (5 Minuten ab Start) und schreibt `welt/index.json`. Länder, die nicht drankommen, stehen im nächsten Lauf vorn. Kein eigener Workflow nötig.
+- Je System `readGbfsSystem` wie in Deutschland; ohne Systeme mit Zugangsdaten. Abgänge/Zugänge geschätzt: Stationen über die Bestandsänderung je Station, frei abgestellte Fahrzeuge über die Position (im Umkreis von 30 m steht im nächsten Lauf keines mehr), unabhängig von wechselnden Kennungen. Vergleichsstand privat in `TRACK_DIR/welt/<Land>.json.gz`.
+- Abdeckung: nur Anbieter mit Eintrag im Verzeichnis. Lime, Voi und Bolt stehen dort nur mit einem Teil ihrer Städte (Lime 19, Voi 9, Bolt 2 Systeme); weitere Direktfeeds folgen in Stufe 2.
+- Schalter: `WELT=0` aus, `WELT_LAENDER=FR,JP` beschränkt, `WELT_BUDGET_MS` Frist, `WELT_CSV` Verzeichnis (Standard `data/cache/systems.csv` aus `build-catalog`).
+- Geplant: Stufe 2 Fahrten und Prognose je Stadt (Feiertage und Wetter je Land), Stufe 3 ÖPNV je Land mit offenen Echtzeit-Feeds, Stufe 4 Gemeindegrenzen, Bericht und Disposition.
+
+## Tokio (Reiter Länder)
+
+Seit 28.11.2026 als Gegenbild zu Deutschland: stationsgebundene Leihräder in Tokio, im Reiter Länder unter Japan (keine Prognose, kein Archiv). Phase `tokio` (`scripts/collect/30-tokio.mjs`, Rechenlogik `lib/pulse-tokio.js`), Abruf über die offenen GBFS-Feeds des Public Transportation Open Data Center (ODPT, ohne Schlüssel):
 
 | System | Feed | Auswahl Tokio | Lizenz |
 |---|---|---|---|

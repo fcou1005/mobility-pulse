@@ -23,8 +23,8 @@ const STYLE = `
 @media (max-width:720px){.tk-map{height:340px}}
 `;
 let cssDone = false;
-const css = () => { if (cssDone || typeof document === 'undefined') return; cssDone = true; const s = document.createElement('style'); s.textContent = STYLE; document.head.appendChild(s); };
-const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+export const css = () => { if (cssDone || typeof document === 'undefined') return; cssDone = true; const s = document.createElement('style'); s.textContent = STYLE; document.head.appendChild(s); };
+export const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const jst = (/** @type {number} */ ms) => (ms ? dateFmt({ dateStyle: 'medium', timeStyle: 'short', timeZone: TK.TOKIO.tz }).format(new Date(ms)) : '–');
 const dayLabel = (/** @type {string} */ d) => dateFmt({ weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
 const cssVar = (/** @type {string} */ k, /** @type {string} */ fb) => (typeof document !== 'undefined' && getComputedStyle(document.documentElement).getPropertyValue(k).trim()) || fb;
@@ -44,8 +44,8 @@ function germanTop(latest) {
   }).filter(x => x.bikes > 0).sort((a, b) => b.bikes - a.bikes).slice(0, 3);
 }
 
-/** Liniendiagramm über die Stunden 0–23 (Ortszeit) @param {any} ctx @param {any[]} series [{ label, i, pts: [{ h, v }] }] @param {(v: number) => string} fv @param {string} aria */
-function hourChart(ctx, series, fv, aria) {
+/** Liniendiagramm über die Stunden 0–23 (Ortszeit; auch für den Reiter Länder) @param {any} ctx @param {any[]} series [{ label, i, pts: [{ h, v }] }] @param {(v: number) => string} fv @param {string} aria @param {string} [tzLabel] */
+export function hourChart(ctx, series, fv, aria, tzLabel = t('tk.jst')) {
   const all = series.flatMap(s => s.pts.map((/** @type {any} */ p) => p.v)).filter(v => v != null);
   if (!all.length) return `<div class="empty">${t('tk.noHours')}</div>`;
   const W = 520, H = 210, P = { l: 46, r: 10, t: 10, b: 24 }, ymax = Math.max(1, ...all) * 1.1;
@@ -57,7 +57,7 @@ function hourChart(ctx, series, fv, aria) {
   const lines = series.map(s => { const lk = look(s.i); let d = '', prev = -9; for (const p of s.pts) { if (p.v == null) { prev = -9; continue; } d += `${p.h - prev === 1 ? 'L' : 'M'}${x(p.h).toFixed(1)},${y(p.v).toFixed(1)}`; prev = p.h; } return d ? `<path d="${d}" fill="none" stroke="${lk.color}" stroke-width="2"${lk.dash}/>` : ''; }).join('');
   const hours = [...new Set(series.flatMap(s => s.pts.filter((/** @type {any} */ p) => p.v != null).map((/** @type {any} */ p) => p.h)))].sort((a, b) => a - b);
   const val = (/** @type {any} */ s, /** @type {number} */ h) => s.pts.find((/** @type {any} */ p) => p.h === h)?.v ?? null;
-  const sp = chartSpec({ n: hours.length, x: (i) => x(hours[i]), top: P.t, bottom: H - P.b, head: (i) => `${hours[i]}–${hours[i] + 1} h (${t('tk.jst')})`, label: aria, colHead: t('tk.hour'), cols: series.map(s => s.label),
+  const sp = chartSpec({ n: hours.length, x: (i) => x(hours[i]), top: P.t, bottom: H - P.b, head: (i) => `${hours[i]}–${hours[i] + 1} h (${tzLabel})`, label: aria, colHead: t('tk.hour'), cols: series.map(s => s.label),
     cell: (i, k) => { const v = val(series[k], hours[i]); return v == null ? '–' : fv(v); },
     rows: (i) => series.map(s => ({ s, v: val(s, hours[i]) })).filter(r => r.v != null).map(r => ({ color: look(r.s.i).color, label: r.s.label, value: fv(r.v), sort: r.v })) });
   const key = `<div class="tk-keys">${series.map(s => `<span><i class="${s.i ? 'd' : ''}" style="--c:${look(s.i).color}"></i>${ctx.esc(s.label)}</span>`).join('')}</div>`;
@@ -79,16 +79,16 @@ function drawDay(ctx, s) {
 
 /** Füllstand eines Ports → Klasse (leer, wenig, mittel, viel, voll, aus) @param {any[]} r STAND_FIELDS */
 const fillOf = (r) => (r[4] & 1 ? 'off' : r[2] === 0 ? 'empty' : r[3] === 0 ? 'full' : r[2] / (r[2] + r[3]) < 1 / 3 ? 'low' : r[2] / (r[2] + r[3]) < 2 / 3 ? 'mid' : 'high');
-const FILL = ['empty', 'low', 'mid', 'high', 'full', 'off'];
+export const FILL = ['empty', 'low', 'mid', 'high', 'full', 'off'];
 /** @param {string} k */
-const fillStyle = (k) => {
+export const fillStyle = (k) => {
   const acc = cssVar('--accent', PRINT.accent), bad = cssVar('--bad', RUN.workshop.light), info = cssVar('--info', RUN.rebalance.light), off = cssVar('--muted', NEUTRAL.disabled);
   return k === 'empty' ? { color: bad, fillColor: bad, fillOpacity: 0, weight: 2, radius: 4.5 } : k === 'full' ? { color: info, fillColor: info, fillOpacity: 1, weight: 2, radius: 5 }
     : k === 'off' ? { color: off, fillColor: off, fillOpacity: 0.6, weight: 0, radius: 3 } : { color: acc, fillColor: acc, fillOpacity: k === 'low' ? 0.3 : k === 'mid' ? 0.6 : 1, weight: 1, radius: 4.5 };
 };
 
 /** Radius der Ports je Zoomstufe (weiter draußen kleiner) @param {number} z */
-const scaleOf = (z) => (z <= 10 ? 0.45 : z <= 11 ? 0.6 : z <= 12 ? 0.8 : 1);
+export const scaleOf = (z) => (z <= 10 ? 0.45 : z <= 11 ? 0.6 : z <= 12 ? 0.8 : 1);
 
 /** @param {any} ctx @param {any} s */
 function drawMap(ctx, s) {

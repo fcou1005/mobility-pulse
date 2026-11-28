@@ -84,6 +84,32 @@ export async function startExtra() {
       }
       return json({}, 404);
     }
+    // Länder (Phase „welt“): systems.csv mit Österreich (frei abgestellt + Stationen), einem System mit Zugangsdaten (fällt weg), Deutschland (fällt weg)
+    // und Japan (404 → System ohne Daten). Jeder Abruf von /welt/at_ff/free_bike_status.json lässt ein E-Scooter-Fahrzeug weiterfahren (Abgang + Zugang),
+    // jeder Abruf von /welt/at_st/station_status.json nimmt an Station s1 ein Rad weg
+    if (kind === 'welt') {
+      const [, , sysId, f] = u.pathname.split('/');
+      if (sysId === 'systems.csv') { res.writeHead(200, { 'content-type': 'text/csv' }); return res.end(['Country Code,Name,Location,System ID,URL,Auto-Discovery URL,Supported Versions,Authentication Info URL,Authentication Type,Authentication Parameter Name',
+        `AT,Scoot Wien,Wien,at_ff,https://example.org,${base}/welt/at_ff/gbfs.json,2.3,,,`, `AT,"Rad, Wien",Wien,at_st,https://example.org,${base}/welt/at_st/gbfs.json,2.3,,,`,
+        `AT,Geheim,Graz,at_key,https://example.org,${base}/welt/at_key/gbfs.json,2.3,https://example.org,2,key`, `DE,Doppelt,Berlin,de_x,https://example.org,${base}/welt/de_x/gbfs.json,2.3,,,`,
+        `JP,Weg,Tokyo,jp_x,https://example.org,${base}/welt/jp_x/gbfs.json,2.3,,,`].join('\n')); }
+      const feedsOf = (id, names) => head({ en: { feeds: names.map(nm => ({ name: nm, url: `${base}/welt/${id}/${nm}.json` })) } });
+      if (sysId === 'at_ff') {
+        if (f === 'gbfs.json') return json(feedsOf('at_ff', ['system_information', 'vehicle_types', 'free_bike_status']));
+        if (f === 'system_information.json') return json(head({ system_id: 'at_ff', name: 'Scoot Wien', operator: 'Lime', timezone: 'Europe/Vienna', language: 'de', license_id: 'CC0-1.0' }));
+        if (f === 'vehicle_types.json') return json(head({ vehicle_types: [{ vehicle_type_id: 'sc', form_factor: 'scooter', propulsion_type: 'electric' }] }));
+        if (f === 'free_bike_status.json') { const k = st.weltFF = (st.weltFF || 0) + 1;
+          return json(head({ bikes: [...Array(5)].map((_, i) => ({ bike_id: `v${k}-${i}`, lat: +(48.20 + i * 0.01).toFixed(5), lon: +(16.37 + (i === 0 ? k * 0.005 : 0)).toFixed(5), is_reserved: false, is_disabled: i === 4, vehicle_type_id: 'sc', last_reported: n() })) })); }
+      }
+      if (sysId === 'at_st') {
+        if (f === 'gbfs.json') return json(feedsOf('at_st', ['system_information', 'station_information', 'station_status']));
+        if (f === 'system_information.json') return json(head({ system_id: 'at_st', name: 'Rad Wien', operator: 'nextbike', timezone: 'Europe/Vienna', language: 'de' }));
+        if (f === 'station_information.json') return json(head({ stations: [{ station_id: 's1', name: 'S1', lat: 48.21, lon: 16.36, capacity: 10 }, { station_id: 's2', name: 'S2', lat: 48.22, lon: 16.35, capacity: 4 }] }));
+        if (f === 'station_status.json') { const k = st.weltST = (st.weltST || 0) + 1;
+          return json(head({ stations: [{ station_id: 's1', num_bikes_available: 8 - k, num_docks_available: 2 + k, is_installed: true, is_renting: true, is_returning: true, last_reported: n() }, { station_id: 's2', num_bikes_available: 0, num_docks_available: 4, is_installed: true, is_renting: true, is_returning: true, last_reported: n() }] })); }
+      }
+      return json({}, 404);
+    }
     if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
     if (kind === 'cs') return cs[file] ? json(cs[file]()) : json({}, 404);
     if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);

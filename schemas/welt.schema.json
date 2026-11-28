@@ -1,0 +1,426 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/welt.schema.json",
+ "title": "Länder außerhalb Deutschlands (Reiter Länder, Stufe 1, 28.11.2026)",
+ "description": "welt/index.json, welt/<Land>/latest.json, welt/<Land>/<Tag>.json und welt/<Land>/punkte.json: Sharing-Bestand je Land, Stadt und System aus den offenen GBFS-Feeds des MobilityData-Verzeichnisses (systems.csv, ohne Systeme mit Zugangsdaten; Japan über die ODPT). Ein Prozess je Land (scripts/welt.mjs). Lizenz je System laut system_information. Abgänge/Zugänge geschätzt (Position bzw. Station, Umsetzungen zählen mit).",
+ "x-version": "1.0",
+ "$defs": {
+  "index": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "countries"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "number"
+    },
+    "source": {
+     "type": "string"
+    },
+    "ms": {
+     "type": "number"
+    },
+    "ran": {
+     "type": "integer",
+     "description": "Länder in diesem Lauf"
+    },
+    "failedProcs": {
+     "type": "integer",
+     "description": "Länder-Prozesse mit Fehler"
+    },
+    "countries": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "land",
+       "region"
+      ],
+      "properties": {
+       "land": {
+        "type": "string",
+        "pattern": "^[A-Z]{2}$",
+        "description": "Land (ISO 3166-1 alpha-2)"
+       },
+       "region": {
+        "enum": [
+         "eu",
+         "jp"
+        ]
+       },
+       "tz": {
+        "type": "string"
+       },
+       "listed": {
+        "type": "integer",
+        "description": "Systeme im Verzeichnis (ohne Zugangsdaten)"
+       },
+       "ok": {
+        "type": "integer"
+       },
+       "failed": {
+        "type": "integer"
+       },
+       "skipped": {
+        "type": "integer"
+       },
+       "at": {
+        "type": [
+         "number",
+         "null"
+        ],
+        "description": "letzter Lauf des Landes (ms)"
+       },
+       "ms": {
+        "type": "number"
+       },
+       "avail": {
+        "type": "number"
+       },
+       "stations": {
+        "type": "number"
+       },
+       "cities": {
+        "type": "integer"
+       },
+       "ops": {
+        "type": "integer"
+       },
+       "types": {
+        "type": "object",
+        "description": "Fahrzeugart → verfügbare Fahrzeuge",
+        "additionalProperties": {
+         "type": "number"
+        }
+       },
+       "today": {
+        "type": "object",
+        "required": [
+         "out",
+         "in",
+         "min"
+        ],
+        "properties": {
+         "out": {
+          "type": "number",
+          "description": "Abgänge heute (Ortszeit) bisher, geschätzt"
+         },
+         "in": {
+          "type": "number",
+          "description": "Zugänge heute bisher"
+         },
+         "min": {
+          "type": "number",
+          "description": "Minuten mit Vergleich zum vorigen Lauf (System mit der längsten Abdeckung)"
+         }
+        },
+        "additionalProperties": false
+       },
+       "error": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "ranNow": {
+        "type": "boolean",
+        "description": "in diesem Sammler-Lauf gelaufen"
+       }
+      },
+      "additionalProperties": false
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "land": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "land",
+    "tz",
+    "at",
+    "day",
+    "fields",
+    "systems",
+    "cities",
+    "totals",
+    "today"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "land": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$",
+     "description": "Land (ISO 3166-1 alpha-2)"
+    },
+    "region": {
+     "enum": [
+      "eu",
+      "jp"
+     ]
+    },
+    "tz": {
+     "type": "string"
+    },
+    "at": {
+     "type": "number"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "ms": {
+     "type": "number"
+    },
+    "systemsListed": {
+     "type": "integer"
+    },
+    "ok": {
+     "type": "integer"
+    },
+    "failed": {
+     "type": "integer"
+    },
+    "skipped": {
+     "type": "integer"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "systems": {
+     "type": "array",
+     "description": "[Kennung, Name, Stadt laut Verzeichnis, Anbieter, in diesem Lauf gelesen, Fahrzeuge verfügbar, gesperrt, Stationen (ohne virtuelle), leere Stationen, volle Stationen, Fahrzeugart → verfügbar, Lizenz, Lizenz-URL, Zeitpunkt des Stands (ms), Fehler]",
+     "items": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15
+     }
+    },
+    "cityFields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "cities": {
+     "type": "array",
+     "description": "[Stadt, Systeme, Fahrzeuge verfügbar, Stationen, Anbieter, Fahrzeugart → verfügbar]",
+     "items": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6
+     }
+    },
+    "totals": {
+     "type": "object",
+     "required": [
+      "avail",
+      "disabled",
+      "stations",
+      "empty",
+      "full",
+      "types"
+     ],
+     "properties": {
+      "avail": {
+       "type": "number"
+      },
+      "disabled": {
+       "type": "number"
+      },
+      "stations": {
+       "type": "number"
+      },
+      "empty": {
+       "type": "number"
+      },
+      "full": {
+       "type": "number"
+      },
+      "types": {
+       "type": "object",
+       "description": "Fahrzeugart → verfügbare Fahrzeuge",
+       "additionalProperties": {
+        "type": "number"
+       }
+      }
+     },
+     "additionalProperties": false
+    },
+    "today": {
+     "type": "object",
+     "required": [
+      "out",
+      "in",
+      "min"
+     ],
+     "properties": {
+      "out": {
+       "type": "number",
+       "description": "Abgänge heute (Ortszeit) bisher, geschätzt"
+      },
+      "in": {
+       "type": "number",
+       "description": "Zugänge heute bisher"
+      },
+      "min": {
+       "type": "number",
+       "description": "Minuten mit Vergleich zum vorigen Lauf (System mit der längsten Abdeckung)"
+      }
+     },
+     "additionalProperties": false
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "day": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "land",
+    "day",
+    "tz",
+    "fields",
+    "sys"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "land": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$",
+     "description": "Land (ISO 3166-1 alpha-2)"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "tz": {
+     "type": "string"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "sys": {
+     "type": "object",
+     "description": "System → Zeilen [Stunde (Ortszeit), Läufe, Σ verfügbar, Σ Stationen, Σ leere Stationen, Σ volle Stationen, Abgänge, Zugänge, Minuten mit Vergleich]",
+     "additionalProperties": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "minItems": 9,
+       "maxItems": 9,
+       "items": {
+        "type": "number"
+       }
+      }
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "punkte": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "land",
+    "at",
+    "stations",
+    "cells"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "land": {
+     "type": "string",
+     "pattern": "^[A-Z]{2}$",
+     "description": "Land (ISO 3166-1 alpha-2)"
+    },
+    "at": {
+     "type": "number"
+    },
+    "stationFields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "stations": {
+     "type": "array",
+     "description": "[System, lat, lon, Räder ausleihbar, freie Plätze (−1 = ohne Angabe), Zustand (Bit 1 keine Ausleihe, Bit 2 keine Rückgabe)]",
+     "items": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6
+     }
+    },
+    "cellFields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "cells": {
+     "type": "array",
+     "description": "Zellen frei abgestellter, verfügbarer Fahrzeuge [lat, lon (Zellmitte), Anzahl]; keine Einzelpositionen",
+     "items": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+       "type": "number"
+      }
+     }
+    }
+   },
+   "additionalProperties": false
+  }
+ }
+}
