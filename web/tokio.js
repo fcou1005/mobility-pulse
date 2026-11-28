@@ -87,30 +87,34 @@ const fillStyle = (k) => {
     : k === 'off' ? { color: off, fillColor: off, fillOpacity: 0.6, weight: 0, radius: 3 } : { color: acc, fillColor: acc, fillOpacity: k === 'low' ? 0.3 : k === 'mid' ? 0.6 : 1, weight: 1, radius: 4.5 };
 };
 
+/** Radius der Ports je Zoomstufe (weiter draußen kleiner) @param {number} z */
+const scaleOf = (z) => (z <= 10 ? 0.45 : z <= 11 ? 0.6 : z <= 12 ? 0.8 : 1);
+
 /** @param {any} ctx @param {any} s */
 function drawMap(ctx, s) {
   const box = s.el.querySelector('[data-tk-map]'), leg = s.el.querySelector('[data-tk-legend]');
   if (!box || typeof L === 'undefined' || !s.stations || !s.stand) return;
   if (!s.map || s.map.getContainer() !== box) {
     s.map?.remove(); const still = reduced();
-    s.map = L.map(box, { zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, preferCanvas: true }).setView([35.69, 139.74], 11);
+    // Start: Mitte Tokios (23 Bezirke); die rund 6.000 Ports der ganzen Präfektur überdecken sich weiter draußen
+    s.map = L.map(box, { zoomAnimation: !still, fadeAnimation: !still, markerZoomAnimation: !still, preferCanvas: true }).setView([35.685, 139.755], 12);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: t('app.openstreetmapContributors') }).addTo(s.map);
-    s.layer = L.layerGroup().addTo(s.map); s.fit = false;
+    s.layer = L.layerGroup().addTo(s.map);
+    s.map.on('zoomend', () => { const f = scaleOf(s.map.getZoom()); for (const m of s.markers || []) m.setRadius(/** @type {any} */ (m.options).r0 * f); });
   }
   s.layer.clearLayers();
   const renderer = L.canvas({ padding: 0.3 }), at = new Map(s.stand.rows.map((/** @type {any[]} */ r) => [`${r[0]}|${r[1]}`, r])), names = Object.fromEntries(s.ix.systems.map((/** @type {any} */ x) => [x.id, x.name]));
   /** @type {Record<string, number>} */
   const n = {};
-  /** @type {Array<[number, number]>} */
-  const pts = [];
+  const f0 = scaleOf(s.map.getZoom()); s.markers = [];
   for (const [sys, id, lat, lon, cap, name] of s.stations.rows) {
     if (!s.on.has(sys)) continue;
     const r = at.get(`${sys}|${id}`); if (!r) continue;
     const k = fillOf(r); n[k] = (n[k] || 0) + 1;
     const tip = `<b translate="no">${ctx.esc(name || id)}</b><div>${ctx.esc(names[sys] || sys)}</div><div>${t('tk.tipBikes', { b: ctx.fmt(r[2]), d: ctx.fmt(r[3]) })}${cap ? `, ${t('tk.tipCap', { n: ctx.fmt(cap) })}` : ''}</div><div>${t(`tk.fill.${k}`)}</div>`;
-    pts.push([lat, lon]); L.circleMarker([lat, lon], { renderer, ...fillStyle(k) }).bindTooltip(tip, { className: 'tk-tip', sticky: true }).addTo(s.layer);
+    const st = fillStyle(k), m = L.circleMarker([lat, lon], /** @type {any} */ ({ renderer, ...st, radius: st.radius * f0, r0: st.radius })); // r0: Radius ab Zoom 13
+    m.bindTooltip(tip, { className: 'tk-tip', sticky: true }).addTo(s.layer); s.markers.push(m);
   }
-  if (pts.length && !s.fit) { s.map.fitBounds(L.latLngBounds(pts), { padding: [20, 20], maxZoom: 14, animate: false }); s.fit = true; }
   setTimeout(() => s.map?.invalidateSize(), 0);
   if (leg) leg.innerHTML = FILL.map(k => { const f = fillStyle(k); return `<span><i style="border:2px solid ${f.color};background:${f.fillOpacity ? `color-mix(in srgb,${f.fillColor} ${Math.round(f.fillOpacity * 100)}%,transparent)` : 'transparent'}"></i>${t(`tk.fill.${k}`)} (${ctx.fmt(n[k] || 0)})</span>`; }).join('');
 }
