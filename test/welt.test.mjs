@@ -66,5 +66,14 @@ const sysRows = [['a', 'Lime Paris', 'Paris', 'Lime', true, 500, 3, 0, 0, 0, { s
 eq(W.citiesOf(sysRows).map(c => [c.city, c.systems, c.avail, c.ops.join('/')]), [['Paris', 2, 800, 'Lime/Vélib\''], ['Lyon', 1, 20, 'X']], 'Städte nach Bestand');
 eq([W.operatorName('Lime Paris', null), W.operatorName('Getaround voiture', null), W.operatorName('TIER Paris', null), W.operatorName('Stadtrad', 'Unbekannt AG')], ['Lime', 'Getaround', 'Dott', 'Unbekannt AG'], 'Anbieter-Namen: Wortgrenzen (voiture ist nicht Voi), TIER → Dott');
 
+// Stufe 2a: Tagtyp, Feiertage, Profil-Prognose, Selbstprüfung
+eq([W.dayTypeOf('2026-11-27'), W.dayTypeOf('2026-11-28'), W.dayTypeOf('2026-11-29'), W.dayTypeOf('2026-11-27', new Set(['2026-11-27']))], ['W', 'S', 'H', 'H'], 'Tagtyp: Werktag, Samstag, Sonntag, Feiertag');
+eq(W.holidaysOpen([{ startDate: '2026-12-25', endDate: '2026-12-26', nationwide: true }, { startDate: '2026-05-01', endDate: '2026-05-01', nationwide: false }]), ['2026-12-25', '2026-12-26'], 'OpenHolidays: nur landesweite, Zeiträume als Tage');
+eq(W.holidaysJapan('\u56fd\u6c11,\u540d\r\n2026/1/12,x\r\nkaputt\r\n2026/11/3,y'), ['2026-01-12', '2026-11-03'], 'Japan: syukujitsu.csv, Datum unabhängig von der Kodierung der Namen');
+const H = (/** @type {number} */ a, /** @type {number|null} */ o) => [{ h: 8, avail: a, empty: null, outH: o, out: 0, in: 0, min: 60 }];
+const hist = [{ day: '2026-11-23', hours: H(100, 10) }, { day: '2026-11-24', hours: H(110, 20) }, { day: '2026-11-25', hours: H(120, 30) }, { day: '2026-11-28', hours: H(50, 5) }];
+eq(W.profileForecast(hist, [{ day: '2026-11-26', h: 8 }, { day: '2026-11-26', h: 9 }, { day: '2026-11-29', h: 8 }], null).map(f => [f.avail, f.outH, f.n]), [[110, 20, 3], [null, null, 0], [null, null, 0]], 'Profil: Median der drei Werktage; ohne Stunde bzw. ohne zwei Sonntage keine Prognose');
+eq(W.checkDay([...hist, { day: '2026-11-26', hours: H(99, 22) }], '2026-11-26', null), { day: '2026-11-26', hours: 1, wapeAvail: 0.111, wapeOut: 0.091 }, 'Selbstprüfung: Prognose 110/20 gegen 99/22');
+
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);

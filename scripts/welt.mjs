@@ -96,12 +96,39 @@ if (done) {
   await put(path.join(OUT, 'punkte.json'), { version: W.WELT.version, land: cc, at: now, stationFields: ['sys', 'lat', 'lon', 'raeder', 'frei', 'zustand'], stations, cellFields: ['lat', 'lon', 'fahrzeuge'], cells: W.cellsOf(free) });
   await mkdir(path.dirname(STATE), { recursive: true }); await writeFile(STATE, gzipSync(JSON.stringify(state)));
 }
+// Stufe 2a: Feiertage (Zwischenspeicher 7 Tage neben dem Vergleichsstand) und Profil-Prognose für den Rest von heute und morgen (Ortszeit)
+async function holidays() {
+  const f = path.join(path.dirname(STATE), `feiertage-${cc}.json`); let c = await rdJson(f);
+  if (process.env.WELT_HOLIDAYS === '0') return c;
+  if (c && now - c.at < 7 * 86400e3) return c;
+  try {
+    const mid = Date.parse(`${day}T12:00:00Z`), iso = (/** @type {number} */ t) => new Date(t).toISOString().slice(0, 10);
+    let list = null, source = null;
+    if (cc === 'JP') { list = W.holidaysJapan(await fetchLimited(W.HOLIDAY_SOURCES.jp, { timeout: 30000, max: 2e6, headers: { 'user-agent': UA } })); source = W.HOLIDAY_SOURCES.jp; }
+    else if (W.OPENHOLIDAYS.includes(cc)) { const r = await fetchJson(`${W.HOLIDAY_SOURCES.openholidays}/PublicHolidays?countryIsoCode=${cc}&languageIsoCode=EN&validFrom=${iso(mid - 400 * 86400e3)}&validTo=${iso(mid + 400 * 86400e3)}`); if (r.ok) { list = W.holidaysOpen(r.json); source = W.HOLIDAY_SOURCES.openholidays; } }
+    if (list) { c = { at: now, source, days: list }; await mkdir(path.dirname(f), { recursive: true }); await writeFile(f, JSON.stringify(c)); }
+  } catch (e) { log(`Feiertage: ${e.message}${c ? ' – alter Stand bleibt' : ''}`); }
+  return c;
+}
+const hol = await holidays(), holSet = hol?.days?.length ? new Set(hol.days) : null;
+/** @type {Array<{ day: string, hours: any[] }>} */
+const hist = [];
+for (const f of (existsSync(OUT) ? await readdir(OUT) : []).filter(x => /^\d{4}-\d{2}-\d{2}\.json$/.test(x)).sort().slice(-W.WELT.keepDays)) {
+  const d = f.slice(0, 10), doc = d === day ? dayDoc : await rdJson(path.join(OUT, f)); if (doc) hist.push({ day: d, hours: W.hourly(doc) });
+}
+if (!hist.some(x => x.day === day)) hist.push({ day, hours: W.hourly(dayDoc) });
+const tomorrow = W.localDayHour(now + 86400e3, tz).day, yday = W.localDayHour(now - 86400e3, tz).day;
+const targets = [...Array.from({ length: 23 - h }, (_, i) => ({ day, h: h + 1 + i })), ...Array.from({ length: 24 }, (_, i) => ({ day: tomorrow, h: i }))];
+const r1 = (/** @type {number|null} */ x) => (x == null ? null : Math.round(x * 10) / 10);
+const forecast = { method: W.FORECAST.method, basisDays: hist.filter(x => x.day < day).length, minDays: W.FORECAST.minDays, holidays: hol ? { source: hol.source, n: hol.days.length } : null,
+  dayTypes: { [day]: W.dayTypeOf(day, holSet), [tomorrow]: W.dayTypeOf(tomorrow, holSet) },
+  next: W.profileForecast(hist, targets, holSet).filter(f => f.avail != null).map(f => [f.day, f.h, r1(f.avail), r1(f.outH), f.n]), check: W.checkDay(hist, yday, holSet) };
 // alte Tage entfernen (höchstens keepDays Dateien)
 await mkdir(OUT, { recursive: true });
 const dayFiles = (await readdir(OUT)).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
 for (const f of dayFiles.slice(0, Math.max(0, dayFiles.length - W.WELT.keepDays))) await rm(path.join(OUT, f), { force: true });
 const days = dayFiles.slice(-W.WELT.keepDays).map(f => f.slice(0, 10));
 await put(path.join(OUT, 'latest.json'), { version: W.WELT.version, land: cc, region: W.regionOf(cc), tz, at: now, day, ms: Date.now() - t0, systemsListed: list.length, ok: done, failed, skipped,
-  fields: W.SYS_FIELDS, systems: rows, cityFields: ['stadt', 'systeme', 'fahrzeuge', 'stationen', 'anbieter', 'arten'], cities, totals, today, days });
+  fields: W.SYS_FIELDS, systems: rows, cityFields: ['stadt', 'systeme', 'fahrzeuge', 'stationen', 'anbieter', 'arten'], cities, totals, today, days, forecast });
 log(`${done}/${list.length} Systeme gelesen, ${failed} ohne Daten, ${skipped} nach Frist; ${totals.avail} Fahrzeuge verfügbar, ${totals.stations} Stationen; ab ${outSum}, an ${inSum} (${Date.now() - t0} ms)`);
 console.log(JSON.stringify({ land: cc, listed: list.length, ok: done, failed, skipped, avail: totals.avail, stations: totals.stations, cities: cities.length, ms: Date.now() - t0 }));

@@ -125,4 +125,12 @@ export default {
   "wl.deForecast": "Forecast",
   "wl.deOepnv": "Public transport",
   "wl.sources": "Sources: MobilityData's GBFS directory (systems.csv) and the operator feeds listed there; Japan via the Public Transportation Open Data Center (ODPT). Licence per system in the system list; the terms of each source apply. Systems requiring credentials are missing, as are operators without a directory entry.",
+  "wl.actual": "measured",
+  "wl.forecast": "Forecast",
+  "wl.tomorrow": "{d} (forecast)",
+  "wl.fcNote": "Forecast: profile from {n} days – per hour the median of the same day types (weekday, Saturday, Sunday and holiday), at least {m} per hour; {hol}; without weather and events.",
+  "wl.fcWait": "Forecast from {m} days of the same type per hour (so far {n} days collected); {hol}.",
+  "wl.fcHol": "holidays from {src}",
+  "wl.fcNoHol": "no holiday source, weekends only",
+  "wl.fcCheck": "Deviation on {day} (forecast from the days before only): available vehicles {a}, departures {o} (WAPE).",
 };

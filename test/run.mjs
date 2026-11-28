@@ -44,7 +44,7 @@ assert(!existsSync('test/out/calendar.json') && d.measure?.version === 2 && !d.e
 
 // ---------- Läufe 3–5: privater Track-Zustand (TRACK_DIR), Zusatzquellen ----------
 const ex = await startExtra();
-const weltEnv = { WELT: '', WELT_CSV: `${ex.base}/welt/systems.csv`, WELT_LAENDER: 'AT,JP', WELT_BUDGET_MS: '60000' }; // Länder (Phase „welt“)
+const weltEnv = { WELT: '', WELT_CSV: `${ex.base}/welt/systems.csv`, WELT_LAENDER: 'AT,JP', WELT_BUDGET_MS: '60000', WELT_HOLIDAYS: '0' }; // Länder (Phase „welt“)
 const tmp = await mkdtemp(path.join(tmpdir(), 'mp-test-'));
 const TRACK_DIR = path.join(tmp, 'track');
 const cat = JSON.parse(await readFile('test/sources.json', 'utf8'));

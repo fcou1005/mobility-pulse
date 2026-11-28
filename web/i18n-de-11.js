@@ -125,4 +125,12 @@ export default {
   "wl.deForecast": "Prognose",
   "wl.deOepnv": "ÖPNV",
   "wl.sources": "Quellen: GBFS-Verzeichnis von MobilityData (systems.csv) und die dort genannten Feeds der Betreiber; Japan über das Public Transportation Open Data Center (ODPT). Lizenz je System in der Systemliste, maßgeblich sind die Bedingungen der jeweiligen Quelle. Systeme mit Zugangsdaten fehlen; Anbieter ohne Eintrag im Verzeichnis ebenso.",
+  "wl.actual": "gemessen",
+  "wl.forecast": "Prognose",
+  "wl.tomorrow": "{d} (Prognose)",
+  "wl.fcNote": "Prognose: Profil aus {n} Tagen – je Stunde der Median der gleichen Tagtypen (Werktag, Samstag, Sonn- und Feiertag), mindestens {m} je Stunde; {hol}; ohne Wetter und Ereignisse.",
+  "wl.fcWait": "Prognose ab {m} gleichen Tagtypen je Stunde (bisher {n} Tage gesammelt); {hol}.",
+  "wl.fcHol": "Feiertage aus {src}",
+  "wl.fcNoHol": "ohne Feiertagsquelle, nur Wochenenden",
+  "wl.fcCheck": "Abweichung am {day} (Prognose nur aus den Tagen davor): verfügbare Fahrzeuge {a}, Abgänge {o} (WAPE).",
 };

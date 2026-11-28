@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/welt.schema.json",
  "title": "Länder außerhalb Deutschlands (Reiter Länder, Stufe 1, 28.11.2026)",
  "description": "welt/index.json, welt/<Land>/latest.json, welt/<Land>/<Tag>.json und welt/<Land>/punkte.json: Sharing-Bestand je Land, Stadt und System aus den offenen GBFS-Feeds des MobilityData-Verzeichnisses (systems.csv, ohne Systeme mit Zugangsdaten; Japan über die ODPT). Ein Prozess je Land (scripts/welt.mjs). Lizenz je System laut system_information. Abgänge/Zugänge geschätzt (Position bzw. Station, Umsetzungen zählen mit).",
- "x-version": "1.0",
+ "x-version": "1.1",
  "$defs": {
   "index": {
    "type": "object",
@@ -299,6 +299,96 @@
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
      }
+    },
+    "forecast": {
+     "type": "object",
+     "description": "ab 1.1: Profil-Prognose für den Rest von heute und morgen (Ortszeit): je Stunde Median der gleichen Tagtypen (W Werktag, S Samstag, H Sonn- und Feiertag) der letzten Tage, ohne Wetter und Ereignisse",
+     "required": [
+      "method",
+      "basisDays",
+      "next"
+     ],
+     "properties": {
+      "method": {
+       "const": "profil"
+      },
+      "basisDays": {
+       "type": "integer",
+       "description": "Tage vor heute mit Stundenwerten"
+      },
+      "minDays": {
+       "type": "integer",
+       "description": "mindestens so viele gleiche Tagtypen je Stunde"
+      },
+      "holidays": {
+       "type": [
+        "object",
+        "null"
+       ],
+       "description": "Feiertagsquelle (OpenHolidays API bzw. Cabinet Office Japan) und Zahl der Tage; null = nur Wochenenden",
+       "properties": {
+        "source": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "n": {
+         "type": "integer"
+        }
+       },
+       "additionalProperties": false
+      },
+      "dayTypes": {
+       "type": "object",
+       "description": "Tag → Tagtyp",
+       "additionalProperties": {
+        "enum": [
+         "W",
+         "S",
+         "H"
+        ]
+       }
+      },
+      "next": {
+       "type": "array",
+       "description": "[Tag, Stunde (Ortszeit), verfügbare Fahrzeuge, Abgänge je Stunde (null = zu wenig Vergleich), Zahl der Vergleichstage]",
+       "items": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5
+       }
+      },
+      "check": {
+       "type": [
+        "object",
+        "null"
+       ],
+       "description": "Selbstprüfung am Vortag: Prognose nur aus den Tagen davor gegen den Verlauf (WAPE)",
+       "properties": {
+        "day": {
+         "type": "string"
+        },
+        "hours": {
+         "type": "integer"
+        },
+        "wapeAvail": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "wapeOut": {
+         "type": [
+          "number",
+          "null"
+         ]
+        }
+       },
+       "additionalProperties": false
+      }
+     },
+     "additionalProperties": false
     }
    },
    "additionalProperties": false

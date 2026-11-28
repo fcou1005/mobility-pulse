@@ -76,7 +76,7 @@ function detail(ctx, s) {
     <div class="wl-sec"><h3 class="cmp-h3">${t('wl.citiesTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('wl.citiesTitle'))}"><table><thead><tr><th>${t('wl.colCity')}</th><th class="n">${t('wl.colAvail')}</th><th>${t('wl.colTypes')}</th><th class="n">${t('wl.colStations')}</th><th>${t('wl.colOps')}</th></tr></thead><tbody>${cityRows}</tbody></table></div>
     ${cities.length > 25 && !s.allCities ? `<button type="button" class="chip" data-wl-act="cities">${t('wl.allCities', { n: ctx.fmt(cities.length) })}</button>` : ''}</div>
     <div class="wl-sec"><h3 class="cmp-h3">${t('wl.opsTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('wl.opsTitle'))}"><table><thead><tr><th>${t('wl.colOp')}</th><th class="n">${t('wl.colAvail')}</th><th>${t('wl.colTypes')}</th><th class="n">${t('wl.colStations')}</th><th class="n">${t('wl.colCities')}</th><th class="n">${t('wl.colSystems')}</th><th>${t('wl.colLicense')}</th></tr></thead><tbody>${opRows}</tbody></table></div></div>
-    <div class="wl-sec"><h3 class="cmp-h3">${t('wl.dayTitle')}</h3><div class="wl-days" role="group" aria-label="${esc(t('wl.dayPick'))}">${(d.days || []).slice(-7).map((/** @type {string} */ x) => `<button type="button" class="chip" data-wl-day="${esc(x)}" aria-pressed="${x === s.day}">${esc(dayLabel(x))}</button>`).join('')}</div><div data-wl-chart></div></div>
+    <div class="wl-sec"><h3 class="cmp-h3">${t('wl.dayTitle')}</h3><div class="wl-days" role="group" aria-label="${esc(t('wl.dayPick'))}">${(d.days || []).slice(-7).map((/** @type {string} */ x) => `<button type="button" class="chip" data-wl-day="${esc(x)}" aria-pressed="${x === s.day}">${esc(dayLabel(x))}</button>`).join('')}${s.tomorrow ? `<button type="button" class="chip" data-wl-day="${esc(s.tomorrow)}" aria-pressed="${s.tomorrow === s.day}">${esc(t('wl.tomorrow', { d: dayLabel(s.tomorrow) }))}</button>` : ''}</div><div data-wl-chart></div></div>
     <div class="wl-sec"><h3 class="cmp-h3">${t('wl.mapTitle')}</h3><div class="tk-map" data-wl-map role="region" aria-label="${esc(t('wl.mapAria', { land: name }))}"></div><div class="tk-legend" data-wl-legend></div></div>
     <details class="more wl-sec"><summary>${t('wl.sysTitle', { n: ctx.fmt(d.systems.length) })}</summary><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('wl.sysTitle', { n: d.systems.length }))}"><table><thead><tr><th>${t('wl.colSystem')}</th><th>${t('wl.colCity')}</th><th>${t('wl.colOp')}</th><th class="n">${t('wl.colAvail')}</th><th class="n">${t('wl.colStations')}</th><th>${t('wl.colLicense')}</th><th>${t('wl.colState')}</th></tr></thead><tbody>${sysRows}</tbody></table></div></details>
     ${d.land === 'JP' ? '<div class="wl-sec panel-2" data-wl-tokio></div>' : ''}
@@ -86,11 +86,17 @@ function detail(ctx, s) {
 /** @param {any} ctx @param {any} s */
 function drawChart(ctx, s) {
   const box = s.el.querySelector('[data-wl-chart]'); if (!box) return;
-  const hs = WL.hourly(s.dayDoc), tz = s.doc?.tz || '';
-  if (!hs.length) { box.innerHTML = `<div class="empty">${t('tk.noHours')}</div>`; return; }
-  const one = (/** @type {(r: any) => number|null} */ f) => [{ label: cname(s.land), i: 0, pts: hs.map(r => ({ h: r.h, v: f(r) })) }];
-  box.innerHTML = `<div class="tk-charts"><div><h3>${t('wl.chartAvail')}</h3>${hourChart(ctx, one(r => Math.round(r.avail)), (v) => ctx.fmt(v), t('wl.chartAvail'), t('wl.localTime', { tz }))}</div>
-    <div><h3>${t('wl.chartOut')}</h3>${hourChart(ctx, one(r => (r.outH == null ? null : Math.round(r.outH))), (v) => ctx.fmt(v), t('wl.chartOut'), t('wl.localTime', { tz }))}</div></div><p class="muted small">${t('wl.outNote')}</p>`;
+  const hs = s.day === s.tomorrow ? [] : WL.hourly(s.dayDoc), tz = s.doc?.tz || '', F = s.doc?.forecast;
+  const fc = (F?.next || []).filter((/** @type {any[]} */ r) => r[0] === s.day);
+  if (!hs.length && !fc.length) { box.innerHTML = `<div class="empty">${t('tk.noHours')}</div>`; return; }
+  // Ist (durchgezogen) und Prognose (gestrichelt, Profil der gleichen Tagtypen)
+  const ser = (/** @type {(r: any) => number|null} */ f, /** @type {number} */ k) => [...(hs.length ? [{ label: t('wl.actual'), i: 0, pts: hs.map(r => ({ h: r.h, v: f(r) })) }] : []),
+    ...(fc.length ? [{ label: t('wl.forecast'), i: 1, pts: fc.map((/** @type {any[]} */ r) => ({ h: r[1], v: r[k] == null ? null : Math.round(r[k]) })) }] : [])];
+  const chk = F?.check, pc = (/** @type {number|null} */ x) => (x == null ? '–' : `${ctx.fmt(x * 100, 0)} %`);
+  const fcNote = F ? t(F.next?.length ? 'wl.fcNote' : 'wl.fcWait', { n: ctx.fmt(F.basisDays), m: ctx.fmt(F.minDays), hol: F.holidays?.source ? t('wl.fcHol', { src: ctx.esc(F.holidays.source) }) : t('wl.fcNoHol') })
+    + (chk ? ` ${t('wl.fcCheck', { day: ctx.esc(dayLabel(chk.day)), a: pc(chk.wapeAvail), o: pc(chk.wapeOut) })}` : '') : '';
+  box.innerHTML = `<div class="tk-charts"><div><h3>${t('wl.chartAvail')}</h3>${hourChart(ctx, ser(r => Math.round(r.avail), 2), (v) => ctx.fmt(v), t('wl.chartAvail'), t('wl.localTime', { tz }))}</div>
+    <div><h3>${t('wl.chartOut')}</h3>${hourChart(ctx, ser(r => (r.outH == null ? null : Math.round(r.outH)), 3), (v) => ctx.fmt(v), t('wl.chartOut'), t('wl.localTime', { tz }))}</div></div>${fcNote ? `<p class="small">${fcNote}</p>` : ''}<p class="muted small">${t('wl.outNote')}</p>`;
 }
 
 /** @param {any} ctx @param {any} s */
@@ -136,6 +142,7 @@ async function pick(ctx, s, cc) {
   const doc = await load(ctx, `${cc}/latest.json`); if (tok !== s.tok) return;
   if (!doc) { box.innerHTML = `<div class="empty">${t('wl.noLand')}</div>`; return; }
   s.doc = doc; s.allCities = false;
+  s.tomorrow = (doc.forecast?.next || []).map((/** @type {any[]} */ r) => r[0]).find((/** @type {string} */ x) => x > doc.day) || null;
   s.day = doc.days?.includes(doc.day) ? doc.day : doc.days?.[doc.days.length - 1] || doc.day;
   const [dayDoc, pts] = await Promise.all([load(ctx, `${cc}/${s.day}.json`), load(ctx, `${cc}/punkte.json`)]); if (tok !== s.tok) return;
   // früh am Tag (Ortszeit): zuerst der Vortag, solange heute weniger als 6 Stunden da sind
@@ -160,7 +167,7 @@ export async function renderWelt(el, ctx) {
       const b = e.target?.closest?.('button[data-wl-land]'); if (b) { pick(s.ctx, s, b.dataset.wlLand); return; }
       const a = e.target?.closest?.('button[data-wl-act]'); if (a?.dataset.wlAct === 'cities') { s.allCities = true; const y = window.scrollY; const box = el.querySelector('[data-wl-detail]'); s.map?.remove(); s.map = null; box.innerHTML = detail(s.ctx, s); drawChart(s.ctx, s); drawMap(s.ctx, s); const tk = box.querySelector('[data-wl-tokio]'); if (tk) renderTokio(/** @type {HTMLElement} */ (tk), s.ctx); window.scrollTo(0, y); return; }
       const d = e.target?.closest?.('button[data-wl-day]');
-      if (d && d.dataset.wlDay !== s.day) { s.day = d.dataset.wlDay; for (const x of el.querySelectorAll('button[data-wl-day]')) x.setAttribute('aria-pressed', String(/** @type {HTMLElement} */ (x).dataset.wlDay === s.day)); s.dayDoc = await load(s.ctx, `${s.land}/${s.day}.json`); drawChart(s.ctx, s); }
+      if (d && d.dataset.wlDay !== s.day) { s.day = d.dataset.wlDay; for (const x of el.querySelectorAll('button[data-wl-day]')) x.setAttribute('aria-pressed', String(/** @type {HTMLElement} */ (x).dataset.wlDay === s.day)); s.dayDoc = s.day === s.tomorrow ? null : await load(s.ctx, `${s.land}/${s.day}.json`); drawChart(s.ctx, s); }
     });
     el.addEventListener('change', (/** @type {any} */ e) => { if (e.target?.matches?.('select[data-wl-sel]')) pick(s.ctx, s, e.target.value); });
   }
