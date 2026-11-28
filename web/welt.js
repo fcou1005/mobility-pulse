@@ -125,7 +125,11 @@ function drawMap(ctx, s) {
   }
   const rescale = () => { const f = scaleOf(s.map.getZoom()); for (const m of marks) m.setRadius(m.options.r0 * f); };
   s.map.on('zoomend', rescale);
-  if (pts.length) s.map.fitBounds(L.latLngBounds(pts), { padding: [20, 20], maxZoom: 13, animate: false }); else s.map.setView([50, 10], 4);
+  // Ausschnitt: um den Median der Punkte, ohne weit entfernte Gebiete (Frankreich: Übersee-Départements)
+  const med = (/** @type {number[]} */ a) => a.slice().sort((p, q) => p - q)[a.length >> 1];
+  const c0 = pts.length ? [med(pts.map(p => p[0])), med(pts.map(p => p[1]))] : null;
+  const core = c0 ? pts.filter(p => Math.abs(p[0] - c0[0]) < 12 && Math.abs(p[1] - c0[1]) < 18) : [];
+  if (core.length) s.map.fitBounds(L.latLngBounds(core), { padding: [20, 20], maxZoom: 13, animate: false }); else s.map.setView([50, 10], 4);
   rescale(); setTimeout(() => s.map?.invalidateSize(), 0);
   const nCells = (P.cells || []).reduce((/** @type {number} */ a, /** @type {number[]} */ c) => a + c[2], 0);
   if (leg) leg.innerHTML = (nCells ? `<span><i style="background:color-mix(in srgb,${ff} 55%,transparent);border:0"></i>${t('wl.legendCells', { n: ctx.fmt(nCells) })}</span>` : '')

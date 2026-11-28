@@ -48,13 +48,16 @@ function germanTop(latest) {
 export function hourChart(ctx, series, fv, aria, tzLabel = t('tk.jst')) {
   const all = series.flatMap(s => s.pts.map((/** @type {any} */ p) => p.v)).filter(v => v != null);
   if (!all.length) return `<div class="empty">${t('tk.noHours')}</div>`;
-  const W = 520, H = 210, P = { l: 46, r: 10, t: 10, b: 24 }, ymax = Math.max(1, ...all) * 1.1;
+  // linker Rand nach der längsten Achsenbeschriftung (100.000 braucht mehr Platz als 50)
+  const ymax = Math.max(1, ...all) * 1.1, W = 520, H = 210, P = { l: Math.max(34, 12 + 7 * fv(ymax).length), r: 10, t: 10, b: 24 };
   const x = (/** @type {number} */ h) => P.l + h / 23 * (W - P.l - P.r), y = (/** @type {number} */ v) => H - P.b - v / ymax * (H - P.t - P.b);
   const q = ymax / 4, p10 = Math.pow(10, Math.floor(Math.log10(q))), f = q / p10, step = p10 * (f > 5 ? 10 : f > 2 ? 5 : f > 1 ? 2 : 1);
   let g = '';
   for (let v = 0; v <= ymax + 1e-9; v += step) g += `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${P.l - 4}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${ctx.esc(fv(v))}</text>`;
   for (const h of [0, 6, 12, 18, 23]) g += `<text x="${x(h).toFixed(1)}" y="${H - 6}" text-anchor="${h === 0 ? 'start' : h === 23 ? 'end' : 'middle'}">${h} h</text>`;
-  const lines = series.map(s => { const lk = look(s.i); let d = '', prev = -9; for (const p of s.pts) { if (p.v == null) { prev = -9; continue; } d += `${p.h - prev === 1 ? 'L' : 'M'}${x(p.h).toFixed(1)},${y(p.v).toFixed(1)}`; prev = p.h; } return d ? `<path d="${d}" fill="none" stroke="${lk.color}" stroke-width="2"${lk.dash}/>` : ''; }).join('');
+  const lines = series.map(s => { const lk = look(s.i); let d = '', prev = -9; for (const p of s.pts) { if (p.v == null) { prev = -9; continue; } d += `${p.h - prev === 1 ? 'L' : 'M'}${x(p.h).toFixed(1)},${y(p.v).toFixed(1)}`; prev = p.h; } const few = s.pts.filter((/** @type {any} */ p) => p.v != null).length <= 3; // einzelne Stunden sichtbar machen (Linie braucht zwei Punkte)
+    const dots = few ? s.pts.filter((/** @type {any} */ p) => p.v != null).map((/** @type {any} */ p) => `<circle cx="${x(p.h).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="3" fill="${lk.color}"/>`).join('') : '';
+    return (d ? `<path d="${d}" fill="none" stroke="${lk.color}" stroke-width="2"${lk.dash}/>` : '') + dots; }).join('');
   const hours = [...new Set(series.flatMap(s => s.pts.filter((/** @type {any} */ p) => p.v != null).map((/** @type {any} */ p) => p.h)))].sort((a, b) => a - b);
   const val = (/** @type {any} */ s, /** @type {number} */ h) => s.pts.find((/** @type {any} */ p) => p.h === h)?.v ?? null;
   const sp = chartSpec({ n: hours.length, x: (i) => x(hours[i]), top: P.t, bottom: H - P.b, head: (i) => `${hours[i]}–${hours[i] + 1} h (${tzLabel})`, label: aria, colHead: t('tk.hour'), cols: series.map(s => s.label),
