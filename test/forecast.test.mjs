@@ -723,7 +723,11 @@ function T_hourOf(ms) { return +new Intl.DateTimeFormat('en-GB', { hour: '2-digi
   const keep = F.DM.minDays; F.DM.minDays = 5;
   const ra = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: null, now: NOWB, ext: extB });
   const iA = Object.values(ra.log.issued)[0], plan = ra.series.plans[ra.series.today];
+  // ohne Chronos-Lauf (28.11.2026): statt chronos/blend die beste Prognose ohne KI; Kombination ohne KI in der Selbstprüfung
+  const rn = F.runForecast({ docs: docs.slice(0, NDAY), calendar: null, weather: WX, prevLog: JSON.parse(JSON.stringify(ra.log)), now: NOWB, ext: null });
   F.DM.minDays = keep;
+  assert(F.AI_FREE.includes(rn.latest.active) && rn.latest.decision?.why?.noAi && rn.latest.aiFree?.model === rn.latest.active && rn.latest.aiFree.chronos === false && Object.values(ra.log.evals).some(e => e.models.klassik && e.models.ensK),
+    `ohne Chronos-Lauf: ${rn.latest.active} statt ${rn.latest.decision?.why?.noAi} (${JSON.stringify(rn.latest.aiFree)}), klassik und ensK in der Selbstprüfung`);
   assert(['blend', 'chronos'].includes(ra.latest.active) && /Chronos/.test(ra.latest.reason) && iA.model === ra.latest.active && ['blend', 'chronos'].includes(plan?.model) && ra.latest.decision.dm[ra.latest.active].p < F.DM.p,
     `S2.3: mit geprüftem Vorsprung (DM p ${ra.latest.decision?.dm?.[ra.latest.active]?.p}) gewählt: ${ra.latest.active} (${ra.latest.reason}), Plan heute mit ${plan?.model}`);
   // scripts/chronos.py im Testmodus (ohne Modell): Eingabe → Ausgabe mit Stunden je Gruppe

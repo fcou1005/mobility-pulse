@@ -132,9 +132,9 @@ details.fv-data{margin-top:var(--s3)}details.fv-data summary{cursor:pointer;font
 .fv-curve text{fill:var(--fg-2);font-size:11px;font-family:var(--sans)}
 .fv-curve .gl{stroke:var(--line);stroke-width:1}
 .fv-curve path{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
-.fv-curve path.act{stroke-width:3.4}.fv-curve path.nv{stroke-dasharray:5 4}
+.fv-curve path.act{stroke-width:3.4}.fv-curve path.nv{stroke-dasharray:5 4}.fv-curve path.kl{stroke-dasharray:9 3}
 .fv-keys2{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s4);font-size:.75rem;color:var(--fg-2);margin:var(--s3) 0 var(--s2)}
-.fv-keys2 i{display:inline-block;width:18px;height:0;border-top:3px solid;margin-right:6px;vertical-align:middle}.fv-keys2 i.nv{border-top-style:dashed}
+.fv-keys2 i{display:inline-block;width:18px;height:0;border-top:3px solid;margin-right:6px;vertical-align:middle}.fv-keys2 i.nv,.fv-keys2 i.kl{border-top-style:dashed}
 .fv-keys2 b{font-weight:600;color:var(--fg)}
 .fv-tbl .m-only{display:none}
 .fv-tbl .v2+.v2::before{content:', '}
@@ -260,9 +260,9 @@ export function accRows(S0, sel, G, { withToday = false } = {}) {
 /** Mittlere Kennzahlen je Modell über die letzten ausgewerteten Tage (Selbstprüfung aus log.json); sc = Wertung (Tag und Stunde je Gruppe), nach der gewählt wird */
 // 80-%-Band als Häufigkeit (Laien lesen Intervalle als harte Grenzen): Soll „etwa 8 von 10“, dazu die letzte bewertete Trefferquote
 const bandFreq = (live) => { const x = (live || []).find(r => Number.isFinite(r?.cover80)); return x ? ` ${t('fv.bandFreq', { k: Math.round(x.cover80 * 10) })}` : ''; };
-export const MODEL_ORDER = ['ens', 'hybrid', 'blend', 'adaptive', 'pooled', 'pooledWx', 'profile', 'chronos', 'mittel', 'naive', 'week'];
+export const MODEL_ORDER = ['ens', 'klassik', 'hybrid', 'blend', 'adaptive', 'pooled', 'pooledWx', 'profile', 'chronos', 'mittel', 'naive', 'week'];
 // S4.6: Modelle als Reihen ohne Anbieter – Plätze der Palette MP-7 der Reihe nach, Vergleichsgrößen („wie gestern“, Vorwoche) grau; keine Statusfarben
-export const MODEL_COLOR = { get hybrid() { return seriesColor(0); }, get blend() { return seriesColor(1); }, get adaptive() { return seriesColor(2); }, get pooled() { return seriesColor(3); }, get pooledWx() { return seriesColor(4); }, get profile() { return seriesColor(5); }, get chronos() { return seriesColor(6); }, get naive() { return moreColor(); }, get week() { return moreColor(); }, get ens() { return MODEL.ens; }, get mittel() { return moreColor(); } };
+export const MODEL_COLOR = { get hybrid() { return seriesColor(0); }, get blend() { return seriesColor(1); }, get adaptive() { return seriesColor(2); }, get pooled() { return seriesColor(3); }, get pooledWx() { return seriesColor(4); }, get profile() { return seriesColor(5); }, get chronos() { return seriesColor(6); }, get naive() { return moreColor(); }, get week() { return moreColor(); }, get ens() { return MODEL.ens; }, get klassik() { return MODEL.ens; }, get mittel() { return moreColor(); } };
 export const modelName = (m) => (m === 'naive' ? t('fv.naive') : m === 'week' ? t('fv.week') : t(`fc.model.${m}`));
 // Mischung Chronos/Hybrid: Stichtag und was bisher gelernt ist (latest.blend)
 export const blendTxt = (L) => { const b = L?.blend, x = b?.learn, from = b?.activeFrom ? dayTxt(b.activeFrom.slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' }) : '–';
@@ -328,7 +328,7 @@ const xpChip = (y) => (y >= XP.much ? `<span class="fv-chip A">${t('fv.scXpMuch'
 const splitBar = (w) => `<span class="fv-split" role="img" aria-label="${t('fv.scSplitAria', { own: pc(w), all: pc(1 - w) })}"><i style="width:${Math.round(w * 100)}%"></i></span>`;
 function activeHow(L) {
   const m = L?.active, name = m ? modelName(m) : '–';
-  const k = m === 'hybrid' ? 'fv.scHowHybrid' : m === 'adaptive' ? 'fv.scHowAdaptive' : m === 'profile' ? 'fv.scHowProfile' : m === 'blend' ? 'fv.scHowBlend' : m === 'ens' ? 'fv.scHowEns' : m ? 'fv.scHowPooled' : 'fv.scHowNone';
+  const k = m === 'hybrid' ? 'fv.scHowHybrid' : m === 'adaptive' ? 'fv.scHowAdaptive' : m === 'profile' ? 'fv.scHowProfile' : m === 'blend' ? 'fv.scHowBlend' : m === 'ens' ? 'fv.scHowEns' : m === 'klassik' ? 'fv.scHowKlassik' : m ? 'fv.scHowPooled' : 'fv.scHowNone';
   return t(k, { model: name, k: FC.HYBRID?.k ?? 20 });
 }
 export function scopePanel(ctx, S0, sel, G, L) {

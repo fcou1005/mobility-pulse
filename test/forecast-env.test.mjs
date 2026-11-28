@@ -32,6 +32,12 @@ assert(big?.[0] === FC.ENV_REL.max && FC.envRelFactor({ beta, ctx: [], weather: 
   const few = FC.chronosEnvChoice(mk(3, 0.3, 0.35)), worse = FC.chronosEnvChoice(mk(9, 0.3, 0.32)), better = FC.chronosEnvChoice(mk(9, 0.3, 0.28)), view = FC.evalsForChoice(mk(2, 0.3, 0.28), better);
   assert(few.on && !few.decided && !worse.on && worse.decided && better.on && Object.values(view)[0].models.chronos.wapeGD === 0.28 && FC.evalsForChoice(mk(2, 0.3, 0.28), worse)['2026-11-10'].models.chronos.wapeGD === 0.3,
     `Chronos-Einflüsse: 3 Tage → mit (noch offen); ${worse.days} Tage schlechter → ohne; besser → mit, Modellwahl wertet dann chronosEnv`); }
+// Kombination ohne KI (28.11.2026): Niveau je Fahrzeugart aus der Wertung des Vortags, Chronos-Bit gelöscht, bestes Modell ohne KI
+{ const E = await import('../lib/pulse-forecast-ens.js'), lv = E.klassikLevel({ scooter: [0.1, 0.2, 950, 1150], bike: [0.1, 0.2, 100, 100] }), X = E.ensBases({ muP: [1, 2], mu1: [1, 2], muQ: [1, 2], muH: [1, 2], muC: [5, NaN] });
+  const r = E.ensRest(X), mu = E.applyLevel([10, 10, 10], (j) => ['a|x|scooter', 'b|y|bike', 'c|z|car'][j], lv);
+  const ev = Object.fromEntries(['2026-11-20', '2026-11-21', '2026-11-22', '2026-11-23'].map(d => [d, { trainDays: 10, models: { klassik: { wapeGD: 0.15, wapeGH: 0.15 }, adaptive: { wapeGD: 0.16, wapeGH: 0.16 }, chronos: { wapeGD: 0.13, wapeGH: 0.13 } } }])), A = FC.aiFreeChoice(ev, 'chronos');
+  assert(Math.abs(lv.get('scooter') - Math.sqrt(1000 / 1200)) < 1e-9 && lv.get('bike') === 1 && r.ok[0] === (X.ok[0] & 15) && !(r.ok[0] & 16) && X.ok[0] & 16 && Math.abs(mu[0] - 10 * Math.sqrt(1000 / 1200)) < 1e-9 && mu[2] === 10 && A.model === 'klassik' && A.score === 0.15 && A.activeScore === 0.13,
+    `ohne KI: Niveau Roller ×${lv.get('scooter').toFixed(3)} (950 statt 1.150 erwartet, k 50, halb), ohne Chronos-Bit, bestes ${A.model} ${A.score} gegen chronos ${A.activeScore}`); }
 // Semesterferien (semfrei, 27.11.2026): gepflegte Liste mit Beleg je Eintrag; erster Fall = Erfassungsbeginn in FEATURE_SINCE
 { const { readFileSync } = await import('node:fs'), CX = await import('../lib/pulse-context.js'), doc = JSON.parse(readFileSync(new URL('../data/vorlesungszeiten.json', import.meta.url), 'utf8'));
   const chk = CX.checkCurated(doc), first = chk.ok.map(e => e.von).sort()[0], L = CX.ctxLookup([], chk.ok), i = CX.CTX_KEYS.indexOf('semfrei');

@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/forecast.schema.json",
  "title": "forecast/ – Prognose",
  "description": "latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.",
- "x-version": "1.12",
+ "x-version": "1.13",
  "$defs": {
   "latest": {
    "type": "object",
@@ -115,6 +115,13 @@
     "env": {
      "type": "object",
      "description": "Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support[Merkmal] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since[Merkmal oder weather] = Zeitpunkt, seit dem es ununterbrochen greift. Seit 1.11: chronos = { days, with, without } – Chronos-2 mit (Schatten chronosEnv) und ohne eingerechnete Einflüsse über dieselben reifen Tage der Selbstprüfung (Abweichung wie scoreOf), null ohne Tage. Seit 1.12: chronos zusätzlich on (Einflüsse bei Chronos im Betrieb) und decided (ab CHRONOS_ENV.minDays Prüftagen entschieden: on nur, wenn with ≤ without; davor on)."
+    },
+    "aiFree": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "description": "Seit 1.13 (28.11.2026): Prognose ohne KI – bestes Modell ohne Chronos-Lauf nach der Selbstprüfung (AI_FREE: klassik, adaptive, hybrid, pooledWx, pooled, profile): { model, score, days, active, activeScore, chronos } (score wie scoreOf; chronos = Chronos-Lauf für diese Ausgabe nutzbar). Ohne Chronos-Lauf rechnet statt chronos, blend oder ens dieses Modell (decision.why.noAi = ursprünglich gewähltes). Modell klassik = Kombination ohne KI (lib/pulse-forecast-ens.js KLASSIK), in evals auch ensK (ohne Niveau)."
     }
    }
   },

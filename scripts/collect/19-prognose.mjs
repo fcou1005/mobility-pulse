@@ -58,7 +58,9 @@ export async function run(ctx) {
         if (termineAuto.length) log(`Termine (Workflow): ${termineAuto.length} Einträge${evOn ? '' : `, in der Prognose ab ${curDoc?.veranstaltungenAb}`}`);
         // Chronos-2 (lib/pulse-chronos.js): chronos.json aus dem Branch tsfm (Workflow „Chronos-2“, scripts/chronos.py) – Vergleich „chronos“ und
         // Mischung „blend“ (lernt mit, wählbar nach geprüftem Vorsprung, FC.DM); fehlt sie oder ist sie zu alt, läuft die Prognose ohne. TSFM_URL leer = aus.
-        let chronos = null; const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
+        // KI abschaltbar (28.11.2026): data/prognose-optionen.json ki: false → kein Chronos-Lauf eingelesen, es rechnet die beste Prognose ohne KI
+        const kiOn = (await rd(path.join(ROOT, 'data', 'prognose-optionen.json')))?.ki !== false; if (!kiOn) log('Prognose: KI abgeschaltet (data/prognose-optionen.json) – ohne Chronos-2');
+        let chronos = null; const tsfmUrl = kiOn ? process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json` : '';
         if (tsfmUrl) { const r = await fetchJson(tsfmUrl); if (r.ok && r.json?.version === 1 && r.json.groups) chronos = r.json; else if (r.status !== 404) log(`Chronos: ${r.error || `HTTP ${r.status}`}`); }
         const ext = chronos ? CH.chronosLookup(chronos) : null;
         // je Fahrzeugfamilie ein eigenes Modell (FC.FAMILY_DIR): micro wie bisher in forecast/ (Lernphase unverändert), E-Roller und Carsharing
@@ -94,7 +96,7 @@ export async function run(ctx) {
         }
       } else {
         // zwischen zwei Prognose-Läufen: neuen Chronos-Lauf (viermal täglich) trotzdem in die Stundenreihen übernehmen, nur Feld c
-        const tsfmUrl = process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
+        const tsfmUrl = (await rd(path.join(ROOT, 'data', 'prognose-optionen.json')))?.ki === false ? '' : process.env.TSFM_URL ?? `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fcou1005/mobility-pulse'}/tsfm/chronos.json`;
         const famSeries = []; for (const fam of FC.FAMILIES) { const f = path.join(DATA, FC.FAMILY_DIR[fam], 'series.json'), ser = await rd(f); if (ser?.version === 1) famSeries.push([fam, f, ser]); }
         if (tsfmUrl && famSeries.length) {
           const r = await fetchJson(tsfmUrl);

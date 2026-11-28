@@ -16,7 +16,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [ops](#ops) | 1.4 | `ops/<Land>.json`, `ops-input/<AGS>.json`, `ops-input/index.json`, `ops-input/fleet/<AGS>.json`, `ops-input/fleet/index.json` |
 | [boundaries](#boundaries) | 1.0 | `boundaries/index.json`, `boundaries/<Land>.json` |
 | [calib](#calib) | 1.0 | `calib.json` |
-| [forecast](#forecast) | 1.12 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/fehlbestand.json`, `forecast/moped/…`, `forecast/car/…` |
+| [forecast](#forecast) | 1.13 | `forecast/latest.json`, `forecast/log.json`, `forecast/series.json`, `forecast/dispo.json`, `forecast/fehlbestand.json`, `forecast/moped/…`, `forecast/car/…` |
 | [auflagen](#auflagen) | 1.2 | `auflagen/verfuegbarkeit-<Jahr>.json`, `auflagen/alarme.json` |
 | [markt](#markt) | 1.2 | `index/<JJJJ-MM>.json`, `index/laufend.json`, `index/index.json`, `markt/wirkung.json`, `markt/scout.json`, `markt/regen.json`, `grafik/index.json`, `offen/index.json` |
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
@@ -342,7 +342,7 @@ Version 1.0 · Schema: [schemas/calib.schema.json](../schemas/calib.schema.json)
 
 forecast/ – Prognose. latest.json (nächste 24 Stunden, Güte, Entscheidung), log.json (Selbstprüfung, Live-Abgleich), series.json (Stundenreihen fürs Dashboard); gleiche Dateien je Fahrzeugfamilie in forecast/moped/ und forecast/car/.
 
-Version 1.12 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
+Version 1.13 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schema.json)
 
 ### forecast · latest
 
@@ -363,6 +363,7 @@ Version 1.12 · Schema: [schemas/forecast.schema.json](../schemas/forecast.schem
 | `memory` |  | object – Langzeitgedächtnis der Wirkungen (memorySummary in lib/pulse-forecast-model.js): upto, days, oldDays, windowDays, since, halfLifeDays; effects\[Wirkung\] = {b (log-Wirkung), se, lo, hi (90-%-Bereich als Faktor), n (Gemeinde-Stunden), days}. Seit 1.6: b und Bereich mit Vorwissen WX_PRIOR (prior: true) und festgelegten Vorzeichen (fixed: true = Daten zeigen das Gegenteil, b = 0 wie im Modell). Seit 1.7 zusätzlich wind und dark (Wind, Dunkelheit). |
 | `outages` |  | object – Seit 1.7: Ausfallstunden im Trainingsfenster (lib/pulse-forecast-outage.js) – days (Tage mit Ausfall), groupHours (Gruppen-Stunden, die nicht mitlernen und in der Selbstprüfung nicht zählen). |
 | `env` |  | object – Einflüsse (Umgebungsmerkmale): keys, ready (genug Daten, GATES.ctxMinRows an ctxMinDays Tagen), active (im Algorithmus), support\[Merkmal\] = {rows, days, memRows, memDays, pending?}, sources, pendingFrom. Seit 1.10: since\[Merkmal oder weather\] = Zeitpunkt, seit dem es ununterbrochen greift. Seit 1.11: chronos = { days, with, without } – Chronos-2 mit (Schatten chronosEnv) und ohne eingerechnete Einflüsse über dieselben reifen Tage der Selbstprüfung (Abweichung wie scoreOf), null ohne Tage. Seit 1.12: chronos zusätzlich on (Einflüsse bei Chronos im Betrieb) und decided (ab CHRONOS_ENV.minDays Prüftagen entschieden: on nur, wenn with ≤ without; davor on). |
+| `aiFree` |  | object / null – Seit 1.13 (28.11.2026): Prognose ohne KI – bestes Modell ohne Chronos-Lauf nach der Selbstprüfung (AI_FREE: klassik, adaptive, hybrid, pooledWx, pooled, profile): { model, score, days, active, activeScore, chronos } (score wie scoreOf; chronos = Chronos-Lauf für diese Ausgabe nutzbar). Ohne Chronos-Lauf rechnet statt chronos, blend oder ens dieses Modell (decision.why.noAi = ursprünglich gewähltes). Modell klassik = Kombination ohne KI (lib/pulse-forecast-ens.js KLASSIK), in evals auch ensK (ohne Niveau). |
 
 ### forecast · log
 

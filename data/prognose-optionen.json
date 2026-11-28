@@ -1,0 +1,5 @@
+{
+ "version": 1,
+ "ki": true,
+ "hinweis": "ki: false schaltet die KI-Schnittstelle der Prognose ab: der Lauf von Chronos-2 (Branch tsfm) wird nicht eingelesen, es rechnet die beste Prognose ohne KI (meist „klassik“, die Kombination ohne KI; lib/pulse-forecast-select.js AI_FREE). Wirkt ab dem nächsten Sammler-Lauf."
+}

@@ -172,6 +172,12 @@ const tag = (k) => `<span class="fv-tag ${k}">${t(`fv.tag.${k}`)}</span>`;
 export const timeTxt = (iso) => (iso ? dateFmt({ dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(iso)) : '–');
 
 /** Selbstkontrollen: jede mit Ampel (ok / near / none) und einem Satz Begründung aus den Daten */
+/** Prognose ohne KI (28.11.2026): bestes Modell ohne Chronos-Lauf gegen das gewählte, Selbstprüfung (latest.aiFree) */
+function aiFreeLine(L, pc) {
+  const A = L?.aiFree; if (!A?.model) return '';
+  const k = L?.decision?.why?.noAi ? 'fv.aiFreeOn' : A.active === A.model ? 'fv.aiFreeIsActive' : 'fv.aiFree';
+  return `<p class="fv-sub">${t(k, { m: modelName(A.model), s: pc(A.score, 1), a: modelName(A.active || L.active || ''), as: A.activeScore == null ? '–' : pc(A.activeScore, 1), d: A.days })}</p>`;
+}
 function checksOf(ctx, S0, L, G, race) {
   const { esc } = ctx, gates = { ...FC.GATES, ...(L.gates || {}) }, wg = L.weather?.gate || {}, out = [], add = (lvl, title, why) => out.push({ lvl, title, why });
   const age = S0.generatedAt ? (Date.now() - Date.parse(S0.generatedAt)) / 3600e3 : null;
@@ -228,10 +234,10 @@ function renderBasisPart(el, ctx, s, S0, L, G) {
     [t('fv.kvStand'), timeTxt(L.generatedAt), t('fv.kvStandSub', { time: timeTxt(S0.generatedAt) })],
   ])}${provTbl}</div>`;
   // Panel 3: Modell
-  const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['hybrid', t('fv.mHybrid', { k: FC.HYBRID.k, back: FC.HYBRID.maxBack })], ['ens', ensTxt(L)], ['blend', blendTxt(L)], ['chronos', t('fv.mChronos', { min: L?.external?.chronos?.minStarts ?? 20 })], ['mittel', t('fv.mMittel')], ...(L?.nowcast ? [['nowcast', t('fv.mNowcast', { w: L.nowcast.rule.windowH, from: L.nowcast.rule.fromHour, minh: L.nowcast.rule.minWindowHour, tau: L.nowcast.rule.tauH, gate: gateTxt(L.nowcast.gate, 'nowcast', L) })]] : []), ...(L?.stoerung ? [['stoerung', t('fv.mStoerung', { h: L.stoerung.rule.maxLeadH, tau: L.stoerung.rule.tauH, n: n0(L.stoerung.cities || 0), learned: n0(L.stoerung.learned || 0), gate: gateTxt(L.stoerung.gate, 'stoerung', L) })]] : []), ['naive', t('fv.mNaive')]];
+  const modelRows = [['profile', t('fv.mProfile')], ['pooled', t('fv.mPooled')], ['pooledWx', t('fv.mPooledWx')], ['adaptive', t('fv.mAdaptive', { hl: FC.FEEDBACK.halfLifeDays })], ['hybrid', t('fv.mHybrid', { k: FC.HYBRID.k, back: FC.HYBRID.maxBack })], ['ens', ensTxt(L)], ['klassik', t('fv.mKlassik')], ['blend', blendTxt(L)], ['chronos', t('fv.mChronos', { min: L?.external?.chronos?.minStarts ?? 20 })], ['mittel', t('fv.mMittel')], ...(L?.nowcast ? [['nowcast', t('fv.mNowcast', { w: L.nowcast.rule.windowH, from: L.nowcast.rule.fromHour, minh: L.nowcast.rule.minWindowHour, tau: L.nowcast.rule.tauH, gate: gateTxt(L.nowcast.gate, 'nowcast', L) })]] : []), ...(L?.stoerung ? [['stoerung', t('fv.mStoerung', { h: L.stoerung.rule.maxLeadH, tau: L.stoerung.rule.tauH, n: n0(L.stoerung.cities || 0), learned: n0(L.stoerung.learned || 0), gate: gateTxt(L.stoerung.gate, 'stoerung', L) })]] : []), ['naive', t('fv.mNaive')]];
   const p3 = `<div class="panel">${head(t('fv.modelTitle'), t('fv.modelSub'))}<code class="fv-formula">${esc(t('fv.formula'))}</code>`
     + `<div class="tbl fv-tbl full" tabindex="0" role="region" aria-label="${esc(t('fv.modelTitle'))}"><table style="margin-top:var(--s3)"><thead><tr><th>${t('fv.colModel')}</th><th>${t('fv.colWhat')}</th></tr></thead><tbody>${modelRows.map(([m, d]) => `<tr><td>${m === 'naive' ? t('fv.naive') : t(`fc.model.${m}`)}${m === L.active ? ` <span class="fv-chip B">${t('fv.activeTag')}</span>` : ''}</td><td class="wrap">${esc(d)}</td></tr>`).join('')}</tbody></table></div>`
-    + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(fcReason(L))}</i></p>` : ''}</div>`;
+    + `<p class="fv-sub">${esc(t('fv.chooseRule', { min: gates.minEvalDays, win: gates.evalWindow, gain: pc(gates.wxGain), again: pc(gates.adGain ?? FC.GATES.adGain), mt: gates.minEvalTrainDays ?? FC.GATES.minEvalTrainDays }))}</p>${L.reason ? `<p class="fv-sub">${t('fv.reasonNow')} <i>${esc(fcReason(L))}</i></p>` : ''}${aiFreeLine(L, pc)}</div>`;
   // Panel 4: gemessen · abgeleitet · modelliert · vermutet
   const A = [
     ['derived', t('fv.aStarts'), t('fv.aStartsHow')], ['measured', t('fv.aExposure'), t('fv.aExposureHow')], ['external', t('fv.aDayType'), t('fv.aDayTypeHow')],
