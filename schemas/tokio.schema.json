@@ -1,0 +1,361 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/fcou1005/mobility-pulse/schemas/tokio.schema.json",
+ "title": "Tokio – stationsgebundene Leihräder (Reiter Vergleich, 28.11.2026)",
+ "description": "tokio/index.json, tokio/stationen.json, tokio/stand.json und tokio/<Tag>.json: docomo bike share (docomo-cycle-tokyo) und HELLO CYCLING (Ports mit Adresse 東京都) aus den offenen GBFS-Feeds der ODPT (api-public.odpt.org), CC BY 4.0. Zeiten der Tagesdateien in Ortszeit Tokio (JST). Abgänge/Zugänge = Summe der Bestandsänderungen je Port zwischen zwei Läufen (Untergrenze der Fahrten, Umsetzungen zählen mit).",
+ "x-version": "1.0",
+ "$defs": {
+  "index": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "tz",
+    "day",
+    "systems",
+    "totals",
+    "days"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "number",
+     "description": "Zeitpunkt des Laufs (ms)"
+    },
+    "tz": {
+     "const": "Asia/Tokyo"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+     "description": "heutiger Tag in Ortszeit"
+    },
+    "systems": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "name",
+       "operator",
+       "license",
+       "licenseUrl",
+       "feed",
+       "ok"
+      ],
+      "properties": {
+       "id": {
+        "enum": [
+         "docomo",
+         "hello"
+        ]
+       },
+       "name": {
+        "type": "string"
+       },
+       "operator": {
+        "type": "string"
+       },
+       "url": {
+        "type": "string"
+       },
+       "license": {
+        "type": "string",
+        "description": "gewählte Lizenz (CC BY 4.0)"
+       },
+       "licenseUrl": {
+        "type": "string"
+       },
+       "feed": {
+        "type": "string",
+        "description": "gbfs.json der ODPT"
+       },
+       "ok": {
+        "type": "boolean",
+        "description": "Stand in diesem Lauf gelesen"
+       },
+       "error": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "stale": {
+        "type": "boolean",
+        "description": "Kennzahlen aus dem letzten gelesenen Stand"
+       },
+       "at": {
+        "type": [
+         "number",
+         "null"
+        ],
+        "description": "Zeitpunkt des Stands (ms)"
+       },
+       "ports": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Ports in Tokio mit Stand"
+       },
+       "bikes": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "ausleihbare Räder"
+       },
+       "docks": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "freie Plätze"
+       },
+       "empty": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Ports ausleihbar, aber ohne Rad"
+       },
+       "full": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Ports mit Rückgabe, aber ohne freien Platz"
+       },
+       "off": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Ports ohne Ausleihe"
+       },
+       "today": {
+        "type": "object",
+        "required": [
+         "out",
+         "in",
+         "min"
+        ],
+        "properties": {
+         "out": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Abgänge heute (Ortszeit) bisher"
+         },
+         "in": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zugänge heute bisher"
+         },
+         "min": {
+          "type": "number",
+          "description": "Minuten mit Vergleich zum vorigen Lauf"
+         }
+        },
+        "additionalProperties": false
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    "totals": {
+     "type": "object",
+     "required": [
+      "ports",
+      "bikes",
+      "docks",
+      "empty",
+      "full",
+      "off"
+     ],
+     "properties": {
+      "ports": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "bikes": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "docks": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "empty": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "full": {
+       "type": "integer",
+       "minimum": 0
+      },
+      "off": {
+       "type": "integer",
+       "minimum": 0
+      }
+     },
+     "additionalProperties": false
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+     },
+     "description": "vorhandene Tagesdateien (höchstens 14)"
+    },
+    "stationsAt": {
+     "type": "object",
+     "description": "System (docomo, hello) → Zeitpunkt (ms)",
+     "additionalProperties": {
+      "type": "number"
+     }
+    },
+    "firstDay": {
+     "type": "string",
+     "description": "erster Tag der Sammlung"
+    }
+   },
+   "additionalProperties": false
+  },
+  "stationen": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "fields",
+    "rows"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "object",
+     "description": "System → Zeitpunkt der Portliste (ms)",
+     "additionalProperties": {
+      "type": "number"
+     }
+    },
+    "tz": {
+     "const": "Asia/Tokyo"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "rows": {
+     "type": "array",
+     "description": "[System, Port-Kennung, lat, lon, Plätze (null = ohne Angabe), Name]",
+     "items": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "stand": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "at",
+    "fields",
+    "rows"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "at": {
+     "type": "object",
+     "description": "System (docomo, hello) → Zeitpunkt (ms)",
+     "additionalProperties": {
+      "type": "number"
+     }
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "rows": {
+     "type": "array",
+     "description": "[System, Port-Kennung, ausleihbare Räder, freie Plätze, Zustand (Bit 1 keine Ausleihe, Bit 2 keine Rückgabe)]",
+     "items": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5
+     }
+    }
+   },
+   "additionalProperties": false
+  },
+  "day": {
+   "type": "object",
+   "required": [
+    "schemaVersion",
+    "version",
+    "day",
+    "tz",
+    "fields",
+    "sys"
+   ],
+   "properties": {
+    "schemaVersion": {
+     "type": "string",
+     "pattern": "^1\\.\\d+$",
+     "description": "Formatversion MAJOR.MINOR"
+    },
+    "version": {
+     "type": "integer"
+    },
+    "day": {
+     "type": "string",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "tz": {
+     "const": "Asia/Tokyo"
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "sys": {
+     "type": "object",
+     "description": "System → Zeilen [Stunde (Ortszeit), Läufe, Σ Räder, Σ Ports, Σ leere Ports, Σ volle Ports, Abgänge, Zugänge, Minuten mit Vergleich] (Summen über die Läufe der Stunde)",
+     "additionalProperties": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "minItems": 9,
+       "maxItems": 9,
+       "items": {
+        "type": "number"
+       }
+      }
+     }
+    }
+   },
+   "additionalProperties": false
+  }
+ }
+}

@@ -95,6 +95,7 @@ liefert die Teile mit.
 | `pulse-schema.js` | Formatversion je Dateifamilie |
 | `pulse-split.js` | Daten nach Gebiet (Ereignisse je Land, Stundensummen, `ops-input`, Ausschnitte je Gemeinde, `latest-core.json`) |
 | `pulse-coverage.js`, `pulse-compare.js`, `pulse-spots.js` | Abdeckung (Anbieter-Website gegen Feeds), Anbieter-Vergleich, Spot-Abgleich |
+| `pulse-tokio.js` | Tokio im Reiter Vergleich: Ports, Stand, Abgänge/Zugänge, Stunden in Ortszeit (Sammler-Phase `tokio`, `web/tokio.js`) |
 | `pulse-strike.js`, `pulse-termine.js`, `pulse-oepnv.js` | Streiks, Termine aus Quellenseiten, ÖPNV-Störungen (Umgebung der Prognose) |
 | `pulse-train.js` | Langzeitarchiv der Trainingsdaten (`train/`, `train-cells/`) |
 | `pulse-track-next.js` | Kandidat der Fahrterkennung im Schattenbetrieb (`shadow/`) |

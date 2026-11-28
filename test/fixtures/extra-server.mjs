@@ -71,6 +71,19 @@ export async function startExtra() {
     if (u.pathname === '/tsfm/chronos.json') { const from = Math.floor(Date.now() / 3600e3) * 3600e3, d0 = new Date(from).toISOString().slice(0, 10); return json({ version: 1, model: 'test', at: '2026-11-07T12:00:00.000Z', from, hours: 48, groups: { '08416041|Bolt|scooter': { m: new Array(48).fill(3) } }, back: { [d0]: { from: from - 3600e3 * 2, hours: 24, groups: { '08416041|Bolt|scooter': new Array(24).fill(4) } } } }); }
     // erster Abruf eines Teilfeeds mit 429 (wie Yoio/rideatom): der Sammler wiederholt einmal
     if (u.pathname === '/rk/d/free_bike_status.json' && !st.flakyServed) { st.flakyServed = true; return json({}, 429); }
+    // Tokio (ODPT-GBFS, Phase „tokio“): docomo mit 2 Ports in Tokio (dx ohne Koordinaten fällt weg), HELLO CYCLING mit h1 in Tokio und h2 in Saitama;
+    // jeder Abruf von station_status nimmt an d1 ein Rad weg (Abgang) und bringt an h1 eines (Zugang); d2 bleibt leer, h1 ist ab dem zweiten Abruf voll
+    if (kind === 'tokio') {
+      const [, , feed, f] = u.pathname.split('/'), S = (id, b, d) => ({ station_id: id, num_bikes_available: b, num_docks_available: d, is_installed: true, is_renting: true, is_returning: true, last_reported: n() });
+      if (f === 'station_information.json') return json(head(feed === 'hellocycling'
+        ? { stations: [{ station_id: 'h1', lat: 35.7, lon: 139.77, name: 'H1', address: '東京都台東区', vehicle_capacity: '8' }, { station_id: 'h2', lat: 35.84, lon: 139.65, name: 'H2', address: '埼玉県さいたま市', vehicle_capacity: '5' }] }
+        : { stations: [{ station_id: 'd1', lat: 35.68, lon: 139.76, name: 'D1', capacity: 10 }, { station_id: 'd2', lat: 35.69, lon: 139.7, name: 'D2', capacity: 6 }, { station_id: 'dx', lat: 0, lon: 0, name: 'X' }] }));
+      if (f === 'station_status.json') {
+        const k = feed === 'hellocycling' ? 'tokioH' : 'tokioD', i = st[k] = (st[k] || 0) + 1;
+        return json(head({ stations: feed === 'hellocycling' ? [S('h1', 6 + i, 2 - i), S('h2', 3, 2)] : [S('d1', 9 - i, 1 + i), S('d2', 0, 6)] }));
+      }
+      return json({}, 404);
+    }
     if (kind === 'rk') { const [, , v, f] = u.pathname.split('/'); const doc = ['a', 'b', 'c', 'd', 'e', 'z'].includes(v) ? rk(v)[f] : null; return doc ? json(doc()) : json({}, 404); }
     if (kind === 'cs') return cs[file] ? json(cs[file]()) : json({}, 404);
     if (kind === 'mf') return st.manifestUp ? json(head({ datasets: [{ system_id: 'mfkid', versions: [{ version: '2.3', url: `${base}/rk/c/gbfs.json` }] }] })) : json({}, 500);

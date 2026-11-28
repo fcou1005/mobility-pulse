@@ -11,7 +11,7 @@ import * as SV from '../lib/pulse-schema.js';
 const srv = spawn('node', ['test/server.mjs'], { stdio: 'inherit' });
 await new Promise(r => setTimeout(r, 800));
 await rm('test/out', { recursive: true, force: true }); await mkdir('test/out', { recursive: true });
-const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', TERMINE_URL: '', WORKS: '0', OEPNV: '0', ...env } }).on('exit', r));
+const collect = (env = {}) => new Promise(r => spawn('node', ['scripts/collect.mjs'], { stdio: 'inherit', env: { ...process.env, DATA_DIR: 'test/out', SOURCES_FILE: 'test/sources.json', BOUNDARIES: 'test/boundaries.json', SKIP_CONTEXT: '1', CALENDAR_URL: '', WEATHER_URL: '', AUTOBAHN_URL: '', SPORT_URL: '', WIKIDATA_URL: '', KALENDER_FILE: '', TSFM_URL: '', STRIKE_URL: '', TERMINE_URL: '', WORKS: '0', OEPNV: '0', TOKIO_URL: '', ...env } }).on('exit', r));
 for (let i = 0; i < 2; i++) await collect({ TRACK_DIR: '' });
 const d = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
 const assert = (c, m) => { if (!c) { console.error('FEHLER:', m); process.exitCode = 1; } else console.log('ok:', m); };
@@ -202,8 +202,15 @@ await writeFile('test/out/calendar.json', calOld);
 await writeFile(path.join(tmp, 'kalender.json'), JSON.stringify({ quellen: [{ name: 'Testarena', url: `${ex.base}/kal/programm`, ort: 'Q1', link: '/kal/detail/' }, { name: 'Messe', url: `${ex.base}/kal/cal.ics`, art: 'ics', ort: 'Q1' }, { name: 'Gesperrt', url: `${ex.base}/kal/geheim`, ort: 'Q1' }, { name: 'Hallen', url: `${ex.base}/kal/hallen`, ort: 'Q1' }] }));
 await writeFile(path.join(tmp, 'spielorte.json'), JSON.stringify({ aktivAb: '2000-01-01T00:00:00Z', ligen: { bl1: 'alle', bl2: 'alle', bl3: 'liste' }, vereine: { Testverein: { ort: 'Tübingen', land: 'BW' } } }));
 const cbCalls3 = ex.log.filter(x => x.path.startsWith('/cb/')).length;
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json`, OEPNV: '', OEPNV_URL: `${ex.base}/oepnv/rt.pb`, OEPNV_STATIC_URL: `${ex.base}/oepnv/feed.zip` });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4i.json'), CALENDAR_URL: ex.base, WEATHER_URL: ex.base, AUTOBAHN_URL: `${ex.base}/autobahn`, SPORT_URL: ex.base, SPORT_VENUES_FILE: path.join(tmp, 'spielorte.json'), WIKIDATA_URL: `${ex.base}/sparql`, KALENDER_FILE: path.join(tmp, 'kalender.json'), FORECAST_EVERY_MIN: '0', STRIKE_URL: `${ex.base}/strike/`, TERMINE_URL: `${ex.base}/termine/termine.json`, OEPNV: '', OEPNV_URL: `${ex.base}/oepnv/rt.pb`, OEPNV_STATIC_URL: `${ex.base}/oepnv/feed.zip`, TOKIO_URL: `${ex.base}/tokio` });
 const l4 = JSON.parse(await readFile('test/out/latest.json', 'utf8'));
+// Tokio (Phase „tokio“): Ports nur in Tokio (docomo d1/d2, HELLO CYCLING h1), Kennzahlen, Stunde in Ortszeit; im ersten Lauf noch keine Abgänge
+{
+  const ix = JSON.parse(await readFile('test/out/tokio/index.json', 'utf8').catch(() => '{}')), stn = JSON.parse(await readFile('test/out/tokio/stationen.json', 'utf8').catch(() => '{}'));
+  const d1 = JSON.parse(await readFile(`test/out/tokio/${ix.day}.json`, 'utf8').catch(() => '{}'));
+  assert(ix.schemaVersion === '1.0' && stn.rows?.map(r => r[1]).join() === 'd1,d2,h1' && ix.totals?.ports === 3 && ix.totals.bikes === 15 && ix.totals.empty === 1 && ix.systems?.every(s => s.ok && s.today?.out === 0)
+    && d1.sys?.docomo?.[0]?.[1] === 1, 'Tokio: Ports in Tokio (ohne Saitama, ohne Unsinn), Kennzahlen, Tagesdatei in Ortszeit, erster Lauf ohne Abgänge');
+}
 // ÖPNV (gtfs.de): Haltestellen nur per Range aus dem ZIP, Echtzeit je Gemeinde und Stunde; 25 Halte in Stuttgart, davon 5 ausgefallen → pt = 1
 {
   const ix = JSON.parse(gunzipSync(await readFile('test/out/oepnv/haltestellen.json.gz').catch(() => gzipSync('{}'))).toString());
@@ -391,7 +398,10 @@ assert(l4.sources.find(s => s.id === 'gone_test').status === 'retired' && !l4.co
   s5.at -= 2 * 3600e3; await writeFile(f, gzipSync(JSON.stringify(s5)));
 }
 const ser4 = JSON.parse(await readFile('test/out/forecast/series.json', 'utf8').catch(() => 'null'));
-await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0', TSFM_URL: `${ex.base}/tsfm/chronos.json` });
+await collect({ ...env3, SOURCES_FILE: path.join(tmp, 's4.json'), REFRESH_STATIC: '0', TSFM_URL: `${ex.base}/tsfm/chronos.json`, TOKIO_URL: `${ex.base}/tokio` });
+{ const ix = JSON.parse(await readFile('test/out/tokio/index.json', 'utf8').catch(() => '{}')), sys = Object.fromEntries((ix.systems || []).map(s => [s.id, s]));
+  assert(sys.docomo?.today?.out === 1 && sys.hello?.today?.in === 1 && sys.hello.full === 1 && ex.log.filter(x => x.path.endsWith('/station_information.json') && x.path.startsWith('/tokio/')).length === 2,
+    'Tokio, zweiter Lauf: Abgang an d1, Zugang an h1 (jetzt voll), Portliste nicht neu gelesen'); }
 { const ser5 = JSON.parse(await readFile('test/out/forecast/series.json', 'utf8').catch(() => 'null'));
   assert(ser4?.version === 1 && ser5?.chronos?.at === '2026-11-07T12:00:00.000Z' && ser5.generatedAt === ser4.generatedAt && ex.log.some(x => x.path === '/tsfm/chronos.json'),
     'Zwischen zwei Prognose-Läufen: neuer Chronos-Lauf landet trotzdem in den Stundenreihen (nur Feld c, Stand der Reihen bleibt)'); }

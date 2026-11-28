@@ -18,7 +18,7 @@ import { TYPE_FILTER, populateOperators, populateScope, renderFilterSum, schedul
 // ---------- Ansichtsmodule bei Bedarf laden (S3.4): Modul und sein Wörterbuchbereich zusammen; M[k] = geladenes Modul ----------
 export const LAZY = { ops: [() => import('./ops.js'), 'ops'], rp: [() => import('./report.js'), 'report'], fl: [() => import('./flows.js'), 'flows'], cov: [() => import('./coverage.js'), 'coverage'],
   cmp: [() => import('./compare.js'), 'compare'], sp: [() => import('./spots.js'), 'spots'], fv: [() => import('./forecast.js'), 'forecast'], st: [() => import('./status.js'), 'status'],
-  sd: [() => import('./stadt.js'), 'stadt'], zw: [() => import('./zonen.js'), 'zonen'], mk: [() => import('./markt.js'), 'markt'], uf: [() => import('./umfeld.js'), 'umfeld'], pt: [() => import('./oepnv.js'), 'oepnv'] }; // S5: Stadt-Startseite, Datenauflagen, Ausschreibungen; S6.1 Zonen-Werkbank
+  sd: [() => import('./stadt.js'), 'stadt'], zw: [() => import('./zonen.js'), 'zonen'], mk: [() => import('./markt.js'), 'markt'], uf: [() => import('./umfeld.js'), 'umfeld'], pt: [() => import('./oepnv.js'), 'oepnv'], tk: [() => import('./tokio.js'), 'tokio'] }; // S5: Stadt-Startseite, Datenauflagen, Ausschreibungen; S6.1 Zonen-Werkbank
 export const M = {}, MP = {};
 // Teil nicht ladbar (z. B. nach einer neuen Version liegen die Teile unter anderen Namen): Hinweis zum Neuladen, nächster Versuch lädt erneut
 export const mod = (k) => MP[k] || (MP[k] = Promise.all([LAZY[k][0](), ensureI18n([LAZY[k][1]])]).then(([m]) => { M[k] = m; if (k === 'ops') m.initOps(opsCtx()); return m; })
@@ -214,7 +214,7 @@ export const rp = (k, fn, id) => () => { const el = document.getElementById(id);
 VIEW_RENDER.bericht = [rp('rp', 'renderReport', 'rp-report'), rp('rp', 'renderForecast', 'rp-fc'), rp('rp', 'renderRegulationProfile', 'rp-reg'), rp('rp', 'renderCaps', 'rp-caps'), rp('rp', 'renderZoneWatch', 'rp-zones'), rp('rp', 'renderFeeCalculator', 'rp-fees'), rp('rp', 'renderWeekHeatmap', 'rp-week'), rp('rp', 'renderHotspotStability', 'rp-hot')];
 VIEW_RENDER.staedte = [() => renderCities(), rp('rp', 'renderAvailability', 'rp-avail'), rp('rp', 'renderCityRanking', 'rp-rank'), rp('rp', 'renderDensityScatter', 'rp-scatter')];
 VIEW_RENDER.usage.push(rp('fl', 'renderFlows', 'fl-panel'));
-VIEW_RENDER.vergleich = [rp('cmp', 'renderCompare', 'cmp-panel')];
+VIEW_RENDER.vergleich = [rp('cmp', 'renderCompare', 'cmp-panel'), rp('tk', 'renderTokio', 'tokio-panel')]; // Tokio: stationsgebundene Leihräder (28.11.2026)
 VIEW_RENDER.begriffe = [() => renderTerms()]; // S4.8
 VIEW_RENDER.zonen = [rp('zw', 'renderZonen', 'zonen-panel')]; // S6.1
 VIEW_RENDER.marktindex = [rp('mk', 'renderMarkt', 'markt-panel')];

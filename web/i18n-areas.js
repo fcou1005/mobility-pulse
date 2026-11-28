@@ -15,6 +15,7 @@ export const AREAS = Object.freeze({
   markt: ['mk'],
   umfeld: ['geo'],
   oepnv: ['pt'],
+  tokio: ['tk'],
 });
 const BY_PREFIX = Object.fromEntries(Object.entries(AREAS).flatMap(([a, ps]) => ps.map(p => [p, a])));
 /** Bereich eines Schlüssels ohne die Startliste (Build); core für alles Übrige */

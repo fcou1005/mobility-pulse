@@ -22,6 +22,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [akku](#akku) | 1.3 | `akku/<AGS>.json`, `akku/bewertung.json` |
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 | [oepnv](#oepnv) | 1.11 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
+| [tokio](#tokio) | 1.0 | `tokio/index.json`, `tokio/stationen.json`, `tokio/stand.json`, `tokio/<Tag>.json` |
 
 ## status
 
@@ -808,3 +809,56 @@ Sharing-Fahrtbeginne in gestörten Stunden gegen die übrigen Stunden derselben 
 | `fields` | ja | array von string |
 | `plan` |  | object / null – Seit 1.9: Fahrplan der Live-Karte (freier Fahrplan von gtfs.de). builtAt = Stand der Tabelle (ms), feed = Stand des Fahrplans (Last-Modified), trips = Fahrten nach Fahrplan im Lauf, merged = Fahrten im Strom, deren Weg aus dem Fahrplan ergänzt wurde; null ohne Fahrplan |
 | `cities` | ja | object – Je Gemeinde die Werte nach fields; seit 1.9 als sechster fahrzeuge_fahrplan (Fahrten ohne Echtzeit), fahrzeuge zählt nur Fahrten im Echtzeit-Strom |
+
+## tokio
+
+Tokio – stationsgebundene Leihräder (Reiter Vergleich, 28.11.2026). tokio/index.json, tokio/stationen.json, tokio/stand.json und tokio/&lt;Tag&gt;.json: docomo bike share (docomo-cycle-tokyo) und HELLO CYCLING (Ports mit Adresse 東京都) aus den offenen GBFS-Feeds der ODPT (api-public.odpt.org), CC BY 4.0. Zeiten der Tagesdateien in Ortszeit Tokio (JST). Abgänge/Zugänge = Summe der Bestandsänderungen je Port zwischen zwei Läufen (Untergrenze der Fahrten, Umsetzungen zählen mit).
+
+Version 1.0 · Schema: [schemas/tokio.schema.json](../schemas/tokio.schema.json)
+
+### tokio · index
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `version` | ja | integer |
+| `at` | ja | number – Zeitpunkt des Laufs (ms) |
+| `tz` | ja | `"Asia/Tokyo"` |
+| `day` | ja | string (Muster `^\d{4}-\d{2}-\d{2}$`) – heutiger Tag in Ortszeit |
+| `systems` | ja | array von object |
+| `totals` | ja | object |
+| `days` | ja | array von string (Muster `^\d{4}-\d{2}-\d{2}$`) – vorhandene Tagesdateien (höchstens 14) |
+| `stationsAt` |  | object – System (docomo, hello) → Zeitpunkt (ms) |
+| `firstDay` |  | string – erster Tag der Sammlung |
+
+### tokio · stationen
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `version` | ja | integer |
+| `at` | ja | object – System → Zeitpunkt der Portliste (ms) |
+| `tz` |  | `"Asia/Tokyo"` |
+| `fields` | ja | array von string |
+| `rows` | ja | array von array – \[System, Port-Kennung, lat, lon, Plätze (null = ohne Angabe), Name\] |
+
+### tokio · stand
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `version` | ja | integer |
+| `at` | ja | object – System (docomo, hello) → Zeitpunkt (ms) |
+| `fields` | ja | array von string |
+| `rows` | ja | array von array – \[System, Port-Kennung, ausleihbare Räder, freie Plätze, Zustand (Bit 1 keine Ausleihe, Bit 2 keine Rückgabe)\] |
+
+### tokio · day
+
+| Feld | Pflicht | Typ |
+| --- | --- | --- |
+| `schemaVersion` | ja | string (Muster `^1\.\d+$`) – Formatversion MAJOR.MINOR |
+| `version` | ja | integer |
+| `day` | ja | string (Muster `^\d{4}-\d{2}-\d{2}$`) |
+| `tz` | ja | `"Asia/Tokyo"` |
+| `fields` | ja | array von string |
+| `sys` | ja | object – System → Zeilen \[Stunde (Ortszeit), Läufe, Σ Räder, Σ Ports, Σ leere Ports, Σ volle Ports, Abgänge, Zugänge, Minuten mit Vergleich\] (Summen über die Läufe der Stunde) |

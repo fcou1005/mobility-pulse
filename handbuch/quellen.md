@@ -11,6 +11,19 @@
 | Direktfeeds Dott, Lime, Zeus, Bird | `data/sources-manual.json` → `direct_candidates` | offen, Kandidaten werden je Lauf geprüft |
 | [DB API Marketplace](https://developers.deutschebahn.com/db-api-marketplace/apis/) | Call a Bike, StadtRAD Hamburg (GBFS) | kostenlose Registrierung, Secrets `DB_CLIENT_ID`/`DB_API_KEY` |
 
+## Tokio (Reiter Vergleich)
+
+Seit 28.11.2026 als Gegenbild zu Deutschland: stationsgebundene Leihräder in Tokio, nur Anzeige im Reiter Vergleich (keine Prognose, kein Archiv). Phase `tokio` (`scripts/collect/30-tokio.mjs`, Rechenlogik `lib/pulse-tokio.js`), Abruf über die offenen GBFS-Feeds des Public Transportation Open Data Center (ODPT, ohne Schlüssel):
+
+| System | Feed | Auswahl Tokio | Lizenz |
+|---|---|---|---|
+| docomo bike share | [docomo-cycle-tokyo](https://api-public.odpt.org/api/v4/gbfs/docomo-cycle-tokyo/gbfs.json) | ganzes System (Koordinaten nur auf Plausibilität geprüft) | CC BY 4.0 (`license_url` im Feed) |
+| HELLO CYCLING (OpenStreet Corp.) | [hellocycling](https://api-public.odpt.org/api/v4/gbfs/hellocycling/gbfs.json) | ganz Japan; nur Ports mit Adresse `東京都` | wahlweise CC BY 4.0, ODC-BY 1.0 oder ODbL 1.0 ([Lizenzdatei](https://d1yl7kw204zjxn.cloudfront.net/gbfs/v2/public/hellocycling_gbfs_licence.txt)); gewählt CC BY 4.0 |
+
+- `station_status` je Lauf (HELLO CYCLING rund 5 MB), `station_information` höchstens alle 20 h (HELLO CYCLING rund 8 MB). `TOKIO_URL` überschreibt die Basis, leer = aus.
+- Fahrten stehen nicht im Feed: Abgänge/Zugänge = Summe der Bestandsänderungen je Port zwischen zwei Läufen (höchstens 40 Minuten Abstand), also eine Untergrenze; Umsetzungen der Betreiber zählen mit.
+- LUUP veröffentlicht keinen offenen Feed und fehlt.
+
 Seit 08.11.2026 auch Carsharing und E-Roller: alle offenen deutschen Feeds der Verzeichnisse (u. a. stadtmobil, teilAuto, Flinkster, Getaround, deer, MIKAR, swu2go, Ford Carsharing, stella; MOBIDROM-Datensätze mit Schlagwort Carsharing); ausgeschlossen bleiben nur Systeme außerhalb Deutschlands (`data/sources-manual.json` → `exclude_patterns`). SHARE NOW, MILES und SIXT share haben keine offenen Feeds. Gemeindezuordnung über BKG VG250 (dl-de/by-2-0), vereinfacht ca. 30 m.
 
 ## Fahrzeugarten E-Roller und Carsharing

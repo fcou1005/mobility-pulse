@@ -130,6 +130,17 @@ if (has('oepnv/wirkung.json')) {
 // Streckenverläufe (wege/, Geo-Lauf): echte Dateien, sonst der synthetische Stand
 { const SYN = path.join(ROOT, 'test/fixtures/oepnv-synth');
   for (const a of KEEP) if (has(`wege/${a}.json`)) await put(`wege/${a}.json`, await rd(`wege/${a}.json`)); else if (existsSync(path.join(SYN, 'wege', `${a}.json`))) await put(`wege/${a}.json`, JSON.parse(await readFile(path.join(SYN, 'wege', `${a}.json`), 'utf8'))); }
+// Tokio (Reiter Vergleich): echte Dateien (Ports in der Mitte Tokios, zwei Tage), sonst der synthetische Stand aus scripts/tokio-fixture.mjs
+if (has('tokio/index.json')) {
+  const ix = await rd('tokio/index.json'), days = ix.days.slice(-2), box = (r) => r[2] > 35.66 && r[2] < 35.71 && r[3] > 139.73 && r[3] < 139.79;
+  const stn = await rd('tokio/stationen.json'), keep = new Set(stn.rows.filter(box).map(r => `${r[0]}|${r[1]}`)), sd = await rd('tokio/stand.json');
+  await put('tokio/index.json', { ...ix, days }); await put('tokio/stationen.json', { ...stn, rows: stn.rows.filter(box) });
+  await put('tokio/stand.json', { ...sd, rows: sd.rows.filter(r => keep.has(`${r[0]}|${r[1]}`)) });
+  for (const d of days) if (has(`tokio/${d}.json`)) await put(`tokio/${d}.json`, await rd(`tokio/${d}.json`));
+} else {
+  const SYN = path.join(ROOT, 'test/fixtures/tokio-synth');
+  if (existsSync(SYN)) for (const f of await readdir(SYN)) await put(`tokio/${f}`, JSON.parse(await readFile(path.join(SYN, f), 'utf8')));
+}
 for (const a of KEEP) if (has(`context/${a}.json`)) await put(`context/${a}.json`, await rd(`context/${a}.json`));
 if (has('context/index.json')) await put('context/index.json', trim(await rd('context/index.json')));
 
