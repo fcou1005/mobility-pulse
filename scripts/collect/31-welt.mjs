@@ -59,7 +59,7 @@ export async function run(ctx) {
       const p = prev.get(cc);
       if (!lt) { if (p) countries.push(p); else countries.push({ land: cc, region: W.regionOf(cc), listed: job.cat[cc].length, at: null }); continue; }
       countries.push({ land: cc, region: W.regionOf(cc), tz: lt.tz, listed: lt.systemsListed, ok: lt.ok, failed: lt.failed, skipped: lt.skipped, at: lt.at, ms: lt.ms,
-        avail: lt.totals.avail, stations: lt.totals.stations, cities: lt.cities.length, ops: new Set(lt.systems.map((/** @type {any[]} */ s) => s[3])).size, types: lt.totals.types,
+        avail: lt.totals.avail, stations: lt.totals.stations, cities: lt.cities.length, ops: new Set(lt.systems.filter((/** @type {any[]} */ s) => !s[15] && s[5] > 0).map((/** @type {any[]} */ s) => s[3])).size, types: lt.totals.types,
         today: lt.today, ...(r && r.land && !r.skipped && r.code !== 0 ? { error: r.error } : {}), ranNow: !!(r && !r.skipped) });
     }
     const ran = job.results.filter((/** @type {any} */ x) => !x.skipped), errs = ran.filter((/** @type {any} */ x) => x.code !== 0);

@@ -133,4 +133,6 @@ export default {
   "wl.fcHol": "Feiertage aus {src}",
   "wl.fcNoHol": "ohne Feiertagsquelle, nur Wochenenden",
   "wl.fcCheck": "Abweichung am {day} (Prognose nur aus den Tagen davor): verfügbare Fahrzeuge {a}, Abgänge {o} (WAPE).",
+  "wl.sysCopy": "Kopie von {id}, zählt nicht",
+  "wl.sysAggregator": "Sammelfeed anderer Systeme, zählt nicht",
 };

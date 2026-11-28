@@ -23,7 +23,7 @@ MAJOR-Version nicht zur Seite, zeigt das Dashboard einen Hinweis. Geprüft wird 
 | [geo](#geo) | 1.3 | `versorgung/<AGS>.json`, `versorgung/index.json`, `zubringer/index.json`, `abstell/<AGS>.json`, `unfall/<AGS>.json`, `unfall/index.json`, `umweg/<AGS>.json`, `umweg/index.json`, `pop/index.json` |
 | [oepnv](#oepnv) | 1.11 | `oepnv/<AGS>.json`, `oepnv/live/<AGS>.json`, `oepnv/wirkung.json`, `oepnv/index.json` |
 | [tokio](#tokio) | 1.0 | `tokio/index.json`, `tokio/stationen.json`, `tokio/stand.json`, `tokio/<Tag>.json` |
-| [welt](#welt) | 1.1 | `welt/index.json`, `welt/<Land>/latest.json`, `welt/<Land>/<Tag>.json`, `welt/<Land>/punkte.json` |
+| [welt](#welt) | 1.2 | `welt/index.json`, `welt/<Land>/latest.json`, `welt/<Land>/<Tag>.json`, `welt/<Land>/punkte.json` |
 
 ## status
 
@@ -868,7 +868,7 @@ Version 1.0 · Schema: [schemas/tokio.schema.json](../schemas/tokio.schema.json)
 
 Länder außerhalb Deutschlands (Reiter Länder, Stufe 1, 28.11.2026). welt/index.json, welt/&lt;Land&gt;/latest.json, welt/&lt;Land&gt;/&lt;Tag&gt;.json und welt/&lt;Land&gt;/punkte.json: Sharing-Bestand je Land, Stadt und System aus den offenen GBFS-Feeds des MobilityData-Verzeichnisses (systems.csv, ohne Systeme mit Zugangsdaten; Japan über die ODPT). Ein Prozess je Land (scripts/welt.mjs). Lizenz je System laut system_information. Abgänge/Zugänge geschätzt (Position bzw. Station, Umsetzungen zählen mit).
 
-Version 1.1 · Schema: [schemas/welt.schema.json](../schemas/welt.schema.json)
+Version 1.2 · Schema: [schemas/welt.schema.json](../schemas/welt.schema.json)
 
 ### welt · index
 
@@ -900,7 +900,7 @@ Version 1.1 · Schema: [schemas/welt.schema.json](../schemas/welt.schema.json)
 | `failed` |  | integer |
 | `skipped` |  | integer |
 | `fields` | ja | array von string |
-| `systems` | ja | array von array – \[Kennung, Name, Stadt laut Verzeichnis, Anbieter, in diesem Lauf gelesen, Fahrzeuge verfügbar, gesperrt, Stationen (ohne virtuelle), leere Stationen, volle Stationen, Fahrzeugart → verfügbar, Lizenz, Lizenz-URL, Zeitpunkt des Stands (ms), Fehler\] |
+| `systems` | ja | array von array – \[Kennung, Name, Stadt laut Verzeichnis, Anbieter, in diesem Lauf gelesen, Fahrzeuge verfügbar, gesperrt, Stationen (ohne virtuelle), leere Stationen, volle Stationen, Fahrzeugart → verfügbar, Lizenz, Lizenz-URL, Zeitpunkt des Stands (ms), Fehler, ab 1.2 Kopie von (Kennung des behaltenen Systems oder „Sammelfeed“; zählt nicht in Summen, Städten, Stunden und Karte)\] |
 | `cityFields` |  | array von string |
 | `cities` | ja | array von array – \[Stadt, Systeme, Fahrzeuge verfügbar, Stationen, Anbieter, Fahrzeugart → verfügbar\] |
 | `totals` | ja | object |

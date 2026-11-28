@@ -53,6 +53,7 @@ function operators(systems) {
   /** @type {Map<string, any>} */
   const m = new Map();
   for (const r of systems) {
+    if (r[15]) continue; // Kopie oder Sammelfeed
     let o = m.get(r[3]); if (!o) m.set(r[3], o = { op: r[3], systems: 0, ok: 0, avail: 0, stations: 0, cities: new Set(), types: {}, lic: new Set() });
     o.systems++; if (r[4]) o.ok++; o.avail += r[5] || 0; o.stations += r[7] || 0; if (r[2]) o.cities.add(r[2]); if (r[11]) o.lic.add(r[11]);
     for (const [k, n] of Object.entries(r[10] || {})) o.types[k] = (o.types[k] || 0) + /** @type {number} */ (n);
@@ -70,7 +71,7 @@ function detail(ctx, s) {
     + tile(t('wl.tSystems'), `${ctx.fmt(d.ok)} <small>/ ${ctx.fmt(d.systemsListed)}</small>`, t('wl.tSystemsS', { f: ctx.fmt(d.failed), s: ctx.fmt(d.skipped || 0) }));
   const cityRows = cities.slice(0, s.allCities ? Infinity : 25).map((/** @type {any[]} */ c) => `<tr><th scope="row">${esc(c[0])}</th><td class="n">${ctx.fmt(c[2])}</td><td>${esc(typesText(ctx, c[5]))}</td><td class="n">${ctx.fmt(c[3])}</td><td>${esc((c[4] || []).join(', '))}</td></tr>`).join('');
   const opRows = ops.map(o => `<tr><th scope="row">${esc(o.op)}</th><td class="n">${ctx.fmt(o.avail)}</td><td>${esc(typesText(ctx, o.types))}</td><td class="n">${ctx.fmt(o.stations)}</td><td class="n">${ctx.fmt(o.cities.size)}</td><td class="n">${ctx.fmt(o.ok)} / ${ctx.fmt(o.systems)}</td><td>${esc([...o.lic].join(', ') || t('wl.noLicense'))}</td></tr>`).join('');
-  const sysRows = d.systems.map((/** @type {any[]} */ r) => `<tr><th scope="row">${esc(r[1])}</th><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td class="n">${ctx.fmt(r[5])}</td><td class="n">${ctx.fmt(r[7])}</td><td>${r[12] ? `<a href="${esc(r[12])}" rel="noopener">${esc(r[11] || t('wl.license'))}</a>` : esc(r[11] || '–')}</td><td>${r[4] ? t('wl.sysOk') : `<span class="wl-err">${esc(r[14] || t('wl.sysFail'))}</span>`}</td></tr>`).join('');
+  const sysRows = d.systems.map((/** @type {any[]} */ r) => `<tr><th scope="row">${esc(r[1])}</th><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td class="n">${ctx.fmt(r[5])}</td><td class="n">${ctx.fmt(r[7])}</td><td>${r[12] ? `<a href="${esc(r[12])}" rel="noopener">${esc(r[11] || t('wl.license'))}</a>` : esc(r[11] || '–')}</td><td>${r[15] ? `<span class="wl-err">${r[15] === 'Sammelfeed' ? t('wl.sysAggregator') : t('wl.sysCopy', { id: esc(r[15]) })}</span>` : r[4] ? t('wl.sysOk') : `<span class="wl-err">${esc(r[14] || t('wl.sysFail'))}</span>`}</td></tr>`).join('');
   return `<div class="panel-head"><div><h2>${t('wl.title', { land: esc(name) })}</h2><div class="sub">${t('wl.sub', { at: esc(at(d.at, d.tz)), tz: esc(d.tz) })}</div></div></div>
     <p>${lead}</p><div class="tiles">${tiles}</div>
     <div class="wl-sec"><h3 class="cmp-h3">${t('wl.citiesTitle')}</h3><div class="tbl" tabindex="0" role="region" aria-label="${esc(t('wl.citiesTitle'))}"><table><thead><tr><th>${t('wl.colCity')}</th><th class="n">${t('wl.colAvail')}</th><th>${t('wl.colTypes')}</th><th class="n">${t('wl.colStations')}</th><th>${t('wl.colOps')}</th></tr></thead><tbody>${cityRows}</tbody></table></div>

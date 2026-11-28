@@ -133,4 +133,6 @@ export default {
   "wl.fcHol": "holidays from {src}",
   "wl.fcNoHol": "no holiday source, weekends only",
   "wl.fcCheck": "Deviation on {day} (forecast from the days before only): available vehicles {a}, departures {o} (WAPE).",
+  "wl.sysCopy": "copy of {id}, not counted",
+  "wl.sysAggregator": "aggregate feed of other systems, not counted",
 };

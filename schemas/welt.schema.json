@@ -3,7 +3,7 @@
  "$id": "https://github.com/fcou1005/mobility-pulse/schemas/welt.schema.json",
  "title": "Länder außerhalb Deutschlands (Reiter Länder, Stufe 1, 28.11.2026)",
  "description": "welt/index.json, welt/<Land>/latest.json, welt/<Land>/<Tag>.json und welt/<Land>/punkte.json: Sharing-Bestand je Land, Stadt und System aus den offenen GBFS-Feeds des MobilityData-Verzeichnisses (systems.csv, ohne Systeme mit Zugangsdaten; Japan über die ODPT). Ein Prozess je Land (scripts/welt.mjs). Lizenz je System laut system_information. Abgänge/Zugänge geschätzt (Position bzw. Station, Umsetzungen zählen mit).",
- "x-version": "1.1",
+ "x-version": "1.2",
  "$defs": {
   "index": {
    "type": "object",
@@ -212,11 +212,11 @@
     },
     "systems": {
      "type": "array",
-     "description": "[Kennung, Name, Stadt laut Verzeichnis, Anbieter, in diesem Lauf gelesen, Fahrzeuge verfügbar, gesperrt, Stationen (ohne virtuelle), leere Stationen, volle Stationen, Fahrzeugart → verfügbar, Lizenz, Lizenz-URL, Zeitpunkt des Stands (ms), Fehler]",
+     "description": "[Kennung, Name, Stadt laut Verzeichnis, Anbieter, in diesem Lauf gelesen, Fahrzeuge verfügbar, gesperrt, Stationen (ohne virtuelle), leere Stationen, volle Stationen, Fahrzeugart → verfügbar, Lizenz, Lizenz-URL, Zeitpunkt des Stands (ms), Fehler, ab 1.2 Kopie von (Kennung des behaltenen Systems oder „Sammelfeed“; zählt nicht in Summen, Städten, Stunden und Karte)]",
      "items": {
       "type": "array",
       "minItems": 15,
-      "maxItems": 15
+      "maxItems": 16
      }
     },
     "cityFields": {

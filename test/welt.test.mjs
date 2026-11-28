@@ -75,5 +75,12 @@ const hist = [{ day: '2026-11-23', hours: H(100, 10) }, { day: '2026-11-24', hou
 eq(W.profileForecast(hist, [{ day: '2026-11-26', h: 8 }, { day: '2026-11-26', h: 9 }, { day: '2026-11-29', h: 8 }], null).map(f => [f.avail, f.outH, f.n]), [[110, 20, 3], [null, null, 0], [null, null, 0]], 'Profil: Median der drei Werktage; ohne Stunde bzw. ohne zwei Sonntage keine Prognose');
 eq(W.checkDay([...hist, { day: '2026-11-26', hours: H(99, 22) }], '2026-11-26', null), { day: '2026-11-26', hours: 1, wapeAvail: 0.111, wapeOut: 0.091 }, 'Selbstprüfung: Prognose 110/20 gegen 99/22');
 
+// Kopien und Sammelfeeds
+const P = (/** @type {number} */ n, /** @type {number} */ lat) => Array.from({ length: n }, (_, i) => /** @type {[number, number]} */ ([lat + i * 0.001, 5]));
+const mir = W.mirrorsOf([{ id: 'a', op: 'Donkey Republic', pts: P(10, 52) }, { id: 'b', op: 'Donkey Republic', pts: P(10, 52) }, { id: 'c', op: 'Donkey Republic', pts: P(8, 53) }, { id: 'd', op: 'Voi', pts: P(10, 52) }, { id: 'sharedmobility.ch', op: 'X', pts: P(20, 47) }]);
+eq([...mir].sort(), [['b', 'a'], ['sharedmobility.ch', 'Sammelfeed']], 'Kopie im selben Anbieter (gleiche Punkte), Sammelfeed; anderer Ort und anderer Anbieter bleiben');
+eq(W.citiesOf([['a', 'A', 'X', 'Op', true, 10, 0, 0, 0, 0, {}, null, null, 0, null, null], ['b', 'B', 'X', 'Op', true, 10, 0, 0, 0, 0, {}, null, null, 0, null, 'a']]).map(c => c.avail), [10], 'Städte ohne Kopien');
+eq(W.summarize({ vehicleListPresent: false, vehicles: [], stations: [{ id: 's', lat: 48.85, lon: 2.35, bookable: 4, docksAvailable: 1, installed: true, renting: true, returning: true, typeHint: 'unknown' }] }).types, { bike: 4 }, 'Dockstation ohne Fahrzeugart: Räder');
+
 console.log(`\n${ok} ok, ${bad} Fehler`);
 if (bad) process.exit(1);
