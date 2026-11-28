@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/03159016-fleet.xml</id>
+  <title>Mobility Pulse – Göttingen: Flottensprung</title>
+  <subtitle>Alarme zum Thema Flottensprung aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-28T12:38:41Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/03159016-fleet.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795869521790</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-28T12:38:41Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">278 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+278).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795868175118</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-28T12:16:15Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 290 Fahrzeuge im Feed seit dem vorigen Lauf (−290).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795825853993</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-28T00:30:53Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">293 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+293).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795823367280</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-27T23:49:27Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 293 Fahrzeuge im Feed seit dem vorigen Lauf (−293).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795785598715</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-27T13:19:58Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">283 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+283).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795784348451</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-27T12:59:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 277 Fahrzeuge im Feed seit dem vorigen Lauf (−277).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795767977478</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-27T08:26:17Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">263 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+263).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795766729900</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-27T08:05:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 283 Fahrzeuge im Feed seit dem vorigen Lauf (−283).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795743913621</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-27T01:45:13Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">288 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+288).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795742682326</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-27T01:24:42Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 288 Fahrzeuge im Feed seit dem vorigen Lauf (−288).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795740132147</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-27T00:42:12Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">288 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+288).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795738899211</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-27T00:21:39Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 288 Fahrzeuge im Feed seit dem vorigen Lauf (−288).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795723883671</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-26T20:11:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">289 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+289).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795722607236</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-26T19:50:07Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 291 Fahrzeuge im Feed seit dem vorigen Lauf (−291).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795708740518</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-26T15:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">294 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+294).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795707448909</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-26T15:37:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 282 Fahrzeuge im Feed seit dem vorigen Lauf (−282).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795701177294</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-26T13:52:57Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">273 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+273).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795699850912</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 274 Fahrzeuge im Feed seit dem vorigen Lauf (−274).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795682282466</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-26T08:38:02Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">290 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+290).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795680975517</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-26T08:16:15Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 290 Fahrzeuge im Feed seit dem vorigen Lauf (−290).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795648702223</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-25T23:18:22Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">294 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+294).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795647445336</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-25T22:57:25Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 296 Fahrzeuge im Feed seit dem vorigen Lauf (−296).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795629929327</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-25T18:05:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">294 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+294).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795628642556</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-25T17:44:02Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 296 Fahrzeuge im Feed seit dem vorigen Lauf (−296).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795590988970</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-25T07:16:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">281 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+281).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795589781129</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-25T06:56:21Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 281 Fahrzeuge im Feed seit dem vorigen Lauf (−281).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795546036443</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-24T18:47:16Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">286 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+286).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795543516900</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-24T18:05:16Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 289 Fahrzeuge im Feed seit dem vorigen Lauf (−289).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795495853522</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-24T04:50:53Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">282 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+282).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795493369310</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-24T04:09:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 281 Fahrzeuge im Feed seit dem vorigen Lauf (−281).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795484680978</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-24T01:44:40Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">282 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+282).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795483450452</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-24T01:24:10Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 282 Fahrzeuge im Feed seit dem vorigen Lauf (−282).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795435820329</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-23T12:10:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">258 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+258).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795434583531</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-23T11:49:43Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 253 Fahrzeuge im Feed seit dem vorigen Lauf (−253).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795403111082</id>
+    <title>Yoio: Flotte gewachsen in Göttingen</title>
+    <updated>2026-11-23T03:05:11Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">289 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+289).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:03159016:Yoio:1795401923417</id>
+    <title>Yoio: Flotte geschrumpft in Göttingen</title>
+    <updated>2026-11-23T02:45:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=03159016#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 288 Fahrzeuge im Feed seit dem vorigen Lauf (−288).</summary>
+  </entry>
+</feed>

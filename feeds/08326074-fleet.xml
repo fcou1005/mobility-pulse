@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/08326074-fleet.xml</id>
+  <title>Mobility Pulse – Villingen-Schwenningen: Flottensprung</title>
+  <subtitle>Alarme zum Thema Flottensprung aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-23T22:37:55Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/08326074-fleet.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08326074#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:08326074:Zeus:1795473475859</id>
+    <title>Zeus: Flotte gewachsen in Villingen-Schwenningen</title>
+    <updated>2026-11-23T22:37:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08326074#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">174 statt 105 Fahrzeuge im Feed seit dem vorigen Lauf (+69).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:08326074:Zeus:1795472230862</id>
+    <title>Zeus: Flotte gewachsen in Villingen-Schwenningen</title>
+    <updated>2026-11-23T22:17:10Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08326074#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">105 statt 63 Fahrzeuge im Feed seit dem vorigen Lauf (+42).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:08326074:Zeus:1795468452369</id>
+    <title>Zeus: Flotte geschrumpft in Villingen-Schwenningen</title>
+    <updated>2026-11-23T21:14:12Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08326074#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">12 statt 276 Fahrzeuge im Feed seit dem vorigen Lauf (−264).</summary>
+  </entry>
+</feed>

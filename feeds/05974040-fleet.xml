@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05974040-fleet.xml</id>
+  <title>Mobility Pulse – Soest: Flottensprung</title>
+  <subtitle>Alarme zum Thema Flottensprung aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-22T20:35:14Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05974040-fleet.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05974040#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:05974040:nextbike:1795379714311</id>
+    <title>nextbike: Flotte gewachsen in Soest</title>
+    <updated>2026-11-22T20:35:14Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05974040#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">197 statt 0 Fahrzeuge im Feed seit dem vorigen Lauf (+197).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:05974040:nextbike:1795378460202</id>
+    <title>nextbike: Flotte geschrumpft in Soest</title>
+    <updated>2026-11-22T20:14:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05974040#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">0 statt 197 Fahrzeuge im Feed seit dem vorigen Lauf (−197).</summary>
+  </entry>
+</feed>

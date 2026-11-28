@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/06412000-briefing.xml</id>
+  <title>Mobility Pulse – Frankfurt am Main: Tagesbriefing</title>
+  <subtitle>Alarme zum Thema Tagesbriefing aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-28T05:04:20Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/06412000-briefing.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=06412000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:briefing:06412000:2026-11-28</id>
+    <title>Briefing Frankfurt am Main, 28.11.2026</title>
+    <updated>2026-11-28T05:04:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=06412000#stadt"/>
+    <category term="briefing" label="Tagesbriefing"/>
+    <summary type="text">Prognose: 6.534 Fahrtbeginne, Spitze 18–19 Uhr (511).
+ÖPNV: gestern 88 % pünktlich; nächste 3 Stunden erwartet 5,3 % verspätet, 0,6 % ausgefallen (am stärksten: 64, S1, X17).
+Veranstaltungen: Deutschland Der Nussknacker - Grand Cl (Festhalle, Messegelände Frankfurt, 13.500 Plätze); Deutschland Schwanensee - Grand Classi (Festhalle, Messegelände Frankfurt, 13.500 Plätze); Nights on Broadway – Bee-Gees-Tribute by Night Fever (Festhalle Frankfurt (Messe Frankfurt)) 20:00.
+Obergrenze: 3.351 von 10.500 E-Scootern (32 %).</summary>
+  </entry>
+</feed>

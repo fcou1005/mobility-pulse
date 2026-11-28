@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/08121000-oepnv.xml</id>
+  <title>Mobility Pulse – Heilbronn: ÖPNV gestört</title>
+  <subtitle>Alarme zum Thema ÖPNV gestört aus offenen Sharing-Daten</subtitle>
+  <updated>2026-11-27T13:19:58Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/08121000-oepnv.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08121000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08121000:-:1795785598715</id>
+    <title>ÖPNV in Heilbronn gestört</title>
+    <updated>2026-11-27T13:19:58Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08121000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 13 und 14 Uhr fielen 3 % der 259 Halte mit Echtzeit aus, 51 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 561 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08121000:-:1795710000207</id>
+    <title>ÖPNV in Heilbronn gestört</title>
+    <updated>2026-11-26T16:20:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08121000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 16 und 17 Uhr fielen 2 % der 340 Halte mit Echtzeit aus, 53 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 517 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08121000:-:1795508366436</id>
+    <title>ÖPNV in Heilbronn gestört</title>
+    <updated>2026-11-24T08:19:26Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08121000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 8 und 9 Uhr fielen 1 % der 322 Halte mit Echtzeit aus, 52 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 472 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08121000:-:1795421874055</id>
+    <title>ÖPNV in Heilbronn gestört</title>
+    <updated>2026-11-23T08:17:54Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08121000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 8 und 9 Uhr fielen 0 % der 293 Halte mit Echtzeit aus, 51 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 488 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+</feed>

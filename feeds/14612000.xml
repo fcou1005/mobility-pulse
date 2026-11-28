@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/14612000.xml</id>
+  <title>Mobility Pulse – Dresden</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-28T12:16:15Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/14612000.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=14612000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:14612000:-:1795868175118</id>
+    <title>ÖPNV in Dresden gestört</title>
+    <updated>2026-11-28T12:16:15Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=14612000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 12 und 13 Uhr fielen 15 % der 2.865 Halte mit Echtzeit aus, 9 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 3.037 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+</feed>

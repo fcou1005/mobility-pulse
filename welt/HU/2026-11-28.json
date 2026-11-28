@@ -1,0 +1,1 @@
+{"schemaVersion":"1.1","version":1,"land":"HU","day":"2026-11-28","tz":"Europe/Budapest","fields":["stunde","laeufe","verfuegbar","stationen","leer","voll","ab","an","minuten"],"sys":{"inurba-budapest":[[11,3,53,0,0,0,1,2,45.099999999999994],[12,3,51,0,0,0,3,2,67.5],[13,2,36,0,0,0,3,4,44.7]]}}

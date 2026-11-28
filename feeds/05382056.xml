@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/05382056.xml</id>
+  <title>Mobility Pulse – Sankt Augustin</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-26T13:30:50Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/05382056.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795699850912</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-bergisches-ebike:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795699850912</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795699850912</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795699850912</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-welo:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795699850912</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-bonn:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795699850912</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:05382056:-:1795512183369</id>
+    <title>ÖPNV in Sankt Augustin gestört</title>
+    <updated>2026-11-24T09:23:03Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 9 und 10 Uhr fielen 0 % der 238 Halte mit Echtzeit aus, 62 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 250 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:05382056:nextbike:1795474740690</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-23T22:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_nextbike-nrw:source-nextbike-welo); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:05382056:nextbike:1795474740690</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-23T22:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_nextbike-welo:source-nextbike-welo); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:05382056:nextbike:1795474740690</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-23T22:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle nextbike_wa); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795384628158</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:57:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-bergisches-ebike:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795384628158</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:57:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795384628158</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:57:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-welo:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795384628158</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:57:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-bonn:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795384628158</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:57:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795382225248</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:17:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-bergisches-ebike:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795382225248</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:17:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795382225248</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:17:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795382225248</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:17:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-welo:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795382225248</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:17:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-bonn:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795382225248</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T21:17:05Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795330675892</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:57:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_bikesharing-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:cambio:1795330675892</id>
+    <title>cambio: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:57:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_cambio-nrw:source-cambio-rheinland meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:cambio:1795330675892</id>
+    <title>cambio: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:57:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_cambio-rheinland:source-cambio-rheinland meldet „error“ (vorher „stale“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795330675892</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:57:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-bergisches-ebike:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795330675892</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:57:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-welo:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:05382056:nextbike:1795330675892</id>
+    <title>nextbike: Flotte gewachsen in Sankt Augustin</title>
+    <updated>2026-11-22T06:57:55Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">114 statt 1 Fahrzeuge im Feed seit dem vorigen Lauf (+113).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795329409023</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:36:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795329409023</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:36:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795329409023</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:36:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795329409023</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T06:36:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:fleet:05382056:nextbike:1795329409023</id>
+    <title>nextbike: Flotte geschrumpft in Sankt Augustin</title>
+    <updated>2026-11-22T06:36:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="fleet" label="Flottensprung"/>
+    <summary type="text">1 statt 113 Fahrzeuge im Feed seit dem vorigen Lauf (−112).</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795313355565</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T02:09:15Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-bergisches-ebike meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:nextbike:1795313355565</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T02:09:15Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795312142431</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T01:49:02Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_voi-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795310921179</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T01:28:41Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795307120036</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-22T00:25:20Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795303386163</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T23:23:06Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795294868236</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T21:01:08Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795291104667</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T19:58:24Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:05382056:Voi:1795283608784</id>
+    <title>Voi: offener Feed nicht erreichbar</title>
+    <updated>2026-11-21T17:53:28Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=05382056#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_e-scooter-sharing-nrw:source-voi-bonn meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+</feed>

@@ -1,0 +1,1 @@
+{"schemaVersion":"1.1","version":1,"land":"LT","day":"2026-11-28","tz":"Europe/Vilnius","fields":["stunde","laeufe","verfuegbar","stationen","leer","voll","ab","an","minuten"],"sys":{"vilnius":[[12,3,0,108,0,90,0,0,45.099999999999994],[13,3,0,72,0,60,0,0,67.4],[14,2,0,72,0,30,0,0,44.7]]}}

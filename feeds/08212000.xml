@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/08212000.xml</id>
+  <title>Mobility Pulse – Karlsruhe</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-26T20:52:59Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/08212000.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08212000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:08212000:Dott:1795726379196</id>
+    <title>Dott: Preise geändert</title>
+    <updated>2026-11-26T20:52:59Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08212000#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle dott-karlsruhe); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:08212000:-:1795533411167</id>
+    <title>ÖPNV in Karlsruhe gestört</title>
+    <updated>2026-11-24T15:16:51Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08212000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 15 und 16 Uhr fielen 8 % der 1.676 Halte mit Echtzeit aus, 64 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 3.233 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:zone:08212000:Bolt:1795390763084</id>
+    <title>Bolt: Zonen geändert</title>
+    <updated>2026-11-22T23:39:23Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=08212000#stadt"/>
+    <category term="zone" label="Zonen geändert"/>
+    <summary type="text">Der Feed meldet 138 statt 148 Zonenflächen (Quelle bolt_karlsruhe).</summary>
+  </entry>
+</feed>

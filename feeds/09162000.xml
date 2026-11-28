@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <id>tag:fcou1005.github.io,2026:feeds/09162000.xml</id>
+  <title>Mobility Pulse – München</title>
+  <subtitle>Alarme aus offenen Sharing-Daten: Obergrenze, Quelle aus, Zonen, Preise, Flottensprung</subtitle>
+  <updated>2026-11-26T17:02:39Z</updated>
+  <author><name>Mobility Pulse</name><uri>https://fcou1005.github.io/mobility-pulse/</uri></author>
+  <link rel="self" type="application/atom+xml" href="https://raw.githubusercontent.com/fcou1005/mobility-pulse/data/feeds/09162000.xml"/>
+  <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+  <generator uri="https://github.com/fcou1005/mobility-pulse">Mobility Pulse</generator>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:oepnv:09162000:-:1795712559564</id>
+    <title>ÖPNV in München gestört</title>
+    <updated>2026-11-26T17:02:39Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+    <category term="oepnv" label="ÖPNV gestört"/>
+    <summary type="text">Zwischen 17 und 18 Uhr fielen 3 % der 13.933 Halte mit Echtzeit aus, 58 % waren mindestens 5 Minuten verspätet (gtfs.de). Im Stadtgebiet stehen 8.185 Sharing-Fahrzeuge bereit.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:09162000:nextbike:1795699850912</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-nrw:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:source:09162000:nextbike:1795699850912</id>
+    <title>nextbike: offener Feed nicht erreichbar</title>
+    <updated>2026-11-26T13:30:50Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+    <category term="source" label="Quelle aus"/>
+    <summary type="text">Quelle mobidrom_nextbike-welo:source-nextbike-welo meldet „error“ (vorher „live“). Bis sie wieder läuft, fehlen die Fahrzeuge dieses Feeds in allen Zahlen.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:09162000:nextbike:1795474740690</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-23T22:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_nextbike-nrw:source-nextbike-welo); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:09162000:nextbike:1795474740690</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-23T22:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle mobidrom_nextbike-welo:source-nextbike-welo); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+  <entry>
+    <id>tag:fcou1005.github.io,2026:price:09162000:nextbike:1795474740690</id>
+    <title>nextbike: Preise geändert</title>
+    <updated>2026-11-23T22:59:00Z</updated>
+    <link rel="alternate" type="text/html" href="https://fcou1005.github.io/mobility-pulse/?scope=09162000#stadt"/>
+    <category term="price" label="Preise geändert"/>
+    <summary type="text">Die Tarife im Feed (system_pricing_plans) haben sich geändert (Quelle nextbike_wa); Einzelheiten unter Auswerten › Leistung › Preise.</summary>
+  </entry>
+</feed>
